@@ -75,6 +75,7 @@ export interface SkillInfo {
   unlock_level: number;
   usage?: number;
   usage_to_next?: number;
+  cast_time_ms?: number;
 }
 
 export interface JobProgressInfo {
@@ -257,6 +258,7 @@ export interface StatusSnapshot {
 export interface BattleEntity {
   id: string;
   name: string;
+  kind?: string;
   is_player: boolean;
   weapon?: string;
   level: number;
@@ -272,11 +274,16 @@ export interface BattleEntity {
   target_id?: string;
   alive: boolean;
   statuses?: StatusSnapshot[];
+  casting_skill_id?: string;
+  cast_target_id?: string;
+  cast_progress?: number;
+  cast_time_ms?: number;
 }
 
 export interface BattleStatePayload {
   battle_id: string;
   entities: BattleEntity[];
+  battle_speed?: number;
 }
 
 export interface ActionResult {
@@ -291,6 +298,7 @@ export interface ActionResult {
   mp_restored?: number;
   message?: string;
   status_applied?: StatusSnapshot[];
+  cast_started?: boolean;
 }
 
 export interface EntityUpdate {
@@ -304,6 +312,10 @@ export interface EntityUpdate {
   target_id?: string;
   alive: boolean;
   statuses?: StatusSnapshot[];
+  casting_skill_id?: string;
+  cast_target_id?: string;
+  cast_progress?: number;
+  cast_time_ms?: number;
 }
 
 export interface BattleEventPayload {
@@ -319,6 +331,10 @@ export interface BattleTickPayload {
   hp?: Record<string, number>;
   alive?: Record<string, boolean>;
   statuses?: Record<string, StatusSnapshot[]>;
+  casting_skill_id?: Record<string, string>;
+  cast_target_id?: Record<string, string>;
+  cast_progress?: Record<string, number>;
+  cast_time_ms?: Record<string, number>;
 }
 
 export interface PlayerReward {

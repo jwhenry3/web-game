@@ -22,9 +22,27 @@ import (
 // ATB bars fill from Agility each tick; an entity may only act on a full bar.
 
 const (
-	DefaultTickWindow = 200 * time.Millisecond
-	atbMax            = 100.0
+	// BaseTickWindow is the action-window duration at battle speed 1.0.
+	BaseTickWindow = 200 * time.Millisecond
+	// DefaultBattleSpeed scales battle tempo (1.0 = baseline, 0.75 = 75% speed).
+	DefaultBattleSpeed = 0.75
+	atbMax             = 100.0
 )
+
+// BattleTickWindow returns the action-window duration for a battle-speed multiplier.
+// Lower speed values lengthen each tick, slowing ATB fill and status ticks.
+func BattleTickWindow(speed float64) time.Duration {
+	if speed <= 0 {
+		speed = DefaultBattleSpeed
+	}
+	if speed > 10 {
+		speed = 10
+	}
+	return time.Duration(float64(BaseTickWindow) / speed)
+}
+
+// DefaultTickWindow is the tick duration at DefaultBattleSpeed.
+var DefaultTickWindow = BattleTickWindow(DefaultBattleSpeed)
 
 // roomHost abstracts the hub so battle logic is testable in isolation.
 type roomHost interface {
@@ -33,11 +51,13 @@ type roomHost interface {
 	Profiles() *store.Store
 	BuildVictoryRewards(roomID string, fighters []battleFighter, totalXP, level, lootBonus int, rng *rand.Rand) []protocol.PlayerReward
 	NotifyPassiveRewards(rewards []protocol.PlayerReward)
+	BattleSpeed() float64
 }
 
 type battleEntity struct {
 	ID          string
 	Name        string
+	Kind        string // enemies: goblin, dire_wolf, stone_imp
 	IsPlayer    bool
 	Weapon      game.WeaponType
 	SubWeapon   game.WeaponType
@@ -61,6 +81,14 @@ type battleEntity struct {
 	// Skills snapshotted at join.
 	unlocked map[string]bool
 	statuses []game.ActiveStatus
+
+	casting *activeCast
+}
+
+type activeCast struct {
+	SkillID  string
+	TargetID string
+	Progress float64 // 0–100
 }
 
 // battleFighter links a combat client to its persistence profile.
@@ -103,7 +131,9 @@ type BattleRoom struct {
 	ID    string
 	Level int
 
-	host roomHost
+	host        roomHost
+	battleSpeed float64
+	tickWindow  time.Duration
 
 	joinCh   chan joinRequest
 	leaveCh  chan string
@@ -121,22 +151,32 @@ type BattleRoom struct {
 }
 
 var enemyTemplates = []struct {
+	Kind string
 	Name string
 	HP   int
 	Str  int
 	Agi  int
 }{
-	{"Goblin", 80, 9, 11},
-	{"Dire Wolf", 65, 8, 17},
-	{"Stone Imp", 110, 11, 8},
+	{"goblin", "Goblin", 80, 9, 11},
+	{"dire_wolf", "Dire Wolf", 65, 8, 17},
+	{"stone_imp", "Stone Imp", 110, 11, 8},
 }
 
 func NewBattleRoom(id string, level int, host roomHost) *BattleRoom {
+	return newBattleRoom(id, level, host, "")
+}
+
+func NewBattleRoomFromNPC(id string, level int, host roomHost, npcKind string) *BattleRoom {
+	return newBattleRoom(id, level, host, npcKind)
+}
+
+func newBattleRoom(id string, level int, host roomHost, primaryKind string) *BattleRoom {
 	b := &BattleRoom{
-		ID:       id,
-		Level:    level,
-		host:     host,
-		joinCh:   make(chan joinRequest, 16),
+		ID:          id,
+		Level:       level,
+		host:        host,
+		battleSpeed: host.BattleSpeed(),
+		joinCh:      make(chan joinRequest, 16),
 		leaveCh:  make(chan string, 16),
 		actionCh: make(chan queuedAction, 64),
 		autoCh:   make(chan autoCmd, 16),
@@ -144,18 +184,28 @@ func NewBattleRoom(id string, level int, host roomHost) *BattleRoom {
 		quitCh:   make(chan struct{}),
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	b.spawnEnemies()
+	b.spawnEnemies(primaryKind)
 	return b
 }
 
-func (b *BattleRoom) spawnEnemies() {
+func (b *BattleRoom) spawnEnemies(primaryKind string) {
 	count := 2 + b.rng.Intn(2) // 2-3 enemies per encounter
 	for i := 0; i < count; i++ {
-		tpl := enemyTemplates[b.rng.Intn(len(enemyTemplates))]
+		tplIdx := b.rng.Intn(len(enemyTemplates))
+		if i == 0 && primaryKind != "" {
+			for j, t := range enemyTemplates {
+				if t.Kind == primaryKind {
+					tplIdx = j
+					break
+				}
+			}
+		}
+		tpl := enemyTemplates[tplIdx]
 		scale := 1.0 + float64(b.Level-1)*0.18
 		e := &battleEntity{
 			ID:       fmt.Sprintf("%s-enemy-%d", b.ID, i+1),
 			Name:     tpl.Name,
+			Kind:     tpl.Kind,
 			IsPlayer: false,
 			Level:    b.Level,
 			MaxHP:    int(float64(tpl.HP) * scale),
@@ -203,6 +253,7 @@ func (b *BattleRoom) SetTarget(clientID, targetID string) {
 // Run drives the room's event loop: buffering actions as they arrive and
 // resolving the batch at the close of each action window.
 func (b *BattleRoom) Run(window time.Duration) {
+	b.tickWindow = window
 	ticker := time.NewTicker(window)
 	defer ticker.Stop()
 	for {
@@ -338,18 +389,32 @@ func (b *BattleRoom) broadcast(msg []byte) {
 	b.host.SendToClients(b.playerIDs(false), msg)
 }
 
+func entityCastFields(e *battleEntity) (skillID, targetID string, progress float64, castMs int) {
+	if e.casting == nil {
+		return "", "", 0, 0
+	}
+	skill, ok := game.FindSkill(e.casting.SkillID)
+	if !ok {
+		return e.casting.SkillID, e.casting.TargetID, e.casting.Progress, 0
+	}
+	return e.casting.SkillID, e.casting.TargetID, e.casting.Progress, game.SkillCastTime(skill)
+}
+
 func (b *BattleRoom) statePayload() protocol.BattleStatePayload {
 	entities := make([]protocol.BattleEntity, 0, len(b.entities))
 	for _, e := range b.entities {
+		castSkill, castTarget, castProg, castMs := entityCastFields(e)
 		entities = append(entities, protocol.BattleEntity{
-			ID: e.ID, Name: e.Name, IsPlayer: e.IsPlayer, Weapon: string(e.Weapon),
+			ID: e.ID, Name: e.Name, Kind: e.Kind, IsPlayer: e.IsPlayer, Weapon: string(e.Weapon),
 			Level: e.Level, HP: e.HP, MaxHP: e.MaxHP, MP: e.MP, MaxMP: e.MaxMP,
 			Agility: e.Agi, AutoATB: e.AutoATB, SkillATB: e.SkillATB, ATB: e.SkillATB,
 			AutoAttack: e.AutoAttack, TargetID: e.TargetID, Alive: e.Alive,
 			Statuses: game.Snapshots(e.statuses),
+			CastingSkillID: castSkill, CastTargetID: castTarget,
+			CastProgress: castProg, CastTimeMs: castMs,
 		})
 	}
-	return protocol.BattleStatePayload{BattleID: b.ID, Entities: entities}
+	return protocol.BattleStatePayload{BattleID: b.ID, Entities: entities, BattleSpeed: b.battleSpeed}
 }
 
 // tick closes the current action window: fills ATB bars, resolves the entire
@@ -380,6 +445,7 @@ func (b *BattleRoom) tick() {
 			if e.HP <= 0 {
 				e.HP = 0
 				e.Alive = false
+				e.casting = nil
 			}
 		}
 	}
@@ -388,7 +454,9 @@ func (b *BattleRoom) tick() {
 			continue
 		}
 		mult := game.ATBMultiplier(e.statuses)
-		e.AutoATB += (3.0 + float64(e.Agi)*0.22) * mult
+		if e.casting == nil {
+			e.AutoATB += (3.0 + float64(e.Agi)*0.22) * mult
+		}
 		e.SkillATB += (4.2 + float64(e.Agi)*0.32) * mult
 		if e.AutoATB > atbMax {
 			e.AutoATB = atbMax
@@ -400,16 +468,57 @@ func (b *BattleRoom) tick() {
 
 	var results []protocol.ActionResult
 
-	// 2. Batch-process GCD actions (skills / items). Auto-attack is not queued.
+	// 2. Advance active spell casts.
+	for _, e := range b.entities {
+		if !e.Alive {
+			e.casting = nil
+			continue
+		}
+		if e.casting == nil {
+			continue
+		}
+		if game.IsStunned(e.statuses) {
+			e.casting = nil
+			continue
+		}
+		skill, ok := game.FindSkill(e.casting.SkillID)
+		if !ok {
+			e.casting = nil
+			continue
+		}
+		castMs := game.SkillCastTime(skill)
+		if castMs <= 0 {
+			e.casting = nil
+			continue
+		}
+		e.casting.Progress += b.castProgressPerTick(castMs)
+		if e.casting.Progress < 100 {
+			continue
+		}
+		target := b.find(e.casting.TargetID)
+		e.casting = nil
+		if target == nil || !target.Alive {
+			continue
+		}
+		if game.SkillTargetsAlly(skill) && !target.IsPlayer {
+			continue
+		}
+		if !game.SkillTargetsAlly(skill) && target.IsPlayer {
+			continue
+		}
+		results = append(results, b.resolveCastComplete(e, target, skill))
+	}
+
+	// 3. Batch-process GCD actions (skills / items). Auto-attack is not queued.
 	batch := b.pending
 	b.pending = nil
 	for _, qa := range batch {
 		results = append(results, b.resolveAction(qa))
 	}
 
-	// 3. Auto-attacks: players swing at their target; enemies swing at the party.
+	// 4. Auto-attacks: players swing at their target; enemies swing at the party.
 	for _, e := range b.entities {
-		if !e.Alive || !e.AutoAttack || e.AutoATB < atbMax || game.IsStunned(e.statuses) {
+		if !e.Alive || !e.AutoAttack || e.AutoATB < atbMax || game.IsStunned(e.statuses) || e.casting != nil {
 			continue
 		}
 		var target *battleEntity
@@ -424,7 +533,7 @@ func (b *BattleRoom) tick() {
 		results = append(results, b.performAutoAttack(e, target))
 	}
 
-	// 4. Atomic broadcast of the batch.
+	// 5. Atomic broadcast of the batch.
 	if len(results) > 0 {
 		b.broadcast(protocol.Encode(protocol.TypeBattleEvent, protocol.BattleEventPayload{
 			Results:   results,
@@ -434,6 +543,7 @@ func (b *BattleRoom) tick() {
 	} else {
 		auto, gcd := map[string]float64{}, map[string]float64{}
 		hp, alive, statuses := map[string]int{}, map[string]bool{}, map[string][]game.StatusSnapshot{}
+		castSkill, castTarget, castProg, castMs := map[string]string{}, map[string]string{}, map[string]float64{}, map[string]int{}
 		for _, e := range b.entities {
 			auto[e.ID] = e.AutoATB
 			gcd[e.ID] = e.SkillATB
@@ -442,14 +552,22 @@ func (b *BattleRoom) tick() {
 			if s := game.Snapshots(e.statuses); len(s) > 0 {
 				statuses[e.ID] = s
 			}
+			if skillID, targetID, progress, ms := entityCastFields(e); skillID != "" {
+				castSkill[e.ID] = skillID
+				castTarget[e.ID] = targetID
+				castProg[e.ID] = progress
+				castMs[e.ID] = ms
+			}
 		}
 		b.broadcast(protocol.Encode(protocol.TypeBattleTick, protocol.BattleTickPayload{
 			AutoATB: auto, SkillATB: gcd, ATB: gcd,
 			HP: hp, Alive: alive, Statuses: statuses,
+			CastingSkillID: castSkill, CastTargetID: castTarget,
+			CastProgress: castProg, CastTimeMs: castMs,
 		}))
 	}
 
-	// 5. Victory / defeat resolution.
+	// 6. Victory / defeat resolution.
 	b.checkEnd()
 }
 
@@ -472,6 +590,10 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		res.Message = "Stunned."
 		return res
 	}
+	if actor.casting != nil {
+		res.Message = "Already casting."
+		return res
+	}
 
 	// Consumables share the skill GCD, not the auto-attack swing.
 	if qa.Action.ActionID == "use_item" {
@@ -490,9 +612,6 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		return b.resolveEngage(qa, actor, res)
 	}
 
-	category := skill.Category
-	skillJob := skill.Job
-
 	if skill.ID != game.BasicAttack.ID && actor.skillLevels[skill.ID] < 1 {
 		res.Message = "Skill not learned."
 		return res
@@ -509,22 +628,83 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		res.Message = "Not enough MP."
 		return res
 	}
-	target := b.find(qa.Action.TargetID)
-	if target == nil || !target.Alive {
-		res.Message = "Invalid target."
-		return res
+	var target *battleEntity
+	if game.SkillTargetsAlly(skill) {
+		target = b.find(qa.Action.TargetID)
+		if target == nil || !target.Alive {
+			res.Message = "Invalid target."
+			return res
+		}
+		if !target.IsPlayer {
+			res.Message = "Must target an ally."
+			return res
+		}
+	} else {
+		if t := b.find(qa.Action.TargetID); t != nil && t.Alive && !t.IsPlayer {
+			target = t
+			actor.TargetID = t.ID
+		} else {
+			target = b.autoTarget(actor)
+		}
+		if target == nil || !target.Alive {
+			res.Message = "No valid target."
+			return res
+		}
 	}
-	if game.SkillTargetsAlly(skill) && !target.IsPlayer {
-		res.Message = "Must target an ally."
-		return res
-	}
-	if !game.SkillTargetsAlly(skill) && target.IsPlayer {
-		res.Message = "Must target an enemy."
-		return res
-	}
+	res.TargetID = target.ID
 
+	if game.SkillCastTime(skill) > 0 {
+		return b.beginCast(actor, target, skill, res)
+	}
+	return b.applySkillEffect(actor, target, skill, res)
+}
+
+func (b *BattleRoom) castProgressPerTick(castMs int) float64 {
+	if castMs <= 0 {
+		return 100
+	}
+	window := b.tickWindow
+	if window <= 0 {
+		window = DefaultTickWindow
+	}
+	return 100.0 * float64(window) / float64(time.Duration(castMs)*time.Millisecond)
+}
+
+func (b *BattleRoom) beginCast(actor, target *battleEntity, skill game.Skill, res protocol.ActionResult) protocol.ActionResult {
 	actor.MP -= skill.MPCost
 	actor.SkillATB = 0
+	actor.AutoATB = 0
+	actor.casting = &activeCast{
+		SkillID:  skill.ID,
+		TargetID: target.ID,
+		Progress: 0,
+	}
+	res.Success = true
+	res.CastStarted = true
+	res.TargetID = target.ID
+	return res
+}
+
+func (b *BattleRoom) resolveCastComplete(actor, target *battleEntity, skill game.Skill) protocol.ActionResult {
+	res := protocol.ActionResult{
+		ActorID:    actor.ID,
+		ActionID:   skill.ID,
+		ActionName: skill.Name,
+		TargetID:   target.ID,
+		Success:    true,
+	}
+	return b.applySkillEffect(actor, target, skill, res)
+}
+
+func (b *BattleRoom) applySkillEffect(actor, target *battleEntity, skill game.Skill, res protocol.ActionResult) protocol.ActionResult {
+	category := skill.Category
+	skillJob := skill.Job
+
+	// Instant skills spend GCD/MP here; casts already spent them in beginCast.
+	if actor.casting == nil && game.SkillCastTime(skill) == 0 {
+		actor.MP -= skill.MPCost
+		actor.SkillATB = 0
+	}
 	res.Success = true
 
 	stat := actor.Str
@@ -569,7 +749,6 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		actor.pendingSkillUses[skill.ID]++
 	}
 
-	// Mug improves the rarity weighting of the victory loot pool.
 	if skill.LootBonus {
 		b.lootBonus++
 	}
@@ -707,11 +886,14 @@ func (b *BattleRoom) randomAlivePlayer() *battleEntity {
 func (b *BattleRoom) entityUpdates() []protocol.EntityUpdate {
 	out := make([]protocol.EntityUpdate, 0, len(b.entities))
 	for _, e := range b.entities {
+		castSkill, castTarget, castProg, castMs := entityCastFields(e)
 		out = append(out, protocol.EntityUpdate{
 			ID: e.ID, HP: e.HP, MP: e.MP,
 			AutoATB: e.AutoATB, SkillATB: e.SkillATB, ATB: e.SkillATB,
 			AutoAttack: e.AutoAttack, TargetID: e.TargetID, Alive: e.Alive,
 			Statuses: game.Snapshots(e.statuses),
+			CastingSkillID: castSkill, CastTargetID: castTarget,
+			CastProgress: castProg, CastTimeMs: castMs,
 		})
 	}
 	return out

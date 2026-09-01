@@ -10,6 +10,7 @@ import type {
   BattleInfo,
   BattleStatePayload,
   BattleTickPayload,
+  BattleEntity,
   ChatMessagePayload,
   Envelope,
   MessageType,
@@ -21,6 +22,7 @@ import type {
   WorldPlayer,
   WorldStatePayload,
 } from "../types";
+import { DEFAULT_BATTLE_SPEED } from "../phaser/battleAnim";
 import {
   actionFromItem,
   actionFromSkill,
@@ -32,6 +34,24 @@ import {
 } from "../types";
 
 export const battleEvents = new Phaser.Events.EventEmitter();
+
+function livingEnemyTarget(battle: { entities: BattleEntity[] }, self: BattleEntity): BattleEntity | undefined {
+  const focus =
+    self.target_id &&
+    battle.entities.find((e) => e.id === self.target_id && e.alive && !e.is_player);
+  if (focus) return focus;
+  return battle.entities.find((e) => !e.is_player && e.alive);
+}
+
+function castEnemySkill(actionId: string, battle: { entities: BattleEntity[] }, self: BattleEntity) {
+  const target = livingEnemyTarget(battle, self);
+  if (!target) return;
+  send("action", { action_id: actionId, target_id: target.id });
+  if (self.target_id !== target.id) {
+    send("set_target", { target_id: target.id });
+  }
+  useGame.setState({ selectedAction: null });
+}
 
 let ws: WebSocket | null = null;
 let intentionalClose = false;
@@ -192,8 +212,10 @@ export const net = {
   },
 
   castSelectedOn(target: { id: string; alive: boolean; is_player: boolean }): boolean {
-    const { selectedAction } = useGame.getState();
+    const { selectedAction, battle, selfId } = useGame.getState();
     if (!selectedAction || !target.alive) return false;
+    const self = battle?.entities.find((e) => e.id === selfId);
+    if (!isGcdReady(self)) return false;
     if (selectedAction.heals ? !target.is_player : target.is_player) return false;
     send("action", {
       action_id: selectedAction.actionId,
@@ -243,8 +265,7 @@ export const net = {
       return;
     }
 
-    const gcdReady = (self.skill_atb ?? self.atb) >= 100;
-    if (!gcdReady) return;
+    if (!isGcdReady(self)) return;
 
     if (bind.kind === "skill") {
       const sk = profile.skills.find((s) => s.id === bind.id);
@@ -253,14 +274,8 @@ export const net = {
       if (self.mp < sk.mp_cost) return;
       if (skillTargetsAlly(sk)) {
         this.armOrSelfCast(actionFromSkill(sk), self.id);
-      } else {
-        const focus = self.target_id && battle?.entities.find((e) => e.id === self.target_id && e.alive && !e.is_player);
-        if (focus) {
-          send("action", { action_id: sk.id, target_id: focus.id });
-          useGame.setState({ selectedAction: null });
-        } else {
-          this.toggleAction(actionFromSkill(sk));
-        }
+      } else if (battle) {
+        castEnemySkill(sk.id, battle, self);
       }
       return;
     }
@@ -302,6 +317,52 @@ export const net = {
   disconnect,
 };
 
+function entityIsCasting(e: { casting_skill_id?: string } | undefined): boolean {
+  return !!e?.casting_skill_id;
+}
+
+function isGcdReady(self: { alive: boolean; skill_atb?: number; atb?: number; casting_skill_id?: string } | undefined): boolean {
+  return !!self?.alive && (self.skill_atb ?? self.atb ?? 0) >= 100 && !entityIsCasting(self);
+}
+
+function mergeEntityCast(
+  e: import("../types").BattleEntity,
+  u: Partial<import("../types").EntityUpdate>,
+): import("../types").BattleEntity {
+  const next = { ...e, ...u } as import("../types").BattleEntity;
+  if (u.casting_skill_id === "") {
+    next.casting_skill_id = undefined;
+    next.cast_target_id = undefined;
+    next.cast_progress = undefined;
+    next.cast_time_ms = undefined;
+  }
+  return next;
+}
+
+function applyTickCast(
+  e: import("../types").BattleEntity,
+  p: import("../types").BattleTickPayload,
+): import("../types").BattleEntity {
+  const skillId = p.casting_skill_id?.[e.id];
+  if (skillId !== undefined) {
+    if (!skillId) {
+      return { ...e, casting_skill_id: undefined, cast_target_id: undefined, cast_progress: undefined, cast_time_ms: undefined };
+    }
+    return {
+      ...e,
+      casting_skill_id: skillId,
+      cast_target_id: p.cast_target_id?.[e.id],
+      cast_progress: p.cast_progress?.[e.id] ?? e.cast_progress,
+      cast_time_ms: p.cast_time_ms?.[e.id] ?? e.cast_time_ms,
+    };
+  }
+  const progress = p.cast_progress?.[e.id];
+  if (progress !== undefined && e.casting_skill_id) {
+    return { ...e, cast_progress: progress };
+  }
+  return e;
+}
+
 function entityName(id: string): string {
   const b = useGame.getState().battle;
   return b?.entities.find((e) => e.id === id)?.name ?? id;
@@ -311,6 +372,9 @@ function describeResult(r: ActionResult): string {
   const actor = entityName(r.actor_id);
   if (!r.success) {
     return `${actor}'s ${r.action_name || r.action_id} fizzled: ${r.message ?? "failed"}`;
+  }
+  if (r.cast_started) {
+    return `${actor} begins casting ${r.action_name}...`;
   }
   const target = entityName(r.target_id);
   const parts: string[] = [];
@@ -454,12 +518,14 @@ function handleMessage(env: Envelope) {
     case "battle_state": {
       const p = env.payload as BattleStatePayload;
       const fresh = g.getState().battle?.battleId !== p.battle_id;
+      const battleSpeed = p.battle_speed && p.battle_speed > 0 ? p.battle_speed : DEFAULT_BATTLE_SPEED;
       g.setState((s) => ({
         screen: "battle",
         chatTab: "battle",
         battle: {
           battleId: p.battle_id,
           entities: p.entities,
+          battleSpeed,
           log: s.battle?.battleId === p.battle_id ? s.battle.log : ["Battle start!"],
           end: s.battle?.battleId === p.battle_id ? s.battle.end : null,
         },
@@ -479,8 +545,7 @@ function handleMessage(env: Envelope) {
         const entities = s.battle.entities.map((e) => {
           const u = byId.get(e.id);
           return u
-            ? {
-                ...e,
+            ? mergeEntityCast(e, {
                 hp: u.hp,
                 mp: u.mp,
                 atb: u.skill_atb ?? u.atb,
@@ -490,9 +555,27 @@ function handleMessage(env: Envelope) {
                 target_id: u.target_id ?? e.target_id,
                 alive: u.alive,
                 statuses: u.statuses ?? e.statuses,
-              }
+                casting_skill_id: u.casting_skill_id,
+                cast_target_id: u.cast_target_id,
+                cast_progress: u.cast_progress,
+                cast_time_ms: u.cast_time_ms,
+              })
             : e;
         });
+        for (const r of p.results ?? []) {
+          if (r.success && !r.cast_started) {
+            const idx = entities.findIndex((e) => e.id === r.actor_id);
+            if (idx >= 0 && entities[idx].casting_skill_id) {
+              entities[idx] = {
+                ...entities[idx],
+                casting_skill_id: undefined,
+                cast_target_id: undefined,
+                cast_progress: undefined,
+                cast_time_ms: undefined,
+              };
+            }
+          }
+        }
         return { battle: { ...s.battle, entities } };
       });
       break;
@@ -507,7 +590,7 @@ function handleMessage(env: Envelope) {
           const hp = p.hp?.[e.id];
           const alive = p.alive?.[e.id];
           const statuses = p.statuses?.[e.id];
-          return {
+          let next = {
             ...e,
             ...(skill !== undefined ? { atb: skill, skill_atb: skill } : {}),
             ...(auto !== undefined ? { auto_atb: auto } : {}),
@@ -515,6 +598,8 @@ function handleMessage(env: Envelope) {
             ...(alive !== undefined ? { alive } : {}),
             ...(statuses !== undefined ? { statuses } : {}),
           };
+          next = applyTickCast(next, p);
+          return next;
         });
         return { battle: { ...s.battle, entities } };
       });

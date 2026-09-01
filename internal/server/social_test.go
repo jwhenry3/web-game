@@ -11,7 +11,7 @@ import (
 
 func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
 	t.Helper()
-	h := NewHub(store.Load(""), nil, nil)
+	h := NewHub(store.Load(""), nil, nil, 0)
 	h.initSocial()
 	a := &Client{ID: "a", Name: "Alpha", Joined: true, Send: make(chan []byte, 64), Hub: h}
 	b := &Client{ID: "b", Name: "Bravo", Joined: true, Send: make(chan []byte, 64), Hub: h}

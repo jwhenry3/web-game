@@ -11,6 +11,12 @@ const (
 	OverworldH  = 1200
 	OverworldCols = OverworldW / TileSize
 	OverworldRows = OverworldH / TileSize
+
+	// Heroes 99 at display scale 1.25 — keep in sync with web/src/characters/heroes99.ts.
+	playerSpriteW         = 100.0 * 1.25
+	playerSpriteH         = 40.0 * 1.25
+	PlayerCollisionHalfW  = playerSpriteW / 8
+	PlayerCollisionHalfH  = playerSpriteH / 4
 )
 
 // Tile kinds for the shared overworld. Walkable: H . , R
@@ -235,6 +241,26 @@ func WalkableAt(x, y float64) bool {
 	return WalkableTile(t.C, t.R)
 }
 
+// BoundsWalkableAt checks a foot-anchored box (cx, cy) with halfW × halfH extending upward.
+func BoundsWalkableAt(cx, cy, halfW, halfH float64) bool {
+	left := cx - halfW
+	right := cx + halfW
+	top := cy - halfH
+	bottom := cy
+	c0 := int(math.Floor(left / TileSize))
+	c1 := int(math.Floor(right / TileSize))
+	r0 := int(math.Floor(top / TileSize))
+	r1 := int(math.Floor(bottom / TileSize))
+	for r := r0; r <= r1; r++ {
+		for c := c0; c <= c1; c++ {
+			if !WalkableTile(c, r) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // SlideMove keeps motion on walkable tiles: try the full step, then axis slides.
 func SlideMove(fromX, fromY, toX, toY float64) (float64, float64) {
 	if WalkableAt(toX, toY) {
@@ -244,6 +270,20 @@ func SlideMove(fromX, fromY, toX, toY float64) (float64, float64) {
 		return toX, fromY
 	}
 	if WalkableAt(fromX, toY) {
+		return fromX, toY
+	}
+	return fromX, fromY
+}
+
+// SlideMovePlayer applies the player foot-anchored collision box.
+func SlideMovePlayer(fromX, fromY, toX, toY float64) (float64, float64) {
+	if BoundsWalkableAt(toX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+		return toX, toY
+	}
+	if BoundsWalkableAt(toX, fromY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+		return toX, fromY
+	}
+	if BoundsWalkableAt(fromX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
 		return fromX, toY
 	}
 	return fromX, fromY

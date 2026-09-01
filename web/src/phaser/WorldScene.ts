@@ -4,8 +4,10 @@ import { useGame } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { appearanceKey, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS } from "../characters/types";
 import type { OverworldMap, WorldNPC, CharacterAppearanceWire } from "../types";
-import { FILL, slideMove, tileAt } from "../world/overworld";
+import { FILL, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W, slideMovePlayer, tileAt } from "../world/overworld";
 import { CharacterSprite } from "./CharacterSprite";
+import { EnemySprite } from "./EnemySprite";
+import { enemyKindFromName } from "../characters/enemies";
 
 const WORLD_W = 1600;
 const WORLD_H = 1200;
@@ -22,15 +24,11 @@ interface Avatar {
 
 interface FoeAvatar {
   wrapper: Phaser.GameObjects.Container;
-  body: Phaser.GameObjects.Rectangle;
+  enemy: EnemySprite;
   label: Phaser.GameObjects.Text;
+  lastX: number;
+  lastY: number;
 }
-
-const NPC_COLORS: Record<string, number> = {
-  goblin: 0x5a9e3c,
-  dire_wolf: 0x8a6a4a,
-  stone_imp: 0x6a6a8a,
-};
 
 export class WorldScene extends Phaser.Scene {
   private avatars = new Map<string, Avatar>();
@@ -137,17 +135,16 @@ export class WorldScene extends Phaser.Scene {
   private ensureFoe(npc: WorldNPC): FoeAvatar {
     let av = this.foes.get(npc.id);
     if (av) return av;
+    const kind = enemyKindFromName(npc.name, npc.kind);
     const wrapper = this.add.container(npc.x, npc.y).setDepth(9);
-    const body = this.add.rectangle(0, 0, 22, 22, 0xffffff).setRotation(Math.PI / 4);
-    body.setStrokeStyle(2, 0x2a1a0a);
+    const enemy = new EnemySprite(this, 0, 0, kind);
     const label = this.add
-      .text(0, -28, "", { fontSize: "11px", color: "#e6d4b0", fontFamily: "Noto Sans, sans-serif" })
+      .text(0, H99_NAME_LABEL_Y, "", { fontSize: "11px", color: "#e6d4b0", fontFamily: "Noto Sans, sans-serif" })
       .setOrigin(0.5, 0.5)
       .setShadow(1, 1, "#000000", 2);
-    wrapper.add([body, label]);
-    body.setInteractive({ useHandCursor: true });
-    body.on("pointerdown", () => this.tryJoinBattleOfNPC(npc.id));
-    av = { wrapper, body, label };
+    wrapper.add([enemy.container, label]);
+    enemy.setInteractive(() => this.tryJoinBattleOfNPC(npc.id));
+    av = { wrapper, enemy, label, lastX: npc.x, lastY: npc.y };
     this.foes.set(npc.id, av);
     return av;
   }
@@ -225,11 +222,11 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    this.syncFoes(state.npcs, selfLocked);
+    this.syncFoes(state.npcs, selfLocked, delta);
     this.moveSelf(time, selfId);
   }
 
-  private syncFoes(npcs: Record<string, WorldNPC>, selfLocked: boolean) {
+  private syncFoes(npcs: Record<string, WorldNPC>, selfLocked: boolean, delta: number) {
     for (const [id, av] of this.foes) {
       if (!npcs[id]) {
         av.wrapper.destroy();
@@ -238,13 +235,21 @@ export class WorldScene extends Phaser.Scene {
     }
     for (const npc of Object.values(npcs)) {
       const av = this.ensureFoe(npc);
-      av.body.fillColor = NPC_COLORS[npc.kind] ?? 0xaa4444;
+      const kind = enemyKindFromName(npc.name, npc.kind);
+      av.enemy.setKind(kind);
       av.wrapper.setAlpha(npc.in_battle ? 0.45 : 1);
       const joinable = npc.in_battle && !selfLocked;
       av.label.setText(`${npc.name} Lv${npc.level}${npc.in_battle ? " ⚔" : ""}${joinable ? " (join)" : ""}`);
-      av.body.setStrokeStyle(2, joinable ? 0xe8c96a : 0x2a1a0a);
+      const prevX = av.lastX;
+      const prevY = av.lastY;
       av.wrapper.x = Phaser.Math.Linear(av.wrapper.x, npc.x, 0.2);
       av.wrapper.y = Phaser.Math.Linear(av.wrapper.y, npc.y, 0.2);
+      const dx = av.wrapper.x - prevX;
+      const dy = av.wrapper.y - prevY;
+      av.enemy.setMoving(Math.hypot(dx, dy) > 0.3, dx, dy);
+      av.enemy.update(delta);
+      av.lastX = av.wrapper.x;
+      av.lastY = av.wrapper.y;
     }
   }
 
@@ -275,9 +280,17 @@ export class WorldScene extends Phaser.Scene {
     av.sprite.setMoving(true, dx, dy);
 
     const len = Math.hypot(dx, dy);
-    const nx = Phaser.Math.Clamp(av.wrapper.x + (dx / len) * SPEED * dt, 16, WORLD_W - 16);
-    const ny = Phaser.Math.Clamp(av.wrapper.y + (dy / len) * SPEED * dt, 16, WORLD_H - 16);
-    const slid = slideMove(useGame.getState().overworld, av.wrapper.x, av.wrapper.y, nx, ny);
+    const nx = Phaser.Math.Clamp(
+      av.wrapper.x + (dx / len) * SPEED * dt,
+      H99_COLLISION_HALF_W,
+      WORLD_W - H99_COLLISION_HALF_W,
+    );
+    const ny = Phaser.Math.Clamp(
+      av.wrapper.y + (dy / len) * SPEED * dt,
+      H99_COLLISION_HALF_H,
+      WORLD_H,
+    );
+    const slid = slideMovePlayer(useGame.getState().overworld, av.wrapper.x, av.wrapper.y, nx, ny);
     av.wrapper.x = slid.x;
     av.wrapper.y = slid.y;
 

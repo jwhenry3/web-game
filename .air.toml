@@ -1,0 +1,24 @@
+# Live reload for the Go server during development.
+# Run: npm run server:dev
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main ./cmd/server"
+  entrypoint = ["./tmp/main"]
+  delay = 500
+  exclude_dir = ["tmp", "bin", "web", "node_modules", "data", "scripts"]
+  exclude_regex = ["_test\\.go$"]
+  include_ext = ["go"]
+  stop_on_error = true
+
+[build.windows]
+  cmd = "go build -o ./tmp/main.exe ./cmd/server"
+  entrypoint = ["tmp\\main.exe"]
+
+[log]
+  time = true
+
+[screen]
+  clear_on_rebuild = true

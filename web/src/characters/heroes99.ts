@@ -78,11 +78,14 @@ export function facingToFlipX(facing: CharacterFacing): boolean {
   return facing === "left";
 }
 
-/** In-world display scale (100×40 source frames → 200×80 px at 2). */
-export const H99_DISPLAY_SCALE = 2;
+/** In-world display scale (100×40 source frames → ~125×50 px at 1.25). */
+export const H99_DISPLAY_SCALE = 1.25;
 
 export const H99_DISPLAY_WIDTH = H99_SHEET.frameWidth * H99_DISPLAY_SCALE;
 export const H99_DISPLAY_HEIGHT = H99_SHEET.frameHeight * H99_DISPLAY_SCALE;
+/** Foot-anchored collision box: quarter sprite size (top ~3/4 may overlap scenery). */
+export const H99_COLLISION_HALF_W = H99_DISPLAY_WIDTH / 8;
+export const H99_COLLISION_HALF_H = H99_DISPLAY_HEIGHT / 4;
 export const H99_NAME_LABEL_Y = -(H99_DISPLAY_HEIGHT + 10);
 /** Selection / status rings sized to the sprite footprint. */
 export const H99_WORLD_RING_RADIUS = H99_DISPLAY_HEIGHT * 0.64;

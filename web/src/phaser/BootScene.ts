@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { preloadAppearance } from "../characters/assets";
+import { ensureEnemyTextures } from "../characters/enemyAssets";
 import { DEFAULT_APPEARANCE } from "../characters/heroes99";
 import { WorldScene } from "./WorldScene";
 import { BattleScene } from "./BattleScene";
@@ -15,6 +16,7 @@ export class BootScene extends Phaser.Scene {
   }
 
   create() {
+    ensureEnemyTextures(this);
     this.scene.start("world");
   }
 }

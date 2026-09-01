@@ -191,6 +191,7 @@ func buildJobCatalog() []Skill {
 				LootBonus:   ab.Loot,
 				Prereq:      prereq,
 				Description: ab.Desc,
+				CastTimeMs:  castTimeForAbility(ab),
 			})
 		}
 	}
@@ -199,6 +200,13 @@ func buildJobCatalog() []Skill {
 
 func skillID(job JobID, suffix string) string {
 	return strings.ToLower(string(job)) + "_" + suffix
+}
+
+func castTimeForAbility(ab jobAbility) int {
+	if ab.Magic || ab.Heals {
+		return DefaultCastTimeMs
+	}
+	return 0
 }
 
 // RootSkillID returns the first ability in a job's skill tree (level-1 root).

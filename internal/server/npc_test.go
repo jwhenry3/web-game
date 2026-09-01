@@ -12,7 +12,7 @@ import (
 
 func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *protocol.WorldPlayer) {
 	t.Helper()
-	h := NewHub(store.Load(""), nil, nil)
+	h := NewHub(store.Load(""), nil, nil, 0)
 	c := &Client{
 		ID:     "client-1",
 		Name:   "Bartz",
@@ -37,7 +37,7 @@ func TestWithinEngageRange(t *testing.T) {
 }
 
 func TestClampMoveRejectsTeleport(t *testing.T) {
-	h := NewHub(store.Load(""), nil, nil)
+	h := NewHub(store.Load(""), nil, nil, 0)
 	x, y := h.clampMove(200, 200, 800, 800)
 	if dist(200, 200, x, y) > maxMoveStep+0.01 {
 		t.Fatalf("teleport must be clamped, moved %f", dist(200, 200, x, y))
@@ -92,7 +92,7 @@ func TestLockedPlayerDoesNotReengage(t *testing.T) {
 }
 
 func TestSeededNPCsStayInRegion(t *testing.T) {
-	h := NewHub(store.Load(""), nil, nil)
+	h := NewHub(store.Load(""), nil, nil, 0)
 	h.seedNPCs(12)
 	if len(h.npcs) != 12 {
 		t.Fatalf("expected 12 patrolling npcs, got %d", len(h.npcs))

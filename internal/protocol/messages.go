@@ -175,6 +175,7 @@ type SkillInfo struct {
 	UnlockLevel int    `json:"unlock_level"`
 	Usage       int    `json:"usage,omitempty"`
 	UsageToNext int    `json:"usage_to_next,omitempty"`
+	CastTimeMs  int    `json:"cast_time_ms,omitempty"`
 }
 
 type JobProgressInfo struct {
@@ -299,6 +300,7 @@ type BattleListPayload struct {
 type BattleEntity struct {
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
+	Kind     string  `json:"kind,omitempty"` // enemies: goblin, dire_wolf, stone_imp
 	IsPlayer bool    `json:"is_player"`
 	Weapon   string  `json:"weapon,omitempty"`
 	Level    int     `json:"level"`
@@ -314,11 +316,16 @@ type BattleEntity struct {
 	TargetID   string  `json:"target_id,omitempty"`
 	Alive      bool    `json:"alive"`
 	Statuses   []game.StatusSnapshot `json:"statuses,omitempty"`
+	CastingSkillID string  `json:"casting_skill_id,omitempty"`
+	CastTargetID   string  `json:"cast_target_id,omitempty"`
+	CastProgress   float64 `json:"cast_progress,omitempty"`
+	CastTimeMs     int     `json:"cast_time_ms,omitempty"`
 }
 
 type BattleStatePayload struct {
-	BattleID string         `json:"battle_id"`
-	Entities []BattleEntity `json:"entities"`
+	BattleID    string         `json:"battle_id"`
+	Entities    []BattleEntity `json:"entities"`
+	BattleSpeed float64        `json:"battle_speed,omitempty"`
 }
 
 // ActionResult carries the validated outcome of one queued action so clients
@@ -335,6 +342,7 @@ type ActionResult struct {
 	MPRestored int    `json:"mp_restored,omitempty"`
 	Message    string `json:"message,omitempty"`
 	StatusApplied []game.StatusSnapshot `json:"status_applied,omitempty"`
+	CastStarted   bool   `json:"cast_started,omitempty"`
 }
 
 type EntityUpdate struct {
@@ -348,6 +356,10 @@ type EntityUpdate struct {
 	TargetID   string  `json:"target_id,omitempty"`
 	Alive      bool    `json:"alive"`
 	Statuses   []game.StatusSnapshot `json:"statuses,omitempty"`
+	CastingSkillID string  `json:"casting_skill_id,omitempty"`
+	CastTargetID   string  `json:"cast_target_id,omitempty"`
+	CastProgress   float64 `json:"cast_progress,omitempty"`
+	CastTimeMs     int     `json:"cast_time_ms,omitempty"`
 }
 
 // BattleEventPayload is the atomic broadcast at the close of each action
@@ -365,6 +377,10 @@ type BattleTickPayload struct {
 	HP        map[string]int                  `json:"hp,omitempty"`
 	Alive     map[string]bool                 `json:"alive,omitempty"`
 	Statuses  map[string][]game.StatusSnapshot `json:"statuses,omitempty"`
+	CastingSkillID map[string]string          `json:"casting_skill_id,omitempty"`
+	CastTargetID   map[string]string          `json:"cast_target_id,omitempty"`
+	CastProgress   map[string]float64         `json:"cast_progress,omitempty"`
+	CastTimeMs     map[string]int             `json:"cast_time_ms,omitempty"`
 }
 
 type PlayerReward struct {

@@ -15,7 +15,7 @@ import (
 const (
 	npcCount     = 12
 	npcRadius    = 22.0
-	playerRadius = 16.0
+	playerRadius = game.PlayerCollisionHalfW
 	engageRange  = npcRadius + playerRadius
 	npcSpeed     = 70.0
 	npcTickSec   = 0.25
@@ -196,15 +196,15 @@ func (h *Hub) checkNPCPlayerCollisions() {
 }
 
 func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
-	toX = clamp(toX, 0, worldWidth)
-	toY = clamp(toY, 0, worldHeight)
+	toX = clamp(toX, game.PlayerCollisionHalfW, worldWidth-game.PlayerCollisionHalfW)
+	toY = clamp(toY, game.PlayerCollisionHalfH, worldHeight)
 	dx, dy := toX-fromX, toY-fromY
 	d := math.Hypot(dx, dy)
 	if d > maxMoveStep {
 		toX = fromX + dx/d*maxMoveStep
 		toY = fromY + dy/d*maxMoveStep
 	}
-	return game.SlideMove(fromX, fromY, toX, toY)
+	return game.SlideMovePlayer(fromX, fromY, toX, toY)
 }
 
 // engageFirstNPCAt starts a battle if an idle NPC sits on (x,y). The
@@ -240,7 +240,7 @@ func (h *Hub) startBattleFromNPC(c *Client, wp *protocol.WorldPlayer, n *worldNP
 	}
 	h.battleSeq++
 	id := fmt.Sprintf("battle-%d", h.battleSeq)
-	room := NewBattleRoom(id, level, h)
+	room := NewBattleRoomFromNPC(id, level, h, n.Kind)
 	h.battles[id] = room
 	go room.Run(h.tickWindow)
 

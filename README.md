@@ -114,13 +114,25 @@ files are gitignored — see `.gitignore`.
 ### Development
 
 ```bash
+# Install frontend deps once
+npm run web:install
+
 # Terminal 1: game server (HTTP + ws://localhost:8080/ws)
-go run ./cmd/server
+npm run server:dev   # recompiles on .go changes (recommended)
+# npm run server     # one-shot, no reload
 
 # Terminal 2: frontend with hot reload (proxies /api and /ws to :8080)
-cd web
-npm install
-npm run dev     # open http://localhost:5173
+npm run web:dev     # open http://localhost:5173
+
+# Stop the background server (default port 8080)
+npm run server:stop
+```
+
+Equivalent without root scripts:
+
+```bash
+go run ./cmd/server
+cd web && npm install && npm run dev
 ```
 
 Register an account in the browser, create a hero, then walk into enemies on
@@ -129,8 +141,9 @@ the overworld to start battles.
 ### Production-style
 
 ```bash
-cd web && npm install && npm run build && cd ..
-go run ./cmd/server   # serves web/dist at http://localhost:8080
+npm run web:install
+npm run build
+npm run server   # serves web/dist at http://localhost:8080
 ```
 
 Set a stable JWT secret for production:
@@ -147,7 +160,7 @@ roster or by clicking a fighting player.
 ## Testing
 
 ```bash
-go test ./...                  # battle room, status effects, loadouts, jobs
+npm test                       # go test ./...
 node scripts/smoke.mjs         # two-player end-to-end flow (server must run)
 node scripts/smoke-defeat.mjs  # defeat-flow regression (server must run)
 ```

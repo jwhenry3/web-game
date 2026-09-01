@@ -1274,6 +1274,12 @@ h3 {
   cursor: pointer;
 }
 
+.ff-parameter.gcd-ready {
+  box-shadow:
+    0 0 0 1px rgba(250, 204, 21, 0.55),
+    0 0 18px rgba(250, 204, 21, 0.35);
+}
+
 .ff-flytext {
   position: absolute;
   left: 540px;

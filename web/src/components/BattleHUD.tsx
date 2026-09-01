@@ -60,7 +60,7 @@ export function BattleHUD() {
   const setSelected = useGame((s) => s.setSelectedAction);
 
   const self = battle?.entities.find((e) => e.id === selfId);
-  const gcdReady = !!self && self.alive && (self.skill_atb ?? self.atb) >= 100 && !battle?.end;
+  const gcdReady = !!self && self.alive && (self.skill_atb ?? self.atb) >= 100 && !self.casting_skill_id && !battle?.end;
 
   useEffect(() => {
     if (!gcdReady && useGame.getState().selectedAction) setSelected(null);
@@ -115,7 +115,7 @@ export function BattleHUD() {
       )}
 
       <div
-        className={`ff-parameter xiv-panel ${selected?.heals && self.alive ? "targetable ff-self-target" : ""}`}
+        className={`ff-parameter xiv-panel ${gcdReady ? "gcd-ready" : ""} ${selected?.heals && self.alive ? "targetable ff-self-target" : ""}`}
         onClick={() => {
           if (selected?.heals && self.alive) net.clickEntity(self);
         }}
@@ -128,7 +128,9 @@ export function BattleHUD() {
         <Gauge value={self.mp} max={self.max_mp} color="#4aa3e8" label="MP" />
         <StatusIcons statuses={self.statuses} className="status-icons--self" />
         <Gauge value={self.auto_atb ?? 0} max={100} color="#e8a13c" label="AA" />
-        <Gauge value={self.skill_atb ?? self.atb} max={100} color="#facc15" label="GCD" />
+        {self.casting_skill_id && (
+          <Gauge value={self.cast_progress ?? 0} max={100} color="#a78bfa" label="Cast" />
+        )}
         <button
           className={`ff-aa-toggle ${self.auto_attack ? "on" : ""}`}
           onClick={(e) => {

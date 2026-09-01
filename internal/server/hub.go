@@ -61,10 +61,14 @@ type Hub struct {
 	battleInvites map[string]*battleInvite
 	battleMeta    map[string]*battleMeta
 
-	tickWindow time.Duration
+	tickWindow  time.Duration
+	battleSpeed float64
 }
 
-func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer) *Hub {
+func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer, battleSpeed float64) *Hub {
+	if battleSpeed <= 0 {
+		battleSpeed = DefaultBattleSpeed
+	}
 	return &Hub{
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client, 16),
@@ -82,11 +86,14 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		partyInvites: make(map[string]*partyInvite),
 		battleInvites: make(map[string]*battleInvite),
 		battleMeta:    make(map[string]*battleMeta),
-		tickWindow:   DefaultTickWindow,
+		tickWindow:   BattleTickWindow(battleSpeed),
+		battleSpeed:  battleSpeed,
 	}
 }
 
 func (h *Hub) Register(c *Client) { h.register <- c }
+
+func (h *Hub) BattleSpeed() float64 { return h.battleSpeed }
 
 func (h *Hub) KickByCharacterName(name string) {
 	h.tasks <- func() {
@@ -698,6 +705,7 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 			UnlockLevel: game.SkillUnlockLevel(s.ID),
 			Usage:       loadout.SkillUsage[s.ID],
 			UsageToNext: game.SkillUsesToNextLevel(lvl),
+			CastTimeMs:  game.SkillCastTime(s),
 		}
 	}
 	skills := []protocol.SkillInfo{toInfo(game.BasicAttack)}

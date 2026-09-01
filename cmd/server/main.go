@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"ffv-web-game/internal/auth"
 	"ffv-web-game/internal/server"
@@ -35,7 +36,14 @@ func main() {
 	accountsFile := flag.String("accounts", "data/accounts.json", "account persistence file")
 	jwtSecret := flag.String("jwt-secret", "", "JWT signing secret (required in production)")
 	staticDir := flag.String("static", "web/dist", "optional static frontend build to serve")
+	battleSpeed := flag.Float64("battle-speed", server.DefaultBattleSpeed, "battle tempo multiplier (1.0 = baseline, 0.75 = 75% speed)")
 	flag.Parse()
+
+	if v := os.Getenv("BATTLE_SPEED"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			*battleSpeed = f
+		}
+	}
 
 	secret := *jwtSecret
 	if secret == "" {
@@ -53,7 +61,8 @@ func main() {
 	profiles := store.Load(*dataFile)
 	accounts := store.LoadAccounts(*accountsFile)
 	tokens := auth.NewTokenIssuer(secret)
-	hub := server.NewHub(profiles, accounts, tokens)
+	hub := server.NewHub(profiles, accounts, tokens, *battleSpeed)
+	log.Printf("battle speed: %.2fx (tick window %s)", *battleSpeed, server.BattleTickWindow(*battleSpeed))
 	go hub.Run()
 
 	authHandler := server.NewAuthHandler(accounts, profiles, tokens, hub)

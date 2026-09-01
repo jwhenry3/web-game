@@ -61,6 +61,8 @@ const (
 	SkillMaxLevel      = 5
 	SkillUsagePerLevel = 15
 	skillLevelPotency  = 0.08 // +8% per level above 1
+	// DefaultCastTimeMs is the cast bar duration for spells (magic / heals).
+	DefaultCastTimeMs = 1000
 )
 
 type Skill struct {
@@ -78,6 +80,7 @@ type Skill struct {
 	Prereq      string
 	Cost        int
 	Description string
+	CastTimeMs  int // 0 = instant; default 1000 for spells
 }
 
 // BasicAttack is always available; it trains the equipped weapon's job category.
@@ -157,6 +160,14 @@ func SkillPrereq(id string) string {
 		return s.Prereq
 	}
 	return ""
+}
+
+// SkillCastTime returns the cast duration for a skill in milliseconds.
+func SkillCastTime(s Skill) int {
+	if s.CastTimeMs > 0 {
+		return s.CastTimeMs
+	}
+	return 0
 }
 
 // FindSkill looks up any skill (including the basic attack) by ID.

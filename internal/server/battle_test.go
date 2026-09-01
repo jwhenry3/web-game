@@ -71,6 +71,8 @@ func (m *mockHost) BuildVictoryRewards(
 
 func (m *mockHost) NotifyPassiveRewards(_ []protocol.PlayerReward) {}
 
+func (m *mockHost) BattleSpeed() float64 { return DefaultBattleSpeed }
+
 func (m *mockHost) messagesOfType(t protocol.MessageType) []protocol.Envelope {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -418,6 +420,182 @@ func TestConsumableUseHeals(t *testing.T) {
 	}
 	if qty != 2 {
 		t.Fatalf("starter potions should decrement 3 → 2, got %d", qty)
+	}
+}
+
+func TestSpellCastTime(t *testing.T) {
+	host := newMockHost()
+	room := NewBattleRoom("cast-test", 1, host)
+	profile := host.store.GetOrCreate("Vivi", game.JobBLM)
+	room.addPlayer("client-1", profile)
+	room.tickWindow = DefaultTickWindow
+
+	player := room.find("client-1")
+	enemyID := firstEnemyID(room)
+	enemy := room.find(enemyID)
+	enemyHP := enemy.HP
+
+	player.SkillATB = 100
+	player.skillLevels["blm_fire"] = 1
+
+	res := room.resolveAction(queuedAction{
+		ActorID: "client-1",
+		Action:  protocol.ActionPayload{ActionID: "blm_fire", TargetID: enemyID},
+	})
+	if !res.Success {
+		t.Fatalf("blm_fire should begin casting: %+v", res)
+	}
+	if !res.CastStarted {
+		t.Fatal("expected CastStarted on spell begin")
+	}
+	if res.Damage != 0 {
+		t.Fatalf("spell should not deal damage immediately, got %d", res.Damage)
+	}
+	if enemy.HP != enemyHP {
+		t.Fatalf("enemy HP should be unchanged during cast start, %d -> %d", enemyHP, enemy.HP)
+	}
+	if player.casting == nil {
+		t.Fatal("player should have active cast")
+	}
+	if player.SkillATB != 0 {
+		t.Fatalf("GCD should be spent when cast begins, skill ATB=%f", player.SkillATB)
+	}
+
+	for i := 0; i < 20 && player.casting != nil; i++ {
+		room.tick()
+	}
+	if player.casting != nil {
+		t.Fatal("cast should complete within 20 ticks")
+	}
+	if enemy.HP >= enemyHP {
+		t.Fatalf("fire spell should damage enemy after cast, HP %d -> %d", enemyHP, enemy.HP)
+	}
+}
+
+func TestEnemySkillAutoTargets(t *testing.T) {
+	host := newMockHost()
+	room := newTestRoom(t, host)
+	player := room.find("client-1")
+	player.SkillATB = 100
+	player.TargetID = ""
+	player.skillLevels["war_heavy_swing"] = 1
+
+	res := room.resolveAction(queuedAction{
+		ActorID: "client-1",
+		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: ""},
+	})
+	if !res.Success {
+		t.Fatalf("enemy skill should auto-target: %+v", res)
+	}
+	if res.TargetID == "" {
+		t.Fatal("expected auto-selected enemy target")
+	}
+	target := room.find(res.TargetID)
+	if target == nil || target.IsPlayer || !target.Alive {
+		t.Fatalf("target should be a living enemy, got %+v", target)
+	}
+	if player.TargetID != target.ID {
+		t.Fatalf("player focus should sync to auto-target %q, got %q", target.ID, player.TargetID)
+	}
+}
+
+func TestEnemySkillUsesSelectedTarget(t *testing.T) {
+	host := newMockHost()
+	room := newTestRoom(t, host)
+	player := room.find("client-1")
+	enemyID := firstEnemyID(room)
+	var otherEnemyID string
+	for _, e := range room.entities {
+		if !e.IsPlayer && e.Alive && e.ID != enemyID {
+			otherEnemyID = e.ID
+			break
+		}
+	}
+	if otherEnemyID == "" {
+		t.Skip("need multiple enemies for this test")
+	}
+
+	player.SkillATB = 100
+	player.TargetID = otherEnemyID
+	player.skillLevels["war_heavy_swing"] = 1
+
+	res := room.resolveAction(queuedAction{
+		ActorID: "client-1",
+		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: ""},
+	})
+	if !res.Success {
+		t.Fatalf("enemy skill should succeed: %+v", res)
+	}
+	if res.TargetID != otherEnemyID {
+		t.Fatalf("expected selected enemy %q, got %q", otherEnemyID, res.TargetID)
+	}
+}
+
+func TestAutoAttackPausesDuringCast(t *testing.T) {
+	host := newMockHost()
+	room := NewBattleRoom("cast-aa-test", 1, host)
+	profile := host.store.GetOrCreate("Vivi", game.JobBLM)
+	room.addPlayer("client-1", profile)
+	room.tickWindow = DefaultTickWindow
+
+	player := room.find("client-1")
+	enemyID := firstEnemyID(room)
+	player.SkillATB = 100
+	player.AutoATB = 80
+	player.AutoAttack = true
+	player.skillLevels["blm_fire"] = 1
+
+	res := room.resolveAction(queuedAction{
+		ActorID: "client-1",
+		Action:  protocol.ActionPayload{ActionID: "blm_fire", TargetID: enemyID},
+	})
+	if !res.Success || !res.CastStarted {
+		t.Fatalf("expected cast to begin: %+v", res)
+	}
+	if player.AutoATB != 0 {
+		t.Fatalf("auto ATB should reset when cast begins, got %f", player.AutoATB)
+	}
+
+	for i := 0; i < 3 && player.casting != nil; i++ {
+		room.tick()
+	}
+	if player.casting == nil {
+		t.Fatal("cast should still be in progress")
+	}
+	if player.AutoATB > 0.01 {
+		t.Fatalf("auto ATB should not fill during cast, got %f", player.AutoATB)
+	}
+}
+
+func TestPhysicalSkillInstant(t *testing.T) {
+	host := newMockHost()
+	room := newTestRoom(t, host)
+	enemyID := firstEnemyID(room)
+	enemy := room.find(enemyID)
+	enemyHP := enemy.HP
+
+	player := room.find("client-1")
+	player.SkillATB = 100
+	player.skillLevels["war_heavy_swing"] = 1
+
+	res := room.resolveAction(queuedAction{
+		ActorID: "client-1",
+		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: enemyID},
+	})
+	if !res.Success {
+		t.Fatalf("war_heavy_swing should resolve instantly: %+v", res)
+	}
+	if res.CastStarted {
+		t.Fatal("physical skill should not start a cast")
+	}
+	if res.Damage <= 0 {
+		t.Fatal("physical skill should deal damage immediately")
+	}
+	if enemy.HP >= enemyHP {
+		t.Fatalf("enemy should take damage immediately, HP %d -> %d", enemyHP, enemy.HP)
+	}
+	if player.casting != nil {
+		t.Fatal("player should not be casting after instant skill")
 	}
 }
 

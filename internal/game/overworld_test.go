@@ -83,3 +83,25 @@ func TestSlideMoveStopsOnWater(t *testing.T) {
 		t.Fatalf("slide must not land on a blocked tile (%f,%f)", x, y)
 	}
 }
+
+func TestPlayerBoundsWalkableAtSpawn(t *testing.T) {
+	if !BoundsWalkableAt(200, 200, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+		t.Fatal("haven spawn must fit the player collision box")
+	}
+}
+
+func TestSlideMovePlayerStopsAtTrees(t *testing.T) {
+	// Tree at (15,8); approach from the west along the path.
+	from := TileCenter(Tile{C: 13, R: 8})
+	to := TileCenter(Tile{C: 15, R: 8})
+	x, y := SlideMovePlayer(from.X, from.Y, to.X, to.Y)
+	if BoundsWalkableAt(to.X, to.Y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+		t.Skip("destination is open; map changed")
+	}
+	if !BoundsWalkableAt(x, y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+		t.Fatalf("player slide must stay walkable, landed at (%f,%f)", x, y)
+	}
+	if x == to.X && y == to.Y {
+		t.Fatal("player should not enter the tree tile")
+	}
+}

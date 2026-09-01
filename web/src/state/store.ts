@@ -44,6 +44,7 @@ export interface CharacterSummary {
 export interface BattleView {
   battleId: string;
   entities: BattleEntity[];
+  battleSpeed: number;
   log: string[];
   end: BattleEndPayload | null;
 }

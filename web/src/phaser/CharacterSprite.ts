@@ -40,6 +40,9 @@ export class CharacterSprite {
   private facing: CharacterFacing = H99_FACING_DEFAULT;
   private loadToken = 0;
   private ready = false;
+  private casting = false;
+  private castPulse = 0;
+  private gcdReady = false;
   private hitCallback: (() => void) | null = null;
   private scene: Phaser.Scene;
 
@@ -88,14 +91,54 @@ export class CharacterSprite {
   }
 
   playAttack(): void {
+    this.casting = false;
     this.anim = "attack";
     this.frame = 0;
     this.frameTimer = 0;
     if (this.ready) this.applyFrame();
   }
 
+  setCasting(active: boolean): void {
+    if (this.casting === active) return;
+    this.casting = active;
+    this.castPulse = 0;
+    if (active) {
+      this.gcdReady = false;
+      this.anim = "idle";
+      this.frame = 0;
+      this.frameTimer = 0;
+    }
+    if (this.ready) this.applyFrame();
+  }
+
+  setGcdReady(ready: boolean): void {
+    if (this.gcdReady === ready) return;
+    this.gcdReady = ready;
+  }
+
   update(delta: number): void {
     if (!this.ready) return;
+    if (this.casting) {
+      this.castPulse += delta;
+      const pulse = 0.85 + 0.15 * Math.sin(this.castPulse / 140);
+      const tint = Phaser.Display.Color.GetColor(
+        Math.floor(0xc4 * pulse),
+        Math.floor(0xb5 * pulse),
+        Math.floor(0xfd * pulse),
+      );
+      for (const sprite of this.layers.values()) sprite.setTint(tint);
+    } else if (this.gcdReady) {
+      this.castPulse += delta;
+      const pulse = 0.92 + 0.08 * Math.sin(this.castPulse / 160);
+      const tint = Phaser.Display.Color.GetColor(
+        Math.floor(0xff * pulse),
+        Math.floor(0xf0 * pulse),
+        Math.floor(0xc0 * pulse),
+      );
+      for (const sprite of this.layers.values()) sprite.setTint(tint);
+    } else {
+      for (const sprite of this.layers.values()) sprite.clearTint();
+    }
     const { frames, msPerFrame } = H99_ANIMS[this.anim];
     this.frameTimer += delta;
     if (this.frameTimer >= msPerFrame) {

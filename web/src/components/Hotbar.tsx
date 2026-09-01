@@ -31,6 +31,7 @@ export function Hotbar() {
 
   const self = battle?.entities.find((e) => e.id === selfId);
   const gcd = self?.skill_atb ?? self?.atb ?? 0;
+  const casting = !!self?.casting_skill_id;
   const inBattle = screen === "battle" && !!self && !battle?.end;
 
   return (
@@ -39,7 +40,7 @@ export function Hotbar() {
         const bind = profile.hotbar?.[slot];
         const isAttack = bind?.kind === "skill" && bind.id === "attack";
         const onGcd = inBattle && !isAttack && !!bind;
-        const gcdLocked = onGcd && gcd < 100;
+        const gcdLocked = onGcd && (gcd < 100 || casting);
         const active =
           (isAttack && self?.auto_attack) ||
           (selected &&
@@ -85,7 +86,10 @@ export function Hotbar() {
             }}
           >
             {onGcd && (
-              <span className="gcd-overlay" style={{ height: `${Math.max(0, 100 - gcd)}%` }} />
+              <span
+                className="gcd-overlay"
+                style={{ height: `${Math.max(0, casting ? 100 : 100 - gcd)}%` }}
+              />
             )}
             <span className="hotbar-key">{slot}</span>
             <span className="hotbar-label">{labelFor(bind, profile)}</span>

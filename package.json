@@ -1,0 +1,20 @@
+{
+  "name": "ffv-web-game",
+  "private": true,
+  "version": "0.1.0",
+  "description": "FF5-inspired multiplayer RPG — root scripts for Go server and web client",
+  "scripts": {
+    "server": "go run ./cmd/server",
+    "server:dev": "go run github.com/air-verse/air@latest",
+    "server:build": "go build -o bin/server.exe ./cmd/server",
+    "server:start": "node scripts/start-server.mjs",
+    "server:stop": "node scripts/stop-server.mjs",
+    "server:test": "go test ./...",
+    "web:install": "npm install --prefix web",
+    "web:dev": "npm run dev --prefix web",
+    "web:build": "npm run build --prefix web",
+    "web:preview": "npm run preview --prefix web",
+    "build": "npm run web:build",
+    "test": "npm run server:test"
+  }
+}

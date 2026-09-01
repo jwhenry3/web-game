@@ -2,6 +2,8 @@ import Phaser from "phaser";
 import { battleEvents, net } from "../net/socket";
 import { useGame } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
+import { enemyKindFromName } from "../characters/enemies";
+import { ensureEnemyTextures } from "../characters/enemyAssets";
 import {
   appearanceKey,
   H99_BATTLE_RING_RADIUS,
@@ -10,21 +12,25 @@ import {
 } from "../characters/types";
 import type { ActionResult, BattleEntity } from "../types";
 import { CharacterSprite } from "./CharacterSprite";
+import { EnemySprite } from "./EnemySprite";
+import { playBattleVfx, playCastStartVfx, playFizzleVfx } from "./battleVfx";
+import { battleDelta, battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
 import { statusColor, statusLabel } from "../ui/statusDisplay";
 
 interface Figure {
   container: Phaser.GameObjects.Container;
-  body: Phaser.GameObjects.Rectangle | null;
   sprite: CharacterSprite | null;
+  enemy: EnemySprite | null;
   label: Phaser.GameObjects.Text;
   hpBar: Phaser.GameObjects.Rectangle;
   hpBack: Phaser.GameObjects.Rectangle;
-  gcdBar: Phaser.GameObjects.Rectangle;
-  gcdBack: Phaser.GameObjects.Rectangle;
+  castBar: Phaser.GameObjects.Rectangle;
+  castBack: Phaser.GameObjects.Rectangle;
   statusText: Phaser.GameObjects.Text;
   ring: Phaser.GameObjects.Arc;
   homeX: number;
   appearanceKey: string;
+  enemyKind: string;
 }
 
 const VIEW_W = 960;
@@ -40,6 +46,7 @@ export class BattleScene extends Phaser.Scene {
 
   create() {
     this.drawBackdrop();
+    ensureEnemyTextures(this);
     battleEvents.on("result", this.onResult);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       battleEvents.off("result", this.onResult);
@@ -79,11 +86,16 @@ export class BattleScene extends Phaser.Scene {
   private ensureFigure(e: BattleEntity, index: number, count: number): Figure {
     const app = e.is_player ? this.playerAppearance(e) : null;
     const appKey = app ? appearanceKey(app) : "";
+    const kind = enemyKindFromName(e.name, e.kind);
     let f = this.figures.get(e.id);
     if (f) {
       if (e.is_player && f.sprite && app && f.appearanceKey !== appKey) {
         f.sprite.setAppearance(app);
         f.appearanceKey = appKey;
+      }
+      if (!e.is_player && f.enemy && f.enemyKind !== kind) {
+        f.enemy.setKind(kind);
+        f.enemyKind = kind;
       }
       return f;
     }
@@ -93,51 +105,62 @@ export class BattleScene extends Phaser.Scene {
     const x = e.is_player ? 250 : 690;
 
     const container = this.add.container(x, y);
-    let body: Phaser.GameObjects.Rectangle | null = null;
     let sprite: CharacterSprite | null = null;
-    const h = e.is_player ? H99_DISPLAY_HEIGHT : 44;
+    let enemy: EnemySprite | null = null;
 
-    const ring = this.add.circle(0, 0, e.is_player ? H99_BATTLE_RING_RADIUS : 26, 0xffe9a8, 0).setVisible(false);
+    const ring = this.add.circle(0, 0, e.is_player ? H99_BATTLE_RING_RADIUS : H99_BATTLE_RING_RADIUS * 0.85, 0xffe9a8, 0).setVisible(false);
+
+    const clickTarget = () => {
+      const target = useGame.getState().battle?.entities.find((x) => x.id === e.id);
+      if (target) net.clickEntity(target);
+    };
 
     if (e.is_player) {
       sprite = new CharacterSprite(this, 0, 0, app!);
-      sprite.setInteractive(() => {
-        const target = useGame.getState().battle?.entities.find((x) => x.id === e.id);
-        if (target) net.clickEntity(target);
-      });
+      sprite.setInteractive(clickTarget);
       container.add([ring, sprite.container]);
     } else {
-      const w = 44;
-      body = this.add.rectangle(0, 0, w, h, 0x9e3a3a);
-      body.setStrokeStyle(2, 0x000000);
-      body.setInteractive({ useHandCursor: true });
-      body.on("pointerdown", () => {
-        const target = useGame.getState().battle?.entities.find((x) => x.id === e.id);
-        if (target) net.clickEntity(target);
-      });
-      container.add([ring, body]);
+      enemy = new EnemySprite(this, 0, 0, kind);
+      enemy.setFacing("left");
+      enemy.setInteractive(clickTarget);
+      container.add([ring, enemy.container]);
     }
 
     const label = this.add
-      .text(0, e.is_player ? H99_NAME_LABEL_Y : -h / 2 - 22, e.name, { fontSize: "12px", color: "#ffffff", fontFamily: "monospace" })
+      .text(0, H99_NAME_LABEL_Y, e.name, { fontSize: "12px", color: "#ffffff", fontFamily: "monospace" })
       .setOrigin(0.5)
       .setShadow(1, 1, "#000", 2);
 
-    const hpBack = this.add.rectangle(0, e.is_player ? H99_NAME_LABEL_Y + 14 : -h / 2 - 10, 50, 5, 0x222222).setOrigin(0.5);
-    const hpBar = this.add.rectangle(-25, e.is_player ? H99_NAME_LABEL_Y + 14 : -h / 2 - 10, 50, 5, 0x4ade80).setOrigin(0, 0.5);
+    const hpBack = this.add.rectangle(0, H99_NAME_LABEL_Y + 14, 50, 5, 0x222222).setOrigin(0.5);
+    const hpBar = this.add.rectangle(-25, H99_NAME_LABEL_Y + 14, 50, 5, 0x4ade80).setOrigin(0, 0.5);
 
-    const gcdY = e.is_player ? 8 : h / 2 + 8;
-    const gcdBack = this.add.rectangle(0, gcdY, 52, 7, 0x1a1610).setOrigin(0.5);
-    gcdBack.setStrokeStyle(1, 0x6a5a2a);
-    const gcdBar = this.add.rectangle(-25, gcdY, 0, 5, 0xfacc15).setOrigin(0, 0.5);
+    const castY = 8;
+    const castBack = this.add.rectangle(0, castY, 52, 7, 0x1a1028).setOrigin(0.5);
+    castBack.setStrokeStyle(1, 0x6a4a8a);
+    const castBar = this.add.rectangle(-25, castY, 0, 5, 0xa78bfa).setOrigin(0, 0.5);
+    castBack.setVisible(false);
+    castBar.setVisible(false);
 
-    const statusY = e.is_player ? H99_NAME_LABEL_Y + 22 : -h / 2 - 4;
     const statusText = this.add
-      .text(0, statusY, "", { fontSize: "9px", color: "#ffffff", fontFamily: "monospace" })
+      .text(0, H99_NAME_LABEL_Y + 22, "", { fontSize: "9px", color: "#ffffff", fontFamily: "monospace" })
       .setOrigin(0.5);
 
-    container.add([label, hpBack, hpBar, statusText, gcdBack, gcdBar]);
-    f = { container, body, sprite, label, hpBar, hpBack, gcdBar, gcdBack, statusText, ring, homeX: x, appearanceKey: appKey };
+    container.add([label, hpBack, hpBar, statusText, castBack, castBar]);
+    f = {
+      container,
+      sprite,
+      enemy,
+      label,
+      hpBar,
+      hpBack,
+      castBar,
+      castBack,
+      statusText,
+      ring,
+      homeX: x,
+      appearanceKey: appKey,
+      enemyKind: kind,
+    };
     this.figures.set(e.id, f);
     return f;
   }
@@ -163,12 +186,11 @@ export class BattleScene extends Phaser.Scene {
 
   private syncFigure(e: BattleEntity, index: number, count: number, delta: number) {
     const f = this.ensureFigure(e, index, count);
+    const battleSpeed = useGame.getState().battle?.battleSpeed ?? DEFAULT_BATTLE_SPEED;
+    const animDelta = battleDelta(delta, battleSpeed);
     const ratio = e.max_hp > 0 ? Phaser.Math.Clamp(e.hp / e.max_hp, 0, 1) : 0;
     f.hpBar.width = 50 * ratio;
     f.hpBar.fillColor = ratio > 0.5 ? 0x4ade80 : ratio > 0.25 ? 0xfacc15 : 0xef4444;
-    const gcd = Phaser.Math.Clamp((e.skill_atb ?? e.atb ?? 0) / 100, 0, 1);
-    f.gcdBar.width = 50 * gcd;
-    f.gcdBar.fillColor = gcd >= 1 ? 0xffe9a8 : 0xe8c96a;
     if (e.statuses?.length) {
       f.statusText.setText(e.statuses.map((s) => statusLabel(s.kind)).join(" "));
       f.statusText.setColor(statusColor(e.statuses[0].kind));
@@ -176,69 +198,111 @@ export class BattleScene extends Phaser.Scene {
     } else {
       f.statusText.setVisible(false);
     }
-    f.gcdBack.setVisible(true);
-    f.gcdBar.setVisible(e.alive);
+
+    const casting = !!e.casting_skill_id;
+    f.sprite?.setCasting(casting);
+    f.enemy?.setCasting(casting);
+    if (casting) {
+      const castPct = Phaser.Math.Clamp((e.cast_progress ?? 0) / 100, 0, 1);
+      f.castBack.setVisible(true);
+      f.castBar.setVisible(e.alive);
+      f.castBar.width = 50 * castPct;
+      f.castBar.fillColor = castPct >= 1 ? 0xc4b5fd : 0xa78bfa;
+    } else {
+      f.castBack.setVisible(false);
+      f.castBar.setVisible(false);
+    }
+
     f.container.setAlpha(e.alive ? 1 : 0.25);
-    if (!e.alive && f.body) f.body.fillColor = 0x555555;
-    f.sprite?.update(delta);
+    f.sprite?.update(animDelta);
+    f.enemy?.update(animDelta);
 
     const state = useGame.getState();
     const sk = state.selectedAction;
     const self = state.selfId ? state.battle?.entities.find((x) => x.id === state.selfId) : undefined;
     const targeted = self?.target_id === e.id;
     const targetable = !!sk && e.alive && (sk.heals ? e.is_player : !e.is_player);
+    const gcdReady =
+      e.is_player && e.alive && !casting && (e.skill_atb ?? e.atb ?? 0) >= 100;
+    const isSelf = e.id === state.selfId;
+
+    f.ring.isStroked = false;
     if (targetable) {
       const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 150);
       f.ring.setVisible(true);
       f.ring.setFillStyle(0xffe9a8, 0.2 * pulse + 0.1);
-      if (f.body) f.body.setStrokeStyle(3, Phaser.Display.Color.GetColor(255, 233, 168 * pulse + 40));
     } else if (targeted) {
       f.ring.setVisible(true);
       f.ring.setFillStyle(0xe8a13c, 0.35);
-      if (f.body) f.body.setStrokeStyle(3, 0xe8a13c);
+    } else if (gcdReady) {
+      const pulse = 0.5 + 0.5 * Math.sin(this.time.now / 220);
+      f.ring.setVisible(true);
+      f.ring.setFillStyle(0xfacc15, (isSelf ? 0.28 : 0.16) * pulse + (isSelf ? 0.22 : 0.1));
+      if (isSelf) {
+        f.ring.isStroked = true;
+        f.ring.setStrokeStyle(2, 0xffe9a8, 0.45 * pulse + 0.35);
+      }
+      f.sprite?.setGcdReady(isSelf);
     } else {
       f.ring.setVisible(false);
-      if (f.body) f.body.setStrokeStyle(2, 0x000000);
+      f.sprite?.setGcdReady(false);
     }
   }
 
   private animateResult(r: ActionResult) {
     const actor = this.figures.get(r.actor_id);
     const target = this.figures.get(r.target_id);
+    const battleSpeed = useGame.getState().battle?.battleSpeed ?? DEFAULT_BATTLE_SPEED;
 
     if (!r.success) {
-      if (actor) this.floatText(actor.container.x, actor.container.y - 40, "fizzle", "#8899aa");
+      if (actor) playFizzleVfx(this, actor.container.x, actor.container.y - 40, battleSpeed);
       return;
     }
+
+    if (r.cast_started) {
+      if (actor) {
+        actor.sprite?.setCasting(true);
+        actor.enemy?.setCasting(true);
+        playCastStartVfx(this, actor.container.x, actor.container.y - 20, r.action_id, battleSpeed);
+      }
+      return;
+    }
+
+    const actorPos = actor ? { x: actor.container.x, y: actor.container.y } : undefined;
+    const targetPos = target ? { x: target.container.x, y: target.container.y } : undefined;
+    playBattleVfx(this, r, actorPos, targetPos, battleSpeed);
+
     if (actor) {
       actor.sprite?.playAttack();
+      actor.enemy?.playAttack();
       const dir = actor.container.x < VIEW_W / 2 ? 1 : -1;
       this.tweens.add({
         targets: actor.container,
         x: actor.homeX + 30 * dir,
-        duration: 110,
+        duration: battleDuration(110, battleSpeed),
         yoyo: true,
         ease: "Power2",
       });
     }
     if (target) {
       if (r.damage) {
-        this.floatText(target.container.x, target.container.y - 45, `${r.damage}`, "#ffffff");
+        this.floatText(target.container.x, target.container.y - 45, `${r.damage}`, "#ffffff", battleSpeed);
+        target.enemy?.playHit(battleSpeed);
         this.tweens.add({
           targets: target.container,
           alpha: 0.3,
-          duration: 60,
+          duration: battleDuration(60, battleSpeed),
           yoyo: true,
           repeat: 2,
         });
-        this.cameras.main.shake(80, 0.003);
+        this.cameras.main.shake(battleDuration(80, battleSpeed), 0.003);
       } else if (r.heal) {
-        this.floatText(target.container.x, target.container.y - 45, `+${r.heal}`, "#4ade80");
+        this.floatText(target.container.x, target.container.y - 45, `+${r.heal}`, "#4ade80", battleSpeed);
       }
     }
   }
 
-  private floatText(x: number, y: number, text: string, color: string) {
+  private floatText(x: number, y: number, text: string, color: string, battleSpeed: number) {
     const t = this.add
       .text(x, y, text, {
         fontSize: "18px",
@@ -252,7 +316,7 @@ export class BattleScene extends Phaser.Scene {
       targets: t,
       y: y - 40,
       alpha: 0,
-      duration: 900,
+      duration: battleDuration(900, battleSpeed),
       ease: "Power1",
       onComplete: () => t.destroy(),
     });

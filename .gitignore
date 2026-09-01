@@ -55,6 +55,9 @@ desktop.ini
 .classpath
 .settings/
 
+# ---- Air (Go live reload) ----
+build-errors.log
+
 # ---- Misc ----
 *.log
 .cache/
