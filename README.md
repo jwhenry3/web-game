@@ -195,3 +195,8 @@ Spectator mode, party level syncing, passive party XP, quests/events, and
 trading are still future work. The core loop — auth, overworld, batched ATB
 combat, job/subjob progression, status effects, loadouts, persistence, and
 procedural loot — is in place.
+
+
+## Discord
+
+- https://discord.gg/kNjTp5VPv
