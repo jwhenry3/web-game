@@ -10,6 +10,7 @@ import { enemyKindFromName } from "../../characters/enemies";
 import { ensureEnemyTextures } from "../../characters/enemyAssets";
 import { isJumpAction, playBattleVfx, playCastStartVfx, playFizzleVfx, playJumpCrash } from "../../phaser/battleVfx";
 import { battleDuration, DEFAULT_BATTLE_SPEED } from "../../phaser/battleAnim";
+import { bindingToPhaserKeyCode, mergeKeybinds } from "../../input/keybinds";
 
 const ARENA_W = 720;
 const ARENA_H = 480;
@@ -29,8 +30,8 @@ const CAST_BAR_W = 48;
 
 export class RTBattleScene extends Phaser.Scene {
   private fighters = new Map<string, Fighter>();
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private wasd!: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
+  private moveKeys: Partial<Record<"move_up" | "move_down" | "move_left" | "move_right", Phaser.Input.Keyboard.Key>> = {};
+  private moveKeysSig = "";
   private lastMoveSent = 0;
   private lastSentX = 0;
   private lastSentY = 0;
@@ -56,19 +57,34 @@ export class RTBattleScene extends Phaser.Scene {
     await ensureEnemyTextures(this);
 
     const kb = this.input.keyboard!;
-    this.cursors = kb.createCursorKeys();
-    this.wasd = {
-      W: kb.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-      A: kb.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      S: kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-      D: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-    };
-    kb.on("keydown-SPACE", () => net.activateHotbar("1"));
+    this.syncMoveKeys();
+    kb.disableGlobalCapture();
 
     battleEvents.on("rt_event", this.onRtEvent);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       battleEvents.off("rt_event", this.onRtEvent);
     });
+  }
+
+  private syncMoveKeys() {
+    const binds = mergeKeybinds(useGame.getState().profile?.keybinds);
+    const sig = `${binds.move_up}|${binds.move_down}|${binds.move_left}|${binds.move_right}`;
+    if (sig === this.moveKeysSig) return;
+    this.moveKeysSig = sig;
+    const kb = this.input.keyboard;
+    if (!kb) return;
+    const bindKey = (action: "move_up" | "move_down" | "move_left" | "move_right") => {
+      const code = bindingToPhaserKeyCode(binds[action] ?? "");
+      this.moveKeys[action] = code != null ? kb.addKey(code) : undefined;
+    };
+    bindKey("move_up");
+    bindKey("move_down");
+    bindKey("move_left");
+    bindKey("move_right");
+  }
+
+  private isMoveDown(action: "move_up" | "move_down" | "move_left" | "move_right"): boolean {
+    return !!this.moveKeys[action]?.isDown;
   }
 
   private ensureEntity(ent: RTBattleEntity) {
@@ -265,6 +281,7 @@ export class RTBattleScene extends Phaser.Scene {
   }
 
   update() {
+    this.syncMoveKeys();
     const rt = useGame.getState().rtBattle;
     if (!rt) return;
     for (const ent of rt.entities) {
@@ -284,11 +301,11 @@ export class RTBattleScene extends Phaser.Scene {
     let moveX = 0;
     let moveY = 0;
     const selfJumping = !!(selfId && this.jumping.has(selfId));
-    if (self && !selfJumping && !rt.end && this.cursors && this.wasd) {
-      if (this.cursors.left.isDown || this.wasd.A.isDown) moveX -= 1;
-      if (this.cursors.right.isDown || this.wasd.D.isDown) moveX += 1;
-      if (this.cursors.up.isDown || this.wasd.W.isDown) moveY -= 1;
-      if (this.cursors.down.isDown || this.wasd.S.isDown) moveY += 1;
+    if (self && !selfJumping && !rt.end) {
+      if (this.isMoveDown("move_left")) moveX -= 1;
+      if (this.isMoveDown("move_right")) moveX += 1;
+      if (this.isMoveDown("move_up")) moveY -= 1;
+      if (this.isMoveDown("move_down")) moveY += 1;
     }
     const selfMoving = moveX !== 0 || moveY !== 0;
 

@@ -4,17 +4,17 @@ import "strings"
 
 // jobAbility defines one node in a job's four-skill tree.
 type jobAbility struct {
-	Suffix  string // appended to job id, e.g. "heavy_swing" -> war_heavy_swing
-	Name    string
-	Desc    string
-	MPCost  int
-	Power   float64
-	Prereq  int // index of prior ability, -1 for root
-	Heals   bool
-	Buffs   bool
-	Magic   bool
-	Loot    bool
-	Ranged  bool // jump / throw / missile: usable at range in realtime combat
+	Suffix string // appended to job id, e.g. "heavy_swing" -> war_heavy_swing
+	Name   string
+	Desc   string
+	MPCost int
+	Power  float64
+	Prereq int // index of prior ability, -1 for root
+	Heals  bool
+	Buffs  bool
+	Magic  bool
+	Loot   bool
+	Ranged bool // jump / throw / missile: usable at range in realtime combat
 }
 
 var jobAbilityTrees = map[JobID][]jobAbility{
@@ -160,7 +160,7 @@ func init() {
 }
 
 func buildJobCatalog() []Skill {
-	var out []Skill
+	out := []Skill{SkillReturn, SkillTeleport}
 	for _, def := range AllJobs() {
 		tree, ok := jobAbilityTrees[def.ID]
 		if !ok {

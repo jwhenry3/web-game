@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { pushChat, useGame } from "../state/store";
-import { pluginHost } from "../core/plugins/pluginHost";
+import { pluginHost, applyMapSnapshot } from "../core/plugins/pluginHost";
+import { fetchAtlas } from "./atlas";
 import { loadDraftAppearance, saveAppearance } from "../characters/appearanceStorage";
 import { appearanceFromWire } from "../characters/types";
 import type { CharacterAppearanceWire } from "../characters/heroes99";
@@ -11,6 +12,7 @@ import type {
   Envelope,
   MessageType,
   PartyInvitePayload,
+  FriendRequestPayload,
   SocialStatePayload,
   WelcomePayload,
   SavePoint,
@@ -164,12 +166,21 @@ export const net = {
   clearHotbar(slot: string) {
     send("set_hotbar", { slot, kind: "", id: "" });
   },
+  setKeybinds(keybinds: Record<string, string>) {
+    send("set_keybinds", { keybinds });
+  },
   joinBattle(battleId: string) {
     send("join_battle", { battle_id: battleId });
     useGame.setState({ battleInvite: null });
   },
   addFriend(playerName: string) {
     send("add_friend", { player_name: playerName });
+  },
+  acceptFriend(playerName: string) {
+    send("accept_friend", { player_name: playerName });
+  },
+  declineFriend(playerName: string) {
+    send("decline_friend", { player_name: playerName });
   },
   removeFriend(playerName: string) {
     send("remove_friend", { player_name: playerName });
@@ -213,6 +224,32 @@ export const net = {
   },
   setSavePoint(savePointId: string) {
     send("set_save_point", { save_point_id: savePointId });
+  },
+  useWorldSkill(skillId: string, savePointId?: string) {
+    send("use_world_skill", { skill_id: skillId, save_point_id: savePointId });
+    useGame.getState().closeWorldSkillDialog();
+  },
+  activateWorldSkill(skillId: string) {
+    const { profile, screen, openWorldSkillDialog } = useGame.getState();
+    if (!profile) return;
+    if (screen !== "world") {
+      pushChat("system", "That can only be used in the field.");
+      return;
+    }
+    const sk = profile.skills.find((s) => s.id === skillId);
+    if (!sk?.unlocked) return;
+    const fieldSkill = sk.world_only || skillId === "return" || skillId === "teleport";
+    if (!fieldSkill) return;
+    if (skillId === "teleport") {
+      openWorldSkillDialog("teleport");
+      return;
+    }
+    if (skillId === "return") {
+      openWorldSkillDialog("return");
+      return;
+    }
+    useGame.setState({ openWindow: null, bindSlot: null });
+    this.useWorldSkill(skillId);
   },
 
   clickEntity(target: { id: string; alive: boolean; is_player: boolean }) {
@@ -269,11 +306,18 @@ export const net = {
   /** Pressing a hotbar key fires skills/items on the GCD (attack included). */
   activateHotbar(slot: string) {
     const { profile, screen } = useGame.getState();
+    const bind = profile?.hotbar?.[slot];
+    if (!profile || !bind) return;
+
+    if (screen === "world" && bind.kind === "skill") {
+      this.activateWorldSkill(bind.id);
+      return;
+    }
+
     const ctx = battleContext();
-    if (!profile || screen !== "battle" || !ctx || ctx.ended) return;
+    if (screen !== "battle" || !ctx || ctx.ended) return;
     const { self, entities } = ctx;
-    const bind = profile.hotbar?.[slot];
-    if (!bind || !self.alive) return;
+    if (!self.alive) return;
     if (!isGcdReady(self)) return;
 
     if (bind.kind === "skill") {
@@ -309,7 +353,7 @@ export const net = {
     const item = profile?.inventory.find((i) => i.id === itemId);
     if (!item) return;
     if (screen !== "battle" || !selfId || !ctx || ctx.ended) {
-      pushChat("system", "Consumables are used during battle (hotbar 1–5).");
+      pushChat("system", "Consumables are used during battle (assign to hotbar).");
       return;
     }
     const { self } = ctx;
@@ -341,37 +385,58 @@ function handleMessage(env: Envelope) {
   switch (env.type) {
     case "welcome": {
       const p = env.payload as WelcomePayload;
-      const fromServer = appearanceFromWire(p.profile.appearance);
-      const appearance = fromServer ?? loadDraftAppearance(p.profile.race ?? "hume");
-      saveAppearance(p.player_id, appearance);
-      const summary = {
-        name: p.profile.name,
-        race: p.profile.race ?? "",
-        main_job: p.profile.main_job,
-        sub_job: p.profile.sub_job,
-      };
-      g.setState((s) => {
-        const exists = s.characters.some((c) => c.name === summary.name);
-        const characters = exists ? s.characters : [...s.characters, summary];
-        const selfWeapon = mainWeaponTypeFromProfile(p.profile);
-        const selfWp = s.players[p.player_id];
-        const players =
-          selfWp && selfWeapon
-            ? { ...s.players, [p.player_id]: { ...selfWp, weapon: selfWeapon } }
-            : s.players;
-        // Mid-battle profile sync (e.g. consumable use) must not eject the player from combat.
-        const screen = s.screen === "battle" ? "battle" : "world";
-        return {
-          selfId: p.player_id,
-          profile: p.profile,
-          hasCharacter: true,
-          characters,
-          character: summary,
-          screen,
-          loginError: null,
-          players,
+      void (async () => {
+        if (p.map?.modules?.length && p.map.combat) {
+          try {
+            await applyMapSnapshot(p.map);
+          } catch (err) {
+            console.error("failed to load map modules", err);
+          }
+        }
+        const fromServer = appearanceFromWire(p.profile.appearance);
+        const appearance = fromServer ?? loadDraftAppearance(p.profile.race ?? "hume");
+        saveAppearance(p.player_id, appearance);
+        const summary = {
+          name: p.profile.name,
+          race: p.profile.race ?? "",
+          main_job: p.profile.main_job,
+          sub_job: p.profile.sub_job,
         };
-      });
+        g.setState((s) => {
+          const exists = s.characters.some((c) => c.name === summary.name);
+          const characters = exists ? s.characters : [...s.characters, summary];
+          const selfWeapon = mainWeaponTypeFromProfile(p.profile);
+          const selfWp = s.players[p.player_id];
+          const players =
+            selfWp && selfWeapon
+              ? { ...s.players, [p.player_id]: { ...selfWp, weapon: selfWeapon } }
+              : s.players;
+          const screen = s.screen === "battle" ? "battle" : "world";
+          return {
+            selfId: p.player_id,
+            profile: p.profile,
+            hasCharacter: true,
+            characters,
+            character: summary,
+            screen,
+            loginError: null,
+            players,
+            mapInfo: p.map
+              ? {
+                  id: p.map.id,
+                  name: p.map.name,
+                  combat: p.map.combat,
+                  capabilities: p.map.capabilities ?? [],
+                  portals: p.map.portals ?? [],
+                }
+              : s.mapInfo,
+            overworld: p.map?.overworld ?? s.overworld,
+          };
+        });
+        fetchAtlas()
+          .then((atlas) => useGame.setState({ atlas: atlas.maps ?? [] }))
+          .catch(() => {});
+      })();
       break;
     }
     case "world_state": {
@@ -438,9 +503,21 @@ function handleMessage(env: Envelope) {
       const p = env.payload as SocialStatePayload;
       g.setState({
         friends: p.friends ?? [],
+        friendRequests: p.pending_friend_requests ?? [],
+        outgoingFriendRequests: p.outgoing_friend_requests ?? [],
         party: p.party ?? null,
         partyInvite: p.pending_invite ?? null,
       });
+      break;
+    }
+    case "friend_request_received": {
+      const p = env.payload as FriendRequestPayload;
+      g.setState((s) => {
+        const exists = s.friendRequests.some((r) => r.from_name.toLowerCase() === p.from_name.toLowerCase());
+        if (exists) return s;
+        return { friendRequests: [...s.friendRequests, p] };
+      });
+      pushChat("social", `${p.from_name} sent you a friend request.`);
       break;
     }
     case "party_invite_received": {

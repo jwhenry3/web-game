@@ -37,6 +37,8 @@ type worldNPC struct {
 	idleUntil   time.Time
 	wanderStep  int
 
+	ow *game.Overworld
+
 	// Hidden from the world while fighting or waiting on SpawnWindows.
 	despawned bool
 	respawnAt time.Time
@@ -66,11 +68,20 @@ func (h *Hub) seedNPCs(count int) {
 	if count <= 0 {
 		return
 	}
-	for i, p := range game.NPCPatrols {
+	patrols := game.NPCPatrols
+	if h.overworld != nil {
+		patrols = h.overworld.NPCPatrols
+	}
+	for i, p := range patrols {
 		if i >= count {
 			break
 		}
-		reg, _ := game.RegionByID(p.Region)
+		var reg game.Region
+		if h.overworld != nil {
+			reg, _ = h.overworld.RegionByID(p.Region)
+		} else {
+			reg, _ = game.RegionByID(p.Region)
+		}
 		start := game.TileCenter(p.Home)
 		n := &worldNPC{
 			ID:     p.ID,
@@ -81,6 +92,7 @@ func (h *Hub) seedNPCs(count int) {
 			Y:      start.Y,
 			patrol: p,
 			region: reg,
+			ow:     h.overworld,
 		}
 		n.beginWander()
 		h.npcs[n.ID] = n
@@ -93,17 +105,32 @@ func (n *worldNPC) beginWander() {
 	n.path = nil
 	n.pathI = 0
 	n.wanderStep = 0
-	n.idleUntil = time.Now().Add(game.WanderIdleDuration())
+	n.idleUntil = time.Now().Add(n.wanderIdle())
+}
+
+func (n *worldNPC) wanderIdle() time.Duration {
+	if n.ow != nil {
+		return n.ow.WanderIdleDuration()
+	}
+	return game.WanderIdleDuration()
 }
 
 func (n *worldNPC) pickNextPath() bool {
 	from := game.WorldToTile(n.X, n.Y)
-	if !game.WalkableTile(from.C, from.R) {
+	walkable := game.WalkableTile
+	if n.ow != nil {
+		walkable = n.ow.WalkableTile
+	}
+	if !walkable(from.C, from.R) {
 		home := game.TileCenter(n.patrol.Home)
 		n.X, n.Y = home.X, home.Y
 		from = n.patrol.Home
 	}
-	n.path = game.PickRandomWanderPath(n.ID, n.region, from, n.wanderStep)
+	if n.ow != nil {
+		n.path = n.ow.PickRandomWanderPath(n.ID, n.region, from, n.wanderStep)
+	} else {
+		n.path = game.PickRandomWanderPath(n.ID, n.region, from, n.wanderStep)
+	}
 	n.pathI = 0
 	n.wanderStep++
 	return len(n.path) > 0
@@ -112,7 +139,7 @@ func (n *worldNPC) pickNextPath() bool {
 func (n *worldNPC) arriveAtDest() {
 	n.path = nil
 	n.pathI = 0
-	n.idleUntil = time.Now().Add(game.WanderIdleDuration())
+	n.idleUntil = time.Now().Add(n.wanderIdle())
 }
 
 func (n *worldNPC) step(distStep float64) bool {
@@ -150,7 +177,13 @@ func (n *worldNPC) step(distStep float64) bool {
 	}
 	n.X += dx / d * distStep
 	n.Y += dy / d * distStep
-	if !game.WalkableAt(n.X, n.Y) {
+	ok := false
+	if n.ow != nil {
+		ok = n.ow.WalkableAt(n.X, n.Y)
+	} else {
+		ok = game.WalkableAt(n.X, n.Y)
+	}
+	if !ok {
 		n.X, n.Y = dest.X, dest.Y
 	}
 	return true
@@ -178,6 +211,9 @@ func (h *Hub) tickNPCs() {
 		return
 	}
 	step := game.WanderSpeed() * npcTickSec
+	if h.overworld != nil {
+		step = h.overworld.WanderSpeed() * npcTickSec
+	}
 	changed := false
 	for _, n := range h.npcs {
 		if n.despawned {
@@ -224,6 +260,9 @@ func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
 	if d > maxMoveStep {
 		toX = fromX + dx/d*maxMoveStep
 		toY = fromY + dy/d*maxMoveStep
+	}
+	if h.overworld != nil {
+		return h.overworld.SlideMovePlayer(fromX, fromY, toX, toY)
 	}
 	return game.SlideMovePlayer(fromX, fromY, toX, toY)
 }

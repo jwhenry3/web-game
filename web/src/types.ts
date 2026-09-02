@@ -8,7 +8,10 @@ export type MessageType =
   | "unequip"
   | "set_jobs"
   | "set_hotbar"
+  | "set_keybinds"
   | "add_friend"
+  | "accept_friend"
+  | "decline_friend"
   | "remove_friend"
   | "party_invite"
   | "party_accept"
@@ -21,6 +24,7 @@ export type MessageType =
   | "action"
   | "set_target"
   | "set_save_point"
+  | "use_world_skill"
   | "rt_move"
   | "rt_attack"
   | "welcome"
@@ -33,6 +37,7 @@ export type MessageType =
   | "social_state"
   | "party_invite_received"
   | "battle_invite_received"
+  | "friend_request_received"
   | "reward_notice"
   | "chat_message"
   | "battle_list"
@@ -82,6 +87,7 @@ export interface SkillInfo {
   usage?: number;
   usage_to_next?: number;
   cast_time_ms?: number;
+  world_only?: boolean;
 }
 
 export interface JobProgressInfo {
@@ -133,10 +139,19 @@ export interface ProfileInfo {
   inventory: Item[];
   equipped: Record<string, string>;
   hotbar: Record<string, HotbarBinding>;
+  keybinds?: Record<string, string>;
   skills: SkillInfo[];
   friends?: string[];
   save_point_id?: string;
   save_point_name?: string;
+  visited_save_points?: VisitedSavePoint[];
+}
+
+export interface VisitedSavePoint {
+  id: string;
+  name: string;
+  map_name?: string;
+  home?: boolean;
 }
 
 export interface FriendInfo {
@@ -174,15 +189,47 @@ export interface BattleInvitePayload {
   from_name: string;
 }
 
+export interface FriendRequestPayload {
+  from_id?: string;
+  from_name: string;
+}
+
 export interface SocialStatePayload {
   friends: FriendInfo[];
   party?: PartyInfo | null;
   pending_invite?: PartyInvitePayload | null;
+  pending_friend_requests?: FriendRequestPayload[];
+  outgoing_friend_requests?: string[];
 }
 
 export interface WelcomePayload {
   player_id: string;
   profile: ProfileInfo;
+  map?: MapSnapshot;
+}
+
+export interface MapSnapshot {
+  id: string;
+  name: string;
+  combat: string;
+  capabilities: string[];
+  modules: Array<{
+    id: string;
+    name: string;
+    version: string;
+    capabilities: string[];
+    frontend: { pluginId: string };
+    config?: Record<string, unknown>;
+  }>;
+  overworld: OverworldMap;
+  portals?: MapPortal[];
+}
+
+export interface MapPortal {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 export interface WorldPlayer {
@@ -196,9 +243,13 @@ export interface WorldPlayer {
   appearance?: CharacterAppearanceWire;
   x: number;
   y: number;
+  facing?: "left" | "right";
   in_battle: boolean;
   battle_id?: string;
   immune_until?: number;
+  casting_skill_id?: string;
+  cast_time_ms?: number;
+  cast_ends_at?: number;
 }
 
 export interface BattleInfo {
@@ -231,6 +282,27 @@ export interface OverworldMap {
   cols: number;
   rows: number;
   cells: string;
+}
+
+export type AtlasPOIKind = "save_point";
+
+export interface AtlasPOI {
+  id: string;
+  kind: AtlasPOIKind | string;
+  name: string;
+  x: number;
+  y: number;
+}
+
+export interface AtlasMap {
+  id: string;
+  name: string;
+  overworld: OverworldMap;
+  pois: AtlasPOI[];
+}
+
+export interface AtlasPayload {
+  maps: AtlasMap[];
 }
 
 export interface WorldStatePayload {
@@ -540,9 +612,10 @@ export function skillWeaponMatches(sk: SkillInfo, profile: ProfileInfo): boolean
   return weaponTypeForSkill(sk, profile) === sk.weapon_req;
 }
 
-export const HOTBAR_SLOTS = ["1", "2", "3", "4", "5"] as const;
+export type { HotbarSlotId } from "./input/keybinds";
+export { HOTBAR_SLOTS, HOTBAR_ROWS } from "./input/keybinds";
 
-export type WindowId = "character" | "equipment" | "inventory" | "skills" | "social";
+export type WindowId = "character" | "equipment" | "inventory" | "skills" | "social" | "map";
 
 export function weaponColor(weapon: string | undefined): number {
   return WEAPONS.find((w) => w.id === weapon)?.color ?? 0xcccccc;

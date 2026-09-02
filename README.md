@@ -5,27 +5,26 @@ authoritative server over WebSockets; Phaser 3 + React frontend.
 
 ## Architecture
 
-The system follows a Hub-and-Spoke model:
+The system follows a Hub-and-Spoke model, split across two server roles:
 
-- **Client** (`internal/server/client.go`) — one WebSocket connection per
-  player with `ReadPump`/`WritePump` goroutines.
-- **Hub** (`internal/server/hub.go`) — central orchestrator. Owns the
-  persistent **open-world layer** (movement, chat, roster, combat-locked
-  states) and routes messages to battle instances. Players stay on the same
-  socket while fighting.
-- **BattleRoom** (`internal/server/battle.go`) — isolated, ephemeral combat
-  instances implementing the **Action Window / Tick system**: action requests
-  are buffered during a 200ms window, validated and batch-processed at the
-  tick, and broadcast in a single atomic `battle_event`. Combat uses an
-  FFXIV-style split: **auto-attack** has its own swing ATB (on by default,
-  toggleable) and **skills/consumables** share a separate GCD ATB. Failed
-  validations return explicit failure results so clients play the "fizzle"
-  animation.
-- **Protocol** (`internal/protocol/messages.go`) — JSON `Envelope` +
-  `MessageType` definitions, mirrored by `web/src/types.ts`.
-- **Auth** (`internal/auth/`, `internal/server/auth_http.go`) — account
-  registration/login over HTTP; JWT bearer tokens required for the WebSocket.
-  Accounts persist to `data/accounts.json`.
+- **Global proxy** (`internal/proxy`) — account auth, one client WebSocket,
+  and validation of travel between map servers. The browser stays connected;
+  the proxy forwards frames to the current map (no reconnect on transfer).
+- **Map server** (`internal/mapnode`) — overworld, plugins, the **Hub**,
+  battle rooms, movement, and gameplay. Several maps can run in one process
+  (default `config/cluster.json`) or as separate processes later.
+- **Client** (`internal/server/client.go`) — one session per player. On the
+  proxy this is a WebSocket; on a map it is a proxied session with the same
+  `ReadPump`/`WritePump` message shape.
+- **Hub** (`internal/server/hub.go`) — orchestrator for a single map. Owns
+  that map's open-world layer and routes messages to battle instances.
+- **BattleRoom** — isolated combat instances (ATB or realtime plugin).
+- **Protocol** (`internal/protocol/messages.go`) — JSON `Envelope` types,
+  mirrored by `web/src/types.ts`. `welcome.map` tells the client what the
+  current map is responsible for (name, overworld, combat modules). Cluster
+  topology and transfer rules are not exposed to the frontend.
+- **Auth** (`internal/auth/`, `internal/server/auth_http.go`) — registration
+  and login on the proxy; JWT required for the WebSocket.
 - **Game rules** (`internal/game/`) — see [Progression & combat](#progression--combat).
 - **Persistence** (`internal/store/`) — player profiles (jobs, loadouts,
   inventory, skills) saved to `data/profiles.json`. Only *equipped* items
@@ -117,9 +116,10 @@ files are gitignored — see `.gitignore`.
 # Install frontend deps once
 npm run web:install
 
-# Terminal 1: game server (HTTP + ws://localhost:8080/ws)
+# Terminal 1: cluster (proxy + map servers)
 npm run server:dev   # recompiles on .go changes (recommended)
 # npm run server     # one-shot, no reload
+# config/cluster.json lists the proxy bind address and map configs
 
 # Terminal 2: frontend with hot reload (proxies /api and /ws to :8080)
 npm run web:dev     # open http://localhost:5173
@@ -137,6 +137,11 @@ cd web && npm install && npm run dev
 
 Register an account in the browser, create a hero, then walk into enemies on
 the overworld to start battles.
+
+The cluster runs two maps with different combat plugins. Greenwood (default)
+uses realtime combat. Walk east along the Wolfrun road into the glowing zone
+line to cross into the Northern Wastes, which uses ATB combat. Walk west from
+Frostgate to return. The proxy keeps your WebSocket; you do not reconnect.
 
 ### Production-style
 
@@ -168,26 +173,24 @@ node scripts/smoke-defeat.mjs  # defeat-flow regression (server must run)
 ## Server flags
 
 ```text
--config     config/server.json   server config (plugins, overworld map, ports, paths)
--addr       (from config)          HTTP listen address override
--data       (from config)          hero profile persistence override
--accounts   (from config)          account persistence override
--overworld  (from config)          overworld map JSON override
+-config     (unused in cluster mode; maps load from cluster.json)
+-cluster    config/cluster.json   proxy + map servers
 -jwt-secret (or JWT_SECRET env)   JWT signing secret (random per launch if unset)
--static     (from config)          frontend build to serve override
--battle-speed (from config)        ATB combat tempo override
 ```
 
 ## Project layout
 
 ```text
-cmd/server/          HTTP + WebSocket entrypoint
+cmd/server/          Cluster entry: global proxy + map nodes
+internal/proxy/      Auth, client WebSocket, map routing, transfer checks
+internal/mapnode/    One map's hub, overworld, plugins, battles
+internal/cluster/    Cluster config and transfer types
 internal/auth/       JWT issuance and validation
 internal/game/       Jobs, skills, status effects, loot, overworld rules
 internal/protocol/   Wire message types
 internal/server/     Hub, battles, NPCs, social, HTTP auth routes
 internal/store/      Profile/account persistence and loadouts
-config/              server.json, overworld maps, per-server settings
+config/              cluster.json, per-map server.json, overworld maps
 web/                 Vite + React + Phaser client
 scripts/             Smoke-test scripts
 data/                Runtime JSON (profiles, accounts)

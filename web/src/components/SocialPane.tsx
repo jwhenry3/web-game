@@ -48,8 +48,8 @@ export function SocialPane() {
   const selfId = useGame((s) => s.selfId);
   const players = useGame((s) => s.players);
   const friends = useGame((s) => s.friends);
+  const outgoingFriendRequests = useGame((s) => s.outgoingFriendRequests);
   const party = useGame((s) => s.party);
-  const partyInvite = useGame((s) => s.partyInvite);
   const [tab, setTab] = useState<SocialTab>("search");
   const [query, setQuery] = useState("");
 
@@ -65,6 +65,10 @@ export function SocialPane() {
   }, [online, query]);
 
   const friendNames = useMemo(() => new Set(friends.map((f) => f.name.toLowerCase())), [friends]);
+  const pendingOutgoing = useMemo(
+    () => new Set(outgoingFriendRequests.map((n) => n.toLowerCase())),
+    [outgoingFriendRequests],
+  );
   const inParty = useMemo(() => new Set(party?.members.map((m) => m.id) ?? []), [party]);
   const isLeader = party?.leader_id === selfId;
 
@@ -85,21 +89,6 @@ export function SocialPane() {
           </button>
         ))}
       </div>
-
-      {partyInvite && tab === "party" && (
-        <div className="xiv-social-invite xiv-panel">
-          <div className="xiv-panel-head">Party Invite</div>
-          <p className="hint">{partyInvite.from_name} invited you to their party.</p>
-          <div className="xiv-social-invite-btns">
-            <button className="xiv-btn gold" onClick={() => net.partyAccept()}>
-              Accept
-            </button>
-            <button className="xiv-btn" onClick={() => net.partyDecline()}>
-              Decline
-            </button>
-          </div>
-        </div>
-      )}
 
       {tab === "search" && (
         <div className="xiv-social-pane">
@@ -125,11 +114,16 @@ export function SocialPane() {
                 actions={
                   p.id !== selfId && (
                     <>
-                      {!friendNames.has(p.name.toLowerCase()) && (
-                        <button className="xiv-btn" onClick={() => net.addFriend(p.name)}>
-                          Friend
-                        </button>
-                      )}
+                      {!friendNames.has(p.name.toLowerCase()) &&
+                        (pendingOutgoing.has(p.name.toLowerCase()) ? (
+                          <button className="xiv-btn" disabled>
+                            Pending
+                          </button>
+                        ) : (
+                          <button className="xiv-btn" onClick={() => net.addFriend(p.name)}>
+                            Friend
+                          </button>
+                        ))}
                       <button
                         className="xiv-btn"
                         disabled={inviteDisabled(p.id) || (!!party && !isLeader)}

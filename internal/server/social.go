@@ -98,6 +98,18 @@ func (h *Hub) buildPartyInfo(party *hubParty) *protocol.PartyInfo {
 	}
 }
 
+func (h *Hub) buildFriendRequests(profile store.Profile) []protocol.FriendRequestPayload {
+	out := make([]protocol.FriendRequestPayload, 0, len(profile.IncomingFriendRequests))
+	for _, fname := range profile.IncomingFriendRequests {
+		req := protocol.FriendRequestPayload{FromName: fname}
+		if wp := h.findWorldByName(fname); wp != nil {
+			req.FromID = wp.ID
+		}
+		out = append(out, req)
+	}
+	return out
+}
+
 func (h *Hub) sendSocialState(c *Client) {
 	if c == nil || !c.Joined {
 		return
@@ -107,7 +119,9 @@ func (h *Hub) sendSocialState(c *Client) {
 		return
 	}
 	payload := protocol.SocialStatePayload{
-		Friends: h.buildFriendList(profile),
+		Friends:                h.buildFriendList(profile),
+		PendingFriendRequests:  h.buildFriendRequests(profile),
+		OutgoingFriendRequests: append([]string(nil), profile.OutgoingFriendRequests...),
 	}
 	if partyID, ok := h.clientParty[c.ID]; ok {
 		payload.Party = h.buildPartyInfo(h.parties[partyID])
@@ -157,15 +171,90 @@ func (h *Hub) handleAddFriend(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	profile, msg := h.store.AddFriend(c.Name, p.PlayerName)
+	profile, msg := h.store.SendFriendRequest(c.Name, p.PlayerName)
 	if msg != "" {
 		h.sendError(c, msg)
 		return
 	}
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
-		PlayerID: c.ID, Profile: profileInfo(profile),
-	})
+	h.sendWelcome(c, profile)
+
+	otherProfile, hasOther := h.store.FindByName(p.PlayerName)
+	target := h.findClientByName(p.PlayerName)
+	becameFriends := hasOther && friendListLinked(profile, otherProfile)
+
+	if target != nil {
+		if becameFriends {
+			h.sendWelcome(target, otherProfile)
+		} else if friendRequestPending(otherProfile, c.Name) {
+			h.send(target, protocol.TypeFriendRequestMsg, protocol.FriendRequestPayload{
+				FromID: c.ID, FromName: c.Name,
+			})
+		}
+		h.sendSocialState(target)
+	}
 	h.sendSocialState(c)
+	h.refreshFriendsSocial(c.Name)
+	if hasOther {
+		h.refreshFriendsSocial(otherProfile.Name)
+	}
+}
+
+func friendRequestPending(p store.Profile, fromName string) bool {
+	for _, n := range p.IncomingFriendRequests {
+		if strings.EqualFold(n, fromName) {
+			return true
+		}
+	}
+	return false
+}
+
+func friendListLinked(a, b store.Profile) bool {
+	for _, f := range a.Friends {
+		if strings.EqualFold(f, b.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Hub) handleAcceptFriend(c *Client, raw json.RawMessage) {
+	var p protocol.PlayerNamePayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return
+	}
+	accepter, other, msg := h.store.AcceptFriendRequest(c.Name, p.PlayerName)
+	if msg != "" {
+		h.sendError(c, msg)
+		return
+	}
+	h.sendWelcome(c, accepter)
+	h.sendSocialState(c)
+	h.refreshFriendsSocial(c.Name)
+	h.refreshFriendsSocial(other.Name)
+
+	target := h.findClientByName(other.Name)
+	if target != nil {
+		h.sendWelcome(target, other)
+		h.sendSocialState(target)
+	}
+}
+
+func (h *Hub) handleDeclineFriend(c *Client, raw json.RawMessage) {
+	var p protocol.PlayerNamePayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return
+	}
+	_, other, ok := h.store.DeclineFriendRequest(c.Name, p.PlayerName)
+	if !ok {
+		h.sendError(c, "No friend request from that hero.")
+		return
+	}
+	h.sendSocialState(c)
+	target := h.findClientByName(p.PlayerName)
+	if target != nil {
+		h.sendWelcome(target, other)
+		h.sendSocialState(target)
+	}
 }
 
 func (h *Hub) handleRemoveFriend(c *Client, raw json.RawMessage) {
@@ -178,9 +267,7 @@ func (h *Hub) handleRemoveFriend(c *Client, raw json.RawMessage) {
 		h.sendError(c, "That hero is not on your friend list.")
 		return
 	}
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
-		PlayerID: c.ID, Profile: profileInfo(profile),
-	})
+	h.sendWelcome(c, profile)
 	h.sendSocialState(c)
 }
 

@@ -25,12 +25,26 @@ type Client struct {
 	Send chan []byte
 	Hub  *Hub
 
+	CloseFn func()
+
 	// The fields below are owned by the hub goroutine.
-	AccountID string
-	Username  string
-	Name      string
-	Joined   bool
-	BattleID string
+	AccountID      string
+	Username       string
+	Name           string
+	Joined         bool
+	BattleID       string
+	SpawnX         float64
+	SpawnY         float64
+	UseSpawn       bool
+	SpawnFacing    string
+	lastWorldSave  time.Time
+	lastWorldSkill time.Time
+
+	worldCastSkill string
+	worldCastDest  string
+	worldCastReady time.Time
+	worldCastX     float64
+	worldCastY     float64
 }
 
 func (c *Client) ReadPump() {

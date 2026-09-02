@@ -7,7 +7,7 @@ import (
 	"ffv-web-game/internal/game"
 )
 
-const hotbarSlotCount = 5
+const hotbarSlotCount = game.HotbarSlotCount
 
 // defaultHotbar builds slot bindings for a main/sub combo: attack, starter
 // consumable, then each job's root skill in ActiveJobs order.
@@ -25,6 +25,9 @@ func defaultHotbar(main, sub game.JobID) map[string]HotbarBinding {
 			hb[strconv.Itoa(slot)] = HotbarBinding{Kind: "skill", ID: id}
 			slot++
 		}
+	}
+	if _, ok := hb["8"]; !ok {
+		hb["8"] = HotbarBinding{Kind: "skill", ID: game.SkillIDReturn}
 	}
 	return hb
 }
@@ -360,6 +363,12 @@ func (p Profile) ActiveJobIDs() []game.JobID {
 func (p *Profile) SyncSkillUnlocks() {
 	l := p.ActiveLoadout()
 	for _, sk := range game.Catalog {
+		if sk.WorldOnly || sk.Job == "" {
+			if l.SkillLevels[sk.ID] < 1 {
+				l.SkillLevels[sk.ID] = 1
+			}
+			continue
+		}
 		if !p.skillAccessibleJob(sk.Job) {
 			continue
 		}

@@ -20,6 +20,9 @@ func TestDefaultHotbarMainOnly(t *testing.T) {
 	if _, ok := hb["4"]; ok {
 		t.Fatal("slot 4 should be empty without sub job")
 	}
+	if hb["8"].ID != game.SkillIDReturn {
+		t.Fatalf("slot 8 = %q, want return", hb["8"].ID)
+	}
 }
 
 func TestDefaultHotbarWithSub(t *testing.T) {
@@ -29,6 +32,9 @@ func TestDefaultHotbarWithSub(t *testing.T) {
 	}
 	if hb["4"].ID != game.RootSkillID(game.JobBRD) {
 		t.Fatalf("slot 4 = %q, want %q", hb["4"].ID, game.RootSkillID(game.JobBRD))
+	}
+	if hb["8"].ID != game.SkillIDReturn {
+		t.Fatalf("slot 8 = %q, want return", hb["8"].ID)
 	}
 }
 

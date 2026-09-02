@@ -46,10 +46,12 @@ export function SkillTooltipContent({
     <div className="xiv-tooltip-body">
       <div className="xiv-tooltip-title">{sk.name}</div>
       <div className="xiv-tooltip-meta">
-        {sk.id === "attack"
-          ? "0 MP · uses GCD"
-          : `${sk.mp_cost} MP${sk.cast_time_ms ? ` · ${(sk.cast_time_ms / 1000).toFixed(1)}s cast` : ""}${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
-        {sk.id !== "attack" && (
+        {sk.world_only
+          ? "Field skill · 0 MP"
+          : sk.id === "attack"
+            ? "0 MP · uses GCD"
+            : `${sk.mp_cost} MP${sk.cast_time_ms ? ` · ${(sk.cast_time_ms / 1000).toFixed(1)}s cast` : ""}${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
+        {!sk.world_only && sk.id !== "attack" && (
           <>
             {" "}
             · Lv {sk.unlocked ? sk.level : 0}/{sk.max_level}
@@ -57,13 +59,16 @@ export function SkillTooltipContent({
           </>
         )}
         {!sk.unlocked && sk.prereq ? ` · requires ${prereq?.name ?? sk.prereq}` : ""}
-        {sk.unlocked && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
-        {sk.unlocked && usage > 0 && atMax ? ` · ${usage} uses` : ""}
+        {sk.unlocked && !sk.world_only && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
+        {sk.unlocked && !sk.world_only && usage > 0 && atMax ? ` · ${usage} uses` : ""}
       </div>
       {sk.description && <div className="xiv-tooltip-desc dim">{sk.description}</div>}
       {!sk.unlocked && <div className="xiv-tooltip-hint dim">Level your job to unlock.</div>}
-      {sk.unlocked && !atMax && <div className="xiv-tooltip-hint dim">Use in battle to level up.</div>}
-      {sk.unlocked && atMax && <div className="xiv-tooltip-hint dim">Max level.</div>}
+      {sk.world_only && sk.unlocked && (
+        <div className="xiv-tooltip-hint dim">Use from the hotbar in the field.</div>
+      )}
+      {sk.unlocked && !sk.world_only && !atMax && <div className="xiv-tooltip-hint dim">Use in battle to level up.</div>}
+      {sk.unlocked && !sk.world_only && atMax && <div className="xiv-tooltip-hint dim">Max level.</div>}
     </div>
   );
 }

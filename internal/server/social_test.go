@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"ffv-web-game/internal/game"
@@ -23,13 +24,44 @@ func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
 	return h, a, b
 }
 
-func TestAddFriendPersists(t *testing.T) {
-	h, a, _ := testSocialHub(t)
+func TestFriendRequestAndAccept(t *testing.T) {
+	h, a, b := testSocialHub(t)
 	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
 	h.handleAddFriend(a, raw)
-	profile, _ := h.store.Get("Alpha")
-	if len(profile.Friends) != 1 || profile.Friends[0] != "Bravo" {
-		t.Fatalf("expected Bravo on friend list, got %v", profile.Friends)
+	bravo, _ := h.store.Get("Bravo")
+	if len(bravo.IncomingFriendRequests) != 1 || !strings.EqualFold(bravo.IncomingFriendRequests[0], "Alpha") {
+		t.Fatalf("Bravo should have incoming request, got %v", bravo.IncomingFriendRequests)
+	}
+	alpha, _ := h.store.Get("Alpha")
+	if len(alpha.OutgoingFriendRequests) != 1 {
+		t.Fatalf("Alpha should have outgoing request, got %v", alpha.OutgoingFriendRequests)
+	}
+	if len(alpha.Friends) != 0 {
+		t.Fatalf("Alpha should not be friends yet, got %v", alpha.Friends)
+	}
+
+	acceptRaw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Alpha"})
+	h.handleAcceptFriend(b, acceptRaw)
+	alpha, _ = h.store.Get("Alpha")
+	bravo, _ = h.store.Get("Bravo")
+	if len(alpha.Friends) != 1 || len(bravo.Friends) != 1 {
+		t.Fatalf("both should be friends: alpha=%v bravo=%v", alpha.Friends, bravo.Friends)
+	}
+	if len(bravo.IncomingFriendRequests) != 0 || len(alpha.OutgoingFriendRequests) != 0 {
+		t.Fatal("pending requests should be cleared")
+	}
+}
+
+func TestFriendRequestMutualAutoAccept(t *testing.T) {
+	h, a, b := testSocialHub(t)
+	rawAB, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
+	h.handleAddFriend(a, rawAB)
+	rawBA, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Alpha"})
+	h.handleAddFriend(b, rawBA)
+	alpha, _ := h.store.Get("Alpha")
+	bravo, _ := h.store.Get("Bravo")
+	if len(alpha.Friends) != 1 || len(bravo.Friends) != 1 {
+		t.Fatalf("mutual requests should auto-friend: alpha=%v bravo=%v", alpha.Friends, bravo.Friends)
 	}
 }
 

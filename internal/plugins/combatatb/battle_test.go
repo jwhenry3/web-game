@@ -447,7 +447,7 @@ func TestConsumableUseHeals(t *testing.T) {
 	}
 }
 
-func TestConsumableRevivesKOAlly(t *testing.T) {
+func TestConsumableRejectsKOAlly(t *testing.T) {
 	host := newMockHost()
 	room := newTestRoom(t, host)
 	allyProfile := host.store.GetOrCreate("Lenna", game.JobWHM)
@@ -475,11 +475,8 @@ func TestConsumableRevivesKOAlly(t *testing.T) {
 		ActorID: "client-1",
 		Action:  protocol.ActionPayload{ActionID: "use_item", TargetID: "client-2", ItemID: potion.ID},
 	})
-	if !res.Success {
-		t.Fatalf("potion should revive ally: %+v", res)
-	}
-	if !ally.Alive || ally.HP <= 0 {
-		t.Fatalf("ally should be alive with HP after potion, got alive=%v hp=%d", ally.Alive, ally.HP)
+	if res.Success {
+		t.Fatalf("potion should not target KO ally: %+v", res)
 	}
 }
 

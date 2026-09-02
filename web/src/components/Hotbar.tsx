@@ -3,11 +3,11 @@ import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { activeBattleView } from "../battle/activeBattle";
 import {
-  HOTBAR_SLOTS,
   consumableCount,
   type HotbarBinding,
   type ProfileInfo,
 } from "../types";
+import { HOTBAR_ROWS, hotbarKeyLabel, mergeKeybinds } from "../input/keybinds";
 import { readHotbarDrag, writeHotbarDrag } from "../ui/hotbarDrag";
 import { GameIcon } from "../ui/GameIcon";
 import { hotbarIconSrc } from "../ui/itemDisplay";
@@ -33,6 +33,7 @@ export function Hotbar() {
   const rtBattle = useGame((s) => s.rtBattle);
   const battle = useMemo(() => activeBattleView(battleRaw, rtBattle), [battleRaw, rtBattle]);
   const selfId = useGame((s) => s.selfId);
+  const keybinds = useMemo(() => mergeKeybinds(profile?.keybinds), [profile?.keybinds]);
   if (!profile) return null;
 
   const self = battle?.entities.find((e) => e.id === selfId);
@@ -40,78 +41,92 @@ export function Hotbar() {
   const casting = !!self?.casting_skill_id;
   const inBattle = screen === "battle" && !!battle && !!self && !battle?.end;
 
+  const renderSlot = (slot: string) => {
+    const bind = profile.hotbar?.[slot];
+    const iconSrc = hotbarIconSrc(bind, profile);
+    const itemCount = bind?.kind === "item" ? consumableCount(profile.inventory, bind.id) : 0;
+    const caption = labelFor(bind, profile);
+    const onGcd = inBattle && !!bind;
+    const gcdLocked = onGcd && (gcd < 100 || casting);
+    const active =
+      selected &&
+      ((bind?.kind === "skill" && selected.actionId === bind.id) ||
+        (bind?.kind === "item" &&
+          selected.itemId &&
+          profile.inventory.find((i) => i.id === selected.itemId)?.consumable === bind.id));
+    return (
+      <HoverTooltip key={slot} content={hotbarTooltipContent(bind, profile)}>
+        <button
+          type="button"
+          tabIndex={-1}
+          className={`hotbar-slot ${active ? "selected" : ""} ${gcdLocked ? "gcd-locked" : ""}`}
+          draggable={!!bind}
+          onMouseDown={(e) => e.preventDefault()}
+          onDragStart={(e) => {
+            if (!bind) return;
+            writeHotbarDrag(e, { kind: bind.kind as "skill" | "item", id: bind.id, slot });
+          }}
+          onDragEnd={(e) => {
+            if (!bind) return;
+            if (e.dataTransfer.dropEffect === "none") net.clearHotbar(slot);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const drag = readHotbarDrag(e);
+            if (!drag) return;
+            if (drag.slot && drag.slot !== slot) {
+              const dest = profile.hotbar?.[slot];
+              if (dest) net.setHotbar(drag.slot, dest.kind, dest.id);
+              else net.clearHotbar(drag.slot);
+            }
+            net.setHotbar(slot, drag.kind, drag.id);
+          }}
+          onClick={() => {
+            net.activateHotbar(slot);
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            net.clearHotbar(slot);
+          }}
+        >
+          {onGcd && (
+            <span
+              className="gcd-overlay"
+              style={{ height: `${Math.max(0, casting ? 100 : 100 - gcd)}%` }}
+            />
+          )}
+          <span className="hotbar-key">{hotbarKeyLabel(slot, keybinds)}</span>
+          {iconSrc && (
+            <span className="hotbar-icon">
+              <GameIcon src={iconSrc} alt="" size={34} />
+            </span>
+          )}
+          {bind?.kind === "item" && itemCount > 1 && (
+            <span className="hotbar-qty">×{itemCount}</span>
+          )}
+          {caption && <span className="hotbar-label">{caption}</span>}
+        </button>
+      </HoverTooltip>
+    );
+  };
+
   return (
-    <div className="hotbar">
-      {HOTBAR_SLOTS.map((slot) => {
-        const bind = profile.hotbar?.[slot];
-        const iconSrc = hotbarIconSrc(bind, profile);
-        const itemCount = bind?.kind === "item" ? consumableCount(profile.inventory, bind.id) : 0;
-        const caption = labelFor(bind, profile);
-        const onGcd = inBattle && !!bind;
-        const gcdLocked = onGcd && (gcd < 100 || casting);
-        const active =
-          selected &&
-          ((bind?.kind === "skill" && selected.actionId === bind.id) ||
-            (bind?.kind === "item" &&
-              selected.itemId &&
-              profile.inventory.find((i) => i.id === selected.itemId)?.consumable === bind.id));
-        return (
-          <HoverTooltip key={slot} content={hotbarTooltipContent(bind, profile)}>
-            <button
-              className={`hotbar-slot ${active ? "selected" : ""} ${gcdLocked ? "gcd-locked" : ""}`}
-            draggable={!!bind}
-            onDragStart={(e) => {
-              if (!bind) return;
-              writeHotbarDrag(e, { kind: bind.kind as "skill" | "item", id: bind.id, slot });
-            }}
-            onDragEnd={(e) => {
-              if (!bind) return;
-              if (e.dataTransfer.dropEffect === "none") net.clearHotbar(slot);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = e.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const drag = readHotbarDrag(e);
-              if (!drag) return;
-              if (drag.slot && drag.slot !== slot) {
-                const dest = profile.hotbar?.[slot];
-                if (dest) net.setHotbar(drag.slot, dest.kind, dest.id);
-                else net.clearHotbar(drag.slot);
-              }
-              net.setHotbar(slot, drag.kind, drag.id);
-            }}
-            onClick={() => {
-              if (inBattle) net.activateHotbar(slot);
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              net.clearHotbar(slot);
-            }}
-          >
-            {onGcd && (
-              <span
-                className="gcd-overlay"
-                style={{ height: `${Math.max(0, casting ? 100 : 100 - gcd)}%` }}
-              />
-            )}
-            <span className="hotbar-key">{slot}</span>
-            {iconSrc && (
-              <span className="hotbar-icon">
-                <GameIcon src={iconSrc} alt="" size={34} />
-              </span>
-            )}
-            {bind?.kind === "item" && itemCount > 1 && (
-              <span className="hotbar-qty">×{itemCount}</span>
-            )}
-            {caption && <span className="hotbar-label">{caption}</span>}
-          </button>
-          </HoverTooltip>
-        );
-      })}
+    <div
+      className="hotbar"
+      onKeyDown={(e) => {
+        if (e.key.startsWith("Arrow")) e.preventDefault();
+      }}
+    >
+      {HOTBAR_ROWS.map((row) => (
+        <div key={row.id} className="hotbar-row">
+          {row.slots.map((slot) => renderSlot(slot))}
+        </div>
+      ))}
     </div>
   );
 }

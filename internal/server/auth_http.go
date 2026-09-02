@@ -10,14 +10,18 @@ import (
 	"ffv-web-game/internal/store"
 )
 
+type CharacterKicker interface {
+	KickByCharacterName(name string)
+}
+
 type AuthHandler struct {
 	accounts *store.AccountStore
 	profiles *store.Store
 	tokens   *auth.TokenIssuer
-	hub      *Hub
+	hub      CharacterKicker
 }
 
-func NewAuthHandler(accounts *store.AccountStore, profiles *store.Store, tokens *auth.TokenIssuer, hub *Hub) *AuthHandler {
+func NewAuthHandler(accounts *store.AccountStore, profiles *store.Store, tokens *auth.TokenIssuer, hub CharacterKicker) *AuthHandler {
 	return &AuthHandler{accounts: accounts, profiles: profiles, tokens: tokens, hub: hub}
 }
 

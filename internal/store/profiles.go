@@ -23,17 +23,26 @@ type HotbarBinding struct {
 const MaxCharactersPerAccount = 8
 
 type Profile struct {
-	AccountID  string                       `json:"account_id,omitempty"`
-	Name       string                       `json:"name"`
-	Race       string                       `json:"race,omitempty"`
-	MainJob    string                       `json:"main_job"`
-	SubJob     string                       `json:"sub_job"`
-	Appearance Appearance                   `json:"appearance,omitempty"`
-	Jobs       map[string]game.JobProgress  `json:"jobs"`
-	Loadouts  map[string]JobLoadout        `json:"loadouts"`
-	Inventory []game.Item                  `json:"inventory"`
-	Friends   []string                     `json:"friends"`
-	SavePointID string                     `json:"save_point_id,omitempty"`
+	AccountID         string                      `json:"account_id,omitempty"`
+	Name              string                      `json:"name"`
+	Race              string                      `json:"race,omitempty"`
+	MainJob           string                      `json:"main_job"`
+	SubJob            string                      `json:"sub_job"`
+	Appearance        Appearance                  `json:"appearance,omitempty"`
+	Jobs              map[string]game.JobProgress `json:"jobs"`
+	Loadouts          map[string]JobLoadout       `json:"loadouts"`
+	Inventory         []game.Item                 `json:"inventory"`
+	Friends                  []string `json:"friends"`
+	IncomingFriendRequests   []string `json:"incoming_friend_requests,omitempty"`
+	OutgoingFriendRequests   []string `json:"outgoing_friend_requests,omitempty"`
+	Keybinds                 map[string]string `json:"keybinds,omitempty"`
+	SavePointID       string                      `json:"save_point_id,omitempty"`
+	VisitedSavePoints []string                    `json:"visited_save_points,omitempty"`
+	MapID             string                      `json:"map_id,omitempty"`
+	WorldX            float64                     `json:"world_x,omitempty"`
+	WorldY            float64                     `json:"world_y,omitempty"`
+	Facing            string                      `json:"facing,omitempty"`
+	HasWorldPos       bool                        `json:"has_world_pos,omitempty"`
 
 	// Legacy fields migrated into Jobs/Loadouts on load.
 	Level          int                      `json:"level,omitempty"`
@@ -66,12 +75,22 @@ func Load(path string) *Store {
 		if p.Friends == nil {
 			p.Friends = []string{}
 		}
+		if p.IncomingFriendRequests == nil {
+			p.IncomingFriendRequests = []string{}
+		}
+		if p.OutgoingFriendRequests == nil {
+			p.OutgoingFriendRequests = []string{}
+		}
+		if p.Keybinds == nil {
+			p.Keybinds = map[string]string{}
+		}
 		for i := range p.Inventory {
 			if p.Inventory[i].Kind == "" {
 				p.Inventory[i].Kind = game.KindEquipment
 			}
 		}
 		p.Inventory = game.CompactStacks(p.Inventory)
+		p.VisitedSavePoints = addVisited(p.VisitedSavePoints, p.SavePointID)
 		p.migrateJobs()
 	}
 	return s
@@ -279,31 +298,158 @@ func (s *Store) UnlockSkill(name, skillID string) (Profile, string) {
 	return *p, ""
 }
 
-func (s *Store) AddFriend(name, friendName string) (Profile, string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	p, ok := s.profiles[name]
-	if !ok {
-		return Profile{}, "Unknown hero."
-	}
-	friendName = strings.TrimSpace(friendName)
-	if friendName == "" {
-		return *p, "Enter a hero name."
-	}
-	if strings.EqualFold(friendName, name) {
-		return *p, "You cannot friend yourself."
-	}
-	for _, f := range p.Friends {
-		if strings.EqualFold(f, friendName) {
-			return *p, "Already on your friend list."
+func friendListHas(list []string, name string) bool {
+	for _, n := range list {
+		if strings.EqualFold(n, name) {
+			return true
 		}
 	}
-	if len(p.Friends) >= 50 {
-		return *p, "Friend list is full."
+	return false
+}
+
+func friendListRemove(list []string, name string) []string {
+	out := make([]string, 0, len(list))
+	for _, n := range list {
+		if !strings.EqualFold(n, name) {
+			out = append(out, n)
+		}
 	}
-	p.Friends = append(p.Friends, friendName)
+	return out
+}
+
+// FindByName returns a hero profile by display name (case-insensitive).
+func (s *Store) FindByName(name string) (Profile, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, p := range s.profiles {
+		if strings.EqualFold(p.Name, name) {
+			return *p, true
+		}
+	}
+	return Profile{}, false
+}
+
+func (s *Store) findProfileLocked(name string) (*Profile, string) {
+	for _, p := range s.profiles {
+		if strings.EqualFold(p.Name, name) {
+			return p, p.Name
+		}
+	}
+	return nil, ""
+}
+
+func (s *Store) linkFriendsLocked(a, b *Profile) string {
+	if len(a.Friends) >= 50 {
+		return "Your friend list is full."
+	}
+	if len(b.Friends) >= 50 {
+		return a.Name + "'s friend list is full."
+	}
+	if !friendListHas(a.Friends, b.Name) {
+		a.Friends = append(a.Friends, b.Name)
+	}
+	if !friendListHas(b.Friends, a.Name) {
+		b.Friends = append(b.Friends, a.Name)
+	}
+	a.IncomingFriendRequests = friendListRemove(a.IncomingFriendRequests, b.Name)
+	a.OutgoingFriendRequests = friendListRemove(a.OutgoingFriendRequests, b.Name)
+	b.IncomingFriendRequests = friendListRemove(b.IncomingFriendRequests, a.Name)
+	b.OutgoingFriendRequests = friendListRemove(b.OutgoingFriendRequests, a.Name)
+	return ""
+}
+
+// SendFriendRequest queues an incoming request for the target hero.
+func (s *Store) SendFriendRequest(fromName, toName string) (Profile, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	from, _ := s.findProfileLocked(fromName)
+	if from == nil {
+		return Profile{}, "Unknown hero."
+	}
+	toName = strings.TrimSpace(toName)
+	if toName == "" {
+		return *from, "Enter a hero name."
+	}
+	if strings.EqualFold(toName, from.Name) {
+		return *from, "You cannot friend yourself."
+	}
+	to, _ := s.findProfileLocked(toName)
+	if to == nil {
+		return *from, "No hero with that name exists."
+	}
+	if friendListHas(from.Friends, to.Name) {
+		return *from, "Already on your friend list."
+	}
+	if friendListHas(from.OutgoingFriendRequests, to.Name) {
+		return *from, "Friend request already sent."
+	}
+	if friendListHas(from.IncomingFriendRequests, to.Name) {
+		if msg := s.linkFriendsLocked(from, to); msg != "" {
+			return *from, msg
+		}
+		s.save()
+		return *from, ""
+	}
+	if friendListHas(to.IncomingFriendRequests, from.Name) {
+		return *from, "They already have your pending request."
+	}
+	to.IncomingFriendRequests = append(to.IncomingFriendRequests, from.Name)
+	from.OutgoingFriendRequests = append(from.OutgoingFriendRequests, to.Name)
 	s.save()
-	return *p, ""
+	return *from, ""
+}
+
+// AcceptFriendRequest adds both heroes as friends and clears pending requests.
+func (s *Store) AcceptFriendRequest(accepterName, fromName string) (Profile, Profile, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	accepter, _ := s.findProfileLocked(accepterName)
+	if accepter == nil {
+		return Profile{}, Profile{}, "Unknown hero."
+	}
+	fromName = strings.TrimSpace(fromName)
+	if fromName == "" {
+		return *accepter, Profile{}, "Enter a hero name."
+	}
+	if !friendListHas(accepter.IncomingFriendRequests, fromName) {
+		return *accepter, Profile{}, "No friend request from that hero."
+	}
+	other, _ := s.findProfileLocked(fromName)
+	if other == nil {
+		accepter.IncomingFriendRequests = friendListRemove(accepter.IncomingFriendRequests, fromName)
+		s.save()
+		return *accepter, Profile{}, "That hero no longer exists."
+	}
+	if msg := s.linkFriendsLocked(accepter, other); msg != "" {
+		return *accepter, Profile{}, msg
+	}
+	s.save()
+	return *accepter, *other, ""
+}
+
+// DeclineFriendRequest removes a pending friend request.
+func (s *Store) DeclineFriendRequest(declinerName, fromName string) (Profile, Profile, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	decliner, _ := s.findProfileLocked(declinerName)
+	if decliner == nil {
+		return Profile{}, Profile{}, false
+	}
+	fromName = strings.TrimSpace(fromName)
+	if fromName == "" || !friendListHas(decliner.IncomingFriendRequests, fromName) {
+		return *decliner, Profile{}, false
+	}
+	decliner.IncomingFriendRequests = friendListRemove(decliner.IncomingFriendRequests, fromName)
+	var other *Profile
+	if p, _ := s.findProfileLocked(fromName); p != nil {
+		other = p
+		other.OutgoingFriendRequests = friendListRemove(other.OutgoingFriendRequests, decliner.Name)
+	}
+	s.save()
+	if other != nil {
+		return *decliner, *other, true
+	}
+	return *decliner, Profile{}, true
 }
 
 func (s *Store) RemoveFriend(name, friendName string) (Profile, bool) {
@@ -368,8 +514,8 @@ func (s *Store) SetHotbar(name, slot, kind, id string) (Profile, bool) {
 	if !ok {
 		return Profile{}, false
 	}
-	valid := map[string]bool{"1": true, "2": true, "3": true, "4": true, "5": true}
-	if !valid[slot] {
+	valid := game.ValidHotbarSlot(slot)
+	if !valid {
 		return *p, false
 	}
 	l := p.ActiveLoadout()
@@ -523,7 +669,66 @@ func (s *Store) SetSavePoint(name, savePointID string) (Profile, bool) {
 		return Profile{}, false
 	}
 	p.SavePointID = savePointID
+	p.VisitedSavePoints = addVisited(p.VisitedSavePoints, savePointID)
 	s.save()
+	return *p, true
+}
+
+func addVisited(ids []string, id string) []string {
+	if id == "" {
+		return ids
+	}
+	for _, v := range ids {
+		if v == id {
+			return ids
+		}
+	}
+	return append(ids, id)
+}
+
+func (p Profile) HasVisitedSavePoint(id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, v := range p.VisitedSavePoints {
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Store) SetMapID(name, mapID string) (Profile, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.profiles[name]
+	if !ok {
+		return Profile{}, false
+	}
+	p.MapID = mapID
+	s.save()
+	return *p, true
+}
+
+// SetWorldLocation stores the hero's last map and overworld position.
+// Memory is always updated; the JSON file is written when flush is true.
+func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing string, flush bool) (Profile, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.profiles[name]
+	if !ok {
+		return Profile{}, false
+	}
+	if mapID != "" {
+		p.MapID = mapID
+	}
+	p.WorldX = x
+	p.WorldY = y
+	p.Facing = facing
+	p.HasWorldPos = true
+	if flush {
+		s.save()
+	}
 	return *p, true
 }
 

@@ -25,6 +25,7 @@ export class PluginHost {
   }
 
   async loadFromManifest(manifest: ModulesManifest): Promise<void> {
+    this.handlers.clear();
     const combatMod = manifest.modules.find((m) => m.id === manifest.combat);
     if (!combatMod) {
       throw new Error(`Combat module ${manifest.combat} not found in manifest`);
@@ -86,6 +87,20 @@ export class PluginHost {
 }
 
 export const pluginHost = new PluginHost();
+
+export async function applyMapSnapshot(map: {
+  combat: string;
+  modules: ModulesManifest["modules"];
+}): Promise<void> {
+  if (pluginHost.getCombatPlugin().id === map.combat && map.combat) {
+    return;
+  }
+  await pluginHost.loadFromManifest({
+    version: 1,
+    combat: map.combat,
+    modules: map.modules,
+  });
+}
 
 export async function bootstrapPlugins(): Promise<PluginHost> {
   const manifest: ModulesManifest = await fetch("/api/modules").then((r) => {

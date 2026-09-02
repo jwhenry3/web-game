@@ -7,6 +7,7 @@ import type {
   ChatChannel,
   ChatLine,
   FriendInfo,
+  FriendRequestPayload,
   PartyInfo,
   PartyInvitePayload,
   BattleInvitePayload,
@@ -18,6 +19,7 @@ import type {
   WorldPlayer,
   RTBattleView,
   SavePoint,
+  AtlasMap,
 } from "../types";
 
 export type Screen = "auth" | "select" | "create" | "world" | "battle";
@@ -67,10 +69,13 @@ interface GameState {
   npcs: Record<string, WorldNPC>;
   savePoints: Record<string, SavePoint>;
   overworld: OverworldMap | null;
+  mapInfo: { id: string; name: string; combat: string; capabilities: string[]; portals: { x: number; y: number; w: number; h: number }[] } | null;
   battles: BattleInfo[];
   chat: ChatLine[];
   chatTab: ChatChannel;
   friends: FriendInfo[];
+  friendRequests: FriendRequestPayload[];
+  outgoingFriendRequests: string[];
   party: PartyInfo | null;
   partyInvite: PartyInvitePayload | null;
   battleInvite: BattleInvitePayload | null;
@@ -83,6 +88,9 @@ interface GameState {
   mainMenuOpen: boolean;
   mainMenuView: MainMenuView;
   options: GameOptions;
+  worldSkillDialog: "return" | "teleport" | null;
+  teleportConfirm: { id: string; name: string } | null;
+  atlas: AtlasMap[];
 
   setScreen: (s: Screen) => void;
   setSelectedAction: (a: SelectedAction | null) => void;
@@ -104,6 +112,11 @@ interface GameState {
   toggleMainMenu: () => void;
   setMainMenuView: (view: MainMenuView) => void;
   setOptions: (options: GameOptions) => void;
+  openWorldSkillDialog: (kind: "return" | "teleport") => void;
+  closeWorldSkillDialog: () => void;
+  openTeleportConfirm: (target: { id: string; name: string }) => void;
+  closeTeleportConfirm: () => void;
+  setAtlas: (maps: AtlasMap[]) => void;
   logout: () => void;
   reset: () => void;
 }
@@ -130,10 +143,13 @@ const initial = {
   npcs: {},
   savePoints: {},
   overworld: null,
+  mapInfo: null,
   battles: [],
   chat: [] as ChatLine[],
   chatTab: "general" as ChatChannel,
   friends: [] as FriendInfo[],
+  friendRequests: [] as FriendRequestPayload[],
+  outgoingFriendRequests: [] as string[],
   party: null,
   partyInvite: null,
   battleInvite: null,
@@ -146,6 +162,9 @@ const initial = {
   mainMenuOpen: false,
   mainMenuView: "menu" as MainMenuView,
   options: loadOptions(),
+  worldSkillDialog: null as "return" | "teleport" | null,
+  teleportConfirm: null as { id: string; name: string } | null,
+  atlas: [] as AtlasMap[],
 };
 
 export const useGame = create<GameState>((set) => ({
@@ -181,6 +200,8 @@ export const useGame = create<GameState>((set) => ({
       openWindow: null,
       bindSlot: null,
       selectedAction: null,
+      worldSkillDialog: null,
+      teleportConfirm: null,
     }),
   closeMainMenu: () => set({ mainMenuOpen: false, mainMenuView: "menu" }),
   toggleMainMenu: () =>
@@ -193,10 +214,25 @@ export const useGame = create<GameState>((set) => ({
             openWindow: null,
             bindSlot: null,
             selectedAction: null,
+            worldSkillDialog: null,
+            teleportConfirm: null,
           },
     ),
   setMainMenuView: (view) => set({ mainMenuView: view }),
   setOptions: (options) => set({ options }),
+  openWorldSkillDialog: (kind) => {
+    set({
+      worldSkillDialog: kind,
+      mainMenuOpen: false,
+    });
+    window.setTimeout(() => {
+      useGame.setState((s) => (s.worldSkillDialog ? { openWindow: null, bindSlot: null } : s));
+    }, 0);
+  },
+  closeWorldSkillDialog: () => set({ worldSkillDialog: null, teleportConfirm: null }),
+  openTeleportConfirm: (target) => set({ teleportConfirm: target, mainMenuOpen: false }),
+  closeTeleportConfirm: () => set({ teleportConfirm: null }),
+  setAtlas: (maps) => set({ atlas: maps }),
   logout: () => {
     setStoredToken(null);
     set({ ...initial, options: loadOptions() });

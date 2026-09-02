@@ -160,11 +160,11 @@ func newBattleRoom(id string, level int, host roomHost, primaryKind string) *Bat
 		host:        host,
 		battleSpeed: host.BattleSpeed(),
 		joinCh:      make(chan joinRequest, 16),
-		leaveCh:  make(chan string, 16),
-		actionCh: make(chan queuedAction, 64),
-		targetCh: make(chan targetCmd, 16),
-		quitCh:   make(chan struct{}),
-		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		leaveCh:     make(chan string, 16),
+		actionCh:    make(chan queuedAction, 64),
+		targetCh:    make(chan targetCmd, 16),
+		quitCh:      make(chan struct{}),
+		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 	b.spawnEnemies(primaryKind)
 	return b
@@ -192,8 +192,8 @@ func (b *BattleRoom) spawnEnemies(primaryKind string) {
 			Level:    b.Level,
 			MaxHP:    int(float64(tpl.HP) * scale),
 			Str:      int(float64(tpl.Str) * scale),
-			Agi:        tpl.Agi,
-			Alive:      true,
+			Agi:      tpl.Agi,
+			Alive:    true,
 		}
 		e.HP = e.MaxHP
 		b.entities = append(b.entities, e)
@@ -293,13 +293,13 @@ func (b *BattleRoom) addPlayer(clientID string, p store.Profile) {
 		MaxHP:       hp, HP: hp,
 		MaxMP: mp, MP: mp,
 		Str: str, Mag: mag, Agi: agi,
-		Alive:       true,
-		TargetID:    b.firstLivingEnemyID(),
+		Alive:            true,
+		TargetID:         b.firstLivingEnemyID(),
 		pendingSkillUses: map[string]int{},
-		skillLevels: skillLevels,
-		mainJob:     game.JobID(p.MainJob),
-		subJob:      game.JobID(p.SubJob),
-		unlocked:    unlocked,
+		skillLevels:      skillLevels,
+		mainJob:          game.JobID(p.MainJob),
+		subJob:           game.JobID(p.SubJob),
+		unlocked:         unlocked,
 	}
 	b.entities = append(b.entities, e)
 	b.broadcast(protocol.Encode(protocol.TypeBattleState, b.statePayload()))
@@ -373,7 +373,7 @@ func (b *BattleRoom) statePayload() protocol.BattleStatePayload {
 			Level: e.Level, HP: e.HP, MaxHP: e.MaxHP, MP: e.MP, MaxMP: e.MaxMP,
 			Agility: e.Agi, SkillATB: e.SkillATB, ATB: e.SkillATB,
 			TargetID: e.TargetID, Alive: e.Alive,
-			Statuses: game.Snapshots(e.statuses),
+			Statuses:       game.Snapshots(e.statuses),
 			CastingSkillID: castSkill, CastTargetID: castTarget,
 			CastProgress: castProg, CastTimeMs: castMs,
 		})
@@ -568,6 +568,10 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		res.Message = "Skill not learned."
 		return res
 	}
+	if skill.WorldOnly {
+		res.Message = "Cannot use that in battle."
+		return res
+	}
 	if skill.WeaponReq != "" && skill.WeaponReq != actor.weaponForSkill(skill) {
 		res.Message = "Requires a " + string(skill.WeaponReq) + "."
 		return res
@@ -757,17 +761,13 @@ func (b *BattleRoom) resolveItemUse(qa queuedAction, actor *battleEntity, res pr
 		return res
 	}
 	target := b.find(qa.Action.TargetID)
-	if target == nil || !target.IsPlayer {
+	if target == nil || !target.Alive || !target.IsPlayer {
 		res.Message = "Invalid target."
 		return res
 	}
 	hp, mp := game.ConsumableEffect(item)
 	if hp == 0 && mp == 0 {
 		res.Message = "This item has no effect."
-		return res
-	}
-	if !target.Alive && hp <= 0 {
-		res.Message = "Invalid target."
 		return res
 	}
 	if _, ok := b.host.Profiles().UseConsumable(actor.ProfileName, item.ID); !ok {
@@ -782,9 +782,6 @@ func (b *BattleRoom) resolveItemUse(qa queuedAction, actor *battleEntity, res pr
 		target.HP += hp
 		if target.HP > target.MaxHP {
 			target.HP = target.MaxHP
-		}
-		if target.HP > 0 {
-			target.Alive = true
 		}
 		res.Heal = hp
 	}
@@ -852,7 +849,7 @@ func (b *BattleRoom) entityUpdates() []protocol.EntityUpdate {
 			ID: e.ID, HP: e.HP, MP: e.MP,
 			SkillATB: e.SkillATB, ATB: e.SkillATB,
 			TargetID: e.TargetID, Alive: e.Alive,
-			Statuses: game.Snapshots(e.statuses),
+			Statuses:       game.Snapshots(e.statuses),
 			CastingSkillID: castSkill, CastTargetID: castTarget,
 			CastProgress: castProg, CastTimeMs: castMs,
 		})

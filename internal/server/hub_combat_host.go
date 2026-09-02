@@ -27,10 +27,7 @@ func (h *Hub) SendProfileUpdate(clientID string, profile store.Profile) {
 	if !ok {
 		return
 	}
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
-		PlayerID: clientID,
-		Profile:  profileInfo(profile),
-	})
+	h.sendWelcome(c, profile)
 }
 
 func (h *Hub) SendError(clientID, message string) {
@@ -59,6 +56,7 @@ func (h *Hub) EnterBattle(clientID, battleID string) {
 	wp.InBattle = true
 	wp.BattleID = battleID
 	wp.ImmuneUntil = 0
+	h.cancelWorldCast(c, wp, "")
 	delete(h.battleInvites, clientID)
 	if meta := h.battleMeta[battleID]; meta != nil {
 		delete(meta.passiveEligible, clientID)

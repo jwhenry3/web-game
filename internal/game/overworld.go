@@ -121,6 +121,9 @@ func OverworldCell(c, r int) byte {
 	if r < 0 || r >= OverworldRows || c < 0 || c >= OverworldCols {
 		return TileRock
 	}
+	if r >= len(OverworldCells) || c >= len(OverworldCells[r]) {
+		return TileRock
+	}
 	return OverworldCells[r][c]
 }
 
@@ -205,14 +208,18 @@ func OverworldMapPayload() (tile, cols, rows int, cells string) {
 }
 
 func Pathfind(from, to Tile, region Region) []Vec2 {
+	return pathfindWith(WalkableTile, from, to, region)
+}
+
+func pathfindWith(walkable func(c, r int) bool, from, to Tile, region Region) []Vec2 {
 	if from == to {
 		return []Vec2{TileCenter(to)}
 	}
-	if !WalkableTile(from.C, from.R) || !WalkableTile(to.C, to.R) {
+	if !walkable(from.C, from.R) || !walkable(to.C, to.R) {
 		return nil
 	}
 	allow := func(c, r int) bool {
-		return WalkableTile(c, r) && (region.ID == "" || region.Contains(c, r))
+		return walkable(c, r) && (region.ID == "" || region.Contains(c, r))
 	}
 	if !allow(from.C, from.R) || !allow(to.C, to.R) {
 		return nil

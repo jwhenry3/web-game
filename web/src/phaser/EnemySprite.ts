@@ -13,7 +13,7 @@ import {
 } from "../characters/heroes99";
 import { ensureEnemyTextures } from "../characters/enemyAssets";
 import { enemyTextureKey, type EnemyKind } from "../characters/enemies";
-import { battleDuration } from "./battleAnim";
+import { playHitFlash } from "./battleAnim";
 
 export class EnemySprite {
   readonly container: Phaser.GameObjects.Container;
@@ -29,6 +29,7 @@ export class EnemySprite {
   private casting = false;
   private castPulse = 0;
   private loadToken = 0;
+  private hitFlash?: Phaser.Tweens.Tween;
 
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind) {
     this.scene = scene;
@@ -89,13 +90,7 @@ export class EnemySprite {
 
   playHit(battleSpeed?: number): void {
     if (!this.sprite) return;
-    this.scene.tweens.add({
-      targets: this.sprite,
-      alpha: 0.4,
-      duration: battleDuration(50, battleSpeed),
-      yoyo: true,
-      repeat: 2,
-    });
+    this.hitFlash = playHitFlash(this.scene, this.sprite, this.hitFlash, battleSpeed, 0.4);
   }
 
   setCasting(active: boolean): void {

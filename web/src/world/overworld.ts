@@ -81,3 +81,7 @@ export function tileAt(map: OverworldMap, c: number, r: number): string {
 }
 
 export { FILL, WALKABLE };
+
+export const TILE_FILL_CSS: Record<string, string> = Object.fromEntries(
+  Object.entries(FILL).map(([k, v]) => [k, `#${v.toString(16).padStart(6, "0")}`]),
+);

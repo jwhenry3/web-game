@@ -5,16 +5,18 @@ import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
 import { PhaserGame } from "./phaser/PhaserGame";
 import { WorldHUD } from "./components/WorldHUD";
+import { InviteToasts } from "./components/InviteToasts";
 import { pluginHost } from "./core/plugins/pluginHost";
 import { SidePanel } from "./components/SidePanel";
 import { GameWindows, WindowBar } from "./components/GameWindows";
+import { WorldSkillDialogs } from "./components/WorldSkillDialogs";
 import { Hotbar } from "./components/Hotbar";
 import { GameHotkeys } from "./components/GameHotkeys";
 import { MainMenu } from "./components/MainMenu";
 import { ExpBar } from "./components/ExpBar";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
 
-export function App() {
+function AppBody() {
   const screen = useGame((s) => s.screen);
   const setAuth = useGame((s) => s.setAuth);
   const [booting, setBooting] = useState(true);
@@ -77,7 +79,6 @@ export function App() {
 
   return (
     <div className="game-layout">
-      <GameHotkeys />
       <div className="game-stage">
         <PhaserGame />
         {screen === combat.battleScreen ? <CombatHUD /> : <WorldHUD />}
@@ -86,8 +87,19 @@ export function App() {
         <ExpBar />
         <WindowBar />
         <GameWindows />
+        <WorldSkillDialogs />
+        <InviteToasts />
         <MainMenu />
       </div>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <>
+      <GameHotkeys />
+      <AppBody />
+    </>
   );
 }

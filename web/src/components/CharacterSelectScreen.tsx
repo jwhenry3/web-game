@@ -3,6 +3,7 @@ import { deleteCharacter, MAX_CHARACTERS } from "../net/auth";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { ALL_JOBS, RACES } from "../types";
+import { useMenuPanelFocus } from "../ui/useMenuPanelFocus";
 
 export function CharacterSelectScreen() {
   const username = useGame((s) => s.username);
@@ -15,6 +16,8 @@ export function CharacterSelectScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  useMenuPanelFocus(characters.length, confirmDelete);
 
   useEffect(() => {
     if (loginError) setBusy(null);
@@ -56,6 +59,7 @@ export function CharacterSelectScreen() {
   };
 
   const atLimit = characters.length >= MAX_CHARACTERS;
+  const createLabel = atLimit ? `Character limit (${MAX_CHARACTERS})` : "Create New Character";
 
   return (
     <div className="login-screen">
@@ -80,35 +84,43 @@ export function CharacterSelectScreen() {
                     <>
                       <span className="hint">Delete {c.name}?</span>
                       <button
+                        type="button"
                         className="xiv-btn danger"
+                        aria-label={`Confirm delete ${c.name}`}
                         disabled={busy !== null}
                         onClick={() => doDelete(c.name)}
                       >
-                        Confirm
+                        <span aria-hidden="true">Confirm</span>
                       </button>
                       <button
+                        type="button"
                         className="xiv-btn"
+                        aria-label="Cancel delete"
                         disabled={busy !== null}
                         onClick={() => setConfirmDelete(null)}
                       >
-                        Cancel
+                        <span aria-hidden="true">Cancel</span>
                       </button>
                     </>
                   ) : (
                     <>
                       <button
+                        type="button"
                         className="xiv-btn gold"
+                        aria-label={`Play as ${c.name}`}
                         disabled={busy !== null}
                         onClick={() => play(c.name)}
                       >
-                        {busy === c.name ? "Entering…" : "Play"}
+                        <span aria-hidden="true">{busy === c.name ? "Entering…" : "Play"}</span>
                       </button>
                       <button
+                        type="button"
                         className="xiv-btn danger"
+                        aria-label={`Delete ${c.name}`}
                         disabled={busy !== null}
                         onClick={() => setConfirmDelete(c.name)}
                       >
-                        Delete
+                        <span aria-hidden="true">Delete</span>
                       </button>
                     </>
                   )}
@@ -118,14 +130,22 @@ export function CharacterSelectScreen() {
           </div>
           {(error || loginError) && <div className="error-text">{error ?? loginError}</div>}
           <button
+            type="button"
             className="xiv-btn wide"
+            aria-label={createLabel}
             disabled={atLimit || busy !== null}
             onClick={startCreate}
           >
-            {atLimit ? `Character limit (${MAX_CHARACTERS})` : "Create New Character"}
+            <span aria-hidden="true">{createLabel}</span>
           </button>
-          <button className="xiv-btn wide logout-btn" disabled={busy !== null} onClick={doLogout}>
-            Log Out
+          <button
+            type="button"
+            className="xiv-btn wide logout-btn"
+            aria-label="Log Out"
+            disabled={busy !== null}
+            onClick={doLogout}
+          >
+            <span aria-hidden="true">Log Out</span>
           </button>
         </div>
       </div>

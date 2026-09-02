@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { login, register, setStoredToken } from "../net/auth";
 import { useGame } from "../state/store";
+import { useMenuPanelFocus } from "../ui/useMenuPanelFocus";
 
 type Mode = "login" | "register";
 
@@ -11,6 +12,8 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const setAuth = useGame((s) => s.setAuth);
+
+  useMenuPanelFocus(mode);
 
   const submit = async () => {
     setError(null);
@@ -32,6 +35,8 @@ export function AuthScreen() {
     }
   };
 
+  const submitLabel = busy ? "Please wait…" : mode === "login" ? "Log In" : "Create Account";
+
   return (
     <div className="login-screen">
       <div className="xiv-window login-panel">
@@ -41,15 +46,28 @@ export function AuthScreen() {
         <div className="xiv-body">
           <p className="subtitle">Sign in to enter the world</p>
           <div className="xiv-tabs">
-            <button className={`xiv-tab ${mode === "login" ? "on" : ""}`} onClick={() => setMode("login")}>
+            <button
+              type="button"
+              className={`xiv-tab ${mode === "login" ? "on" : ""}`}
+              aria-label="Log In"
+              onClick={() => setMode("login")}
+            >
               Log In
             </button>
-            <button className={`xiv-tab ${mode === "register" ? "on" : ""}`} onClick={() => setMode("register")}>
+            <button
+              type="button"
+              className={`xiv-tab ${mode === "register" ? "on" : ""}`}
+              aria-label="Register"
+              onClick={() => setMode("register")}
+            >
               Register
             </button>
           </div>
-          <label className="field-label">Username</label>
+          <label className="field-label" htmlFor="auth-username">
+            Username
+          </label>
           <input
+            id="auth-username"
             className="xiv-input"
             value={username}
             maxLength={20}
@@ -57,8 +75,11 @@ export function AuthScreen() {
             placeholder="3–20 characters"
             onChange={(e) => setUsername(e.target.value)}
           />
-          <label className="field-label">Password</label>
+          <label className="field-label" htmlFor="auth-password">
+            Password
+          </label>
           <input
+            id="auth-password"
             className="xiv-input"
             type="password"
             value={password}
@@ -69,11 +90,13 @@ export function AuthScreen() {
           />
           {error && <div className="error-text">{error}</div>}
           <button
+            type="button"
             className="xiv-btn gold wide"
+            aria-label={submitLabel}
             disabled={busy || username.trim().length < 3 || password.length < 6}
             onClick={submit}
           >
-            {busy ? "Please wait…" : mode === "login" ? "Log In" : "Create Account"}
+            <span aria-hidden="true">{submitLabel}</span>
           </button>
         </div>
       </div>

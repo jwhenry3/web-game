@@ -76,6 +76,10 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 		res.Message = "Skill not learned."
 		return r.eventFromResult(actor, res)
 	}
+	if skill.WorldOnly {
+		res.Message = "Cannot use that in battle."
+		return r.eventFromResult(actor, res)
+	}
 	if skill.WeaponReq != "" && skill.WeaponReq != actor.weaponForSkill(skill) {
 		res.Message = "Requires a " + string(skill.WeaponReq) + "."
 		return r.eventFromResult(actor, res)
@@ -135,7 +139,7 @@ func (r *Room) resolveItemUse(actor *entity, action protocol.ActionPayload) prot
 		return res
 	}
 	target := r.find(action.TargetID)
-	if target == nil || !target.isPlayer {
+	if target == nil || !target.alive || !target.isPlayer {
 		res.Message = "Invalid target."
 		return res
 	}
@@ -146,10 +150,6 @@ func (r *Room) resolveItemUse(actor *entity, action protocol.ActionPayload) prot
 	hp, mp := game.ConsumableEffect(item)
 	if hp == 0 && mp == 0 {
 		res.Message = "This item has no effect."
-		return res
-	}
-	if !target.alive && hp <= 0 {
-		res.Message = "Invalid target."
 		return res
 	}
 	if _, ok := r.host.Profiles().UseConsumable(actor.profileName, item.ID); !ok {
@@ -163,9 +163,6 @@ func (r *Room) resolveItemUse(actor *entity, action protocol.ActionPayload) prot
 		target.hp += hp
 		if target.hp > target.maxHP {
 			target.hp = target.maxHP
-		}
-		if target.hp > 0 {
-			target.alive = true
 		}
 		res.Heal = hp
 	}

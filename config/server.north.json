@@ -5,11 +5,11 @@
     "data": "data/north-profiles.json",
     "accounts": "data/accounts.json",
     "static": "web/dist",
-    "overworld": "config/overworld.json",
+    "overworld": "config/overworld.north.json",
     "battle_speed": 0.75
   },
   "plugins": {
-    "combat": "combat.realtime",
+    "combat": "combat.atb",
     "modules": [
       {
         "id": "combat.atb",

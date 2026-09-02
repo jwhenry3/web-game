@@ -166,9 +166,7 @@ func (h *Hub) notifyPassiveRewards(rewards []protocol.PlayerReward) {
 		if !ok {
 			continue
 		}
-		h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
-			PlayerID: c.ID, Profile: profileInfo(profile),
-		})
+		h.sendWelcome(c, profile)
 		h.send(c, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
 			XP: r.XP, Passive: true, Victory: true,
 			Message: fmt.Sprintf("Party victory — +%d passive EXP (you stayed out of combat).", r.XP),

@@ -36,15 +36,7 @@ func SeedFromID(id string) int64 {
 
 // WalkableTilesInRegion lists every walkable tile inside a region.
 func WalkableTilesInRegion(region Region) []Tile {
-	out := make([]Tile, 0, (region.MaxC-region.MinC+1)*(region.MaxR-region.MinR+1))
-	for r := region.MinR; r <= region.MaxR; r++ {
-		for c := region.MinC; c <= region.MaxC; c++ {
-			if WalkableTile(c, r) {
-				out = append(out, Tile{C: c, R: r})
-			}
-		}
-	}
-	return out
+	return walkableTilesInRegion(WalkableTile, region)
 }
 
 func wanderMinDistance() int {
@@ -73,12 +65,19 @@ func WanderSpeed() float64 {
 
 // PickRandomWanderPath chooses a distant random tile in the region and paths to it.
 func PickRandomWanderPath(id string, region Region, from Tile, step int) []Vec2 {
-	pool := WalkableTilesInRegion(region)
+	return pickWanderPath(WalkableTile, Wander, id, region, from, step)
+}
+
+func pickWanderPath(walkable func(c, r int) bool, settings wanderSettings, id string, region Region, from Tile, step int) []Vec2 {
+	pool := walkableTilesInRegion(walkable, region)
 	if len(pool) == 0 {
 		return nil
 	}
 
-	minDist := wanderMinDistance()
+	minDist := settings.MinDistance
+	if minDist <= 0 {
+		minDist = defaultWanderMinDist
+	}
 	rng := rand.New(rand.NewSource(SeedFromID(id) + int64(step)*7919 + int64(from.C)*997 + int64(from.R)*37))
 
 	for attempt := 0; attempt < wanderPickAttempts; attempt++ {
@@ -89,24 +88,35 @@ func PickRandomWanderPath(id string, region Region, from Tile, step int) []Vec2 
 		if tileManhattan(from, dest) < minDist {
 			continue
 		}
-		path := Pathfind(from, dest, region)
+		path := pathfindWith(walkable, from, dest, region)
 		if len(path) > 0 {
 			return path
 		}
 	}
 
-	// Relax distance if the region is tight or heavily blocked.
 	for attempt := 0; attempt < wanderPickAttempts; attempt++ {
 		dest := pool[rng.Intn(len(pool))]
 		if dest == from {
 			continue
 		}
-		path := Pathfind(from, dest, region)
+		path := pathfindWith(walkable, from, dest, region)
 		if len(path) > 0 && tileManhattan(from, dest) >= 3 {
 			return path
 		}
 	}
 	return nil
+}
+
+func walkableTilesInRegion(walkable func(c, r int) bool, region Region) []Tile {
+	out := make([]Tile, 0, (region.MaxC-region.MinC+1)*(region.MaxR-region.MinR+1))
+	for r := region.MinR; r <= region.MaxR; r++ {
+		for c := region.MinC; c <= region.MaxC; c++ {
+			if walkable(c, r) {
+				out = append(out, Tile{C: c, R: r})
+			}
+		}
+	}
+	return out
 }
 
 func tileManhattan(a, b Tile) int {

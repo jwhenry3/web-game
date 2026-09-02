@@ -17,7 +17,7 @@ import {
   type CharacterAppearance,
   type CharacterFacing,
 } from "../characters/heroes99";
-import { battleDuration } from "./battleAnim";
+import { playHitFlash } from "./battleAnim";
 
 const LAYER_DEPTH: Record<string, number> = {
   skin: 0,
@@ -46,6 +46,7 @@ export class CharacterSprite {
   private gcdReady = false;
   private hitCallback: (() => void) | null = null;
   private scene: Phaser.Scene;
+  private hitFlash?: Phaser.Tweens.Tween;
 
   constructor(
     scene: Phaser.Scene,
@@ -63,6 +64,12 @@ export class CharacterSprite {
 
   getFacing(): CharacterFacing {
     return this.facing;
+  }
+
+  setFacing(facing: CharacterFacing): void {
+    if (facing === this.facing) return;
+    this.facing = facing;
+    if (this.ready) this.applyFrame();
   }
 
   setAppearance(appearance: CharacterAppearance): void {
@@ -105,13 +112,7 @@ export class CharacterSprite {
   }
 
   playHit(battleSpeed?: number): void {
-    this.scene.tweens.add({
-      targets: this.container,
-      alpha: 0.35,
-      duration: battleDuration(50, battleSpeed),
-      yoyo: true,
-      repeat: 2,
-    });
+    this.hitFlash = playHitFlash(this.scene, this.container, this.hitFlash, battleSpeed, 0.35);
   }
 
   setCasting(active: boolean): void {

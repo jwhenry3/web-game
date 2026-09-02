@@ -29,6 +29,7 @@ h3 {
 .xiv-window,
 .xiv-chat,
 .xiv-slot,
+.xiv-item-row,
 .xiv-hotbar-slot,
 .xiv-detail {
   background: rgba(18, 18, 20, 0.82);
@@ -74,6 +75,39 @@ h3 {
   cursor: pointer;
   padding: 5px 10px;
   font-size: 12px;
+  user-select: none;
+}
+
+.main-menu-panel button,
+.xiv-skill-dialog button,
+.xiv-toast button,
+.xiv-window-layer .xiv-window button {
+  user-select: none;
+}
+
+.main-menu-panel button:focus-visible,
+.xiv-skill-dialog button:focus-visible,
+.xiv-toast button:focus-visible,
+.xiv-window-layer .xiv-window button:focus-visible,
+.login-panel button:focus-visible {
+  outline: 2px solid #e8c96a;
+  outline-offset: 2px;
+}
+
+.end-modal button:focus-visible {
+  outline: 2px solid #e8c96a;
+  outline-offset: 2px;
+}
+
+.login-panel button,
+.login-panel .job-card,
+.end-modal button {
+  user-select: none;
+}
+
+.job-card .job-name,
+.job-card .job-swatch {
+  pointer-events: none;
 }
 
 .xiv-btn:hover:not(:disabled),
@@ -440,7 +474,7 @@ h3 {
   left: 50%;
   transform: translateX(-50%);
   width: min(360px, 92%);
-  z-index: 12;
+  z-index: 50;
   pointer-events: auto;
 }
 
@@ -450,6 +484,224 @@ h3 {
   right: 12px;
   width: 220px;
   pointer-events: auto;
+}
+
+.xiv-world-cast {
+  position: absolute;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%);
+  width: min(280px, 70%);
+  z-index: 41;
+  pointer-events: none;
+  padding: 6px 8px;
+  background: rgba(18, 18, 20, 0.82);
+  border: 1px solid rgba(196, 163, 90, 0.55);
+}
+
+.xiv-world-cast-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #d4bc7d;
+  margin-bottom: 4px;
+  text-align: center;
+}
+
+.xiv-world-cast .ff-gauge-track {
+  margin: 0;
+}
+
+.xiv-skill-dialog-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 6, 8, 0.55);
+}
+
+.xiv-skill-dialog-layer--confirm {
+  z-index: 220;
+}
+
+.xiv-skill-dialog {
+  width: min(360px, 92%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.xiv-skill-dialog--teleport {
+  width: min(960px, 96vw);
+  max-height: 88vh;
+  overflow: hidden;
+}
+
+.xiv-teleport-list .xiv-btn.on {
+  border-color: #e8c96a;
+  color: #e8c96a;
+}
+
+.xiv-teleport-layout {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  min-height: 280px;
+  flex: 1;
+}
+
+.xiv-teleport-layout .world-map {
+  height: 100%;
+}
+
+.xiv-teleport-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.xiv-teleport-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xiv-teleport-section .xiv-section-label {
+  margin: 0;
+}
+
+.world-map {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.world-map-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #0c100e;
+  border: 1px solid rgba(196, 163, 90, 0.4);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.world-map-viewport.grabbing {
+  cursor: grabbing;
+}
+
+.world-map-zoom {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+  z-index: 4;
+}
+
+.world-map-zoom-btn {
+  min-width: 32px;
+  padding: 4px 8px;
+}
+
+.world-map-plane {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.world-map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.world-map-poi {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+  z-index: 2;
+}
+
+.world-map-poi::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 7px;
+  width: 14px;
+  height: 14px;
+  transform: rotate(45deg);
+  border: 1px solid #fff6c8;
+  background: #a8e8ff;
+  border-radius: 2px;
+  box-shadow: 0 0 6px rgba(168, 232, 255, 0.55);
+  pointer-events: none;
+}
+
+.world-map-poi.selectable {
+  cursor: pointer;
+}
+
+.world-map-poi.home::after {
+  background: #e8c96a;
+  box-shadow: 0 0 8px rgba(232, 201, 106, 0.8);
+}
+
+.world-map-poi.undiscovered::after {
+  background: #5c6a70;
+  border-color: #7a8a90;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+.world-map-poi.selected::after {
+  box-shadow: 0 0 0 2px #fff, 0 0 8px #e8c96a;
+}
+
+.world-map-poi.poi-player {
+  width: 16px;
+  height: 16px;
+  z-index: 3;
+}
+
+.world-map-poi.poi-player::after {
+  left: 2px;
+  top: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: none;
+  background: #f4f0e0;
+  border: 2px solid #c45c4a;
+  box-shadow: 0 0 8px #c45c4a;
+}
+
+.world-map-caption {
+  font-size: 12px;
+  color: #c9b27a;
+  min-height: 1.2em;
 }
 
 .xiv-player-search {
@@ -692,6 +944,10 @@ h3 {
   overflow: hidden;
 }
 
+.xiv-window--map {
+  width: min(860px, 96%);
+}
+
 .xiv-titlebar {
   display: flex;
   justify-content: space-between;
@@ -721,6 +977,10 @@ h3 {
 .xiv-body {
   padding: 12px 14px;
   overflow-y: auto;
+}
+
+.xiv-body--map {
+  overflow: hidden;
 }
 
 .xiv-char-head,
@@ -761,22 +1021,42 @@ h3 {
 
 .xiv-equip {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: auto 1fr;
   gap: 16px;
+}
+
+.xiv-equip-preview {
+  grid-area: preview;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 12px;
+  min-height: 100%;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(196, 163, 90, 0.25);
+  border-radius: 4px;
+}
+
+.xiv-equip-preview-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #c4a35a;
 }
 
 .xiv-doll {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: auto auto auto;
   grid-template-areas:
-    ". head ."
-    "sub_weapon weapon back"
-    ". chest ."
-    ". hands ."
-    ". legs ."
-    ". feet .";
+    "weapon preview sub_weapon"
+    "head preview back"
+    "chest preview legs"
+    "hands preview feet";
   gap: 8px;
   justify-items: center;
+  align-items: center;
 }
 
 .doll-weapon { grid-area: weapon; }
@@ -806,6 +1086,103 @@ h3 {
   display: grid;
   grid-template-columns: repeat(auto-fill, 44px);
   gap: 6px;
+}
+
+.xiv-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.xiv-item-list-empty {
+  padding: 8px 4px;
+  margin: 0;
+}
+
+.xiv-item-row-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.xiv-item-row-wrap.selected .xiv-item-row {
+  border-color: #e8c96a;
+  background: rgba(40, 34, 18, 0.85);
+}
+
+.xiv-item-row-wrap.equipped .xiv-item-row {
+  box-shadow: inset 0 0 0 1px #e8c96a;
+}
+
+.xiv-item-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+  color: #e6e2d6;
+  font-family: inherit;
+  font-size: 12px;
+  border-radius: 0;
+}
+
+.xiv-item-row[draggable="true"] {
+  cursor: grab;
+}
+
+.xiv-item-row:hover {
+  border-color: #e8c96a;
+  background: rgba(40, 34, 18, 0.85);
+}
+
+.xiv-item-action {
+  min-width: 92px;
+  padding: 5px 6px;
+  font-size: 11px;
+  align-self: center;
+}
+
+.xiv-item-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.xiv-item-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.xiv-item-row-equipped {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #1a1406;
+  background: #e8c96a;
+  border: 1px solid #f0d88a;
+}
+
+.xiv-item-row-meta {
+  font-size: 11px;
+  color: #8c8778;
+  font-variant-numeric: tabular-nums;
+}
+
+.hotbar-drag-ghost {
+  opacity: 0.92;
 }
 
 .xiv-slot {
@@ -902,10 +1279,43 @@ h3 {
   color: #e8c96a;
 }
 
-.xiv-inv-split {
-  display: grid;
-  grid-template-columns: 1fr 240px;
-  gap: 14px;
+.xiv-inv-split,
+.xiv-inv-list {
+  display: block;
+}
+
+.xiv-toast-stack {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.xiv-toast {
+  pointer-events: auto;
+  padding: 10px 12px;
+}
+
+.xiv-toast-message {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.xiv-toast-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.xiv-toast .hint {
+  margin: 4px 0 0;
 }
 
 .xiv-tree {
@@ -974,9 +1384,16 @@ h3 {
   bottom: 30px;
   transform: translateX(-50%);
   display: flex;
+  flex-direction: column;
   gap: 4px;
   z-index: 40;
   pointer-events: auto;
+}
+
+.hotbar-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
 }
 
 .xiv-mainmenu {
@@ -1028,6 +1445,10 @@ h3 {
   width: min(400px, 92vw);
   max-height: 85vh;
   overflow: auto;
+}
+
+.main-menu-panel--options {
+  width: min(640px, 94vw);
 }
 
 .main-menu-panel .xiv-titlebar {
@@ -1120,10 +1541,92 @@ h3 {
   justify-content: center;
 }
 
+.main-menu-options-layout {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  min-height: 280px;
+}
+
+.main-menu-options-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid rgba(196, 163, 90, 0.25);
+  padding-right: 10px;
+}
+
+.main-menu-options-tab {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  color: #c9b27a;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(196, 163, 90, 0.25);
+  cursor: pointer;
+}
+
+.main-menu-options-tab:hover {
+  border-color: rgba(196, 163, 90, 0.55);
+  color: #e8c96a;
+}
+
+.main-menu-options-tab.on {
+  border-color: #c9a24a;
+  color: #e8c96a;
+  background: rgba(40, 34, 18, 0.85);
+}
+
+.main-menu-options-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .main-menu-options {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.main-menu-keybind-hint {
+  margin: 0 0 10px;
+}
+
+.main-menu-keybinds {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.main-menu-keybind-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.main-menu-keybind-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.main-menu-keybind-action {
+  font-size: 12px;
+  color: #d8ccb0;
+}
+
+.main-menu-keybind-row .xiv-btn {
+  min-width: 120px;
+  justify-content: center;
 }
 
 .main-menu-option {
@@ -1164,6 +1667,7 @@ h3 {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .hotbar-slot[draggable="true"] {

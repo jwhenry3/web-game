@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
@@ -13,6 +13,8 @@ import {
 } from "../characters/types";
 import { ALL_JOBS } from "../types";
 import type { CreationDraft } from "../state/store";
+import { jobGridNeighbor, layoutJobGrid, treeNavDirection } from "../ui/jobGridNav";
+import { useMenuPanelFocus } from "../ui/useMenuPanelFocus";
 
 const DEFAULT_RACE = "hume";
 
@@ -46,7 +48,49 @@ export function CharacterCreationWizard() {
   const [step, setStep] = useState<Step>("appearance");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focusJobId, setFocusJobId] = useState<string | null>(null);
+  const jobGridRef = useRef<HTMLDivElement>(null);
   const loginError = useGame((s) => s.loginError);
+
+  useMenuPanelFocus(step);
+
+  const mainJobIds = useMemo(() => ALL_JOBS.map((j) => j.id), []);
+  const subJobIds = useMemo(
+    () => ["", ...ALL_JOBS.filter((j) => j.id !== draft.mainJob).map((j) => j.id)],
+    [draft.mainJob],
+  );
+  const jobIds = step === "main" ? mainJobIds : step === "sub" ? subJobIds : [];
+  const jobLayout = useMemo(() => layoutJobGrid(jobIds, 4), [jobIds]);
+
+  useEffect(() => {
+    setFocusJobId(null);
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== "main" && step !== "sub") return;
+    const onKey = (e: KeyboardEvent) => {
+      const dir = treeNavDirection(e.key);
+      if (!dir) return;
+      if (!document.activeElement?.closest(".job-grid")) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!jobIds.length) return;
+
+      const currentId = focusJobId ?? jobIds[0]!;
+      const nextId = jobGridNeighbor(jobLayout, currentId, dir);
+      if (nextId == null) return;
+      setFocusJobId(nextId);
+      requestAnimationFrame(() => {
+        jobGridRef.current
+          ?.querySelector<HTMLButtonElement>(`[data-job-id="${CSS.escape(nextId)}"]`)
+          ?.focus();
+      });
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [step, focusJobId, jobIds, jobLayout]);
 
   useEffect(() => {
     if (loginError) setBusy(false);
@@ -152,15 +196,24 @@ export function CharacterCreationWizard() {
           )}
 
           {step === "main" && (
-            <div className="job-grid job-grid-compact">
+            <div ref={jobGridRef} className="job-grid job-grid-compact">
               {ALL_JOBS.map((j) => (
                 <button
                   key={j.id}
+                  type="button"
+                  data-job-id={j.id}
+                  aria-label={j.name}
                   className={`job-card job-card--inline ${draft.mainJob === j.id ? "selected" : ""}`}
-                  onClick={() => patch({ mainJob: j.id, subJob: draft.subJob === j.id ? "" : draft.subJob })}
+                  onClick={() => {
+                    setFocusJobId(j.id);
+                    patch({ mainJob: j.id, subJob: draft.subJob === j.id ? "" : draft.subJob });
+                  }}
+                  onFocus={() => setFocusJobId(j.id)}
                 >
-                  <span className="job-swatch" style={{ background: j.color }} />
-                  <span className="job-name">{j.name}</span>
+                  <span className="job-swatch" style={{ background: j.color }} aria-hidden="true" />
+                  <span className="job-name" aria-hidden="true">
+                    {j.name}
+                  </span>
                 </button>
               ))}
             </div>
@@ -169,21 +222,39 @@ export function CharacterCreationWizard() {
           {step === "sub" && (
             <>
               <p className="hint">Sub job abilities contribute at half strength (FFXI-style).</p>
-              <div className="job-grid job-grid-compact">
+              <div ref={jobGridRef} className="job-grid job-grid-compact">
                 <button
+                  type="button"
+                  data-job-id=""
+                  aria-label="None"
                   className={`job-card job-card--inline ${!draft.subJob ? "selected" : ""}`}
-                  onClick={() => patch({ subJob: "" })}
+                  onClick={() => {
+                    setFocusJobId("");
+                    patch({ subJob: "" });
+                  }}
+                  onFocus={() => setFocusJobId("")}
                 >
-                  <span className="job-name">None</span>
+                  <span className="job-name" aria-hidden="true">
+                    None
+                  </span>
                 </button>
                 {ALL_JOBS.filter((j) => j.id !== draft.mainJob).map((j) => (
                   <button
                     key={j.id}
+                    type="button"
+                    data-job-id={j.id}
+                    aria-label={j.name}
                     className={`job-card job-card--inline ${draft.subJob === j.id ? "selected" : ""}`}
-                    onClick={() => patch({ subJob: j.id })}
+                    onClick={() => {
+                      setFocusJobId(j.id);
+                      patch({ subJob: j.id });
+                    }}
+                    onFocus={() => setFocusJobId(j.id)}
                   >
-                    <span className="job-swatch" style={{ background: j.color }} />
-                    <span className="job-name">{j.name}</span>
+                    <span className="job-swatch" style={{ background: j.color }} aria-hidden="true" />
+                    <span className="job-name" aria-hidden="true">
+                      {j.name}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -219,27 +290,29 @@ export function CharacterCreationWizard() {
           {error && <div className="error-text">{error}</div>}
           <div className="xiv-wizard-nav">
             {stepIndex === 0 && hasExisting ? (
-              <button className="xiv-btn" disabled={busy} onClick={() => setScreen("select")}>
-                Back to Select
+              <button type="button" className="xiv-btn" aria-label="Back to Select" disabled={busy} onClick={() => setScreen("select")}>
+                <span aria-hidden="true">Back to Select</span>
               </button>
             ) : (
-              <button className="xiv-btn" disabled={stepIndex === 0 || busy} onClick={back}>
-                Back
+              <button type="button" className="xiv-btn" aria-label="Back" disabled={stepIndex === 0 || busy} onClick={back}>
+                <span aria-hidden="true">Back</span>
               </button>
             )}
-            <button className="xiv-btn gold" disabled={busy} onClick={next}>
-              {step === "name" ? (busy ? "Entering…" : "Enter World") : "Next"}
+            <button type="button" className="xiv-btn gold" aria-label={step === "name" ? (busy ? "Entering" : "Enter World") : "Next"} disabled={busy} onClick={next}>
+              <span aria-hidden="true">{step === "name" ? (busy ? "Entering…" : "Enter World") : "Next"}</span>
             </button>
           </div>
           <button
+            type="button"
             className="xiv-btn wide logout-btn"
+            aria-label="Log Out"
             disabled={busy}
             onClick={() => {
               net.disconnect();
               logout();
             }}
           >
-            Log Out
+            <span aria-hidden="true">Log Out</span>
           </button>
         </div>
       </div>

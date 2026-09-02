@@ -86,7 +86,8 @@ type Skill struct {
 	Prereq      string
 	Cost        int
 	Description string
-	CastTimeMs  int // 0 = instant; default 1000 for spells
+	CastTimeMs  int  // 0 = instant; default 1000 for spells
+	WorldOnly   bool // field skill; cannot be used in battle
 }
 
 // BasicAttack is always available on the hotbar; it uses the shared GCD.

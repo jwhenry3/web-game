@@ -27,6 +27,9 @@ const (
 
 	// Grace after win, defeat, or leave so the next collision cannot instantly re-aggro.
 	battleImmunity = 5 * time.Second
+
+	worldPosSaveInterval = 5 * time.Second
+	worldSkillCooldown   = 2 * time.Second
 )
 
 type Event struct {
@@ -53,20 +56,25 @@ type Hub struct {
 	tokens   *auth.TokenIssuer
 
 	// Run-goroutine owned:
-	world        map[string]*protocol.WorldPlayer // clientID -> world presence
-	npcs         map[string]*worldNPC
-	battleSeq    int
-	combat       contracts.CombatPlugin
-	modCfg       plugins.Config
-	parties      map[string]*hubParty
-	clientParty  map[string]string
-	partyInvites map[string]*partyInvite
-	partySeq     int
+	world         map[string]*protocol.WorldPlayer // clientID -> world presence
+	npcs          map[string]*worldNPC
+	battleSeq     int
+	combat        contracts.CombatPlugin
+	modCfg        plugins.Config
+	parties       map[string]*hubParty
+	clientParty   map[string]string
+	partyInvites  map[string]*partyInvite
+	partySeq      int
 	battleInvites map[string]*battleInvite
 	battleMeta    map[string]*battleMeta
 
 	tickWindow  time.Duration
 	battleSpeed float64
+
+	overworld  *game.Overworld
+	mapID      string
+	mapName    string
+	OnTransfer func(clientID, destMap string, destX, destY float64, facing string)
 }
 
 func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer, battleSpeed float64, modCfg plugins.Config) (*Hub, error) {
@@ -74,24 +82,25 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		battleSpeed = combatatb.DefaultBattleSpeed
 	}
 	h := &Hub{
-		clients:    make(map[string]*Client),
-		register:   make(chan *Client, 16),
-		unregister: make(chan *Client, 16),
-		events:     make(chan Event, 256),
-		tasks:      make(chan func(), 256),
-		store:      profiles,
-		accounts:   accounts,
-		tokens:     tokens,
-		world:        make(map[string]*protocol.WorldPlayer),
-		npcs:         make(map[string]*worldNPC),
-		parties:      make(map[string]*hubParty),
-		clientParty:  make(map[string]string),
-		partyInvites: make(map[string]*partyInvite),
+		clients:       make(map[string]*Client),
+		register:      make(chan *Client, 16),
+		unregister:    make(chan *Client, 16),
+		events:        make(chan Event, 256),
+		tasks:         make(chan func(), 256),
+		store:         profiles,
+		accounts:      accounts,
+		tokens:        tokens,
+		world:         make(map[string]*protocol.WorldPlayer),
+		npcs:          make(map[string]*worldNPC),
+		parties:       make(map[string]*hubParty),
+		clientParty:   make(map[string]string),
+		partyInvites:  make(map[string]*partyInvite),
 		battleInvites: make(map[string]*battleInvite),
 		battleMeta:    make(map[string]*battleMeta),
-		tickWindow:   combatatb.BattleTickWindow(battleSpeed),
-		battleSpeed:  battleSpeed,
-		modCfg:       modCfg,
+		tickWindow:    combatatb.BattleTickWindow(battleSpeed),
+		battleSpeed:   battleSpeed,
+		modCfg:        modCfg,
+		overworld:     game.Loaded(),
 	}
 	combat, err := plugins.NewCombatPlugin(modCfg, h)
 	if err != nil {
@@ -102,6 +111,76 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 }
 
 func (h *Hub) Register(c *Client) { h.register <- c }
+
+func (h *Hub) Unregister(c *Client) { h.unregister <- c }
+
+func (h *Hub) PushEvent(ev Event) { h.events <- ev }
+
+func (h *Hub) SetMap(id, name string, ow *game.Overworld) {
+	h.mapID = id
+	h.mapName = name
+	if ow != nil {
+		h.overworld = ow
+		game.RegisterSavePoints(id, name, ow.SavePoints)
+	}
+}
+
+func (h *Hub) MapID() string { return h.mapID }
+
+func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
+	if h.mapID == "" || h.overworld == nil {
+		return nil
+	}
+	tile, cols, rows, cells := h.overworld.MapPayload()
+	caps := []string{}
+	mods := make([]protocol.MapModule, 0)
+	for _, m := range h.modCfg.ClientManifest().Modules {
+		mods = append(mods, protocol.MapModule{
+			ID: m.ID, Name: m.Name, Version: m.Version,
+			Capabilities: m.Capabilities,
+			Frontend:     protocol.MapFrontend{PluginID: m.Frontend.PluginID},
+			Config:       m.Config,
+		})
+		caps = append(caps, m.Capabilities...)
+	}
+	portals := make([]protocol.MapPortal, 0, len(h.overworld.Exits))
+	for _, e := range h.overworld.Exits {
+		portals = append(portals, protocol.MapPortal{
+			X: float64(e.MinC) * game.TileSize,
+			Y: float64(e.MinR) * game.TileSize,
+			W: float64(e.MaxC-e.MinC+1) * game.TileSize,
+			H: float64(e.MaxR-e.MinR+1) * game.TileSize,
+		})
+	}
+	return &protocol.MapSnapshot{
+		ID:           h.mapID,
+		Name:         h.mapName,
+		Combat:       h.modCfg.Combat,
+		Capabilities: caps,
+		Modules:      mods,
+		Overworld:    protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
+		Portals:      portals,
+	}
+}
+
+func (h *Hub) welcomePayload(c *Client, profile store.Profile) protocol.WelcomePayload {
+	return protocol.WelcomePayload{
+		PlayerID: c.ID,
+		Profile:  profileInfo(profile),
+		Map:      h.mapSnapshot(),
+	}
+}
+
+func (h *Hub) sendWelcome(c *Client, profile store.Profile) {
+	h.send(c, protocol.TypeWelcome, h.welcomePayload(c, profile))
+}
+
+func (h *Hub) mapCells() (tile, cols, rows int, cells string) {
+	if h.overworld != nil {
+		return h.overworld.MapPayload()
+	}
+	return game.OverworldMapPayload()
+}
 
 func (h *Hub) BattleSpeed() float64 { return h.battleSpeed }
 
@@ -117,7 +196,11 @@ func (h *Hub) KickByCharacterName(name string) {
 		}
 		h.mu.RUnlock()
 		if target != nil {
-			target.Conn.Close()
+			if target.Conn != nil {
+				target.Conn.Close()
+			} else if target.CloseFn != nil {
+				target.CloseFn()
+			}
 		}
 	}
 }
@@ -127,6 +210,8 @@ func (h *Hub) Run() {
 	h.seedNPCs(npcCount)
 	ticker := time.NewTicker(time.Duration(npcTickSec * float64(time.Second)))
 	defer ticker.Stop()
+	castTicker := time.NewTicker(50 * time.Millisecond)
+	defer castTicker.Stop()
 	for {
 		select {
 		case client := <-h.register:
@@ -146,6 +231,9 @@ func (h *Hub) Run() {
 
 		case <-ticker.C:
 			h.tickNPCs()
+
+		case <-castTicker.C:
+			h.finishDueWorldCasts(time.Now())
 		}
 	}
 }
@@ -226,6 +314,9 @@ func (h *Hub) handleDisconnect(client *Client) {
 	close(client.Send)
 	h.mu.Unlock()
 
+	if wp, ok := h.world[client.ID]; ok {
+		h.persistWorldLocation(client, wp, true)
+	}
 	if client.BattleID != "" {
 		h.combat.OnDisconnect(client.ID)
 	}
@@ -263,8 +354,14 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handleSetJobs(c, ev.Payload)
 	case protocol.TypeSetHotbar:
 		h.handleSetHotbar(c, ev.Payload)
+	case protocol.TypeSetKeybinds:
+		h.handleSetKeybinds(c, ev.Payload)
 	case protocol.TypeAddFriend:
 		h.handleAddFriend(c, ev.Payload)
+	case protocol.TypeAcceptFriend:
+		h.handleAcceptFriend(c, ev.Payload)
+	case protocol.TypeDeclineFriend:
+		h.handleDeclineFriend(c, ev.Payload)
 	case protocol.TypeRemoveFriend:
 		h.handleRemoveFriend(c, ev.Payload)
 	case protocol.TypePartyInvite:
@@ -289,6 +386,8 @@ func (h *Hub) handleEvent(ev Event) {
 		}
 	case protocol.TypeSetSavePoint:
 		h.handleSetSavePoint(c, ev.Payload)
+	case protocol.TypeUseWorldSkill:
+		h.handleUseWorldSkill(c, ev.Payload)
 	default:
 		h.sendError(c, fmt.Sprintf("Unknown message type %q.", ev.Type))
 	}
@@ -362,7 +461,7 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	c.Joined = true
 
 	app := appearanceProto(profile)
-	spawnX, spawnY := game.SpawnPosition(profile.SavePointID)
+	spawnX, spawnY, facing := h.resumeSpawn(c, profile)
 	wp := &protocol.WorldPlayer{
 		ID:         c.ID,
 		Name:       profile.Name,
@@ -374,25 +473,57 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 		Appearance: app,
 		X:          spawnX,
 		Y:          spawnY,
+		Facing:     facing,
 	}
 	h.world[c.ID] = wp
+	h.persistWorldLocation(c, wp, true)
 
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
-		PlayerID: c.ID,
-		Profile:  profileInfo(profile),
-	})
-	tile, cols, rows, cells := game.OverworldMapPayload()
+	h.sendWelcome(c, profile)
+	tile, cols, rows, cells := h.mapCells()
 	h.send(c, protocol.TypeWorldState, protocol.WorldStatePayload{
 		Players:    h.worldPlayers(),
 		NPCs:       h.worldNPCs(),
 		Battles:    h.battleInfos(),
-		SavePoints: worldSavePoints(),
+		SavePoints: h.worldSavePoints(),
 		Map:        protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
 	})
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerJoin, *wp))
 	h.sendSocialState(c)
 	h.refreshFriendsSocial(c.Name)
 	log.Printf("%s joined the world as %s/%s (lv %d)", name, profile.MainJob, profile.SubJob, profile.MainJobLevel())
+}
+
+func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facing string) {
+	if c.UseSpawn {
+		return c.SpawnX, c.SpawnY, c.SpawnFacing
+	}
+	if profile.HasWorldPos && h.canResumeAt(profile.WorldX, profile.WorldY) {
+		return profile.WorldX, profile.WorldY, profile.Facing
+	}
+	if h.overworld != nil {
+		x, y = h.overworld.SpawnPosition(profile.SavePointID)
+	} else {
+		x, y = game.SpawnPosition(profile.SavePointID)
+	}
+	return x, y, ""
+}
+
+func (h *Hub) canResumeAt(x, y float64) bool {
+	if h.overworld != nil {
+		return h.overworld.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
+	}
+	return game.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
+}
+
+func (h *Hub) persistWorldLocation(c *Client, wp *protocol.WorldPlayer, flush bool) {
+	if c == nil || wp == nil || c.Name == "" {
+		return
+	}
+	doFlush := flush || time.Since(c.lastWorldSave) >= worldPosSaveInterval
+	h.store.SetWorldLocation(c.Name, h.mapID, wp.X, wp.Y, wp.Facing, doFlush)
+	if doFlush {
+		c.lastWorldSave = time.Now()
+	}
 }
 
 func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
@@ -404,7 +535,21 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
+	prevX := wp.X
 	wp.X, wp.Y = h.clampMove(wp.X, wp.Y, p.X, p.Y)
+	wp.Facing = game.FacingFromDeltaX(wp.X-prevX, wp.Facing)
+	h.interruptWorldCastOnMove(c, wp)
+	h.persistWorldLocation(c, wp, false)
+	if h.OnTransfer != nil && h.overworld != nil {
+		if exit, ok := h.overworld.ExitAt(wp.X, wp.Y); ok && exit.DestMap != h.mapID {
+			facing := wp.Facing
+			if facing == "" {
+				facing = game.FacingFromExit(exit)
+			}
+			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, facing)
+			return
+		}
+	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 		ID: c.ID, X: wp.X, Y: wp.Y,
 	}))
@@ -446,7 +591,7 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp.Weapon = string(profile.WeaponType())
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{PlayerID: c.ID, Profile: profileInfo(profile)})
+	h.sendWelcome(c, profile)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 }
 
@@ -468,7 +613,7 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp.Weapon = string(profile.WeaponType())
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{PlayerID: c.ID, Profile: profileInfo(profile)})
+	h.sendWelcome(c, profile)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 }
 
@@ -495,7 +640,7 @@ func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
 	wp.MainJob = profile.MainJob
 	wp.SubJob = profile.SubJob
 	wp.Level = profile.MainJobLevel()
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{PlayerID: c.ID, Profile: profileInfo(profile)})
+	h.sendWelcome(c, profile)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 }
 
@@ -509,7 +654,20 @@ func (h *Hub) handleSetHotbar(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Invalid hotbar slot.")
 		return
 	}
-	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{PlayerID: c.ID, Profile: profileInfo(profile)})
+	h.sendWelcome(c, profile)
+}
+
+func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
+	var p protocol.SetKeybindsPayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return
+	}
+	profile, ok := h.store.SetKeybinds(c.Name, p.Keybinds)
+	if !ok {
+		h.sendError(c, "Invalid keybinds.")
+		return
+	}
+	h.sendWelcome(c, profile)
 }
 
 func (h *Hub) handleLeaveBattleReleased(c *Client) {
@@ -543,10 +701,7 @@ func (h *Hub) releaseFromBattle(clientID string) {
 			wp.Weapon = string(profile.WeaponType())
 			// Push the authoritative post-battle profile (XP, loot,
 			// proficiency gains, and any newly unlocked skills).
-			h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
-				PlayerID: c.ID,
-				Profile:  profileInfo(profile),
-			})
+			h.sendWelcome(c, profile)
 		}
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
@@ -606,19 +761,20 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		return protocol.SkillInfo{
 			ID: s.ID, Name: s.Name, MPCost: s.MPCost, Heals: s.Heals, Buffs: s.Buffs,
 			Description: s.Description, Category: string(s.Category),
-			Job: string(s.Job),
-			Prereq: game.SkillPrereq(s.ID),
+			Job:       string(s.Job),
+			Prereq:    game.SkillPrereq(s.ID),
 			WeaponReq: string(s.WeaponReq), Unlocked: unlocked,
 			Level: lvl, MaxLevel: game.SkillMaxLevel,
 			UnlockLevel: game.SkillUnlockLevel(s.ID),
 			Usage:       loadout.SkillUsage[s.ID],
 			UsageToNext: game.SkillUsesToNextLevel(lvl),
 			CastTimeMs:  game.SkillCastTime(s),
+			WorldOnly:   s.WorldOnly,
 		}
 	}
 	skills := []protocol.SkillInfo{toInfo(game.BasicAttack)}
 	for _, s := range game.Catalog {
-		if jobActive(s.Job) {
+		if s.WorldOnly || jobActive(s.Job) {
 			skills = append(skills, toInfo(s))
 		}
 	}
@@ -649,7 +805,7 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		jobs = append(jobs, protocol.JobProgressInfo{
 			ID: string(def.ID), Name: def.Name, Abbr: def.Abbr,
 			Category: string(def.Category),
-			Level: prog.Level, XP: prog.XP, MaxXP: game.XPToNext(prog.Level),
+			Level:    prog.Level, XP: prog.XP, MaxXP: game.XPToNext(prog.Level),
 		})
 	}
 
@@ -659,24 +815,26 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 	}
 
 	return protocol.ProfileInfo{
-		Name:         p.Name,
-		Race:         p.Race,
-		Level:        mainLvl,
-		XP:           mainXP,
-		MaxXP:        game.XPToNext(mainLvl),
-		MainJob:      p.MainJob,
-		SubJob:       p.SubJob,
-		SubjobUnlock: game.SubjobUnlockLevel,
-		Appearance:   appearanceProto(p),
-		Jobs:         jobs,
-		Stats:        protocol.StatBlock{HP: hp, MP: mp, Str: str, Mag: mag, Agi: agi},
-		Inventory:    p.Inventory,
-		Equipped:     equipped,
-		Hotbar:       hotbar,
-		Skills:       skills,
-		Friends:      append([]string(nil), p.Friends...),
-		SavePointID:  p.SavePointID,
-		SavePointName: savePointName(p.SavePointID),
+		Name:              p.Name,
+		Race:              p.Race,
+		Level:             mainLvl,
+		XP:                mainXP,
+		MaxXP:             game.XPToNext(mainLvl),
+		MainJob:           p.MainJob,
+		SubJob:            p.SubJob,
+		SubjobUnlock:      game.SubjobUnlockLevel,
+		Appearance:        appearanceProto(p),
+		Jobs:              jobs,
+		Stats:             protocol.StatBlock{HP: hp, MP: mp, Str: str, Mag: mag, Agi: agi},
+		Inventory:         p.Inventory,
+		Equipped:          equipped,
+		Hotbar:            hotbar,
+		Skills:            skills,
+		Friends:           append([]string(nil), p.Friends...),
+		SavePointID:       p.SavePointID,
+		SavePointName:     savePointName(p.SavePointID),
+		VisitedSavePoints: visitedSavePoints(p),
+		Keybinds:          p.KeybindMap(),
 	}
 }
 

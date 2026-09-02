@@ -1,15 +1,30 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
+import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
-import { equipSlotsForProfile, equippedSlotForItem, jobColor, jobLabel, type Item, type ProfileInfo, type SkillInfo, type WindowId } from "../types";
+import {
+  equipSlotsForProfile,
+  equippedSlotForItem,
+  jobColor,
+  jobLabel,
+  mainWeaponTypeFromProfile,
+  type Item,
+  type ProfileInfo,
+  type SkillInfo,
+  type WindowId,
+} from "../types";
 import { GameIcon } from "../ui/GameIcon";
 import { ICONS } from "../ui/icons";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { SkillTooltipContent } from "../ui/tooltipContent";
 import { writeHotbarDrag } from "../ui/hotbarDrag";
-import { ItemDetail, ItemSlot } from "./ItemBits";
+import { ItemListRow, ItemSlot } from "./ItemBits";
 import { SocialPane } from "./SocialPane";
 import { MainMenuTrigger } from "./MainMenu";
+import { MapWindow } from "./WorldMap";
+import { focusPrimaryDialogButton } from "../ui/dialogFocus";
+import { treeNavDirection, treeNeighbor } from "../ui/skillTreeNav";
 
 const TITLES: Record<WindowId, string> = {
   character: "Character",
@@ -17,29 +32,38 @@ const TITLES: Record<WindowId, string> = {
   inventory: "Inventory",
   skills: "Actions & Traits",
   social: "Social",
+  map: "Map",
 };
 
 export function GameWindows() {
   const open = useGame((s) => s.openWindow);
   const close = useGame((s) => s.closeWindow);
   const profile = useGame((s) => s.profile);
+
+  useEffect(() => {
+    if (!open) return;
+    const t = window.setTimeout(() => focusPrimaryDialogButton(), 0);
+    return () => window.clearTimeout(t);
+  }, [open]);
+
   if (!open || !profile) return null;
 
   return (
     <div className="xiv-window-layer" onMouseDown={close}>
-      <div className="xiv-window" onMouseDown={(e) => e.stopPropagation()}>
+      <div className={`xiv-window ${open === "map" ? "xiv-window--map" : ""}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="xiv-titlebar">
           <span className="xiv-title">{TITLES[open]}</span>
           <button className="xiv-close" onClick={close} aria-label="Close">
             ×
           </button>
         </div>
-        <div className="xiv-body">
+        <div className={`xiv-body ${open === "map" ? "xiv-body--map" : ""}`}>
           {open === "character" && <CharacterPane profile={profile} />}
           {open === "equipment" && <EquipmentPane profile={profile} />}
           {open === "inventory" && <InventoryPane profile={profile} />}
           {open === "skills" && <SkillsPane profile={profile} />}
           {open === "social" && <SocialPane />}
+          {open === "map" && <MapWindow />}
         </div>
       </div>
     </div>
@@ -150,7 +174,16 @@ function Param({ label, value }: { label: string; value: number }) {
   );
 }
 
+function previewWeaponForEquipment(profile: ProfileInfo, focus: Item | null): string | undefined {
+  const equipped = mainWeaponTypeFromProfile(profile);
+  if (!focus || focus.kind !== "equipment") return equipped;
+  const slot = equippedSlotForItem(profile.equipped, focus.id) ?? focus.slot;
+  if (slot === "weapon" && focus.type) return focus.type;
+  return equipped;
+}
+
 function EquipmentPane({ profile }: { profile: ProfileInfo }) {
+  const selfId = useGame((s) => s.selfId);
   const locked = useGame((s) => {
     const self = s.selfId ? s.players[s.selfId] : undefined;
     return self?.in_battle ?? s.screen === "battle";
@@ -159,52 +192,73 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   const [focus, setFocus] = useState<Item | null>(null);
 
   const slots = equipSlotsForProfile(profile.sub_job);
+  const previewWeapon = previewWeaponForEquipment(profile, focus);
+  const previewAppearance = useMemo(
+    () =>
+      resolveCharacterAppearance({
+        playerId: selfId ?? "",
+        selfId,
+        profile,
+        race: profile.race,
+        wire: profile.appearance,
+        weapon: previewWeapon,
+      }),
+    [selfId, profile, previewWeapon],
+  );
+  const previewingWeapon = !!focus && previewWeapon !== mainWeaponTypeFromProfile(profile);
+  const armouryItems = profile.inventory.filter((i) => i.kind !== "consumable" && i.slot);
+
+  const dollSlot = (slotId: string, label: string) => {
+    const enabled = slots.some((s) => s.id === slotId);
+    const item = profile.equipped[slotId] ? byId.get(profile.equipped[slotId]) : undefined;
+    return (
+      <div key={slotId} className={`xiv-doll-cell doll-${slotId}`}>
+        <span className="xiv-doll-label">{label}</span>
+        <ItemSlot
+          item={item}
+          empty={slotId}
+          emptyLabel={label}
+          equipped={!!item}
+          selected={focus?.id === item?.id}
+          onClick={enabled && item ? () => setFocus(item) : undefined}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="xiv-equip">
       {locked && <p className="hint">Gear cannot be changed while engaged.</p>}
       <div className="xiv-doll">
-        {slots.map((slot) => {
-          const item = profile.equipped[slot.id] ? byId.get(profile.equipped[slot.id]) : undefined;
-          const label = slot.id === "sub_weapon" ? "Sub" : slot.id === "weapon" ? "Main" : slot.label;
-          return (
-            <div key={slot.id} className={`xiv-doll-cell doll-${slot.id}`}>
-              <span className="xiv-doll-label">{label}</span>
-              <ItemSlot
-                item={item}
-                empty={slot.id}
-                emptyLabel={label}
-                equipped={!!item}
-                selected={focus?.id === item?.id}
-                onClick={() => item && setFocus(item)}
-              />
-            </div>
-          );
-        })}
+        <div className="xiv-equip-preview">
+          <CharacterPreviewAnimated appearance={previewAppearance} />
+          {previewingWeapon && <span className="xiv-equip-preview-label">Preview</span>}
+        </div>
+        {dollSlot("weapon", "Main")}
+        {dollSlot("sub_weapon", "Sub")}
+        {dollSlot("head", "Head")}
+        {dollSlot("back", "Back")}
+        {dollSlot("chest", "Chest")}
+        {dollSlot("legs", "Legs")}
+        {dollSlot("hands", "Hands")}
+        {dollSlot("feet", "Feet")}
       </div>
       <div className="xiv-equip-side">
-        {focus ? (
-          <ItemDetail
-            item={focus}
-            profile={profile}
-            equippedSlot={equippedSlotForItem(profile.equipped, focus.id)}
-            locked={locked}
-          />
-        ) : (
-          <p className="hint">Select a slot to inspect gear.</p>
-        )}
         <div className="xiv-section-label">Armoury Chest</div>
-        <div className="xiv-slot-grid">
-          {profile.inventory
-            .filter((i) => i.kind !== "consumable" && i.slot && !equippedSlotForItem(profile.equipped, i.id))
-            .map((item) => (
-              <ItemSlot
-                key={item.id}
-                item={item}
-                selected={focus?.id === item.id}
-                onClick={() => setFocus(item)}
-              />
-            ))}
+        <div className="xiv-item-list">
+          {armouryItems.map((item) => (
+            <ItemListRow
+              key={item.id}
+              item={item}
+              profile={profile}
+              locked={locked}
+              equipped={!!equippedSlotForItem(profile.equipped, item.id)}
+              equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
+              selected={focus?.id === item.id}
+              onClick={() => setFocus(item)}
+            />
+          ))}
+          {armouryItems.length === 0 && <p className="hint xiv-item-list-empty">No gear in the armoury chest.</p>}
         </div>
       </div>
     </div>
@@ -233,27 +287,22 @@ function InventoryPane({ profile }: { profile: ProfileInfo }) {
           </button>
         ))}
       </div>
-      <div className="xiv-inv-split">
-        <div className="xiv-slot-grid">
+      <div className="xiv-inv-list">
+        <div className="xiv-item-list">
           {items.map((item) => (
-            <ItemSlot
+            <ItemListRow
               key={item.id}
               item={item}
+              profile={profile}
+              locked={locked}
               equipped={!!equippedSlotForItem(profile.equipped, item.id)}
+              equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
               selected={focus?.id === item.id}
               onClick={() => setFocus(item)}
             />
           ))}
-          {items.length === 0 && <p className="hint">No items in this tab.</p>}
+          {items.length === 0 && <p className="hint xiv-item-list-empty">No items in this tab.</p>}
         </div>
-        {focus && (
-          <ItemDetail
-            item={focus}
-            profile={profile}
-            equippedSlot={equippedSlotForItem(profile.equipped, focus.id)}
-            locked={locked}
-          />
-        )}
       </div>
     </div>
   );
@@ -315,14 +364,40 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
   });
   const [tab, setTab] = useState<ActionTab>("general");
   const [focusId, setFocusId] = useState<string | null>(null);
+  const treeRef = useRef<HTMLDivElement>(null);
   const byId = new Map(profile.skills.map((s) => [s.id, s]));
   const tabs = jobTabs(profile);
   const activeJob = tab === "general" ? null : tab;
   const tree = activeJob
     ? profile.skills.filter((s) => s.job === activeJob)
-    : profile.skills.filter((s) => s.id === "attack");
-  const layout = layoutSkillTree(tree);
+    : profile.skills.filter((s) => s.id === "attack" || s.world_only);
+  const layout = useMemo(() => layoutSkillTree(tree), [tree]);
   const focus = (focusId && byId.get(focusId)) || tree[0];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const dir = treeNavDirection(e.key);
+      if (!dir) return;
+      const active = document.activeElement;
+      if (!active?.closest(".xiv-tree")) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const currentId = focusId ?? tree[0]?.id;
+      if (!currentId) return;
+      const nextId = treeNeighbor(layout, currentId, dir);
+      if (!nextId) return;
+      setFocusId(nextId);
+      requestAnimationFrame(() => {
+        treeRef.current
+          ?.querySelector<HTMLButtonElement>(`[data-skill-id="${nextId}"]`)
+          ?.focus();
+      });
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [layout, focusId, tree]);
 
   const maxX = layout.reduce((m, n) => Math.max(m, n.x), 0);
   const maxY = layout.reduce((m, n) => Math.max(m, n.y), 0);
@@ -351,10 +426,10 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <p className="hint">
         {tab === "general"
-          ? "Attack is always available. Press hotbar slot 1 or drag it onto another slot."
+          ? "Attack, Return, and Teleport are always available. Drag them onto the hotbar; Return and Teleport are used in the field."
           : "Skills unlock as your jobs level up. Use them in battle to raise skill level."}
       </p>
-      <div className="xiv-tree" style={{ width, height }}>
+      <div ref={treeRef} className="xiv-tree" style={{ width, height }}>
         <svg className="xiv-tree-links" width={width} height={height}>
           {tree.map((sk) => {
             if (!sk.prereq) return null;
@@ -411,6 +486,8 @@ function SkillNode({
   const node = (
     <button
       type="button"
+      data-skill-id={sk.id}
+      aria-label={sk.name}
       className={`xiv-tree-node ${sk.unlocked ? "learned" : ""} ${selected ? "selected" : ""} ${!prereqMet ? "locked" : ""}`}
       style={style}
       draggable={sk.unlocked}
@@ -419,23 +496,26 @@ function SkillNode({
         writeHotbarDrag(e, { kind: "skill", id: sk.id });
       }}
       onClick={onSelect}
+      onFocus={onSelect}
     >
-      <span className={`xiv-slot ${sk.unlocked ? "equipped" : "empty"}`}>
+      <span className={`xiv-slot ${sk.unlocked ? "equipped" : "empty"}`} aria-hidden="true">
         <span className="xiv-slot-glyph">
           <GameIcon
-            src={
+              src={
               sk.id === "attack"
                 ? ICONS.attack
-                : sk.unlocked
+                : sk.id === "return" || sk.id === "teleport"
                   ? ICONS.skillUnlocked
-                  : ICONS.skillLockedNode
+                  : sk.unlocked
+                    ? ICONS.skillUnlocked
+                    : ICONS.skillLockedNode
             }
             alt=""
             size={16}
           />
         </span>
       </span>
-      <span className="xiv-tree-name">
+      <span className="xiv-tree-name" aria-hidden="true">
         {sk.name}
         {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
       </span>
@@ -465,10 +545,12 @@ function SkillDetail({
     <div className="xiv-detail xiv-tree-detail">
       <div className="xiv-detail-name">{sk.name}</div>
       <div className="xiv-detail-meta">
-        {sk.id === "attack"
-          ? "0 MP · uses GCD"
-          : `${sk.mp_cost} MP${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
-        {sk.id !== "attack" && (
+        {sk.world_only
+          ? "Field skill · 0 MP"
+          : sk.id === "attack"
+            ? "0 MP · uses GCD"
+            : `${sk.mp_cost} MP${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
+        {!sk.world_only && sk.id !== "attack" && (
           <>
             {" "}
             · Lv {sk.unlocked ? sk.level : 0}/{sk.max_level}
@@ -476,12 +558,35 @@ function SkillDetail({
           </>
         )}
         {!sk.unlocked && sk.prereq ? ` · requires ${prereq?.name ?? sk.prereq}` : ""}
-        {sk.unlocked && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
-        {sk.unlocked && usage > 0 && atMax ? ` · ${usage} uses` : ""}
+        {sk.unlocked && !sk.world_only && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
+        {sk.unlocked && !sk.world_only && usage > 0 && atMax ? ` · ${usage} uses` : ""}
       </div>
       <div className="dim">{sk.description}</div>
       <div className="xiv-detail-actions">
-        {!sk.unlocked ? (
+        {sk.world_only && sk.unlocked ? (
+          <>
+            <span className="dim">Drag onto the hotbar or use now in the field.</span>
+            <button
+              type="button"
+              className="xiv-btn gold"
+              disabled={locked}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (sk.id === "return" || sk.id === "teleport") {
+                  useGame.getState().openWorldSkillDialog(sk.id);
+                }
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                net.activateWorldSkill(sk.id);
+              }}
+            >
+              Use
+            </button>
+          </>
+        ) : !sk.unlocked ? (
           <span className="dim">Level your job to unlock this action.</span>
         ) : atMax ? (
           <span className="dim">Max level. Drag onto the hotbar.</span>
@@ -490,6 +595,18 @@ function SkillDetail({
         )}
       </div>
     </div>
+  );
+}
+
+function MapMenuGlyph() {
+  return (
+    <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M5 6.5 13 4l6 2.2L27 4v21.5L19 28l-6-2.2L5 28V6.5zm8 1.2v16.6l6 2V9.7l-6-2z"
+      />
+      <circle cx="16" cy="14" r="2.4" fill="#e8c96a" />
+    </svg>
   );
 }
 
@@ -502,6 +619,7 @@ export function WindowBar() {
     { id: "inventory", label: "Inventory", key: "I", icon: ICONS.menuInventory },
     { id: "skills", label: "Actions", key: "K", icon: ICONS.menuSkills },
     { id: "social", label: "Social", key: "O", icon: ICONS.menuSocial },
+    { id: "map", label: "Map", key: "M", icon: "" },
   ];
   return (
     <div className="xiv-mainmenu">
@@ -514,7 +632,7 @@ export function WindowBar() {
             aria-label={b.label}
           >
             <span className="xiv-menu-icon">
-              <GameIcon src={b.icon} alt="" size={32} />
+              {b.id === "map" ? <MapMenuGlyph /> : <GameIcon src={b.icon} alt="" size={32} />}
             </span>
           </button>
         </HoverTooltip>

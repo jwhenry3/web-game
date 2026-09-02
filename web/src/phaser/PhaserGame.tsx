@@ -7,6 +7,7 @@ import { buildGameScenes } from "./BootScene";
 export function PhaserGame() {
   const hostRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const combatMode = useGame((s) => s.combatMode);
 
   useEffect(() => {
     const combat = pluginHost.getCombatPlugin();
@@ -49,7 +50,7 @@ export function PhaserGame() {
       game.destroy(true);
       gameRef.current = null;
     };
-  }, []);
+  }, [combatMode]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

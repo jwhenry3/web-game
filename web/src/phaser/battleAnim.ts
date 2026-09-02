@@ -15,3 +15,26 @@ export function battleDuration(ms: number, speed?: number): number {
 export function battleDelta(delta: number, speed?: number): number {
   return delta * normalizeSpeed(speed);
 }
+
+/** Blink a sprite then restore full opacity. Safe to retrigger while a flash is running. */
+export function playHitFlash(
+  scene: Phaser.Scene,
+  target: { setAlpha: (value: number) => unknown },
+  previous: Phaser.Tweens.Tween | undefined,
+  battleSpeed?: number,
+  dim = 0.35,
+): Phaser.Tweens.Tween {
+  previous?.stop();
+  target.setAlpha(1);
+  const tween = scene.tweens.add({
+    targets: target,
+    alpha: dim,
+    duration: battleDuration(50, battleSpeed),
+    yoyo: true,
+    repeat: 2,
+    onComplete: () => {
+      target.setAlpha(1);
+    },
+  });
+  return tween;
+}
