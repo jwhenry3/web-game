@@ -214,6 +214,93 @@ export function playFizzleVfx(scene: Phaser.Scene, x: number, y: number, battleS
   burst(scene, x, y, 6, 0x8899aa, 12, battleSpeed, { size: 2, duration: 350 });
 }
 
+export function isJumpAction(actionId: string): boolean {
+  return /jump/i.test(actionId);
+}
+
+/** Leap off the top of the screen, crash onto the target, then bounce home. */
+export function playJumpCrash(
+  scene: Phaser.Scene,
+  actor: Phaser.GameObjects.Container,
+  target: Phaser.GameObjects.Container,
+  battleSpeed: number,
+  onImpact?: () => void,
+  onDone?: () => void,
+): void {
+  const startX = actor.x;
+  const startY = actor.y;
+  const startDepth = actor.depth;
+  const skyY = scene.cameras.main.worldView.top - 90;
+  const finish = () => {
+    actor.setPosition(startX, startY);
+    actor.setDepth(startDepth);
+    onDone?.();
+  };
+
+  scene.tweens.killTweensOf(actor);
+  actor.setDepth(startDepth + 80);
+
+  const followCrash = { p: 0 };
+  const followHop = { h: 0 };
+
+  scene.tweens.add({
+    targets: actor,
+    y: skyY,
+    duration: battleDuration(260, battleSpeed),
+    ease: "Cubic.easeIn",
+    onComplete: () => {
+      followCrash.p = 0;
+      scene.tweens.add({
+        targets: followCrash,
+        p: 1,
+        duration: battleDuration(200, battleSpeed),
+        ease: "Cubic.easeIn",
+        onUpdate: () => {
+          actor.setPosition(target.x, skyY + (target.y - skyY) * followCrash.p);
+        },
+        onComplete: () => {
+          actor.setPosition(target.x, target.y);
+          burst(scene, target.x, target.y + 10, 16, 0xccbb88, 30, battleSpeed, { size: 3, duration: 400 });
+          onImpact?.();
+          followHop.h = 0;
+          scene.tweens.add({
+            targets: followHop,
+            h: 48,
+            duration: battleDuration(67, battleSpeed),
+            yoyo: true,
+            ease: "Quad.easeOut",
+            onUpdate: () => {
+              actor.setPosition(target.x, target.y - followHop.h);
+            },
+            onComplete: () => {
+              const fromX = actor.x;
+              const fromY = actor.y;
+              const apexY = Math.min(startY, fromY) - 140;
+              scene.tweens.add({
+                targets: actor,
+                x: (startX + fromX) / 2,
+                y: apexY,
+                duration: battleDuration(120, battleSpeed),
+                ease: "Quad.easeOut",
+                onComplete: () => {
+                  scene.tweens.add({
+                    targets: actor,
+                    x: startX,
+                    y: startY,
+                    duration: battleDuration(120, battleSpeed),
+                    ease: "Quad.easeIn",
+                    onComplete: finish,
+                  });
+                },
+              });
+            },
+          });
+        },
+      });
+    },
+  });
+}
+
 export function playCastStartVfx(
   scene: Phaser.Scene,
   x: number,

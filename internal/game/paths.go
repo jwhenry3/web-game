@@ -6,6 +6,10 @@ import (
 	"runtime"
 )
 
+func DefaultOverworldPath() string {
+	return defaultOverworldPath()
+}
+
 func defaultOverworldPath() string {
 	if p := os.Getenv("OVERWORLD_DATA"); p != "" {
 		return p

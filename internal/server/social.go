@@ -407,26 +407,19 @@ func (h *Hub) engagePartyMemberAt(c *Client, wp *protocol.WorldPlayer, x, y floa
 		if !withinEngageRange(x, y, ally.X, ally.Y) {
 			continue
 		}
-		room, ok := h.battles[ally.BattleID]
-		if !ok {
+		if h.ParticipantCount(ally.BattleID) >= maxPartySize {
 			continue
 		}
-		if h.battleParticipantCount(ally.BattleID) >= maxPartySize {
-			continue
+		if err := h.combat.Join(c.ID, ally.BattleID); err == nil {
+			return true
 		}
-		profile, ok := h.store.Get(c.Name)
-		if !ok {
-			return false
-		}
-		h.enterBattle(c, wp, room, profile)
-		return true
 	}
 	return false
 }
 
 // promptPartyForBattle asks nearby party mates to opt into a fight. Anyone
 // in range who skips still earns passive EXP if the party wins.
-func (h *Hub) promptPartyForBattle(triggerID string, room *BattleRoom, x, y float64) {
+func (h *Hub) promptPartyForBattle(triggerID string, battleID string, x, y float64) {
 	partyID, ok := h.clientParty[triggerID]
 	if !ok {
 		return
@@ -437,11 +430,11 @@ func (h *Hub) promptPartyForBattle(triggerID string, room *BattleRoom, x, y floa
 	}
 
 	meta := &battleMeta{partyID: partyID, passiveEligible: map[string]string{}}
-	h.battleMeta[room.ID] = meta
+	h.battleMeta[battleID] = meta
 
 	participants := 0
 	for _, wp := range h.world {
-		if wp.InBattle && wp.BattleID == room.ID {
+		if wp.InBattle && wp.BattleID == battleID {
 			participants++
 		}
 	}
@@ -470,10 +463,10 @@ func (h *Hub) promptPartyForBattle(triggerID string, room *BattleRoom, x, y floa
 			continue
 		}
 		h.battleInvites[memberID] = &battleInvite{
-			BattleID: room.ID, FromID: triggerID, FromName: h.world[triggerID].Name,
+			BattleID: battleID, FromID: triggerID, FromName: h.world[triggerID].Name,
 		}
 		h.send(mc, protocol.TypeBattleInviteMsg, protocol.BattleInvitePayload{
-			BattleID: room.ID, FromID: triggerID, FromName: h.world[triggerID].Name,
+			BattleID: battleID, FromID: triggerID, FromName: h.world[triggerID].Name,
 		})
 	}
 }

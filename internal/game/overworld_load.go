@@ -69,8 +69,12 @@ func LoadOverworld(path string) error {
 	if err := applyOverworld(raw); err != nil {
 		return fmt.Errorf("apply overworld %s: %w", path, err)
 	}
+	loadedOverworldPath = path
 	return nil
 }
+
+// OverworldPath returns the JSON file loaded by the most recent LoadOverworld call.
+func OverworldPath() string { return loadedOverworldPath }
 
 func applyOverworld(raw overworldFile) error {
 	if len(raw.Regions) == 0 {
@@ -189,8 +193,4 @@ func buildOverworldFromPaint(cfg mapPaintFile) ([]string, error) {
 	return out, nil
 }
 
-func init() {
-	if err := LoadOverworld(defaultOverworldPath()); err != nil {
-		panic("game: " + err.Error())
-	}
-}
+var loadedOverworldPath string

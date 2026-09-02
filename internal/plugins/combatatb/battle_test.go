@@ -1,12 +1,14 @@
-package server
+package combatatb
 
 import (
 	"encoding/json"
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"ffv-web-game/internal/game"
+	"ffv-web-game/internal/plugins/contracts"
 	"ffv-web-game/internal/protocol"
 	"ffv-web-game/internal/store"
 )
@@ -43,16 +45,20 @@ func (m *mockHost) Profiles() *store.Store { return m.store }
 
 func (m *mockHost) BuildVictoryRewards(
 	_ string,
-	fighters []battleFighter,
+	fighters []contracts.BattleFighter,
 	totalXP, level, lootBonus int,
 	rng *rand.Rand,
 ) []protocol.PlayerReward {
+	converted := make([]battleFighter, len(fighters))
+	for i, f := range fighters {
+		converted[i] = battleFighter{ClientID: f.ClientID, Name: f.Name}
+	}
 	share := totalXP
 	if len(fighters) > 1 {
 		share = totalXP / len(fighters)
 	}
 	var out []protocol.PlayerReward
-	for _, f := range fighters {
+	for _, f := range converted {
 		loot := game.GenerateLoot(rng, level, lootBonus)
 		mainXP := share
 		subXP := 0
@@ -72,6 +78,24 @@ func (m *mockHost) BuildVictoryRewards(
 func (m *mockHost) NotifyPassiveRewards(_ []protocol.PlayerReward) {}
 
 func (m *mockHost) BattleSpeed() float64 { return DefaultBattleSpeed }
+
+func (m *mockHost) SendToClient(_ string, msg []byte) { m.SendToClients(nil, msg) }
+func (m *mockHost) SendError(_ string, _ string)      {}
+func (m *mockHost) Broadcast(msg []byte)             { m.SendToClients(nil, msg) }
+func (m *mockHost) SendProfileUpdate(_ string, _ store.Profile) {}
+func (m *mockHost) TickWindow() int64                { return int64(DefaultTickWindow / time.Millisecond) }
+func (m *mockHost) EnterBattle(_, _ string)            {}
+func (m *mockHost) ReleaseFromBattle(_ string)         {}
+func (m *mockHost) BroadcastBattleList()               {}
+func (m *mockHost) SyncPlayer(_ *protocol.WorldPlayer) {}
+func (m *mockHost) PromptPartyForBattle(_, _ string, _, _ float64) {}
+func (m *mockHost) ClearBattleInvite(_ string)         {}
+func (m *mockHost) ParticipantCount(_ string) int      { return 0 }
+func (m *mockHost) MaxPartySize() int                  { return 4 }
+func (m *mockHost) ProfileFor(_ string) (store.Profile, bool) { return store.Profile{}, false }
+func (m *mockHost) ClientName(_ string) string         { return "" }
+func (m *mockHost) WorldPlayer(_ string) *protocol.WorldPlayer { return nil }
+func (m *mockHost) NextBattleID() string               { return "battle-test" }
 
 func (m *mockHost) messagesOfType(t protocol.MessageType) []protocol.Envelope {
 	m.mu.Lock()

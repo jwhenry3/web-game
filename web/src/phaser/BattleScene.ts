@@ -13,7 +13,7 @@ import {
 import type { ActionResult, BattleEntity } from "../types";
 import { CharacterSprite } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
-import { playBattleVfx, playCastStartVfx, playFizzleVfx } from "./battleVfx";
+import { isJumpAction, playBattleVfx, playCastStartVfx, playFizzleVfx, playJumpCrash } from "./battleVfx";
 import { battleDelta, battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
 import { statusColor, statusLabel } from "../ui/statusDisplay";
 
@@ -270,6 +270,44 @@ export class BattleScene extends Phaser.Scene {
 
     const actorPos = actor ? { x: actor.container.x, y: actor.container.y } : undefined;
     const targetPos = target ? { x: target.container.x, y: target.container.y } : undefined;
+
+    const showHit = () => {
+      if (!target) return;
+      if (r.damage) {
+        this.floatText(target.container.x, target.container.y - 45, `${r.damage}`, "#ffffff", battleSpeed);
+        target.enemy?.playHit(battleSpeed);
+        this.tweens.add({
+          targets: target.container,
+          alpha: 0.3,
+          duration: battleDuration(60, battleSpeed),
+          yoyo: true,
+          repeat: 2,
+        });
+        this.cameras.main.shake(battleDuration(80, battleSpeed), 0.003);
+      } else if (r.heal) {
+        this.floatText(target.container.x, target.container.y - 45, `+${r.heal}`, "#4ade80", battleSpeed);
+      }
+    };
+
+    if (actor && target && isJumpAction(r.action_id)) {
+      actor.sprite?.playAttack();
+      actor.enemy?.playAttack();
+      playJumpCrash(
+        this,
+        actor.container,
+        target.container,
+        battleSpeed,
+        () => {
+          playBattleVfx(this, r, { x: target.container.x, y: target.container.y }, targetPos, battleSpeed);
+          showHit();
+        },
+        () => {
+          actor.container.x = actor.homeX;
+        },
+      );
+      return;
+    }
+
     playBattleVfx(this, r, actorPos, targetPos, battleSpeed);
 
     if (actor) {
@@ -293,22 +331,7 @@ export class BattleScene extends Phaser.Scene {
         },
       });
     }
-    if (target) {
-      if (r.damage) {
-        this.floatText(target.container.x, target.container.y - 45, `${r.damage}`, "#ffffff", battleSpeed);
-        target.enemy?.playHit(battleSpeed);
-        this.tweens.add({
-          targets: target.container,
-          alpha: 0.3,
-          duration: battleDuration(60, battleSpeed),
-          yoyo: true,
-          repeat: 2,
-        });
-        this.cameras.main.shake(battleDuration(80, battleSpeed), 0.003);
-      } else if (r.heal) {
-        this.floatText(target.container.x, target.container.y - 45, `+${r.heal}`, "#4ade80", battleSpeed);
-      }
-    }
+    showHit();
   }
 
   private floatText(x: number, y: number, text: string, color: string, battleSpeed: number) {

@@ -6,7 +6,6 @@ import (
 
 	"ffv-web-game/internal/game"
 	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
 )
 
 func TestSetSavePointRequiresProximity(t *testing.T) {
@@ -57,7 +56,7 @@ func TestDefeatWithoutSavePointUsesDefaultSpawn(t *testing.T) {
 }
 
 func TestJoinWorldSpawnsAtSavePoint(t *testing.T) {
-	h := NewHub(store.Load(""), nil, nil, 0)
+	h := mustTestHub()
 	if len(game.SavePoints) == 0 {
 		t.Fatal("expected save points")
 	}

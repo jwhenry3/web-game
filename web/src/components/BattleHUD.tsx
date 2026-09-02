@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
+import { activeBattleView } from "../battle/activeBattle";
 import type { BattleEntity } from "../types";
+import type { BattleView } from "../state/store";
 import { RARITY_COLORS } from "../types";
 import { StatusIcons } from "../ui/StatusIcons";
 
@@ -53,7 +55,9 @@ function PartyRow({
 }
 
 export function BattleHUD() {
-  const battle = useGame((s) => s.battle);
+  const battleRaw = useGame((s) => s.battle);
+  const rtBattle = useGame((s) => s.rtBattle);
+  const battle: BattleView | null = useMemo(() => activeBattleView(battleRaw, rtBattle), [battleRaw, rtBattle]);
   const profile = useGame((s) => s.profile);
   const selfId = useGame((s) => s.selfId);
   const selected = useGame((s) => s.selectedAction);

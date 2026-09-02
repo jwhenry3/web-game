@@ -1,29 +1,24 @@
 import Phaser from "phaser";
-import { appendBattleLog, pushChat, useGame } from "../state/store";
+import { pushChat, useGame } from "../state/store";
+import { pluginHost } from "../core/plugins/pluginHost";
 import { loadDraftAppearance, saveAppearance } from "../characters/appearanceStorage";
 import { appearanceFromWire } from "../characters/types";
 import type { CharacterAppearanceWire } from "../characters/heroes99";
 import type {
-  ActionResult,
-  BattleEndPayload,
-  BattleEventPayload,
   BattleInfo,
-  BattleStatePayload,
-  BattleTickPayload,
   BattleEntity,
   ChatMessagePayload,
   Envelope,
   MessageType,
   PartyInvitePayload,
-  BattleInvitePayload,
   SocialStatePayload,
   WelcomePayload,
   SavePoint,
   WorldNPC,
   WorldPlayer,
   WorldStatePayload,
+  SelectedAction,
 } from "../types";
-import { DEFAULT_BATTLE_SPEED } from "../phaser/battleAnim";
 import {
   actionFromItem,
   actionFromSkill,
@@ -31,8 +26,8 @@ import {
   mainWeaponTypeFromProfile,
   skillTargetsAlly,
   skillWeaponMatches,
-  type SelectedAction,
 } from "../types";
+import { activeBattleView } from "../battle/activeBattle";
 
 export const battleEvents = new Phaser.Events.EventEmitter();
 
@@ -44,8 +39,18 @@ function livingEnemyTarget(battle: { entities: BattleEntity[] }, self: BattleEnt
   return battle.entities.find((e) => !e.is_player && e.alive);
 }
 
-function castEnemySkill(actionId: string, battle: { entities: BattleEntity[] }, self: BattleEntity) {
-  const target = livingEnemyTarget(battle, self);
+function battleContext(): { self: BattleEntity; entities: BattleEntity[]; ended: boolean } | null {
+  const { battle, rtBattle, selfId, screen } = useGame.getState();
+  if (screen !== "battle" || !selfId) return null;
+  const view = activeBattleView(battle, rtBattle);
+  if (!view) return null;
+  const self = view.entities.find((e) => e.id === selfId);
+  if (!self) return null;
+  return { self, entities: view.entities, ended: !!view.end };
+}
+
+function castEnemySkill(actionId: string, entities: BattleEntity[], self: BattleEntity) {
+  const target = livingEnemyTarget({ entities }, self);
   if (!target) return;
   send("action", { action_id: actionId, target_id: target.id });
   if (self.target_id !== target.id) {
@@ -69,6 +74,8 @@ function send(type: MessageType, payload?: unknown) {
     ws.send(JSON.stringify({ type, payload }));
   }
 }
+
+(window as unknown as { __gameSocketSend?: typeof send }).__gameSocketSend = send;
 
 export interface JoinWorldPayload {
   player_name: string;
@@ -190,7 +197,13 @@ export const net = {
   },
   leaveBattle() {
     send("leave_battle");
-    useGame.setState({ battle: null, screen: "world", selectedAction: null });
+    useGame.setState({ battle: null, rtBattle: null, screen: "world", selectedAction: null });
+  },
+  rtMove(x: number, y: number) {
+    send("rt_move", { x, y });
+  },
+  rtAttack(facingX: number, facingY: number) {
+    send("rt_attack", { facing_x: facingX, facing_y: facingY });
   },
   action(actionId: string, targetId: string, itemId?: string) {
     send("action", { action_id: actionId, target_id: targetId, item_id: itemId });
@@ -213,9 +226,10 @@ export const net = {
   },
 
   castSelectedOn(target: { id: string; alive: boolean; is_player: boolean }): boolean {
-    const { selectedAction, battle, selfId } = useGame.getState();
-    if (!selectedAction || !target.alive) return false;
-    const self = battle?.entities.find((e) => e.id === selfId);
+    const { selectedAction } = useGame.getState();
+    const ctx = battleContext();
+    if (!selectedAction || !target.alive || !ctx) return false;
+    const { self } = ctx;
     if (!isGcdReady(self)) return false;
     if (selectedAction.heals ? !target.is_player : target.is_player) return false;
     send("action", {
@@ -254,13 +268,12 @@ export const net = {
 
   /** Pressing a hotbar key fires skills/items on the GCD (attack included). */
   activateHotbar(slot: string) {
-    const { profile, selfId, screen, battle } = useGame.getState();
-    if (!profile || screen !== "battle" || battle?.end) return;
+    const { profile, screen } = useGame.getState();
+    const ctx = battleContext();
+    if (!profile || screen !== "battle" || !ctx || ctx.ended) return;
+    const { self, entities } = ctx;
     const bind = profile.hotbar?.[slot];
-    if (!bind) return;
-    const self = battle?.entities.find((e) => e.id === selfId);
-    if (!self?.alive) return;
-
+    if (!bind || !self.alive) return;
     if (!isGcdReady(self)) return;
 
     if (bind.kind === "skill") {
@@ -270,8 +283,8 @@ export const net = {
       if (self.mp < sk.mp_cost) return;
       if (skillTargetsAlly(sk)) {
         this.armOrSelfCast(actionFromSkill(sk), self.id);
-      } else if (battle) {
-        castEnemySkill(sk.id, battle, self);
+      } else {
+        castEnemySkill(sk.id, entities, self);
       }
       return;
     }
@@ -291,19 +304,20 @@ export const net = {
   },
 
   useItemFromBag(itemId: string) {
-    const { screen, selfId, battle, profile } = useGame.getState();
+    const { screen, selfId, profile } = useGame.getState();
+    const ctx = battleContext();
     const item = profile?.inventory.find((i) => i.id === itemId);
     if (!item) return;
-    if (screen !== "battle" || !selfId || battle?.end) {
+    if (screen !== "battle" || !selfId || !ctx || ctx.ended) {
       pushChat("system", "Consumables are used during battle (hotbar 1–5).");
       return;
     }
-    const self = battle?.entities.find((e) => e.id === selfId);
-    if (!self?.alive) {
+    const { self } = ctx;
+    if (!self.alive) {
       useGame.setState({ selectedAction: actionFromItem(item) });
       return;
     }
-    if ((self.skill_atb ?? self.atb) < 100) {
+    if (!isGcdReady(self)) {
       useGame.setState({ selectedAction: actionFromItem(item) });
       return;
     }
@@ -321,71 +335,8 @@ function isGcdReady(self: { alive: boolean; skill_atb?: number; atb?: number; ca
   return !!self?.alive && (self.skill_atb ?? self.atb ?? 0) >= 100 && !entityIsCasting(self);
 }
 
-function mergeEntityCast(
-  e: import("../types").BattleEntity,
-  u: Partial<import("../types").EntityUpdate>,
-): import("../types").BattleEntity {
-  const next = { ...e, ...u } as import("../types").BattleEntity;
-  if (u.casting_skill_id === "") {
-    next.casting_skill_id = undefined;
-    next.cast_target_id = undefined;
-    next.cast_progress = undefined;
-    next.cast_time_ms = undefined;
-  }
-  return next;
-}
-
-function applyTickCast(
-  e: import("../types").BattleEntity,
-  p: import("../types").BattleTickPayload,
-): import("../types").BattleEntity {
-  const skillId = p.casting_skill_id?.[e.id];
-  if (skillId !== undefined) {
-    if (!skillId) {
-      return { ...e, casting_skill_id: undefined, cast_target_id: undefined, cast_progress: undefined, cast_time_ms: undefined };
-    }
-    return {
-      ...e,
-      casting_skill_id: skillId,
-      cast_target_id: p.cast_target_id?.[e.id],
-      cast_progress: p.cast_progress?.[e.id] ?? e.cast_progress,
-      cast_time_ms: p.cast_time_ms?.[e.id] ?? e.cast_time_ms,
-    };
-  }
-  const progress = p.cast_progress?.[e.id];
-  if (progress !== undefined && e.casting_skill_id) {
-    return { ...e, cast_progress: progress };
-  }
-  return e;
-}
-
-function entityName(id: string): string {
-  const b = useGame.getState().battle;
-  return b?.entities.find((e) => e.id === id)?.name ?? id;
-}
-
-function describeResult(r: ActionResult): string {
-  const actor = entityName(r.actor_id);
-  if (!r.success) {
-    return `${actor}'s ${r.action_name || r.action_id} fizzled: ${r.message ?? "failed"}`;
-  }
-  if (r.cast_started) {
-    return `${actor} begins casting ${r.action_name}...`;
-  }
-  const target = entityName(r.target_id);
-  const parts: string[] = [];
-  if (r.heal) parts.push(`${target} recovered ${r.heal} HP`);
-  if (r.mp_restored) parts.push(`${target} recovered ${r.mp_restored} MP`);
-  if (r.damage) parts.push(`${target} took ${r.damage} damage`);
-  if (r.status_applied?.length) {
-    const names = r.status_applied.map((s) => s.kind.replace(/_/g, " "));
-    parts.push(`${target} gained ${names.join(", ")}`);
-  }
-  if (parts.length === 0) return `${actor} used ${r.action_name}.`;
-  return `${actor} used ${r.action_name} — ${parts.join(", ")}!`;
-}
-
 function handleMessage(env: Envelope) {
+  if (pluginHost.dispatch(env)) return;
   const g = useGame;
   switch (env.type) {
     case "welcome": {
@@ -498,12 +449,6 @@ function handleMessage(env: Envelope) {
       pushChat("social", `${p.from_name} invited you to a party.`);
       break;
     }
-    case "battle_invite_received": {
-      const p = env.payload as BattleInvitePayload;
-      g.setState({ battleInvite: p });
-      pushChat("social", `${p.from_name} started a battle nearby — join from the prompt.`);
-      break;
-    }
     case "reward_notice": {
       const p = env.payload as { message: string };
       pushChat("system", p.message);
@@ -517,101 +462,6 @@ function handleMessage(env: Envelope) {
     case "battle_list": {
       const p = env.payload as { battles: BattleInfo[] };
       g.setState({ battles: p.battles ?? [] });
-      break;
-    }
-    case "battle_state": {
-      const p = env.payload as BattleStatePayload;
-      const fresh = g.getState().battle?.battleId !== p.battle_id;
-      const battleSpeed = p.battle_speed && p.battle_speed > 0 ? p.battle_speed : DEFAULT_BATTLE_SPEED;
-      g.setState((s) => ({
-        screen: "battle",
-        chatTab: "battle",
-        battle: {
-          battleId: p.battle_id,
-          entities: p.entities,
-          battleSpeed,
-          log: s.battle?.battleId === p.battle_id ? s.battle.log : ["Battle start!"],
-          end: s.battle?.battleId === p.battle_id ? s.battle.end : null,
-        },
-      }));
-      if (fresh) pushChat("battle", "Battle start!");
-      break;
-    }
-    case "battle_event": {
-      const p = env.payload as BattleEventPayload;
-      for (const r of p.results ?? []) {
-        appendBattleLog(describeResult(r));
-        battleEvents.emit("result", r);
-      }
-      g.setState((s) => {
-        if (!s.battle) return s;
-        const byId = new Map(p.entities.map((u) => [u.id, u]));
-        const entities = s.battle.entities.map((e) => {
-          const u = byId.get(e.id);
-          return u
-            ? mergeEntityCast(e, {
-                hp: u.hp,
-                mp: u.mp,
-                atb: u.skill_atb ?? u.atb,
-                skill_atb: u.skill_atb ?? u.atb,
-                target_id: u.target_id ?? e.target_id,
-                alive: u.alive,
-                statuses: u.statuses ?? e.statuses,
-                casting_skill_id: u.casting_skill_id,
-                cast_target_id: u.cast_target_id,
-                cast_progress: u.cast_progress,
-                cast_time_ms: u.cast_time_ms,
-              })
-            : e;
-        });
-        for (const r of p.results ?? []) {
-          if (r.success && !r.cast_started) {
-            const idx = entities.findIndex((e) => e.id === r.actor_id);
-            if (idx >= 0 && entities[idx].casting_skill_id) {
-              entities[idx] = {
-                ...entities[idx],
-                casting_skill_id: undefined,
-                cast_target_id: undefined,
-                cast_progress: undefined,
-                cast_time_ms: undefined,
-              };
-            }
-          }
-        }
-        return { battle: { ...s.battle, entities } };
-      });
-      break;
-    }
-    case "battle_tick": {
-      const p = env.payload as BattleTickPayload;
-      g.setState((s) => {
-        if (!s.battle) return s;
-        const entities = s.battle.entities.map((e) => {
-          const skill = p.skill_atb?.[e.id] ?? p.atb?.[e.id];
-          const hp = p.hp?.[e.id];
-          const alive = p.alive?.[e.id];
-          const statuses = p.statuses?.[e.id];
-          let next = {
-            ...e,
-            ...(skill !== undefined ? { atb: skill, skill_atb: skill } : {}),
-            ...(hp !== undefined ? { hp } : {}),
-            ...(alive !== undefined ? { alive } : {}),
-            ...(statuses !== undefined ? { statuses } : {}),
-          };
-          next = applyTickCast(next, p);
-          return next;
-        });
-        return { battle: { ...s.battle, entities } };
-      });
-      break;
-    }
-    case "battle_end": {
-      const p = env.payload as BattleEndPayload;
-      appendBattleLog(p.victory ? "Victory!" : "The party has fallen...");
-      g.setState((s) => ({
-        selectedAction: null,
-        battle: s.battle ? { ...s.battle, end: p } : s.battle,
-      }));
       break;
     }
     case "error": {

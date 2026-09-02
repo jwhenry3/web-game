@@ -1,4 +1,4 @@
-package server
+package combatatb
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"ffv-web-game/internal/game"
+	"ffv-web-game/internal/plugins/contracts"
 	"ffv-web-game/internal/protocol"
 	"ffv-web-game/internal/store"
 )
@@ -45,14 +46,7 @@ func BattleTickWindow(speed float64) time.Duration {
 var DefaultTickWindow = BattleTickWindow(DefaultBattleSpeed)
 
 // roomHost abstracts the hub so battle logic is testable in isolation.
-type roomHost interface {
-	SendToClients(ids []string, msg []byte)
-	FinishBattle(roomID string, participantIDs []string, victory bool)
-	Profiles() *store.Store
-	BuildVictoryRewards(roomID string, fighters []battleFighter, totalXP, level, lootBonus int, rng *rand.Rand) []protocol.PlayerReward
-	NotifyPassiveRewards(rewards []protocol.PlayerReward)
-	BattleSpeed() float64
-}
+type roomHost = contracts.CombatHost
 
 type battleEntity struct {
 	ID          string
@@ -90,10 +84,7 @@ type activeCast struct {
 }
 
 // battleFighter links a combat client to its persistence profile.
-type battleFighter struct {
-	ClientID string
-	Name     string
-}
+type battleFighter = contracts.BattleFighter
 
 func (b *BattleRoom) fighters() []battleFighter {
 	var out []battleFighter
@@ -807,10 +798,7 @@ func (b *BattleRoom) resolveItemUse(qa queuedAction, actor *battleEntity, res pr
 
 	// Push the reduced inventory so the actor's hotbar counts stay honest.
 	if profile, ok := b.host.Profiles().Get(actor.ProfileName); ok {
-		b.host.SendToClients([]string{actor.ID}, protocol.Encode(protocol.TypeWelcome, protocol.WelcomePayload{
-			PlayerID: actor.ID,
-			Profile:  profileInfo(profile),
-		}))
+		b.host.SendProfileUpdate(actor.ID, profile)
 	}
 	return res
 }

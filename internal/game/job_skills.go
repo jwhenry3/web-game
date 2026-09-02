@@ -14,6 +14,7 @@ type jobAbility struct {
 	Buffs   bool
 	Magic   bool
 	Loot    bool
+	Ranged  bool // jump / throw / missile: usable at range in realtime combat
 }
 
 var jobAbilityTrees = map[JobID][]jobAbility{
@@ -48,10 +49,10 @@ var jobAbilityTrees = map[JobID][]jobAbility{
 		{Suffix: "tachi", Name: "Tachi", Desc: "A masterful iaijutsu arc.", MPCost: 15, Power: 3.2, Prereq: 1},
 	},
 	JobDRG: {
-		{Suffix: "jump", Name: "Jump", Desc: "Leap and impale from above.", MPCost: 6, Power: 1.9},
-		{Suffix: "high_jump", Name: "High Jump", Desc: "A soaring lance dive.", MPCost: 10, Power: 2.4, Prereq: 0},
+		{Suffix: "jump", Name: "Jump", Desc: "Leap and impale from above.", MPCost: 6, Power: 1.9, Ranged: true},
+		{Suffix: "high_jump", Name: "High Jump", Desc: "A soaring lance dive.", MPCost: 10, Power: 2.4, Prereq: 0, Ranged: true},
 		{Suffix: "penta_thrust", Name: "Penta Thrust", Desc: "Five rapid spear thrusts.", MPCost: 11, Power: 2.3, Prereq: 0},
-		{Suffix: "super_jump", Name: "Super Jump", Desc: "Vanish skyward, then crash down.", MPCost: 15, Power: 3.1, Prereq: 1},
+		{Suffix: "super_jump", Name: "Super Jump", Desc: "Vanish skyward, then crash down.", MPCost: 15, Power: 3.1, Prereq: 1, Ranged: true},
 	},
 	JobBLU: {
 		{Suffix: "head_butt", Name: "Head Butt", Desc: "A borrowed blunt strike.", MPCost: 5, Power: 1.7},
@@ -189,6 +190,7 @@ func buildJobCatalog() []Skill {
 				Heals:       ab.Heals,
 				Buffs:       ab.Buffs,
 				LootBonus:   ab.Loot,
+				Ranged:      ab.Ranged,
 				Prereq:      prereq,
 				Description: ab.Desc,
 				CastTimeMs:  castTimeForAbility(ab),

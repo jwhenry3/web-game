@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
+import { activeBattleView } from "../battle/activeBattle";
 import {
   HOTBAR_SLOTS,
   consumableCount,
@@ -27,14 +29,16 @@ export function Hotbar() {
   const profile = useGame((s) => s.profile);
   const screen = useGame((s) => s.screen);
   const selected = useGame((s) => s.selectedAction);
-  const battle = useGame((s) => s.battle);
+  const battleRaw = useGame((s) => s.battle);
+  const rtBattle = useGame((s) => s.rtBattle);
+  const battle = useMemo(() => activeBattleView(battleRaw, rtBattle), [battleRaw, rtBattle]);
   const selfId = useGame((s) => s.selfId);
   if (!profile) return null;
 
   const self = battle?.entities.find((e) => e.id === selfId);
   const gcd = self?.skill_atb ?? self?.atb ?? 0;
   const casting = !!self?.casting_skill_id;
-  const inBattle = screen === "battle" && !!self && !battle?.end;
+  const inBattle = screen === "battle" && !!battle && !!self && !battle?.end;
 
   return (
     <div className="hotbar">

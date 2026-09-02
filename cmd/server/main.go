@@ -11,7 +11,9 @@ import (
 
 	"ffv-web-game/internal/auth"
 	"ffv-web-game/internal/game"
+	"ffv-web-game/internal/plugins/combatatb"
 	"ffv-web-game/internal/server"
+	"ffv-web-game/internal/servercfg"
 	"ffv-web-game/internal/store"
 
 	"github.com/gorilla/websocket"
@@ -32,26 +34,47 @@ func newClientID() string {
 }
 
 func main() {
-	addr := flag.String("addr", ":8080", "http listen address")
-	dataFile := flag.String("data", "data/profiles.json", "player profile persistence file")
-	accountsFile := flag.String("accounts", "data/accounts.json", "account persistence file")
+	configFile := flag.String("config", "config/server.json", "server configuration file")
+	addr := flag.String("addr", "", "http listen address (overrides config)")
+	dataFile := flag.String("data", "", "player profile persistence file (overrides config)")
+	accountsFile := flag.String("accounts", "", "account persistence file (overrides config)")
 	jwtSecret := flag.String("jwt-secret", "", "JWT signing secret (required in production)")
-	staticDir := flag.String("static", "web/dist", "optional static frontend build to serve")
-	battleSpeed := flag.Float64("battle-speed", server.DefaultBattleSpeed, "battle tempo multiplier (1.0 = baseline, 0.75 = 75% speed)")
-	overworldFile := flag.String("overworld", "", "overworld map and NPC config JSON (default: config/overworld.json)")
+	staticDir := flag.String("static", "", "frontend build to serve (overrides config)")
+	battleSpeed := flag.Float64("battle-speed", 0, "battle tempo multiplier (overrides config)")
+	overworldFile := flag.String("overworld", "", "overworld map config (overrides config)")
 	flag.Parse()
 
-	if *overworldFile != "" {
-		if err := game.LoadOverworld(*overworldFile); err != nil {
-			log.Fatalf("overworld: %v", err)
-		}
+	cfg, err := servercfg.Load(*configFile)
+	if err != nil {
+		log.Fatalf("config: %v", err)
 	}
 
-	if v := os.Getenv("BATTLE_SPEED"); v != "" {
+	overrides := servercfg.Overrides{
+		Addr:      *addr,
+		Data:      *dataFile,
+		Accounts:  *accountsFile,
+		Static:    *staticDir,
+		Overworld: *overworldFile,
+	}
+	if *battleSpeed > 0 {
+		overrides.BattleSpeed = *battleSpeed
+	}
+	if v := os.Getenv("BATTLE_SPEED"); v != "" && overrides.BattleSpeed <= 0 {
 		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
-			*battleSpeed = f
+			overrides.BattleSpeed = f
 		}
 	}
+	if err := cfg.ApplyOverrides(overrides); err != nil {
+		log.Fatalf("config overrides: %v", err)
+	}
+
+	if err := game.LoadOverworld(cfg.Server.Overworld); err != nil {
+		log.Fatalf("overworld: %v", err)
+	}
+	if cfg.Server.Name != "" {
+		log.Printf("server: %s", cfg.Server.Name)
+	}
+	log.Printf("overworld: %s", game.OverworldPath())
 
 	secret := *jwtSecret
 	if secret == "" {
@@ -66,17 +89,22 @@ func main() {
 		log.Printf("warning: using ephemeral JWT secret; set -jwt-secret or JWT_SECRET for production")
 	}
 
-	profiles := store.Load(*dataFile)
-	accounts := store.LoadAccounts(*accountsFile)
+	profiles := store.Load(cfg.Server.Data)
+	accounts := store.LoadAccounts(cfg.Server.Accounts)
 	tokens := auth.NewTokenIssuer(secret)
-	hub := server.NewHub(profiles, accounts, tokens, *battleSpeed)
-	log.Printf("battle speed: %.2fx (tick window %s)", *battleSpeed, server.BattleTickWindow(*battleSpeed))
+	hub, err := server.NewHub(profiles, accounts, tokens, cfg.Server.BattleSpeed, cfg.Plugins)
+	if err != nil {
+		log.Fatalf("hub: %v", err)
+	}
+	log.Printf("config: %s", *configFile)
+	log.Printf("combat plugin: %s", cfg.Plugins.Combat)
+	log.Printf("battle speed: %.2fx (tick window %s)", cfg.Server.BattleSpeed, combatatb.BattleTickWindow(cfg.Server.BattleSpeed))
 	go hub.Run()
 
 	authHandler := server.NewAuthHandler(accounts, profiles, tokens, hub)
 
 	apiMux := http.NewServeMux()
-	server.RegisterAPIRoutes(apiMux, authHandler)
+	server.RegisterAPIRoutes(apiMux, authHandler, cfg.Plugins)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
@@ -118,13 +146,13 @@ func main() {
 		go client.ReadPump()
 	})
 
-	if info, err := os.Stat(*staticDir); err == nil && info.IsDir() {
-		mux.Handle("/", http.FileServer(http.Dir(*staticDir)))
-		log.Printf("serving frontend from %s", *staticDir)
+	if info, err := os.Stat(cfg.Server.Static); err == nil && info.IsDir() {
+		mux.Handle("/", http.FileServer(http.Dir(cfg.Server.Static)))
+		log.Printf("serving frontend from %s", cfg.Server.Static)
 	}
 
-	log.Printf("FF5-Multiplayer server listening on %s", *addr)
-	if err := http.ListenAndServe(*addr, mux); err != nil {
+	log.Printf("FF5-Multiplayer server listening on %s", cfg.Server.Addr)
+	if err := http.ListenAndServe(cfg.Server.Addr, mux); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
 }

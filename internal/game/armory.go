@@ -1,5 +1,7 @@
 package game
 
+import "strings"
+
 // The Armory system replaces fixed jobs: every player can use any skill
 // category, but using skills of a category (and attacking with its weapon
 // type) earns proficiency points in it. Points raise potency in that
@@ -63,6 +65,9 @@ const (
 	skillLevelPotency  = 0.08 // +8% per level above 1
 	// DefaultCastTimeMs is the cast bar duration for spells (magic / heals).
 	DefaultCastTimeMs = 1000
+	// Realtime combat reach. Jumps use SpellSkillRange, same as offensive magic.
+	SpellSkillRange = 320
+	AllySkillRange  = 280
 )
 
 type Skill struct {
@@ -77,6 +82,7 @@ type Skill struct {
 	Heals       bool
 	Buffs       bool // targets a friendly player (protections, wards)
 	LootBonus   bool // improves the battle's loot pool when used (Mug)
+	Ranged      bool // throw / missile attacks: use ranged distance in realtime combat
 	Prereq      string
 	Cost        int
 	Description string
@@ -166,6 +172,33 @@ func SkillPrereq(id string) string {
 func SkillCastTime(s Skill) int {
 	if s.CastTimeMs > 0 {
 		return s.CastTimeMs
+	}
+	return 0
+}
+
+// SkillIsRanged is true for magic, casts, heals/buffs, jumps, and explicit throw/missile skills.
+// Realtime combat uses this to allow fighting from outside melee.
+func SkillIsRanged(s Skill) bool {
+	if s.ID == BasicAttack.ID {
+		return false
+	}
+	if s.Ranged || s.UsesMagic || s.Heals || s.Buffs {
+		return true
+	}
+	if strings.Contains(strings.ToLower(s.ID), "jump") {
+		return true
+	}
+	return SkillCastTime(s) > 0
+}
+
+// SkillMaxRange is the realtime hit distance for a skill. Melee returns 0
+// (callers use a facing arc instead). Jumps share SpellSkillRange with spells.
+func SkillMaxRange(s Skill) float64 {
+	if SkillTargetsAlly(s) {
+		return AllySkillRange
+	}
+	if SkillIsRanged(s) {
+		return SpellSkillRange
 	}
 	return 0
 }

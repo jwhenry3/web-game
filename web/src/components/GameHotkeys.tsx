@@ -40,7 +40,8 @@ export function GameHotkeys() {
       }
 
       if (e.key >= "1" && e.key <= "5") {
-        if (useGame.getState().screen === "battle") {
+        const { screen, battle, rtBattle } = useGame.getState();
+        if (screen === "battle" && (battle || rtBattle)) {
           e.preventDefault();
           net.activateHotbar(e.key);
         }

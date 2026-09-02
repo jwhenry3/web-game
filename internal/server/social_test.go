@@ -6,12 +6,11 @@ import (
 
 	"ffv-web-game/internal/game"
 	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
 )
 
 func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
 	t.Helper()
-	h := NewHub(store.Load(""), nil, nil, 0)
+	h := mustTestHub()
 	h.initSocial()
 	a := &Client{ID: "a", Name: "Alpha", Joined: true, Send: make(chan []byte, 64), Hub: h}
 	b := &Client{ID: "b", Name: "Bravo", Joined: true, Send: make(chan []byte, 64), Hub: h}
@@ -69,12 +68,12 @@ func TestPromptPartyDoesNotAutoJoin(t *testing.T) {
 	h.handlePartyInvite(a, raw)
 	h.handlePartyAccept(b)
 
-	room := NewBattleRoom("battle-test", 1, h)
-	h.battles[room.ID] = room
+	h.world[a.ID].InBattle = true
+	h.world[a.ID].BattleID = "battle-test"
 	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
 	h.world[b.ID].X, h.world[b.ID].Y = 520, 520 // within range
 
-	h.promptPartyForBattle(a.ID, room, 500, 500)
+	h.promptPartyForBattle(a.ID, "battle-test", 500, 500)
 
 	if h.world[b.ID].InBattle {
 		t.Fatal("party mates must opt in, not auto-join")
@@ -90,29 +89,26 @@ func TestMoveIntoPartyMemberJoinsBattle(t *testing.T) {
 	h.handlePartyInvite(a, raw)
 	h.handlePartyAccept(b)
 
-	room := NewBattleRoom("battle-test", 1, h)
-	h.battles[room.ID] = room
-	h.world[a.ID].InBattle = true
-	h.world[a.ID].BattleID = room.ID
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 510, Y: 500}
 	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
 	h.world[b.ID].X, h.world[b.ID].Y = 400, 500
+	h.startBattleFromNPC(a, h.world[a.ID], h.npcs["npc-1"])
+	battleID := h.world[a.ID].BattleID
 
 	move, _ := json.Marshal(protocol.MovePayload{X: 500, Y: 500})
 	h.handleMove(b, move)
 
-	if !h.world[b.ID].InBattle || h.world[b.ID].BattleID != room.ID {
+	if !h.world[b.ID].InBattle || h.world[b.ID].BattleID != battleID {
 		t.Fatalf("party mate should join by collision, got %+v", h.world[b.ID])
 	}
 }
 
 func TestMoveIntoNonPartyMemberDoesNotJoin(t *testing.T) {
 	h, a, b := testSocialHub(t)
-	room := NewBattleRoom("battle-test", 1, h)
-	h.battles[room.ID] = room
-	h.world[a.ID].InBattle = true
-	h.world[a.ID].BattleID = room.ID
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 510, Y: 500}
 	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
 	h.world[b.ID].X, h.world[b.ID].Y = 400, 500
+	h.startBattleFromNPC(a, h.world[a.ID], h.npcs["npc-1"])
 
 	move, _ := json.Marshal(protocol.MovePayload{X: 500, Y: 500})
 	h.handleMove(b, move)
@@ -128,16 +124,17 @@ func TestPromptPartySkipsDistantMembers(t *testing.T) {
 	h.handlePartyInvite(a, raw)
 	h.handlePartyAccept(b)
 
-	room := NewBattleRoom("battle-test", 1, h)
+	h.world[a.ID].InBattle = true
+	h.world[a.ID].BattleID = "battle-test"
 	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
 	h.world[b.ID].X, h.world[b.ID].Y = 900, 900 // out of range
 
-	h.promptPartyForBattle(a.ID, room, 500, 500)
+	h.promptPartyForBattle(a.ID, "battle-test", 500, 500)
 
 	if h.battleInvites[b.ID] != nil {
 		t.Fatal("distant party mates must not be prompted")
 	}
-	meta := h.battleMeta[room.ID]
+	meta := h.battleMeta["battle-test"]
 	if meta != nil && meta.passiveEligible[b.ID] != "" {
 		t.Fatal("distant party mates must not earn passive eligibility")
 	}

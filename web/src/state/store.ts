@@ -16,6 +16,7 @@ import type {
   OverworldMap,
   WorldNPC,
   WorldPlayer,
+  RTBattleView,
   SavePoint,
 } from "../types";
 
@@ -74,6 +75,8 @@ interface GameState {
   partyInvite: PartyInvitePayload | null;
   battleInvite: BattleInvitePayload | null;
   battle: BattleView | null;
+  rtBattle: RTBattleView | null;
+  combatMode: string | null;
   selectedAction: SelectedAction | null;
   openWindow: WindowId | null;
   bindSlot: string | null;
@@ -135,6 +138,8 @@ const initial = {
   partyInvite: null,
   battleInvite: null,
   battle: null,
+  rtBattle: null,
+  combatMode: null,
   selectedAction: null,
   openWindow: null,
   bindSlot: null,

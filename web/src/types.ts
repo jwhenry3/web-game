@@ -21,6 +21,8 @@ export type MessageType =
   | "action"
   | "set_target"
   | "set_save_point"
+  | "rt_move"
+  | "rt_attack"
   | "welcome"
   | "world_state"
   | "player_joined"
@@ -38,6 +40,10 @@ export type MessageType =
   | "battle_event"
   | "battle_tick"
   | "battle_end"
+  | "rt_battle_state"
+  | "rt_battle_tick"
+  | "rt_battle_event"
+  | "rt_battle_end"
   | "error";
 
 export interface Envelope {
@@ -357,6 +363,64 @@ export interface PlayerReward {
 export interface BattleEndPayload {
   victory: boolean;
   rewards: PlayerReward[];
+}
+
+export interface RTBattleEntity {
+  id: string;
+  name: string;
+  kind?: string;
+  is_player: boolean;
+  x: number;
+  y: number;
+  hp: number;
+  max_hp: number;
+  mp?: number;
+  max_mp?: number;
+  skill_atb?: number;
+  target_id?: string;
+  alive: boolean;
+  statuses?: StatusSnapshot[];
+  casting_skill_id?: string;
+  cast_target_id?: string;
+  cast_progress?: number;
+  cast_time_ms?: number;
+}
+
+export interface RTBattleStatePayload {
+  battle_id: string;
+  entities: RTBattleEntity[];
+  mode?: string;
+}
+
+export interface RTBattleTickPayload {
+  entities: RTBattleEntity[];
+}
+
+export interface RTBattleEventPayload {
+  attacker_id: string;
+  target_id?: string;
+  damage?: number;
+  heal?: number;
+  mp_restored?: number;
+  hit: boolean;
+  message?: string;
+  action_id?: string;
+  action_name?: string;
+  success?: boolean;
+  cast_started?: boolean;
+  cast_cancelled?: boolean;
+  entities: RTBattleEntity[];
+}
+
+export interface RTBattleEndPayload {
+  victory: boolean;
+  rewards: PlayerReward[];
+}
+
+export interface RTBattleView {
+  battleId: string;
+  entities: RTBattleEntity[];
+  end: RTBattleEndPayload | null;
 }
 
 /** A pending battle action waiting for a target click. */

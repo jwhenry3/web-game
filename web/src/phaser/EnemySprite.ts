@@ -61,6 +61,11 @@ export class EnemySprite {
     const facingChanged = nextFacing !== this.facing;
     this.facing = nextFacing;
 
+    if (this.anim === "attack") {
+      if (this.ready && facingChanged) this.applyFrame();
+      return;
+    }
+
     const nextAnim: CharacterAnim = moving ? "run" : "idle";
     const animChanged = nextAnim !== this.anim;
     if (animChanged) {

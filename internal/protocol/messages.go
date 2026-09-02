@@ -34,6 +34,9 @@ const (
 	TypeAction      MessageType = "action"
 	TypeSetTarget   MessageType = "set_target"
 	TypeSetSavePoint MessageType = "set_save_point"
+	// Realtime combat plugin (combat.realtime)
+	TypeRTMove        MessageType = "rt_move"
+	TypeRTAttack      MessageType = "rt_attack"
 )
 
 // Server -> Client
@@ -56,6 +59,11 @@ const (
 	TypeBattleTick  MessageType = "battle_tick"  // lightweight ATB sync
 	TypeBattleEnd   MessageType = "battle_end"
 	TypeError       MessageType = "error"
+	// Realtime combat plugin (combat.realtime)
+	TypeRTBattleState MessageType = "rt_battle_state"
+	TypeRTBattleTick  MessageType = "rt_battle_tick"
+	TypeRTBattleEvent MessageType = "rt_battle_event"
+	TypeRTBattleEnd   MessageType = "rt_battle_end"
 )
 
 type Envelope struct {
@@ -248,6 +256,7 @@ type BattleInfo struct {
 	Participants int    `json:"participants"`
 	MaxPlayers   int    `json:"max_players"`
 	Level        int    `json:"level"`
+	Mode         string `json:"mode,omitempty"`
 }
 
 type WorldNPC struct {
@@ -460,4 +469,68 @@ type SocialStatePayload struct {
 
 type ErrorPayload struct {
 	Message string `json:"message"`
+}
+
+// ---- Realtime combat (combat.realtime) ----
+
+type RTMovePayload struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type RTAttackPayload struct {
+	FacingX float64 `json:"facing_x"`
+	FacingY float64 `json:"facing_y"`
+}
+
+type RTBattleEntity struct {
+	ID             string               `json:"id"`
+	Name           string               `json:"name"`
+	Kind           string               `json:"kind,omitempty"`
+	IsPlayer       bool                 `json:"is_player"`
+	X              float64              `json:"x"`
+	Y              float64              `json:"y"`
+	HP             int                  `json:"hp"`
+	MaxHP          int                  `json:"max_hp"`
+	MP             int                  `json:"mp,omitempty"`
+	MaxMP          int                  `json:"max_mp,omitempty"`
+	SkillATB       float64              `json:"skill_atb,omitempty"`
+	TargetID       string               `json:"target_id,omitempty"`
+	Alive          bool                 `json:"alive"`
+	Statuses       []game.StatusSnapshot `json:"statuses,omitempty"`
+	CastingSkillID string               `json:"casting_skill_id,omitempty"`
+	CastTargetID   string               `json:"cast_target_id,omitempty"`
+	CastProgress   float64              `json:"cast_progress,omitempty"`
+	CastTimeMs     int                  `json:"cast_time_ms,omitempty"`
+}
+
+type RTBattleStatePayload struct {
+	BattleID string           `json:"battle_id"`
+	Entities []RTBattleEntity `json:"entities"`
+	Mode     string           `json:"mode"`
+}
+
+type RTBattleTickPayload struct {
+	Entities []RTBattleEntity `json:"entities"`
+}
+
+type RTBattleEventPayload struct {
+	AttackerID   string           `json:"attacker_id"`
+	TargetID     string           `json:"target_id"`
+	Damage       int              `json:"damage"`
+	Heal         int              `json:"heal,omitempty"`
+	MPRestored   int              `json:"mp_restored,omitempty"`
+	Hit          bool             `json:"hit"`
+	Message      string           `json:"message,omitempty"`
+	ActionID     string           `json:"action_id,omitempty"`
+	ActionName   string           `json:"action_name,omitempty"`
+	Success      bool             `json:"success,omitempty"`
+	CastStarted  bool             `json:"cast_started,omitempty"`
+	CastCancelled bool            `json:"cast_cancelled,omitempty"`
+	Entities     []RTBattleEntity `json:"entities"`
+}
+
+type RTBattleEndPayload struct {
+	Victory bool           `json:"victory"`
+	Rewards []PlayerReward `json:"rewards"`
 }

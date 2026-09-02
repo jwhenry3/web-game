@@ -17,6 +17,7 @@ import {
   type CharacterAppearance,
   type CharacterFacing,
 } from "../characters/heroes99";
+import { battleDuration } from "./battleAnim";
 
 const LAYER_DEPTH: Record<string, number> = {
   skin: 0,
@@ -77,6 +78,11 @@ export class CharacterSprite {
     const facingChanged = nextFacing !== this.facing;
     this.facing = nextFacing;
 
+    if (this.anim === "attack") {
+      if (this.ready && facingChanged) this.applyFrame();
+      return;
+    }
+
     const nextAnim: CharacterAnim = moving ? "run" : "idle";
     const animChanged = nextAnim !== this.anim;
     if (animChanged) {
@@ -96,6 +102,16 @@ export class CharacterSprite {
     this.frame = 0;
     this.frameTimer = 0;
     if (this.ready) this.applyFrame();
+  }
+
+  playHit(battleSpeed?: number): void {
+    this.scene.tweens.add({
+      targets: this.container,
+      alpha: 0.35,
+      duration: battleDuration(50, battleSpeed),
+      yoyo: true,
+      repeat: 2,
+    });
   }
 
   setCasting(active: boolean): void {

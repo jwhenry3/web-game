@@ -7,12 +7,11 @@ import (
 
 	"ffv-web-game/internal/game"
 	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
 )
 
 func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *protocol.WorldPlayer) {
 	t.Helper()
-	h := NewHub(store.Load(""), nil, nil, 0)
+	h := mustTestHub()
 	c := &Client{
 		ID:     "client-1",
 		Name:   "Bartz",
@@ -37,7 +36,7 @@ func TestWithinEngageRange(t *testing.T) {
 }
 
 func TestClampMoveRejectsTeleport(t *testing.T) {
-	h := NewHub(store.Load(""), nil, nil, 0)
+	h := mustTestHub()
 	x, y := h.clampMove(200, 200, 800, 800)
 	if dist(200, 200, x, y) > maxMoveStep+0.01 {
 		t.Fatalf("teleport must be clamped, moved %f", dist(200, 200, x, y))
@@ -52,8 +51,8 @@ func TestMoveOntoNPCStartsBattle(t *testing.T) {
 	if !wp.InBattle || wp.BattleID == "" {
 		t.Fatalf("collision should lock the player into a battle, got %+v", wp)
 	}
-	if len(h.battles) != 1 {
-		t.Fatalf("expected one room, got %d", len(h.battles))
+	if !h.combat.RoomExists(wp.BattleID) {
+		t.Fatal("expected combat room")
 	}
 	npc := h.npcs["npc-1"]
 	if !npc.InBattle || npc.BattleID != wp.BattleID {
@@ -62,9 +61,7 @@ func TestMoveOntoNPCStartsBattle(t *testing.T) {
 	if npc.onWorld() || hasWorldNPC(h, "npc-1") {
 		t.Fatal("engaged npc must despawn from the world map")
 	}
-	if room := h.battles[wp.BattleID]; room != nil {
-		room.Close()
-	}
+	h.combat.CloseRoom(wp.BattleID)
 }
 
 func TestMoveFarFromNPCDoesNotStartBattle(t *testing.T) {
@@ -75,7 +72,7 @@ func TestMoveFarFromNPCDoesNotStartBattle(t *testing.T) {
 	if wp.InBattle {
 		t.Fatal("distant npc must not start a battle")
 	}
-	if len(h.battles) != 0 {
+	if wp.BattleID != "" {
 		t.Fatal("no room should exist")
 	}
 }
@@ -83,16 +80,17 @@ func TestMoveFarFromNPCDoesNotStartBattle(t *testing.T) {
 func TestLockedPlayerDoesNotReengage(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 400, 400)
 	wp.InBattle = true
+	wp.BattleID = "existing-battle"
 	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 400, Y: 400}
 	raw, _ := json.Marshal(protocol.MovePayload{X: 402, Y: 400})
 	h.handleMove(c, raw)
-	if len(h.battles) != 0 {
+	if wp.BattleID != "existing-battle" {
 		t.Fatal("combat-locked players cannot start another battle")
 	}
 }
 
 func TestSeededNPCsStayInRegion(t *testing.T) {
-	h := NewHub(store.Load(""), nil, nil, 0)
+	h := mustTestHub()
 	h.seedNPCs(12)
 	if len(h.npcs) != 12 {
 		t.Fatalf("expected 12 patrolling npcs, got %d", len(h.npcs))
@@ -130,7 +128,7 @@ func TestReleaseFromBattleGrantsImmunity(t *testing.T) {
 	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 410, Y: 400}
 	raw, _ := json.Marshal(protocol.MovePayload{X: 408, Y: 400})
 	h.handleMove(c, raw)
-	if wp.InBattle || len(h.battles) != 0 {
+	if wp.InBattle || wp.BattleID != "" {
 		t.Fatal("immune player must not start a battle by walking onto an npc")
 	}
 }
@@ -144,15 +142,13 @@ func TestExpiredImmunityAllowsBattle(t *testing.T) {
 	if !wp.InBattle {
 		t.Fatal("expired invul should not block collision")
 	}
-	if room := h.battles[wp.BattleID]; room != nil {
-		room.Close()
-	}
+	h.combat.CloseRoom(wp.BattleID)
 }
 
 func TestReturnToWorldRefreshesImmunity(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 400, 400)
 	wp.ImmuneUntil = time.Now().Add(-time.Second).UnixMilli()
-	h.handleLeaveBattle(c)
+	h.handleLeaveBattleReleased(c)
 	if !battleImmune(wp) {
 		t.Fatal("Return to World after a finished fight should refresh invul")
 	}
@@ -188,11 +184,8 @@ func TestNPCDespawnsUntilSpawnWindow(t *testing.T) {
 		t.Fatal("npc should vanish from the map when the fight starts")
 	}
 
-	room := h.battles[wp.BattleID]
+	h.combat.CloseRoom(wp.BattleID)
 	h.releaseNPCs(wp.BattleID)
-	if room != nil {
-		room.Close()
-	}
 	n := h.npcs["g1"]
 	if n.onWorld() || hasWorldNPC(h, "g1") {
 		t.Fatal("npc must stay hidden after the fight until its spawn window")
@@ -241,7 +234,5 @@ func TestNPCTickWalksIntoPlayer(t *testing.T) {
 	if !wp.InBattle {
 		t.Fatal("an npc walking onto a player should start a battle")
 	}
-	if room := h.battles[wp.BattleID]; room != nil {
-		room.Close()
-	}
+	h.combat.CloseRoom(wp.BattleID)
 }

@@ -1,40 +1,53 @@
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
 import { useGame } from "../state/store";
-import { GAME_SCENES } from "./BootScene";
+import { pluginHost } from "../core/plugins/pluginHost";
+import { buildGameScenes } from "./BootScene";
 
 export function PhaserGame() {
   const hostRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
+    const combat = pluginHost.getCombatPlugin();
     const game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: hostRef.current!,
       width: 960,
       height: 600,
       backgroundColor: "#0a0f1e",
-      scene: GAME_SCENES,
+      scene: buildGameScenes(),
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH,
       },
     });
+    gameRef.current = game;
 
-    // Switch scenes when the player enters/leaves a battle instance.
     const unsub = useGame.subscribe((s, prev) => {
       if (s.screen === prev.screen) return;
-      if (s.screen === "battle") {
+      if (s.screen === combat.battleScreen) {
         game.scene.sleep("world");
-        game.scene.run("battle");
+        if (!game.scene.getScene(combat.battleSceneKey)) return;
+        game.scene.start(combat.battleSceneKey);
       } else if (s.screen === "world") {
-        game.scene.sleep("battle");
-        game.scene.run("world");
+        if (game.scene.getScene(combat.battleSceneKey)) {
+          game.scene.stop(combat.battleSceneKey);
+        }
+        game.scene.wake("world");
       }
     });
+
+    const state = useGame.getState();
+    if (state.screen === combat.battleScreen && game.scene.getScene(combat.battleSceneKey)) {
+      game.scene.sleep("world");
+      game.scene.start(combat.battleSceneKey);
+    }
 
     return () => {
       unsub();
       game.destroy(true);
+      gameRef.current = null;
     };
   }, []);
 

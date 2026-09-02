@@ -1,12 +1,12 @@
 package server
 
 import (
-	"fmt"
 	"log"
 	"math"
 	"time"
 
 	"ffv-web-game/internal/game"
+	"ffv-web-game/internal/plugins/contracts"
 	"ffv-web-game/internal/protocol"
 )
 
@@ -251,27 +251,18 @@ func (h *Hub) engageFirstNPCAt(c *Client, wp *protocol.WorldPlayer, x, y float64
 }
 
 func (h *Hub) startBattleFromNPC(c *Client, wp *protocol.WorldPlayer, n *worldNPC) {
-	profile, ok := h.store.Get(c.Name)
+	snap := contracts.NPCSnapshot{
+		ID: n.ID, Name: n.Name, Kind: n.Kind, Level: n.Level, X: n.X, Y: n.Y,
+	}
+	battleID, ok := h.combat.StartFromNPC(c.ID, wp, snap)
 	if !ok {
 		return
 	}
-	level := n.Level
-	if profile.MainJobLevel() > level {
-		level = profile.MainJobLevel()
-	}
-	h.battleSeq++
-	id := fmt.Sprintf("battle-%d", h.battleSeq)
-	room := NewBattleRoomFromNPC(id, level, h, n.Kind)
-	h.battles[id] = room
-	go room.Run(h.tickWindow)
-
 	n.InBattle = true
-	n.BattleID = id
+	n.BattleID = battleID
 	n.despawn()
-	h.enterBattle(c, wp, room, profile)
-	h.promptPartyForBattle(c.ID, room, wp.X, wp.Y)
 	h.broadcastNPCs()
-	log.Printf("%s collided with %s and started %s (lv %d)", c.Name, n.Name, id, level)
+	log.Printf("%s collided with %s and started %s (lv %d)", c.Name, n.Name, battleID, n.Level)
 }
 
 func (n *worldNPC) despawn() {

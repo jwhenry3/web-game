@@ -19,9 +19,14 @@ type battleMeta struct {
 	passiveEligible map[string]string // clientID -> profile name
 }
 
-// BuildVictoryRewards splits XP/loot among fighters and awards passive XP to
+type battleFighter struct {
+	ClientID string
+	Name     string
+}
+
+// buildVictoryRewards splits XP/loot among fighters and awards passive XP to
 // nearby party mates who stayed out of the instance.
-func (h *Hub) BuildVictoryRewards(
+func (h *Hub) buildVictoryRewards(
 	roomID string,
 	fighters []battleFighter,
 	totalXP int,

@@ -168,12 +168,14 @@ node scripts/smoke-defeat.mjs  # defeat-flow regression (server must run)
 ## Server flags
 
 ```text
--addr       :8080                 HTTP listen address
--data       data/profiles.json    hero profile persistence
--accounts   data/accounts.json     account persistence
--overworld  config/overworld.json   map paint ops, regions, NPC spawns, wander tuning
+-config     config/server.json   server config (plugins, overworld map, ports, paths)
+-addr       (from config)          HTTP listen address override
+-data       (from config)          hero profile persistence override
+-accounts   (from config)          account persistence override
+-overworld  (from config)          overworld map JSON override
 -jwt-secret (or JWT_SECRET env)   JWT signing secret (random per launch if unset)
--static     web/dist              frontend build to serve (default in production)
+-static     (from config)          frontend build to serve override
+-battle-speed (from config)        ATB combat tempo override
 ```
 
 ## Project layout
@@ -185,7 +187,7 @@ internal/game/       Jobs, skills, status effects, loot, overworld rules
 internal/protocol/   Wire message types
 internal/server/     Hub, battles, NPCs, social, HTTP auth routes
 internal/store/      Profile/account persistence and loadouts
-config/              Overworld map and NPC config (versioned)
+config/              server.json, overworld maps, per-server settings
 web/                 Vite + React + Phaser client
 scripts/             Smoke-test scripts
 data/                Runtime JSON (profiles, accounts)

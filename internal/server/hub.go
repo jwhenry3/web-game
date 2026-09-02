@@ -10,6 +10,9 @@ import (
 
 	"ffv-web-game/internal/auth"
 	"ffv-web-game/internal/game"
+	"ffv-web-game/internal/plugins"
+	"ffv-web-game/internal/plugins/combatatb"
+	"ffv-web-game/internal/plugins/contracts"
 	"ffv-web-game/internal/protocol"
 	"ffv-web-game/internal/store"
 )
@@ -52,8 +55,9 @@ type Hub struct {
 	// Run-goroutine owned:
 	world        map[string]*protocol.WorldPlayer // clientID -> world presence
 	npcs         map[string]*worldNPC
-	battles      map[string]*BattleRoom
 	battleSeq    int
+	combat       contracts.CombatPlugin
+	modCfg       plugins.Config
 	parties      map[string]*hubParty
 	clientParty  map[string]string
 	partyInvites map[string]*partyInvite
@@ -65,11 +69,11 @@ type Hub struct {
 	battleSpeed float64
 }
 
-func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer, battleSpeed float64) *Hub {
+func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer, battleSpeed float64, modCfg plugins.Config) (*Hub, error) {
 	if battleSpeed <= 0 {
-		battleSpeed = DefaultBattleSpeed
+		battleSpeed = combatatb.DefaultBattleSpeed
 	}
-	return &Hub{
+	h := &Hub{
 		clients:    make(map[string]*Client),
 		register:   make(chan *Client, 16),
 		unregister: make(chan *Client, 16),
@@ -80,15 +84,21 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		tokens:     tokens,
 		world:        make(map[string]*protocol.WorldPlayer),
 		npcs:         make(map[string]*worldNPC),
-		battles:      make(map[string]*BattleRoom),
 		parties:      make(map[string]*hubParty),
 		clientParty:  make(map[string]string),
 		partyInvites: make(map[string]*partyInvite),
 		battleInvites: make(map[string]*battleInvite),
 		battleMeta:    make(map[string]*battleMeta),
-		tickWindow:   BattleTickWindow(battleSpeed),
+		tickWindow:   combatatb.BattleTickWindow(battleSpeed),
 		battleSpeed:  battleSpeed,
+		modCfg:       modCfg,
 	}
+	combat, err := plugins.NewCombatPlugin(modCfg, h)
+	if err != nil {
+		return nil, err
+	}
+	h.combat = combat
+	return h, nil
 }
 
 func (h *Hub) Register(c *Client) { h.register <- c }
@@ -158,13 +168,11 @@ func (h *Hub) Profiles() *store.Store { return h.store }
 // are released from the combat-locked state and the room is removed.
 func (h *Hub) FinishBattle(roomID string, participantIDs []string, victory bool) {
 	h.tasks <- func() {
-		room, ok := h.battles[roomID]
-		if !ok {
+		if !h.combat.RoomExists(roomID) {
 			return
 		}
-		delete(h.battles, roomID)
 		delete(h.battleMeta, roomID)
-		room.Close()
+		h.combat.CloseRoom(roomID)
 		for _, id := range participantIDs {
 			if !victory {
 				h.respawnAtSavePoint(id)
@@ -219,9 +227,7 @@ func (h *Hub) handleDisconnect(client *Client) {
 	h.mu.Unlock()
 
 	if client.BattleID != "" {
-		if room, ok := h.battles[client.BattleID]; ok {
-			room.Leave(client.ID)
-		}
+		h.combat.OnDisconnect(client.ID)
 	}
 	if _, ok := h.world[client.ID]; ok {
 		delete(h.world, client.ID)
@@ -271,16 +277,16 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handlePartyLeave(c)
 	case protocol.TypePartyKick:
 		h.handlePartyKick(c, ev.Payload)
-	case protocol.TypeDeclineBattleInvite:
-		h.handleDeclineBattleInvite(c)
-	case protocol.TypeJoinBattle:
-		h.handleJoinBattle(c, ev.Payload)
-	case protocol.TypeLeaveBattle:
-		h.handleLeaveBattle(c)
-	case protocol.TypeAction:
-		h.handleAction(c, ev.Payload)
-	case protocol.TypeSetTarget:
-		h.handleSetTarget(c, ev.Payload)
+	case protocol.TypeDeclineBattleInvite, protocol.TypeJoinBattle,
+		protocol.TypeLeaveBattle, protocol.TypeAction, protocol.TypeSetTarget,
+		protocol.TypeRTMove, protocol.TypeRTAttack:
+		if ev.Type == protocol.TypeLeaveBattle && c.BattleID == "" {
+			h.handleLeaveBattleReleased(c)
+			break
+		}
+		if h.combat != nil {
+			h.combat.HandleMessage(c.ID, ev.Type, ev.Payload)
+		}
 	case protocol.TypeSetSavePoint:
 		h.handleSetSavePoint(c, ev.Payload)
 	default:
@@ -506,72 +512,11 @@ func (h *Hub) handleSetHotbar(c *Client, raw json.RawMessage) {
 	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{PlayerID: c.ID, Profile: profileInfo(profile)})
 }
 
-func (h *Hub) handleJoinBattle(c *Client, raw json.RawMessage) {
-	wp, ok := h.world[c.ID]
-	if !ok || wp.InBattle {
-		return
+func (h *Hub) handleLeaveBattleReleased(c *Client) {
+	if wp, ok := h.world[c.ID]; ok && !wp.InBattle {
+		h.grantBattleImmunity(wp)
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 	}
-	var p protocol.JoinBattlePayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	room, ok := h.battles[p.BattleID]
-	if !ok {
-		h.sendError(c, "That battle no longer exists.")
-		return
-	}
-	participants := 0
-	for _, other := range h.world {
-		if other.InBattle && other.BattleID == p.BattleID {
-			participants++
-		}
-	}
-	if participants >= maxPartySize {
-		h.sendError(c, "That party is already full.")
-		return
-	}
-	profile, ok := h.store.Get(c.Name)
-	if !ok {
-		return
-	}
-	h.enterBattle(c, wp, room, profile)
-	delete(h.battleInvites, c.ID)
-}
-
-// enterBattle puts the player into the Idle/Locked state in the world layer
-// and bridges them into the battle instance.
-func (h *Hub) enterBattle(c *Client, wp *protocol.WorldPlayer, room *BattleRoom, profile store.Profile) {
-	c.BattleID = room.ID
-	wp.InBattle = true
-	wp.BattleID = room.ID
-	wp.ImmuneUntil = 0
-	delete(h.battleInvites, c.ID)
-	if meta := h.battleMeta[room.ID]; meta != nil {
-		delete(meta.passiveEligible, c.ID)
-	}
-	room.Join(c.ID, profile)
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
-	h.broadcastBattleList()
-	if partyID, ok := h.clientParty[c.ID]; ok {
-		h.broadcastPartySocial(h.parties[partyID])
-	}
-}
-
-func (h *Hub) handleLeaveBattle(c *Client) {
-	if c.BattleID == "" {
-		// Already unlocked after a win/defeat: refresh invul as they return to the world.
-		if wp, ok := h.world[c.ID]; ok && !wp.InBattle {
-			h.grantBattleImmunity(wp)
-			h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
-		}
-		return
-	}
-	roomID := c.BattleID
-	if room, ok := h.battles[roomID]; ok {
-		room.Leave(c.ID)
-	}
-	h.releaseFromBattle(c.ID)
-	h.broadcastBattleList()
 }
 
 // releaseFromBattle clears the combat-locked state for one player and syncs
@@ -610,46 +555,19 @@ func (h *Hub) releaseFromBattle(clientID string) {
 	}
 }
 
-func (h *Hub) grantBattleImmunity(wp *protocol.WorldPlayer) {
-	if wp == nil {
-		return
-	}
-	wp.ImmuneUntil = time.Now().Add(battleImmunity).UnixMilli()
-}
-
-func (h *Hub) handleAction(c *Client, raw json.RawMessage) {
-	if c.BattleID == "" {
-		h.sendError(c, "You are not in a battle.")
-		return
-	}
-	var p protocol.ActionPayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	if room, ok := h.battles[c.BattleID]; ok {
-		room.QueueAction(c.ID, p)
-	}
-}
-
-func (h *Hub) handleSetTarget(c *Client, raw json.RawMessage) {
-	if c.BattleID == "" {
-		return
-	}
-	var p protocol.SetTargetPayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
-	}
-	if room, ok := h.battles[c.BattleID]; ok {
-		room.SetTarget(c.ID, p.TargetID)
-	}
-}
-
 func (h *Hub) worldPlayers() []protocol.WorldPlayer {
 	out := make([]protocol.WorldPlayer, 0, len(h.world))
 	for _, wp := range h.world {
 		out = append(out, *wp)
 	}
 	return out
+}
+
+func (h *Hub) grantBattleImmunity(wp *protocol.WorldPlayer) {
+	if wp == nil {
+		return
+	}
+	wp.ImmuneUntil = time.Now().Add(battleImmunity).UnixMilli()
 }
 
 func (h *Hub) battleInfos() []protocol.BattleInfo {
@@ -659,16 +577,10 @@ func (h *Hub) battleInfos() []protocol.BattleInfo {
 			counts[wp.BattleID]++
 		}
 	}
-	out := make([]protocol.BattleInfo, 0, len(h.battles))
-	for id, room := range h.battles {
-		out = append(out, protocol.BattleInfo{
-			BattleID:     id,
-			Participants: counts[id],
-			MaxPlayers:   maxPartySize,
-			Level:        room.Level,
-		})
+	if h.combat == nil {
+		return nil
 	}
-	return out
+	return h.combat.BattleInfos(counts)
 }
 
 func (h *Hub) broadcastBattleList() {

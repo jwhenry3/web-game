@@ -5,7 +5,7 @@ import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
 import { PhaserGame } from "./phaser/PhaserGame";
 import { WorldHUD } from "./components/WorldHUD";
-import { BattleHUD } from "./components/BattleHUD";
+import { pluginHost } from "./core/plugins/pluginHost";
 import { SidePanel } from "./components/SidePanel";
 import { GameWindows, WindowBar } from "./components/GameWindows";
 import { Hotbar } from "./components/Hotbar";
@@ -72,12 +72,15 @@ export function App() {
     return <CharacterCreationWizard />;
   }
 
+  const combat = pluginHost.getCombatPlugin();
+  const CombatHUD = combat.HUD;
+
   return (
     <div className="game-layout">
       <GameHotkeys />
       <div className="game-stage">
         <PhaserGame />
-        {screen === "battle" ? <BattleHUD /> : <WorldHUD />}
+        {screen === combat.battleScreen ? <CombatHUD /> : <WorldHUD />}
         <SidePanel />
         <Hotbar />
         <ExpBar />
