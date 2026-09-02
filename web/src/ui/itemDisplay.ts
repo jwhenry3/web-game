@@ -1,3 +1,4 @@
+import type { HotbarBinding, ProfileInfo } from "../types";
 import type { Item } from "../types";
 import { ICONS } from "./icons";
 
@@ -10,9 +11,7 @@ export function itemStats(item: Item): string {
 
 export function itemIconSrc(item: Item): string {
   if (item.kind === "consumable") {
-    if (item.consumable === "ether") return ICONS.ether;
-    if (item.consumable === "hi_potion") return ICONS.hiPotion;
-    return ICONS.potion;
+    return consumableIconSrc(item.consumable ?? "");
   }
   switch (item.slot) {
     case "weapon":
@@ -34,4 +33,26 @@ export function itemIconSrc(item: Item): string {
     default:
       return ICONS.default;
   }
+}
+
+export function consumableIconSrc(consumableId: string): string {
+  if (consumableId === "ether") return ICONS.ether;
+  if (consumableId === "hi_potion") return ICONS.hiPotion;
+  if (consumableId === "potion") return ICONS.potion;
+  return ICONS.default;
+}
+
+export function skillIconSrc(skillId: string, unlocked = true): string {
+  if (skillId === "attack") return ICONS.attack;
+  return unlocked ? ICONS.skillUnlocked : ICONS.skillLocked;
+}
+
+export function hotbarIconSrc(
+  bind: HotbarBinding | undefined,
+  profile: ProfileInfo,
+): string | null {
+  if (!bind) return null;
+  if (bind.kind === "item") return consumableIconSrc(bind.id);
+  const sk = profile.skills.find((s) => s.id === bind.id);
+  return skillIconSrc(bind.id, sk?.unlocked ?? false);
 }

@@ -15,8 +15,8 @@ export class BootScene extends Phaser.Scene {
     preloadAppearance(this.load, DEFAULT_APPEARANCE);
   }
 
-  create() {
-    ensureEnemyTextures(this);
+  async create() {
+    await ensureEnemyTextures(this);
     this.scene.start("world");
   }
 }

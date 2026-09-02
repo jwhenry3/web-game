@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
-import { appearanceKey, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS } from "../characters/types";
+import { appearanceKey, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS, H99_WORLD_RING_Y } from "../characters/types";
 import type { OverworldMap, WorldNPC, CharacterAppearanceWire } from "../types";
 import { FILL, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W, slideMovePlayer, tileAt } from "../world/overworld";
 import { CharacterSprite } from "./CharacterSprite";
@@ -117,7 +117,7 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const wrapper = this.add.container(0, 0).setDepth(10);
-    const ring = this.add.circle(0, 3, H99_WORLD_RING_RADIUS, 0xffe9a8, 0).setVisible(false);
+    const ring = this.add.circle(0, H99_WORLD_RING_Y, H99_WORLD_RING_RADIUS, 0xffe9a8, 0).setVisible(false);
     const sprite = new CharacterSprite(this, 0, 0, appearance);
     const label = this.add
       .text(0, H99_NAME_LABEL_Y, "", { fontSize: "11px", color: "#ffffff", fontFamily: "monospace" })

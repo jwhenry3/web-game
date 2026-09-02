@@ -531,39 +531,55 @@ func TestEnemySkillUsesSelectedTarget(t *testing.T) {
 	}
 }
 
-func TestAutoAttackPausesDuringCast(t *testing.T) {
+func TestAttackUsesGCD(t *testing.T) {
 	host := newMockHost()
-	room := NewBattleRoom("cast-aa-test", 1, host)
-	profile := host.store.GetOrCreate("Vivi", game.JobBLM)
-	room.addPlayer("client-1", profile)
-	room.tickWindow = DefaultTickWindow
+	room := newTestRoom(t, host)
+	enemyID := firstEnemyID(room)
+	enemy := room.find(enemyID)
+	enemyHP := enemy.HP
 
 	player := room.find("client-1")
-	enemyID := firstEnemyID(room)
 	player.SkillATB = 100
-	player.AutoATB = 80
-	player.AutoAttack = true
-	player.skillLevels["blm_fire"] = 1
 
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "blm_fire", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "attack", TargetID: enemyID},
 	})
-	if !res.Success || !res.CastStarted {
-		t.Fatalf("expected cast to begin: %+v", res)
+	if !res.Success {
+		t.Fatalf("attack should succeed: %+v", res)
 	}
-	if player.AutoATB != 0 {
-		t.Fatalf("auto ATB should reset when cast begins, got %f", player.AutoATB)
+	if res.Damage <= 0 {
+		t.Fatal("attack should deal damage")
 	}
+	if enemy.HP >= enemyHP {
+		t.Fatalf("enemy should take damage, HP %d -> %d", enemyHP, enemy.HP)
+	}
+	if player.SkillATB != 0 {
+		t.Fatalf("attack should spend the GCD, skill ATB=%f", player.SkillATB)
+	}
+}
 
-	for i := 0; i < 3 && player.casting != nil; i++ {
-		room.tick()
+func TestEnemyAttackOnGCD(t *testing.T) {
+	host := newMockHost()
+	room := newTestRoom(t, host)
+	player := room.find("client-1")
+	playerHP := player.HP
+
+	var enemy *battleEntity
+	for _, e := range room.entities {
+		if !e.IsPlayer {
+			enemy = e
+			break
+		}
 	}
-	if player.casting == nil {
-		t.Fatal("cast should still be in progress")
+	enemy.SkillATB = 100
+
+	room.tick()
+	if player.HP >= playerHP {
+		t.Fatal("enemy should attack on the shared GCD")
 	}
-	if player.AutoATB > 0.01 {
-		t.Fatalf("auto ATB should not fill during cast, got %f", player.AutoATB)
+	if enemy.SkillATB != 0 {
+		t.Fatalf("enemy attack should spend GCD, skill ATB=%f", enemy.SkillATB)
 	}
 }
 
@@ -640,21 +656,16 @@ func TestOnlyEquippedGearApplies(t *testing.T) {
 	}
 }
 
-// ATB pacing: bars fill from Agility each tick and cap at 100.
+// ATB pacing: the GCD bar fills from Agility each tick and caps at 100.
 func TestATBFillsWithAgility(t *testing.T) {
 	host := newMockHost()
 	room := newTestRoom(t, host)
 	player := room.find("client-1")
-	player.AutoATB = 0
 	player.SkillATB = 0
-	player.AutoAttack = false // isolate fill from combat ending the room
 
 	room.tick()
-	if player.AutoATB <= 0 || player.SkillATB <= 0 {
-		t.Fatal("both ATBs should fill on tick")
-	}
-	if player.AutoATB == player.SkillATB {
-		t.Error("auto-attack and GCD should fill at different rates")
+	if player.SkillATB <= 0 {
+		t.Fatal("GCD should fill on tick")
 	}
 	for i := 0; i < 100; i++ {
 		room.tick()
@@ -662,41 +673,7 @@ func TestATBFillsWithAgility(t *testing.T) {
 			break
 		}
 	}
-	if player.AutoATB > 100 {
-		t.Errorf("AutoATB must cap at 100, got %f", player.AutoATB)
-	}
 	if player.SkillATB > 100 {
 		t.Errorf("SkillATB must cap at 100, got %f", player.SkillATB)
-	}
-}
-
-func TestAutoAttackIndependentOfGCD(t *testing.T) {
-	host := newMockHost()
-	room := newTestRoom(t, host)
-	player := room.find("client-1")
-	var enemy *battleEntity
-	for _, e := range room.entities {
-		if !e.IsPlayer {
-			enemy = e
-			break
-		}
-	}
-	if enemy == nil {
-		t.Fatal("expected an enemy")
-	}
-	player.AutoAttack = true
-	player.TargetID = enemy.ID
-	player.AutoATB = 100
-	player.SkillATB = 40
-
-	room.tick()
-	if player.SkillATB < 40 {
-		t.Fatalf("auto-attack must not spend the GCD (skill ATB was %f)", player.SkillATB)
-	}
-	if player.AutoATB >= 100 {
-		t.Fatal("auto-attack should have spent AutoATB")
-	}
-	if enemy.HP == enemy.MaxHP {
-		t.Fatal("auto-attack should have dealt damage")
 	}
 }

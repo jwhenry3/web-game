@@ -351,7 +351,7 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <p className="hint">
         {tab === "general"
-          ? "Auto-attack swings on its own timer and does not spend the GCD. Drag it onto the hotbar."
+          ? "Attack is always available. Press hotbar slot 1 or drag it onto another slot."
           : "Skills unlock as your jobs level up. Use them in battle to raise skill level."}
       </p>
       <div className="xiv-tree" style={{ width, height }}>
@@ -466,7 +466,7 @@ function SkillDetail({
       <div className="xiv-detail-name">{sk.name}</div>
       <div className="xiv-detail-meta">
         {sk.id === "attack"
-          ? "Toggle · own timer"
+          ? "0 MP · uses GCD"
           : `${sk.mp_cost} MP${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
         {sk.id !== "attack" && (
           <>

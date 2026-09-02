@@ -215,7 +215,7 @@ func TestNPCDespawnsUntilSpawnWindow(t *testing.T) {
 	if !n.onWorld() || !hasWorldNPC(h, "g1") {
 		t.Fatal("npc should return to the map after the spawn window")
 	}
-	home := game.TileCenter(game.NPCPatrols[0].Loop[0])
+	home := game.TileCenter(game.NPCPatrols[0].Home)
 	if dist(n.X, n.Y, home.X, home.Y) > 1 {
 		t.Fatalf("respawn should start at patrol home, got %f,%f", n.X, n.Y)
 	}

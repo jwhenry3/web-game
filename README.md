@@ -171,6 +171,7 @@ node scripts/smoke-defeat.mjs  # defeat-flow regression (server must run)
 -addr       :8080                 HTTP listen address
 -data       data/profiles.json    hero profile persistence
 -accounts   data/accounts.json     account persistence
+-overworld  data/overworld.json    map paint ops, regions, NPC spawns, wander tuning
 -jwt-secret (or JWT_SECRET env)   JWT signing secret (random per launch if unset)
 -static     web/dist              frontend build to serve (default in production)
 ```
@@ -186,7 +187,7 @@ internal/server/     Hub, battles, NPCs, social, HTTP auth routes
 internal/store/      Profile/account persistence and loadouts
 web/                 Vite + React + Phaser client
 scripts/             Smoke-test scripts
-data/                Runtime JSON persistence (gitignored)
+data/                Runtime JSON (profiles, accounts, overworld map/NPC config)
 ```
 
 ## Not yet implemented

@@ -425,6 +425,15 @@ func (s *Store) Equip(name, itemID, equipSlot string) (Profile, bool) {
 			return Profile{}, false
 		}
 		l.Equipped[targetSlot] = item.ID
+		if item.Slot == game.SlotWeapon {
+			other := game.SlotSubWeapon
+			if targetSlot == game.SlotSubWeapon {
+				other = game.SlotWeapon
+			}
+			if l.Equipped[other] == item.ID {
+				delete(l.Equipped, other)
+			}
+		}
 		p.Loadouts[p.ComboKey()] = *l
 		s.save()
 		return *p, true

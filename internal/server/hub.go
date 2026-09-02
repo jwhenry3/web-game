@@ -276,8 +276,6 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handleLeaveBattle(c)
 	case protocol.TypeAction:
 		h.handleAction(c, ev.Payload)
-	case protocol.TypeToggleAuto:
-		h.handleToggleAuto(c, ev.Payload)
 	case protocol.TypeSetTarget:
 		h.handleSetTarget(c, ev.Payload)
 	default:
@@ -621,17 +619,6 @@ func (h *Hub) handleAction(c *Client, raw json.RawMessage) {
 	}
 	if room, ok := h.battles[c.BattleID]; ok {
 		room.QueueAction(c.ID, p)
-	}
-}
-
-func (h *Hub) handleToggleAuto(c *Client, raw json.RawMessage) {
-	if c.BattleID == "" {
-		return
-	}
-	var p protocol.ToggleAutoPayload
-	_ = json.Unmarshal(raw, &p)
-	if room, ok := h.battles[c.BattleID]; ok {
-		room.ToggleAuto(c.ID, p.Enabled)
 	}
 }
 

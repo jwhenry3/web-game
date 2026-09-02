@@ -47,7 +47,7 @@ export function SkillTooltipContent({
       <div className="xiv-tooltip-title">{sk.name}</div>
       <div className="xiv-tooltip-meta">
         {sk.id === "attack"
-          ? "Toggle · own timer"
+          ? "0 MP · uses GCD"
           : `${sk.mp_cost} MP${sk.cast_time_ms ? ` · ${(sk.cast_time_ms / 1000).toFixed(1)}s cast` : ""}${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
         {sk.id !== "attack" && (
           <>

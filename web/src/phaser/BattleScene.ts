@@ -44,9 +44,9 @@ export class BattleScene extends Phaser.Scene {
     super("battle");
   }
 
-  create() {
+  async create() {
     this.drawBackdrop();
-    ensureEnemyTextures(this);
+    await ensureEnemyTextures(this);
     battleEvents.on("result", this.onResult);
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
       battleEvents.off("result", this.onResult);
@@ -275,13 +275,22 @@ export class BattleScene extends Phaser.Scene {
     if (actor) {
       actor.sprite?.playAttack();
       actor.enemy?.playAttack();
-      const dir = actor.container.x < VIEW_W / 2 ? 1 : -1;
+      let lungeX = actor.homeX + (actor.homeX < VIEW_W / 2 ? 30 : -30);
+      if (target) {
+        const dx = target.container.x - actor.container.x;
+        if (Math.abs(dx) > 4) {
+          lungeX = actor.container.x + Math.sign(dx) * 30;
+        }
+      }
       this.tweens.add({
         targets: actor.container,
-        x: actor.homeX + 30 * dir,
+        x: lungeX,
         duration: battleDuration(110, battleSpeed),
         yoyo: true,
         ease: "Power2",
+        onComplete: () => {
+          actor.container.x = actor.homeX;
+        },
       });
     }
     if (target) {

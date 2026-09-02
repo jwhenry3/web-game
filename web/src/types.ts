@@ -19,7 +19,6 @@ export type MessageType =
   | "join_battle"
   | "leave_battle"
   | "action"
-  | "toggle_auto"
   | "set_target"
   | "welcome"
   | "world_state"
@@ -267,10 +266,8 @@ export interface BattleEntity {
   mp: number;
   max_mp: number;
   agility: number;
-  auto_atb: number;
   skill_atb: number;
   atb: number;
-  auto_attack: boolean;
   target_id?: string;
   alive: boolean;
   statuses?: StatusSnapshot[];
@@ -305,10 +302,8 @@ export interface EntityUpdate {
   id: string;
   hp: number;
   mp: number;
-  auto_atb: number;
   skill_atb: number;
   atb: number;
-  auto_attack: boolean;
   target_id?: string;
   alive: boolean;
   statuses?: StatusSnapshot[];
@@ -325,7 +320,6 @@ export interface BattleEventPayload {
 }
 
 export interface BattleTickPayload {
-  auto_atb?: Record<string, number>;
   skill_atb?: Record<string, number>;
   atb: Record<string, number>;
   hp?: Record<string, number>;

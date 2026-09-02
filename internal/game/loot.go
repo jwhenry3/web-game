@@ -32,6 +32,10 @@ const (
 var ArmorSlots = []string{SlotHead, SlotChest, SlotHands, SlotLegs, SlotFeet, SlotBack}
 var AllSlots = append([]string{SlotWeapon, SlotSubWeapon}, ArmorSlots...)
 
+// lootSlots are inventory slots random gear can roll. Weapons always use SlotWeapon;
+// sub_weapon is an equip destination for a second job's weapon, not a drop type.
+var lootSlots = append([]string{SlotWeapon}, ArmorSlots...)
+
 // ValidEquipSlot reports whether a slot id can appear in a loadout's equipped map.
 func ValidEquipSlot(slot string) bool {
 	for _, s := range AllSlots {
@@ -109,7 +113,7 @@ func NewConsumable(rng *rand.Rand, defID string, level int) Item {
 
 var weaponBases = map[WeaponType][]string{
 	WeaponSword:  {"Blade", "Saber", "Claymore"},
-	WeaponDagger: {"Dirk", "Kris", "Stiletto"},
+	WeaponDagger: {"Twin Dirks", "Twin Kris", "Matched Stilettos"},
 	WeaponStaff:  {"Staff", "Rod", "Scepter"},
 	WeaponMace:   {"Mace", "Cudgel", "Morningstar"},
 }
@@ -162,9 +166,10 @@ func rollRarity(rng *rand.Rand, bonus int) Rarity {
 // GenerateItem rolls a single piece of equipment for the given level.
 func GenerateItem(rng *rand.Rand, level int, rarityBonus int) Item {
 	rarity := rollRarity(rng, rarityBonus)
-	slot := AllSlots[rng.Intn(len(AllSlots))]
+	slot := lootSlots[rng.Intn(len(lootSlots))]
 	power := rarityPower[rarity]
-	prefix := rarityPrefixes[rarity][rng.Intn(len(rarityPrefixes[rarity]))]
+	prefixes := rarityPrefixes[rarity]
+	prefix := prefixes[rng.Intn(len(prefixes))]
 
 	item := Item{
 		ID:     fmt.Sprintf("item-%08x%04x", rng.Uint32(), rng.Intn(0xffff)),
@@ -187,11 +192,12 @@ func GenerateItem(rng *rand.Rand, level int, rarityBonus int) Item {
 		item.Stats[key] += val
 	}
 
-	if slot == SlotWeapon {
+	switch slot {
+	case SlotWeapon:
 		wt := WeaponTypes[rng.Intn(len(WeaponTypes))]
+		bases := weaponBases[wt]
 		item.Type = string(wt)
-		item.Name = fmt.Sprintf("%s %s", prefix, weaponBases[wt][rng.Intn(len(weaponBases[wt]))])
-		// Weapons roll their primary stat plus rarity extras.
+		item.Name = fmt.Sprintf("%s %s", prefix, bases[rng.Intn(len(bases))])
 		primary := "str"
 		if wt == WeaponStaff || wt == WeaponMace {
 			primary = "mag"
@@ -200,8 +206,9 @@ func GenerateItem(rng *rand.Rand, level int, rarityBonus int) Item {
 		for i := 1; i < power.Rolls; i++ {
 			rollStat(armorStatKeys[rng.Intn(len(armorStatKeys))], 0.7)
 		}
-	} else {
-		item.Name = fmt.Sprintf("%s %s", prefix, armorBases[slot][rng.Intn(len(armorBases[slot]))])
+	default:
+		bases := armorBases[slot]
+		item.Name = fmt.Sprintf("%s %s", prefix, bases[rng.Intn(len(bases))])
 		for i := 0; i < power.Rolls; i++ {
 			rollStat(armorStatKeys[rng.Intn(len(armorStatKeys))], 1.0)
 		}

@@ -7,6 +7,8 @@ import {
   type ProfileInfo,
 } from "../types";
 import { readHotbarDrag, writeHotbarDrag } from "../ui/hotbarDrag";
+import { GameIcon } from "../ui/GameIcon";
+import { hotbarIconSrc } from "../ui/itemDisplay";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { hotbarTooltipContent } from "../ui/tooltipContent";
 
@@ -17,8 +19,8 @@ function labelFor(bind: HotbarBinding | undefined, profile: ProfileInfo): string
     return sk?.name ?? bind.id;
   }
   const count = consumableCount(profile.inventory, bind.id);
-  const sample = profile.inventory.find((i) => i.consumable === bind.id);
-  return `${sample?.name ?? bind.id}${count ? ` ×${count}` : ""}`;
+  if (count > 1) return `×${count}`;
+  return "";
 }
 
 export function Hotbar() {
@@ -38,16 +40,17 @@ export function Hotbar() {
     <div className="hotbar">
       {HOTBAR_SLOTS.map((slot) => {
         const bind = profile.hotbar?.[slot];
-        const isAttack = bind?.kind === "skill" && bind.id === "attack";
-        const onGcd = inBattle && !isAttack && !!bind;
+        const iconSrc = hotbarIconSrc(bind, profile);
+        const itemCount = bind?.kind === "item" ? consumableCount(profile.inventory, bind.id) : 0;
+        const caption = labelFor(bind, profile);
+        const onGcd = inBattle && !!bind;
         const gcdLocked = onGcd && (gcd < 100 || casting);
         const active =
-          (isAttack && self?.auto_attack) ||
-          (selected &&
-            ((bind?.kind === "skill" && selected.actionId === bind.id) ||
-              (bind?.kind === "item" &&
-                selected.itemId &&
-                profile.inventory.find((i) => i.id === selected.itemId)?.consumable === bind.id)));
+          selected &&
+          ((bind?.kind === "skill" && selected.actionId === bind.id) ||
+            (bind?.kind === "item" &&
+              selected.itemId &&
+              profile.inventory.find((i) => i.id === selected.itemId)?.consumable === bind.id));
         return (
           <HoverTooltip key={slot} content={hotbarTooltipContent(bind, profile)}>
             <button
@@ -92,8 +95,15 @@ export function Hotbar() {
               />
             )}
             <span className="hotbar-key">{slot}</span>
-            <span className="hotbar-label">{labelFor(bind, profile)}</span>
-            {isAttack && <span className="hotbar-aa">{self?.auto_attack ? "AA" : "off"}</span>}
+            {iconSrc && (
+              <span className="hotbar-icon">
+                <GameIcon src={iconSrc} alt="" size={34} />
+              </span>
+            )}
+            {bind?.kind === "item" && itemCount > 1 && (
+              <span className="hotbar-qty">×{itemCount}</span>
+            )}
+            {caption && <span className="hotbar-label">{caption}</span>}
           </button>
           </HoverTooltip>
         );

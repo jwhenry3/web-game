@@ -67,9 +67,7 @@ type battleEntity struct {
 	MP, MaxMP   int
 	Str, Mag    int
 	Agi         int
-	AutoATB     float64 // weapon swing (FFXIV auto-attack)
-	SkillATB    float64 // GCD (skills + consumables)
-	AutoAttack  bool
+	SkillATB    float64 // GCD (skills, attack, consumables)
 	TargetID    string
 	Alive       bool
 
@@ -117,11 +115,6 @@ type joinRequest struct {
 	Profile  store.Profile
 }
 
-type autoCmd struct {
-	ClientID string
-	Enabled  *bool
-}
-
 type targetCmd struct {
 	ClientID string
 	TargetID string
@@ -138,7 +131,6 @@ type BattleRoom struct {
 	joinCh   chan joinRequest
 	leaveCh  chan string
 	actionCh chan queuedAction
-	autoCh   chan autoCmd
 	targetCh chan targetCmd
 	quitCh   chan struct{}
 
@@ -179,7 +171,6 @@ func newBattleRoom(id string, level int, host roomHost, primaryKind string) *Bat
 		joinCh:      make(chan joinRequest, 16),
 		leaveCh:  make(chan string, 16),
 		actionCh: make(chan queuedAction, 64),
-		autoCh:   make(chan autoCmd, 16),
 		targetCh: make(chan targetCmd, 16),
 		quitCh:   make(chan struct{}),
 		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
@@ -211,7 +202,6 @@ func (b *BattleRoom) spawnEnemies(primaryKind string) {
 			MaxHP:    int(float64(tpl.HP) * scale),
 			Str:      int(float64(tpl.Str) * scale),
 			Agi:        tpl.Agi,
-			AutoAttack: true,
 			Alive:      true,
 		}
 		e.HP = e.MaxHP
@@ -236,13 +226,6 @@ func (b *BattleRoom) QueueAction(clientID string, action protocol.ActionPayload)
 	}
 }
 
-func (b *BattleRoom) ToggleAuto(clientID string, enabled *bool) {
-	select {
-	case b.autoCh <- autoCmd{ClientID: clientID, Enabled: enabled}:
-	default:
-	}
-}
-
 func (b *BattleRoom) SetTarget(clientID, targetID string) {
 	select {
 	case b.targetCh <- targetCmd{ClientID: clientID, TargetID: targetID}:
@@ -264,15 +247,6 @@ func (b *BattleRoom) Run(window time.Duration) {
 			b.removePlayer(clientID)
 		case qa := <-b.actionCh:
 			b.pending = append(b.pending, qa)
-		case cmd := <-b.autoCh:
-			if e := b.find(cmd.ClientID); e != nil && e.Alive {
-				if cmd.Enabled != nil {
-					e.AutoAttack = *cmd.Enabled
-				} else {
-					e.AutoAttack = !e.AutoAttack
-				}
-				b.broadcast(protocol.Encode(protocol.TypeBattleState, b.statePayload()))
-			}
 		case cmd := <-b.targetCh:
 			if e := b.find(cmd.ClientID); e != nil {
 				if t := b.find(cmd.TargetID); t != nil && t.Alive {
@@ -329,7 +303,6 @@ func (b *BattleRoom) addPlayer(clientID string, p store.Profile) {
 		MaxMP: mp, MP: mp,
 		Str: str, Mag: mag, Agi: agi,
 		Alive:       true,
-		AutoAttack:  true,
 		TargetID:    b.firstLivingEnemyID(),
 		pendingSkillUses: map[string]int{},
 		skillLevels: skillLevels,
@@ -407,8 +380,8 @@ func (b *BattleRoom) statePayload() protocol.BattleStatePayload {
 		entities = append(entities, protocol.BattleEntity{
 			ID: e.ID, Name: e.Name, Kind: e.Kind, IsPlayer: e.IsPlayer, Weapon: string(e.Weapon),
 			Level: e.Level, HP: e.HP, MaxHP: e.MaxHP, MP: e.MP, MaxMP: e.MaxMP,
-			Agility: e.Agi, AutoATB: e.AutoATB, SkillATB: e.SkillATB, ATB: e.SkillATB,
-			AutoAttack: e.AutoAttack, TargetID: e.TargetID, Alive: e.Alive,
+			Agility: e.Agi, SkillATB: e.SkillATB, ATB: e.SkillATB,
+			TargetID: e.TargetID, Alive: e.Alive,
 			Statuses: game.Snapshots(e.statuses),
 			CastingSkillID: castSkill, CastTargetID: castTarget,
 			CastProgress: castProg, CastTimeMs: castMs,
@@ -454,13 +427,7 @@ func (b *BattleRoom) tick() {
 			continue
 		}
 		mult := game.ATBMultiplier(e.statuses)
-		if e.casting == nil {
-			e.AutoATB += (3.0 + float64(e.Agi)*0.22) * mult
-		}
 		e.SkillATB += (4.2 + float64(e.Agi)*0.32) * mult
-		if e.AutoATB > atbMax {
-			e.AutoATB = atbMax
-		}
 		if e.SkillATB > atbMax {
 			e.SkillATB = atbMax
 		}
@@ -509,28 +476,28 @@ func (b *BattleRoom) tick() {
 		results = append(results, b.resolveCastComplete(e, target, skill))
 	}
 
-	// 3. Batch-process GCD actions (skills / items). Auto-attack is not queued.
+	// 3. Batch-process GCD actions (skills, attack, items).
 	batch := b.pending
 	b.pending = nil
 	for _, qa := range batch {
 		results = append(results, b.resolveAction(qa))
 	}
 
-	// 4. Auto-attacks: players swing at their target; enemies swing at the party.
+	// 4. Enemy attacks on the shared GCD.
 	for _, e := range b.entities {
-		if !e.Alive || !e.AutoAttack || e.AutoATB < atbMax || game.IsStunned(e.statuses) || e.casting != nil {
+		if !e.Alive || e.IsPlayer || e.SkillATB < atbMax || game.IsStunned(e.statuses) || e.casting != nil {
 			continue
 		}
-		var target *battleEntity
-		if e.IsPlayer {
-			target = b.autoTarget(e)
-		} else {
-			target = b.randomAlivePlayer()
-		}
+		target := b.randomAlivePlayer()
 		if target == nil {
 			continue
 		}
-		results = append(results, b.performAutoAttack(e, target))
+		results = append(results, b.applySkillEffect(e, target, game.BasicAttack, protocol.ActionResult{
+			ActorID:    e.ID,
+			ActionID:   game.BasicAttack.ID,
+			ActionName: game.BasicAttack.Name,
+			TargetID:   target.ID,
+		}))
 	}
 
 	// 5. Atomic broadcast of the batch.
@@ -541,11 +508,10 @@ func (b *BattleRoom) tick() {
 			Timestamp: time.Now().UnixMilli(),
 		}))
 	} else {
-		auto, gcd := map[string]float64{}, map[string]float64{}
+		gcd := map[string]float64{}
 		hp, alive, statuses := map[string]int{}, map[string]bool{}, map[string][]game.StatusSnapshot{}
 		castSkill, castTarget, castProg, castMs := map[string]string{}, map[string]string{}, map[string]float64{}, map[string]int{}
 		for _, e := range b.entities {
-			auto[e.ID] = e.AutoATB
 			gcd[e.ID] = e.SkillATB
 			hp[e.ID] = e.HP
 			alive[e.ID] = e.Alive
@@ -560,7 +526,7 @@ func (b *BattleRoom) tick() {
 			}
 		}
 		b.broadcast(protocol.Encode(protocol.TypeBattleTick, protocol.BattleTickPayload{
-			AutoATB: auto, SkillATB: gcd, ATB: gcd,
+			SkillATB: gcd, ATB: gcd,
 			HP: hp, Alive: alive, Statuses: statuses,
 			CastingSkillID: castSkill, CastTargetID: castTarget,
 			CastProgress: castProg, CastTimeMs: castMs,
@@ -595,7 +561,7 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		return res
 	}
 
-	// Consumables share the skill GCD, not the auto-attack swing.
+	// Consumables share the skill GCD with attack and spells.
 	if qa.Action.ActionID == "use_item" {
 		return b.resolveItemUse(qa, actor, res)
 	}
@@ -606,11 +572,6 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		return res
 	}
 	res.ActionName = skill.Name
-
-	// "Attack" is the auto-attack toggle / engage, not a GCD weaponskill.
-	if skill.ID == game.BasicAttack.ID {
-		return b.resolveEngage(qa, actor, res)
-	}
 
 	if skill.ID != game.BasicAttack.ID && actor.skillLevels[skill.ID] < 1 {
 		res.Message = "Skill not learned."
@@ -673,7 +634,6 @@ func (b *BattleRoom) castProgressPerTick(castMs int) float64 {
 func (b *BattleRoom) beginCast(actor, target *battleEntity, skill game.Skill, res protocol.ActionResult) protocol.ActionResult {
 	actor.MP -= skill.MPCost
 	actor.SkillATB = 0
-	actor.AutoATB = 0
 	actor.casting = &activeCast{
 		SkillID:  skill.ID,
 		TargetID: target.ID,
@@ -698,6 +658,12 @@ func (b *BattleRoom) resolveCastComplete(actor, target *battleEntity, skill game
 
 func (b *BattleRoom) applySkillEffect(actor, target *battleEntity, skill game.Skill, res protocol.ActionResult) protocol.ActionResult {
 	category := skill.Category
+	if skill.ID == game.BasicAttack.ID {
+		category = game.WeaponCategory(actor.Weapon)
+		if category == "" && !actor.IsPlayer {
+			category = game.CatSwordplay
+		}
+	}
 	skillJob := skill.Job
 
 	// Instant skills spend GCD/MP here; casts already spent them in beginCast.
@@ -889,8 +855,8 @@ func (b *BattleRoom) entityUpdates() []protocol.EntityUpdate {
 		castSkill, castTarget, castProg, castMs := entityCastFields(e)
 		out = append(out, protocol.EntityUpdate{
 			ID: e.ID, HP: e.HP, MP: e.MP,
-			AutoATB: e.AutoATB, SkillATB: e.SkillATB, ATB: e.SkillATB,
-			AutoAttack: e.AutoAttack, TargetID: e.TargetID, Alive: e.Alive,
+			SkillATB: e.SkillATB, ATB: e.SkillATB,
+			TargetID: e.TargetID, Alive: e.Alive,
 			Statuses: game.Snapshots(e.statuses),
 			CastingSkillID: castSkill, CastTargetID: castTarget,
 			CastProgress: castProg, CastTimeMs: castMs,
@@ -915,40 +881,6 @@ func (b *BattleRoom) autoTarget(actor *battleEntity) *battleEntity {
 	id := b.firstLivingEnemyID()
 	actor.TargetID = id
 	return b.find(id)
-}
-
-func (b *BattleRoom) performAutoAttack(actor, target *battleEntity) protocol.ActionResult {
-	dmg := b.rollDamage(actor.Str, 1.0)
-	dmg = game.ModifyDamageDealt(actor.statuses, dmg)
-	dmg = game.ModifyDamageTaken(&target.statuses, dmg)
-	target.HP -= dmg
-	if target.HP <= 0 {
-		target.HP = 0
-		target.Alive = false
-	}
-	actor.AutoATB = 0
-	return protocol.ActionResult{
-		ActorID: actor.ID, ActionID: "attack", ActionName: "Auto-attack",
-		TargetID: target.ID, Success: true, Damage: dmg,
-	}
-}
-
-func (b *BattleRoom) resolveEngage(qa queuedAction, actor *battleEntity, res protocol.ActionResult) protocol.ActionResult {
-	actor.AutoAttack = true
-	if qa.Action.TargetID != "" {
-		if t := b.find(qa.Action.TargetID); t != nil && t.Alive && !t.IsPlayer {
-			actor.TargetID = t.ID
-		}
-	}
-	if actor.AutoATB >= atbMax {
-		if t := b.autoTarget(actor); t != nil {
-			return b.performAutoAttack(actor, t)
-		}
-	}
-	res.Success = true
-	res.ActionName = "Auto-attack"
-	res.Message = "Auto-attack on."
-	return res
 }
 
 func (b *BattleRoom) checkEnd() {

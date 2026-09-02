@@ -28,12 +28,13 @@ export class EnemySprite {
   private scene: Phaser.Scene;
   private casting = false;
   private castPulse = 0;
+  private loadToken = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind) {
     this.scene = scene;
     this.kind = kind;
     this.container = new Phaser.GameObjects.Container(scene, x, y);
-    this.syncSprite();
+    void this.syncSprite();
   }
 
   getFacing(): CharacterFacing {
@@ -52,7 +53,7 @@ export class EnemySprite {
     this.sprite?.destroy();
     this.sprite = null;
     this.ready = false;
-    this.syncSprite();
+    void this.syncSprite();
   }
 
   setMoving(moving: boolean, dx = 0, _dy = 0): void {
@@ -139,8 +140,15 @@ export class EnemySprite {
     this.container.destroy();
   }
 
-  private syncSprite(): void {
-    ensureEnemyTextures(this.scene);
+  private async syncSprite(): Promise<void> {
+    const token = ++this.loadToken;
+    try {
+      await ensureEnemyTextures(this.scene);
+    } catch {
+      return;
+    }
+    if (token !== this.loadToken) return;
+
     const key = enemyTextureKey(this.kind);
     if (!this.scene.textures.exists(key)) return;
 

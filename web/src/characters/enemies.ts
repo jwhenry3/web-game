@@ -1,4 +1,4 @@
-/** Overworld / battle enemy kinds — procedural sprites match Heroes 99 frame layout. */
+/** Overworld / battle enemy kinds — SVG sprites baked into Heroes 99 frame layout. */
 
 export type EnemyKind = "goblin" | "dire_wolf" | "stone_imp";
 

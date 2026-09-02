@@ -89,6 +89,8 @@ export const H99_COLLISION_HALF_H = H99_DISPLAY_HEIGHT / 4;
 export const H99_NAME_LABEL_Y = -(H99_DISPLAY_HEIGHT + 10);
 /** Selection / status rings sized to the sprite footprint. */
 export const H99_WORLD_RING_RADIUS = H99_DISPLAY_HEIGHT * 0.64;
+/** Ring center Y in foot-local space (negative = up toward the sprite body). */
+export const H99_WORLD_RING_Y = -H99_DISPLAY_HEIGHT * 0.35;
 export const H99_BATTLE_RING_RADIUS = H99_DISPLAY_HEIGHT * 0.72;
 
 export const H99_SKINS = ["c1", "c2", "c3", "c4", "c5", "c6"] as const;

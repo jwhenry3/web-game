@@ -127,19 +127,9 @@ export function BattleHUD() {
         <Gauge value={self.hp} max={self.max_hp} color="#3dcc6e" label="HP" />
         <Gauge value={self.mp} max={self.max_mp} color="#4aa3e8" label="MP" />
         <StatusIcons statuses={self.statuses} className="status-icons--self" />
-        <Gauge value={self.auto_atb ?? 0} max={100} color="#e8a13c" label="AA" />
         {self.casting_skill_id && (
           <Gauge value={self.cast_progress ?? 0} max={100} color="#a78bfa" label="Cast" />
         )}
-        <button
-          className={`ff-aa-toggle ${self.auto_attack ? "on" : ""}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            net.toggleAuto();
-          }}
-        >
-          Auto-attack {self.auto_attack ? "ON" : "OFF"}
-        </button>
         <button
           className="flee-btn"
           onClick={(e) => {

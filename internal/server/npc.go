@@ -17,7 +17,6 @@ const (
 	npcRadius    = 22.0
 	playerRadius = game.PlayerCollisionHalfW
 	engageRange  = npcRadius + playerRadius
-	npcSpeed     = 70.0
 	npcTickSec   = 0.25
 	maxMoveStep  = 80.0 // ~240 px/s plus slack; rejects teleports
 )
@@ -31,11 +30,12 @@ type worldNPC struct {
 	InBattle bool
 	BattleID string
 
-	patrol   game.Patrol
-	region   game.Region
-	patrolI  int
-	path     []game.Vec2
-	pathI    int
+	patrol      game.Patrol
+	region      game.Region
+	path        []game.Vec2
+	pathI       int
+	idleUntil   time.Time
+	wanderStep  int
 
 	// Hidden from the world while fighting or waiting on SpawnWindows.
 	despawned bool
@@ -71,7 +71,7 @@ func (h *Hub) seedNPCs(count int) {
 			break
 		}
 		reg, _ := game.RegionByID(p.Region)
-		start := game.TileCenter(p.Loop[0])
+		start := game.TileCenter(p.Home)
 		n := &worldNPC{
 			ID:     p.ID,
 			Name:   p.Name,
@@ -82,49 +82,70 @@ func (h *Hub) seedNPCs(count int) {
 			patrol: p,
 			region: reg,
 		}
-		n.routeTo(1)
+		n.beginWander()
 		h.npcs[n.ID] = n
 	}
 }
 
-func (n *worldNPC) routeTo(loopIndex int) {
-	if len(n.patrol.Loop) == 0 {
-		n.path = nil
-		n.pathI = 0
-		return
-	}
-	n.patrolI = loopIndex % len(n.patrol.Loop)
+func (n *worldNPC) beginWander() {
+	home := game.TileCenter(n.patrol.Home)
+	n.X, n.Y = home.X, home.Y
+	n.path = nil
+	n.pathI = 0
+	n.wanderStep = 0
+	n.idleUntil = time.Now().Add(game.WanderIdleDuration())
+}
+
+func (n *worldNPC) pickNextPath() bool {
 	from := game.WorldToTile(n.X, n.Y)
 	if !game.WalkableTile(from.C, from.R) {
-		from = n.patrol.Loop[n.patrolI]
-		c := game.TileCenter(from)
-		n.X, n.Y = c.X, c.Y
+		home := game.TileCenter(n.patrol.Home)
+		n.X, n.Y = home.X, home.Y
+		from = n.patrol.Home
 	}
-	n.path = game.Pathfind(from, n.patrol.Loop[n.patrolI], n.region)
+	n.path = game.PickRandomWanderPath(n.ID, n.region, from, n.wanderStep)
 	n.pathI = 0
+	n.wanderStep++
+	return len(n.path) > 0
+}
+
+func (n *worldNPC) arriveAtDest() {
+	n.path = nil
+	n.pathI = 0
+	n.idleUntil = time.Now().Add(game.WanderIdleDuration())
 }
 
 func (n *worldNPC) step(distStep float64) bool {
-	if len(n.path) == 0 {
-		if len(n.patrol.Loop) == 0 {
-			return false
+	if !n.idleUntil.IsZero() && time.Now().Before(n.idleUntil) {
+		return false
+	}
+	if !n.idleUntil.IsZero() {
+		n.idleUntil = time.Time{}
+		if !n.pickNextPath() {
+			n.idleUntil = time.Now().Add(time.Second)
 		}
-		n.routeTo(n.patrolI)
-		if len(n.path) == 0 {
+		return len(n.path) > 0
+	}
+
+	if len(n.path) == 0 {
+		if !n.pickNextPath() {
+			n.idleUntil = time.Now().Add(time.Second)
 			return false
 		}
 	}
 	if n.pathI >= len(n.path) {
-		n.routeTo(n.patrolI + 1)
-		if len(n.path) == 0 {
-			return false
-		}
+		n.arriveAtDest()
+		return true
 	}
+
 	dest := n.path[n.pathI]
 	dx, dy := dest.X-n.X, dest.Y-n.Y
 	d := math.Hypot(dx, dy)
 	if d < 6 {
 		n.pathI++
+		if n.pathI >= len(n.path) {
+			n.arriveAtDest()
+		}
 		return true
 	}
 	n.X += dx / d * distStep
@@ -156,7 +177,7 @@ func (h *Hub) tickNPCs() {
 	if len(h.npcs) == 0 {
 		return
 	}
-	step := npcSpeed * npcTickSec
+	step := game.WanderSpeed() * npcTickSec
 	changed := false
 	for _, n := range h.npcs {
 		if n.despawned {
@@ -259,12 +280,7 @@ func (n *worldNPC) despawn() {
 }
 
 func (n *worldNPC) placeHome() {
-	if len(n.patrol.Loop) == 0 {
-		return
-	}
-	home := game.TileCenter(n.patrol.Loop[0])
-	n.X, n.Y = home.X, home.Y
-	n.routeTo(1)
+	n.beginWander()
 }
 
 func (h *Hub) maybeRespawn(n *worldNPC) bool {

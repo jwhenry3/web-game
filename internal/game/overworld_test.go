@@ -31,26 +31,32 @@ func TestPatrolsStayInRegionAndPathfind(t *testing.T) {
 		if !ok {
 			t.Fatalf("unknown region %s", p.Region)
 		}
-		if len(p.Loop) < 2 {
-			t.Fatalf("%s needs a loop", p.ID)
+		if !WalkableTile(p.Home.C, p.Home.R) {
+			t.Errorf("%s home (%d,%d) is %c", p.ID, p.Home.C, p.Home.R, OverworldCell(p.Home.C, p.Home.R))
 		}
-		for i, wp := range p.Loop {
-			if !WalkableTile(wp.C, wp.R) {
-				t.Errorf("%s waypoint %d (%d,%d) is %c", p.ID, i, wp.C, wp.R, OverworldCell(wp.C, wp.R))
+		if !reg.Contains(p.Home.C, p.Home.R) {
+			t.Errorf("%s home outside %s", p.ID, p.Region)
+		}
+		var far Tile
+		found := false
+		for _, dest := range WalkableTilesInRegion(reg) {
+			if tileManhattan(p.Home, dest) >= wanderMinDistance() {
+				far = dest
+				found = true
+				break
 			}
-			if !reg.Contains(wp.C, wp.R) {
-				t.Errorf("%s waypoint %d outside %s", p.ID, i, p.Region)
-			}
-			next := p.Loop[(i+1)%len(p.Loop)]
-			path := Pathfind(wp, next, reg)
-			if len(path) == 0 {
-				t.Errorf("%s no path %v -> %v", p.ID, wp, next)
-			}
-			for _, step := range path {
-				tile := WorldToTile(step.X, step.Y)
-				if !reg.Contains(tile.C, tile.R) || !WalkableTile(tile.C, tile.R) {
-					t.Errorf("%s path left area at %v", p.ID, tile)
-				}
+		}
+		if !found {
+			t.Fatalf("%s region has no distant walkable tile", p.ID)
+		}
+		path := Pathfind(p.Home, far, reg)
+		if len(path) == 0 {
+			t.Errorf("%s no path %v -> %v", p.ID, p.Home, far)
+		}
+		for _, step := range path {
+			tile := WorldToTile(step.X, step.Y)
+			if !reg.Contains(tile.C, tile.R) || !WalkableTile(tile.C, tile.R) {
+				t.Errorf("%s path left area at %v", p.ID, tile)
 			}
 		}
 	}

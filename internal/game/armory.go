@@ -83,10 +83,10 @@ type Skill struct {
 	CastTimeMs  int // 0 = instant; default 1000 for spells
 }
 
-// BasicAttack is always available; it trains the equipped weapon's job category.
+// BasicAttack is always available on the hotbar; it uses the shared GCD.
 var BasicAttack = Skill{
-	ID: "attack", Name: "Auto-attack", Power: 1.0,
-	Description: "Toggle weapon swings. Auto-attack fills its own timer and does not spend the GCD.",
+	ID: "attack", Name: "Attack", Power: 1.0,
+	Description: "A basic weapon strike.",
 }
 
 // Catalog is populated in job_skills.go (init) with per-job ability trees.
@@ -218,7 +218,7 @@ func XPToNext(level int) int {
 
 var starterNames = map[WeaponType]string{
 	WeaponSword:  "Rusty Sword",
-	WeaponDagger: "Chipped Dagger",
+	WeaponDagger: "Chipped Daggers",
 	WeaponStaff:  "Gnarled Staff",
 	WeaponMace:   "Worn Mace",
 }

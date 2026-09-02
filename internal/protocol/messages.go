@@ -32,7 +32,6 @@ const (
 	TypeJoinBattle  MessageType = "join_battle"
 	TypeLeaveBattle MessageType = "leave_battle"
 	TypeAction      MessageType = "action"
-	TypeToggleAuto  MessageType = "toggle_auto"
 	TypeSetTarget   MessageType = "set_target"
 )
 
@@ -146,10 +145,6 @@ type ActionPayload struct {
 	ActionID string `json:"action_id"` // skill id, or "use_item"
 	TargetID string `json:"target_id"`
 	ItemID   string `json:"item_id,omitempty"` // consumable instance for use_item
-}
-
-type ToggleAutoPayload struct {
-	Enabled *bool `json:"enabled,omitempty"` // omit to flip
 }
 
 type SetTargetPayload struct {
@@ -309,10 +304,8 @@ type BattleEntity struct {
 	MP       int     `json:"mp"`
 	MaxMP    int     `json:"max_mp"`
 	Agility    int     `json:"agility"`
-	AutoATB    float64 `json:"auto_atb"`  // weapon-swing timer (auto-attack)
-	SkillATB   float64 `json:"skill_atb"` // GCD for skills and consumables
+	SkillATB   float64 `json:"skill_atb"` // GCD for skills, attack, and consumables
 	ATB        float64 `json:"atb"`      // alias of skill_atb for older clients
-	AutoAttack bool    `json:"auto_attack"`
 	TargetID   string  `json:"target_id,omitempty"`
 	Alive      bool    `json:"alive"`
 	Statuses   []game.StatusSnapshot `json:"statuses,omitempty"`
@@ -349,10 +342,8 @@ type EntityUpdate struct {
 	ID         string  `json:"id"`
 	HP         int     `json:"hp"`
 	MP         int     `json:"mp"`
-	AutoATB    float64 `json:"auto_atb"`
 	SkillATB   float64 `json:"skill_atb"`
 	ATB        float64 `json:"atb"`
-	AutoAttack bool    `json:"auto_attack"`
 	TargetID   string  `json:"target_id,omitempty"`
 	Alive      bool    `json:"alive"`
 	Statuses   []game.StatusSnapshot `json:"statuses,omitempty"`
@@ -371,7 +362,6 @@ type BattleEventPayload struct {
 }
 
 type BattleTickPayload struct {
-	AutoATB   map[string]float64              `json:"auto_atb"`
 	SkillATB  map[string]float64              `json:"skill_atb"`
 	ATB       map[string]float64              `json:"atb"` // skill_atb alias
 	HP        map[string]int                  `json:"hp,omitempty"`

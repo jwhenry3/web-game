@@ -9,7 +9,7 @@ import (
 
 const hotbarSlotCount = 5
 
-// defaultHotbar builds slot bindings for a main/sub combo: auto-attack, starter
+// defaultHotbar builds slot bindings for a main/sub combo: attack, starter
 // consumable, then each job's root skill in ActiveJobs order.
 func defaultHotbar(main, sub game.JobID) map[string]HotbarBinding {
 	hb := map[string]HotbarBinding{

@@ -194,9 +194,6 @@ export const net = {
   action(actionId: string, targetId: string, itemId?: string) {
     send("action", { action_id: actionId, target_id: targetId, item_id: itemId });
   },
-  toggleAuto(enabled?: boolean) {
-    send("toggle_auto", enabled === undefined ? {} : { enabled });
-  },
   setTarget(targetId: string) {
     send("set_target", { target_id: targetId });
   },
@@ -251,7 +248,7 @@ export const net = {
     useGame.setState({ selectedAction: same ? null : action });
   },
 
-  /** Pressing a hotbar key: Attack toggles AA; skills/items use the GCD. */
+  /** Pressing a hotbar key fires skills/items on the GCD (attack included). */
   activateHotbar(slot: string) {
     const { profile, selfId, screen, battle } = useGame.getState();
     if (!profile || screen !== "battle" || battle?.end) return;
@@ -259,11 +256,6 @@ export const net = {
     if (!bind) return;
     const self = battle?.entities.find((e) => e.id === selfId);
     if (!self?.alive) return;
-
-    if (bind.kind === "skill" && bind.id === "attack") {
-      send("toggle_auto", {});
-      return;
-    }
 
     if (!isGcdReady(self)) return;
 
@@ -549,9 +541,7 @@ function handleMessage(env: Envelope) {
                 hp: u.hp,
                 mp: u.mp,
                 atb: u.skill_atb ?? u.atb,
-                auto_atb: u.auto_atb ?? e.auto_atb,
                 skill_atb: u.skill_atb ?? u.atb,
-                auto_attack: u.auto_attack ?? e.auto_attack,
                 target_id: u.target_id ?? e.target_id,
                 alive: u.alive,
                 statuses: u.statuses ?? e.statuses,
@@ -586,14 +576,12 @@ function handleMessage(env: Envelope) {
         if (!s.battle) return s;
         const entities = s.battle.entities.map((e) => {
           const skill = p.skill_atb?.[e.id] ?? p.atb?.[e.id];
-          const auto = p.auto_atb?.[e.id];
           const hp = p.hp?.[e.id];
           const alive = p.alive?.[e.id];
           const statuses = p.statuses?.[e.id];
           let next = {
             ...e,
             ...(skill !== undefined ? { atb: skill, skill_atb: skill } : {}),
-            ...(auto !== undefined ? { auto_atb: auto } : {}),
             ...(hp !== undefined ? { hp } : {}),
             ...(alive !== undefined ? { alive } : {}),
             ...(statuses !== undefined ? { statuses } : {}),

@@ -55,15 +55,10 @@ type Patrol struct {
 	Name   string
 	Level  int
 	Region string
-	Loop   []Tile
+	Home   Tile
 }
 
-var Regions = []Region{
-	{ID: "haven", MinC: 2, MinR: 2, MaxC: 10, MaxR: 9},
-	{ID: "greenwood", MinC: 12, MinR: 2, MaxC: 22, MaxR: 14},
-	{ID: "wolfrun", MinC: 22, MinR: 8, MaxC: 37, MaxR: 21},
-	{ID: "imphollow", MinC: 3, MinR: 18, MaxC: 24, MaxR: 27},
-}
+var Regions []Region
 
 func RegionByID(id string) (Region, bool) {
 	for _, r := range Regions {
@@ -74,100 +69,12 @@ func RegionByID(id string) (Region, bool) {
 	return Region{}, false
 }
 
-// NPCPatrols are the designated routes. Each foe stays inside its region
-// and walks the loop with A* between waypoints.
-var NPCPatrols = []Patrol{
-	{ID: "g1", Kind: "goblin", Name: "Goblin", Level: 1, Region: "greenwood",
-		Loop: []Tile{{13, 4}, {17, 4}, {17, 7}, {13, 7}}},
-	{ID: "g2", Kind: "goblin", Name: "Goblin", Level: 1, Region: "greenwood",
-		Loop: []Tile{{18, 3}, {21, 3}, {21, 6}, {18, 6}}},
-	{ID: "g3", Kind: "goblin", Name: "Goblin", Level: 1, Region: "greenwood",
-		Loop: []Tile{{13, 10}, {16, 10}, {16, 13}, {13, 13}}},
-	{ID: "g4", Kind: "goblin", Name: "Goblin", Level: 1, Region: "greenwood",
-		Loop: []Tile{{18, 10}, {21, 10}, {21, 13}, {18, 13}}},
-	{ID: "w1", Kind: "dire_wolf", Name: "Dire Wolf", Level: 1, Region: "wolfrun",
-		Loop: []Tile{{23, 10}, {27, 10}, {27, 13}, {23, 13}}},
-	{ID: "w2", Kind: "dire_wolf", Name: "Dire Wolf", Level: 1, Region: "wolfrun",
-		Loop: []Tile{{31, 11}, {35, 11}, {35, 15}, {31, 15}}},
-	{ID: "w3", Kind: "dire_wolf", Name: "Dire Wolf", Level: 1, Region: "wolfrun",
-		Loop: []Tile{{23, 16}, {27, 16}, {27, 19}, {23, 19}}},
-	{ID: "w4", Kind: "dire_wolf", Name: "Dire Wolf", Level: 1, Region: "wolfrun",
-		Loop: []Tile{{31, 17}, {35, 17}, {35, 20}, {31, 20}}},
-	{ID: "i1", Kind: "stone_imp", Name: "Stone Imp", Level: 2, Region: "imphollow",
-		Loop: []Tile{{5, 19}, {8, 19}, {8, 22}, {5, 22}}},
-	{ID: "i2", Kind: "stone_imp", Name: "Stone Imp", Level: 2, Region: "imphollow",
-		Loop: []Tile{{16, 19}, {18, 19}, {18, 22}, {16, 22}}},
-	{ID: "i3", Kind: "stone_imp", Name: "Stone Imp", Level: 2, Region: "imphollow",
-		Loop: []Tile{{5, 24}, {8, 24}, {8, 26}, {5, 26}}},
-	{ID: "i4", Kind: "stone_imp", Name: "Stone Imp", Level: 2, Region: "imphollow",
-		Loop: []Tile{{16, 26}, {18, 26}, {18, 27}, {16, 27}}},
-}
+// NPCPatrols are overworld foe spawn definitions loaded from data/overworld.json.
+var NPCPatrols []Patrol
 
 // OverworldCells is the authoritative 40×30 tile map (row-major).
 // H haven  . grass  , path  R ruins  T trees  # rock  ~ water
 var OverworldCells []string
-
-func init() {
-	OverworldCells = buildOverworld()
-}
-
-func buildOverworld() []string {
-	g := make([][]byte, OverworldRows)
-	for r := 0; r < OverworldRows; r++ {
-		g[r] = bytesRepeat(TileGrass, OverworldCols)
-		for c := 0; c < OverworldCols; c++ {
-			if r < 2 || r >= OverworldRows-2 || c == 0 || c == OverworldCols-1 {
-				g[r][c] = TileRock
-			}
-		}
-	}
-	fill(g, 2, 2, 10, 9, TileHaven)
-	fill(g, 11, 2, 12, 6, TileTree) // tree belt east of haven
-	fill(g, 13, 2, 22, 14, TileGrass)
-	stamp(g, 15, 8, TileTree)
-	stamp(g, 16, 8, TileTree)
-	stamp(g, 19, 5, TileTree)
-	fill(g, 8, 8, 24, 8, TilePath)
-	fill(g, 10, 9, 10, 14, TilePath)
-	fill(g, 24, 8, 24, 18, TilePath)
-	fill(g, 22, 9, 37, 21, TileGrass)
-	fill(g, 28, 3, 36, 6, TileWater)
-	fill(g, 28, 7, 36, 7, TileRock)
-	fill(g, 29, 18, 30, 20, TileWater)
-	fill(g, 3, 18, 24, 27, TileGrass)
-	// west pond
-	fill(g, 1, 24, 4, 27, TileWater)
-	// two ruin courtyards with interiors
-	ring(g, 10, 20, 15, 25, TileRock)
-	fill(g, 11, 21, 14, 24, TileRuins)
-	ring(g, 19, 20, 24, 25, TileRock)
-	fill(g, 20, 21, 23, 24, TileRuins)
-	// south ruin yard for i3/i4 stays grass; add a copse they walk around
-	stamp(g, 10, 26, TileTree)
-	stamp(g, 20, 23, TileTree)
-	// keep test anchors walkable
-	stamp(g, 10, 10, TilePath)
-	stamp(g, 12, 12, TileGrass)
-	stamp(g, 5, 5, TileHaven)
-	// reopen patrol yards in case decorations overlapped
-	for _, p := range NPCPatrols {
-		for _, wp := range p.Loop {
-			if wp.C > 0 && wp.C < OverworldCols-1 && wp.R > 1 && wp.R < OverworldRows-2 {
-				if p.Region == "haven" {
-					g[wp.R][wp.C] = TileHaven
-				} else {
-					g[wp.R][wp.C] = TileGrass
-				}
-			}
-		}
-	}
-	// i2 waypoints 14,19 etc are outside the ring — keep grass. Good.
-	out := make([]string, OverworldRows)
-	for r, row := range g {
-		out[r] = string(row)
-	}
-	return out
-}
 
 func bytesRepeat(ch byte, n int) []byte {
 	b := make([]byte, n)

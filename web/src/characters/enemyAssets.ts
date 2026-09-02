@@ -2,162 +2,40 @@ import Phaser from "phaser";
 import { H99_ANIMS, H99_SHEET } from "./heroes99";
 import { ENEMY_KINDS, enemyTextureKey, type EnemyKind } from "./enemies";
 
-type Pixel = readonly [number, number, string];
+const ENEMY_BASE = "/assets/enemies";
+
+const ENEMY_SVG_PATH: Record<EnemyKind, string> = {
+  goblin: `${ENEMY_BASE}/goblin.svg`,
+  dire_wolf: `${ENEMY_BASE}/dire_wolf.svg`,
+  stone_imp: `${ENEMY_BASE}/stone_imp.svg`,
+};
+
+const DRAW_SIZE: Record<EnemyKind, { w: number; h: number }> = {
+  goblin: { w: 48, h: 36 },
+  dire_wolf: { w: 56, h: 32 },
+  stone_imp: { w: 44, h: 40 },
+};
 
 const FOOT_X = 50;
 const FOOT_Y = 36;
 
-function px(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, scale: number): void {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.floor(x), Math.floor(y), scale, scale);
-}
+const imageCache = new Map<EnemyKind, HTMLImageElement>();
+const imageLoads = new Map<EnemyKind, Promise<HTMLImageElement>>();
+let sheetBuild: Promise<void> | null = null;
 
-function drawPixels(
-  ctx: CanvasRenderingContext2D,
-  ox: number,
-  oy: number,
-  pixels: readonly Pixel[],
-  scale: number,
-): void {
-  for (const [x, y, c] of pixels) {
-    px(ctx, ox + x * scale, oy + y * scale, c, scale);
+function frameMotion(frame: number): { bob: number; lunge: number; sway: number } {
+  if (frame < 6) {
+    return { bob: Math.sin(frame * 0.8) * 2, lunge: 0, sway: 0 };
   }
-}
-
-function goblinPixels(phase: number, attack = 0): Pixel[] {
-  const bob = Math.sin(phase * 0.8) * 1;
-  const leg = Math.sin(phase * 1.4);
-  const lunge = attack * 5;
-  const y = (v: number) => v + bob;
-  const lx = leg > 0 ? 1 : 0;
-  const rx = leg <= 0 ? 1 : 0;
-  return [
-    [18 + lunge, y(6), "#3d6b28"],
-    [19 + lunge, y(6), "#4a8a32"],
-    [20 + lunge, y(5), "#4a8a32"],
-    [21 + lunge, y(5), "#5a9e3c"],
-    [22 + lunge, y(4), "#5a9e3c"],
-    [23 + lunge, y(4), "#6ab84a"],
-    [24 + lunge, y(3), "#6ab84a"],
-    [25 + lunge, y(3), "#5a9e3c"],
-    [26 + lunge, y(4), "#4a8a32"],
-    [27 + lunge, y(5), "#4a8a32"],
-    [28 + lunge, y(6), "#3d6b28"],
-    [24 + lunge, y(7), "#cc2222"],
-    [25 + lunge, y(7), "#cc2222"],
-    [23 + lunge, y(8), "#2a1a0a"],
-    [26 + lunge, y(8), "#2a1a0a"],
-    [20 + lunge, y(9), "#4a8a32"],
-    [21 + lunge, y(9), "#5a9e3c"],
-    [22 + lunge, y(9), "#5a9e3c"],
-    [23 + lunge, y(9), "#5a9e3c"],
-    [24 + lunge, y(9), "#4a8a32"],
-    [25 + lunge, y(9), "#4a8a32"],
-    [26 + lunge, y(9), "#4a8a32"],
-    [27 + lunge, y(9), "#3d6b28"],
-    [21 + lunge, y(10), "#3d6b28"],
-    [22 + lunge, y(10), "#4a8a32"],
-    [23 + lunge, y(10), "#4a8a32"],
-    [24 + lunge, y(10), "#3d6b28"],
-    [25 + lunge, y(10), "#3d6b28"],
-    [26 + lunge, y(10), "#3d6b28"],
-    [20 + lunge - lx, y(14), "#2a4a1e"],
-    [21 + lunge - lx, y(15), "#2a4a1e"],
-    [26 + lunge + rx, y(14), "#2a4a1e"],
-    [27 + lunge + rx, y(15), "#2a4a1e"],
-    [29 + lunge + attack * 3, y(8), "#8a8a8a"],
-    [30 + lunge + attack * 3, y(7), "#aaaaaa"],
-    [31 + lunge + attack * 3, y(6), "#cccccc"],
-  ];
-}
-
-function wolfPixels(phase: number, attack = 0): Pixel[] {
-  const bob = Math.sin(phase * 0.9) * 0.5;
-  const leg = Math.sin(phase * 1.6);
-  const lunge = attack * 4;
-  const y = (v: number) => v + bob;
-  const f1 = leg > 0.3 ? 1 : 0;
-  const f2 = leg < -0.3 ? 1 : 0;
-  return [
-    [14 + lunge, y(12), "#5a4030"],
-    [15 + lunge, y(11), "#6a5040"],
-    [16 + lunge, y(10), "#7a6050"],
-    [17 + lunge, y(9), "#8a6a4a"],
-    [18 + lunge, y(8), "#9a7a5a"],
-    [19 + lunge, y(7), "#8a6a4a"],
-    [20 + lunge, y(6), "#7a6050"],
-    [21 + lunge, y(5), "#6a5040"],
-    [22 + lunge, y(5), "#5a4030"],
-    [23 + lunge, y(6), "#4a3020"],
-    [24 + lunge, y(7), "#3a2818"],
-    [25 + lunge, y(8), "#2a1a0a"],
-    [18 + lunge, y(8), "#cc3333"],
-    [19 + lunge, y(10), "#6a5040"],
-    [20 + lunge, y(10), "#7a6050"],
-    [21 + lunge, y(10), "#7a6050"],
-    [22 + lunge, y(10), "#6a5040"],
-    [23 + lunge, y(10), "#5a4030"],
-    [17 + lunge, y(11), "#5a4030"],
-    [24 + lunge, y(11), "#5a4030"],
-    [16 + lunge - f1, y(13), "#3a2818"],
-    [17 + lunge - f1, y(14), "#2a1a0a"],
-    [20 + lunge, y(13), "#3a2818"],
-    [21 + lunge, y(14), "#2a1a0a"],
-    [24 + lunge + f2, y(13), "#3a2818"],
-    [25 + lunge + f2, y(14), "#2a1a0a"],
-    [26 + lunge, y(9), "#5a4030"],
-    [27 + lunge, y(8), "#4a3020"],
-  ];
-}
-
-function impPixels(phase: number, attack = 0): Pixel[] {
-  const bob = Math.sin(phase * 0.7) * 0.8;
-  const pulse = Math.sin(phase * 2) * 0.5 + 0.5;
-  const lunge = attack * 4;
-  const y = (v: number) => v + bob;
-  const glow = pulse > 0.5 ? "#ff8844" : "#cc6622";
-  return [
-    [20 + lunge, y(3), "#5a5a6a"],
-    [21 + lunge, y(2), "#6a6a7a"],
-    [22 + lunge, y(2), "#6a6a7a"],
-    [23 + lunge, y(3), "#5a5a6a"],
-    [18 + lunge, y(5), "#4a4a5a"],
-    [19 + lunge, y(4), "#5a5a6a"],
-    [20 + lunge, y(4), "#6a6a7a"],
-    [21 + lunge, y(4), "#7a7a8a"],
-    [22 + lunge, y(4), "#7a7a8a"],
-    [23 + lunge, y(4), "#6a6a7a"],
-    [24 + lunge, y(4), "#5a5a6a"],
-    [25 + lunge, y(5), "#4a4a5a"],
-    [21 + lunge, y(6), glow],
-    [22 + lunge, y(6), glow],
-    [19 + lunge, y(7), "#4a4a5a"],
-    [20 + lunge, y(7), "#5a5a6a"],
-    [21 + lunge, y(7), "#6a6a7a"],
-    [22 + lunge, y(7), "#6a6a7a"],
-    [23 + lunge, y(7), "#5a5a6a"],
-    [24 + lunge, y(7), "#4a4a5a"],
-    [20 + lunge, y(8), "#3a3a4a"],
-    [21 + lunge, y(8), "#4a4a5a"],
-    [22 + lunge, y(8), "#4a4a5a"],
-    [23 + lunge, y(8), "#3a3a4a"],
-    [19 + lunge, y(9), "#3a3a4a"],
-    [20 + lunge, y(9), "#4a4a5a"],
-    [21 + lunge, y(9), "#5a5a6a"],
-    [22 + lunge, y(9), "#5a5a6a"],
-    [23 + lunge, y(9), "#4a4a5a"],
-    [24 + lunge, y(9), "#3a3a4a"],
-    [20 + lunge, y(10), "#2a2a3a"],
-    [21 + lunge, y(10), "#3a3a4a"],
-    [22 + lunge, y(10), "#3a3a4a"],
-    [23 + lunge, y(10), "#2a2a3a"],
-    [19 + lunge, y(12), "#2a2a3a"],
-    [20 + lunge, y(13), "#1a1a2a"],
-    [23 + lunge, y(12), "#2a2a3a"],
-    [24 + lunge, y(13), "#1a1a2a"],
-    [27 + lunge + attack * 2, y(7), "#8888aa"],
-    [28 + lunge + attack * 2, y(6), "#aaaacc"],
-  ];
+  if (frame >= 16 && frame <= 23) {
+    const phase = frame - 16;
+    return { bob: Math.sin(phase * 0.9) * 1, lunge: 0, sway: Math.sin(phase * 1.4) * 2 };
+  }
+  if (frame >= 36) {
+    const phase = frame - 36;
+    return { bob: Math.sin(phase * 0.7) * 1, lunge: Math.min(1, phase / 3) * 8, sway: 0 };
+  }
+  return { bob: 0, lunge: 0, sway: 0 };
 }
 
 function drawEnemyFrame(
@@ -166,31 +44,56 @@ function drawEnemyFrame(
   frame: number,
   cellX: number,
   cellY: number,
+  img: HTMLImageElement,
 ): void {
-  const scale = 2;
-  const ox = cellX + FOOT_X - 24 * scale;
-  const oy = cellY + FOOT_Y - 18 * scale;
-
-  let phase = 0;
-  let attack = 0;
-  if (frame < 6) phase = frame;
-  else if (frame >= 16 && frame <= 23) phase = frame - 16;
-  else if (frame >= 36) {
-    phase = frame - 36;
-    attack = Math.min(1, phase / 3);
-  }
-
-  const pixels =
-    kind === "goblin"
-      ? goblinPixels(phase, attack)
-      : kind === "dire_wolf"
-        ? wolfPixels(phase, attack)
-        : impPixels(phase, attack);
-
-  drawPixels(ctx, ox, oy, pixels, scale);
+  const { w, h } = DRAW_SIZE[kind];
+  const { bob, lunge, sway } = frameMotion(frame);
+  const ox = cellX + FOOT_X - w * 0.55 + lunge;
+  const oy = cellY + FOOT_Y - h + bob + sway * 0.3;
+  ctx.drawImage(img, ox, oy, w, h);
 }
 
-function drawEnemySheet(ctx: CanvasRenderingContext2D, kind: EnemyKind): void {
+async function loadEnemyImage(kind: EnemyKind): Promise<HTMLImageElement> {
+  const cached = imageCache.get(kind);
+  if (cached) return cached;
+
+  const pending = imageLoads.get(kind);
+  if (pending) return pending;
+
+  const promise = (async () => {
+    const resp = await fetch(ENEMY_SVG_PATH[kind]);
+    if (!resp.ok) throw new Error(`Failed to fetch ${ENEMY_SVG_PATH[kind]}: ${resp.status}`);
+    const svg = (await resp.text()).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error(`Failed to decode enemy SVG: ${kind}`));
+      el.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    });
+    imageCache.set(kind, img);
+    return img;
+  })();
+
+  imageLoads.set(kind, promise);
+  try {
+    return await promise;
+  } finally {
+    imageLoads.delete(kind);
+  }
+}
+
+function buildEnemySheet(scene: Phaser.Scene, kind: EnemyKind, img: HTMLImageElement): void {
+  const key = enemyTextureKey(kind);
+  if (scene.textures.exists(key)) return;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = H99_SHEET.width;
+  canvas.height = H99_SHEET.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.imageSmoothingEnabled = true;
+
   const frames = new Set<number>();
   for (const anim of Object.values(H99_ANIMS)) {
     for (const f of anim.frames) frames.add(f);
@@ -198,39 +101,47 @@ function drawEnemySheet(ctx: CanvasRenderingContext2D, kind: EnemyKind): void {
   for (const frame of frames) {
     const col = frame % H99_SHEET.columns;
     const row = Math.floor(frame / H99_SHEET.columns);
-    drawEnemyFrame(ctx, kind, frame, col * H99_SHEET.frameWidth, row * H99_SHEET.frameHeight);
+    drawEnemyFrame(ctx, kind, frame, col * H99_SHEET.frameWidth, row * H99_SHEET.frameHeight, img);
+  }
+
+  const texture = scene.textures.addCanvas(key, canvas);
+  if (!texture) return;
+
+  const cols = H99_SHEET.columns;
+  const rows = Math.floor(H99_SHEET.height / H99_SHEET.frameHeight);
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const frame = row * cols + col;
+      texture.add(
+        frame,
+        0,
+        col * H99_SHEET.frameWidth,
+        row * H99_SHEET.frameHeight,
+        H99_SHEET.frameWidth,
+        H99_SHEET.frameHeight,
+      );
+    }
+  }
+
+  texture.refresh();
+}
+
+async function buildAllEnemySheets(scene: Phaser.Scene): Promise<void> {
+  const images = await Promise.all(ENEMY_KINDS.map((kind) => loadEnemyImage(kind)));
+  for (let i = 0; i < ENEMY_KINDS.length; i++) {
+    buildEnemySheet(scene, ENEMY_KINDS[i]!, images[i]!);
   }
 }
 
-export function ensureEnemyTextures(scene: Phaser.Scene): void {
-  for (const kind of ENEMY_KINDS) {
-    const key = enemyTextureKey(kind);
-    if (scene.textures.exists(key)) continue;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = H99_SHEET.width;
-    canvas.height = H99_SHEET.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) continue;
-    ctx.imageSmoothingEnabled = false;
-    drawEnemySheet(ctx, kind);
-
-    const texture = scene.textures.addCanvas(key, canvas);
-    if (!texture) continue;
-    const cols = H99_SHEET.columns;
-    const rows = Math.floor(H99_SHEET.height / H99_SHEET.frameHeight);
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const frame = row * cols + col;
-        texture.add(
-          frame,
-          0,
-          col * H99_SHEET.frameWidth,
-          row * H99_SHEET.frameHeight,
-          H99_SHEET.frameWidth,
-          H99_SHEET.frameHeight,
-        );
-      }
-    }
+/** Load SVG sources and bake Heroes 99–layout sprite sheets. */
+export function ensureEnemyTextures(scene: Phaser.Scene): Promise<void> {
+  if (ENEMY_KINDS.every((kind) => scene.textures.exists(enemyTextureKey(kind)))) {
+    return Promise.resolve();
   }
+  if (!sheetBuild) {
+    sheetBuild = buildAllEnemySheets(scene).finally(() => {
+      sheetBuild = null;
+    });
+  }
+  return sheetBuild;
 }
