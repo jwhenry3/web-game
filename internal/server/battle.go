@@ -47,7 +47,7 @@ var DefaultTickWindow = BattleTickWindow(DefaultBattleSpeed)
 // roomHost abstracts the hub so battle logic is testable in isolation.
 type roomHost interface {
 	SendToClients(ids []string, msg []byte)
-	FinishBattle(roomID string, participantIDs []string)
+	FinishBattle(roomID string, participantIDs []string, victory bool)
 	Profiles() *store.Store
 	BuildVictoryRewards(roomID string, fighters []battleFighter, totalXP, level, lootBonus int, rng *rand.Rand) []protocol.PlayerReward
 	NotifyPassiveRewards(rewards []protocol.PlayerReward)
@@ -329,7 +329,7 @@ func (b *BattleRoom) removePlayer(clientID string) {
 	if len(b.playerIDs(false)) == 0 {
 		// Last player left: dissolve the instance without a battle_end.
 		b.ended = true
-		b.host.FinishBattle(b.ID, nil)
+		b.host.FinishBattle(b.ID, nil, false)
 		return
 	}
 	b.broadcast(protocol.Encode(protocol.TypeBattleState, b.statePayload()))
@@ -766,13 +766,17 @@ func (b *BattleRoom) resolveItemUse(qa queuedAction, actor *battleEntity, res pr
 		return res
 	}
 	target := b.find(qa.Action.TargetID)
-	if target == nil || !target.Alive || !target.IsPlayer {
+	if target == nil || !target.IsPlayer {
 		res.Message = "Invalid target."
 		return res
 	}
 	hp, mp := game.ConsumableEffect(item)
 	if hp == 0 && mp == 0 {
 		res.Message = "This item has no effect."
+		return res
+	}
+	if !target.Alive && hp <= 0 {
+		res.Message = "Invalid target."
 		return res
 	}
 	if _, ok := b.host.Profiles().UseConsumable(actor.ProfileName, item.ID); !ok {
@@ -787,6 +791,9 @@ func (b *BattleRoom) resolveItemUse(qa queuedAction, actor *battleEntity, res pr
 		target.HP += hp
 		if target.HP > target.MaxHP {
 			target.HP = target.MaxHP
+		}
+		if target.HP > 0 {
+			target.Alive = true
 		}
 		res.Heal = hp
 	}
@@ -931,5 +938,5 @@ func (b *BattleRoom) finish(victory bool) {
 	}
 
 	b.broadcast(protocol.Encode(protocol.TypeBattleEnd, payload))
-	b.host.FinishBattle(b.ID, b.playerIDs(false))
+	b.host.FinishBattle(b.ID, b.playerIDs(false), victory)
 }

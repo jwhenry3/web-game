@@ -33,6 +33,7 @@ const (
 	TypeLeaveBattle MessageType = "leave_battle"
 	TypeAction      MessageType = "action"
 	TypeSetTarget   MessageType = "set_target"
+	TypeSetSavePoint MessageType = "set_save_point"
 )
 
 // Server -> Client
@@ -151,6 +152,10 @@ type SetTargetPayload struct {
 	TargetID string `json:"target_id"`
 }
 
+type SetSavePointPayload struct {
+	SavePointID string `json:"save_point_id"`
+}
+
 // ---- Server -> Client payloads ----
 
 type SkillInfo struct {
@@ -213,6 +218,8 @@ type ProfileInfo struct {
 	Hotbar           map[string]HotbarBinding   `json:"hotbar"`
 	Skills           []SkillInfo                `json:"skills"`
 	Friends          []string                   `json:"friends"`
+	SavePointID      string                     `json:"save_point_id,omitempty"`
+	SavePointName    string                     `json:"save_point_name,omitempty"`
 }
 
 type WelcomePayload struct {
@@ -261,11 +268,19 @@ type OverworldMap struct {
 	Cells string `json:"cells"`
 }
 
+type SavePoint struct {
+	ID   string  `json:"id"`
+	Name string  `json:"name"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+}
+
 type WorldStatePayload struct {
-	Players []WorldPlayer `json:"players"`
-	NPCs    []WorldNPC    `json:"npcs"`
-	Battles []BattleInfo  `json:"battles"`
-	Map     OverworldMap  `json:"map"`
+	Players    []WorldPlayer `json:"players"`
+	NPCs       []WorldNPC    `json:"npcs"`
+	Battles    []BattleInfo  `json:"battles"`
+	SavePoints []SavePoint   `json:"save_points"`
+	Map        OverworldMap  `json:"map"`
 }
 
 type NPCStatePayload struct {

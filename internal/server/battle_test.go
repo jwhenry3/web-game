@@ -33,7 +33,7 @@ func (m *mockHost) SendToClients(ids []string, msg []byte) {
 	}
 }
 
-func (m *mockHost) FinishBattle(roomID string, participantIDs []string) {
+func (m *mockHost) FinishBattle(roomID string, participantIDs []string, victory bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.finished = true
@@ -420,6 +420,42 @@ func TestConsumableUseHeals(t *testing.T) {
 	}
 	if qty != 2 {
 		t.Fatalf("starter potions should decrement 3 → 2, got %d", qty)
+	}
+}
+
+func TestConsumableRevivesKOAlly(t *testing.T) {
+	host := newMockHost()
+	room := newTestRoom(t, host)
+	allyProfile := host.store.GetOrCreate("Lenna", game.JobWHM)
+	room.addPlayer("client-2", allyProfile)
+	ally := room.find("client-2")
+	ally.HP = 0
+	ally.Alive = false
+
+	player := room.find("client-1")
+	player.SkillATB = 100
+
+	profile, _ := host.store.Get("Bartz")
+	var potion game.Item
+	for _, item := range profile.Inventory {
+		if item.Consumable == "potion" {
+			potion = item
+			break
+		}
+	}
+	if potion.ID == "" {
+		t.Fatal("starter kit should include a potion")
+	}
+
+	res := room.resolveAction(queuedAction{
+		ActorID: "client-1",
+		Action:  protocol.ActionPayload{ActionID: "use_item", TargetID: "client-2", ItemID: potion.ID},
+	})
+	if !res.Success {
+		t.Fatalf("potion should revive ally: %+v", res)
+	}
+	if !ally.Alive || ally.HP <= 0 {
+		t.Fatalf("ally should be alive with HP after potion, got alive=%v hp=%d", ally.Alive, ally.HP)
 	}
 }
 

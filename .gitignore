@@ -22,8 +22,9 @@ web/yarn-debug.log*
 web/yarn-error.log*
 web/pnpm-debug.log*
 
-# ---- Local server persistence ----
-data/*.json
+# ---- Local server persistence (player/runtime data) ----
+data/profiles.json
+data/accounts.json
 
 # ---- Secrets & env ----
 .env

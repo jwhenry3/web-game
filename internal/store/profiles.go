@@ -33,6 +33,7 @@ type Profile struct {
 	Loadouts  map[string]JobLoadout        `json:"loadouts"`
 	Inventory []game.Item                  `json:"inventory"`
 	Friends   []string                     `json:"friends"`
+	SavePointID string                     `json:"save_point_id,omitempty"`
 
 	// Legacy fields migrated into Jobs/Loadouts on load.
 	Level          int                      `json:"level,omitempty"`
@@ -512,6 +513,18 @@ func (s *Store) AwardJobVictory(name string, mainXP, subXP int, loot []game.Item
 func (s *Store) AwardVictory(name string, xp int, loot []game.Item) (Profile, int) {
 	p, levels, _ := s.AwardJobVictory(name, xp, 0, loot)
 	return p, levels
+}
+
+func (s *Store) SetSavePoint(name, savePointID string) (Profile, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.profiles[name]
+	if !ok {
+		return Profile{}, false
+	}
+	p.SavePointID = savePointID
+	s.save()
+	return *p, true
 }
 
 func (s *Store) Get(name string) (Profile, bool) {

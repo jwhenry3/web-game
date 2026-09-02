@@ -156,7 +156,7 @@ func (h *Hub) Profiles() *store.Store { return h.store }
 
 // FinishBattle marshals room teardown onto the hub goroutine: participants
 // are released from the combat-locked state and the room is removed.
-func (h *Hub) FinishBattle(roomID string, participantIDs []string) {
+func (h *Hub) FinishBattle(roomID string, participantIDs []string, victory bool) {
 	h.tasks <- func() {
 		room, ok := h.battles[roomID]
 		if !ok {
@@ -166,6 +166,9 @@ func (h *Hub) FinishBattle(roomID string, participantIDs []string) {
 		delete(h.battleMeta, roomID)
 		room.Close()
 		for _, id := range participantIDs {
+			if !victory {
+				h.respawnAtSavePoint(id)
+			}
 			h.releaseFromBattle(id)
 		}
 		h.releaseNPCs(roomID)
@@ -278,6 +281,8 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handleAction(c, ev.Payload)
 	case protocol.TypeSetTarget:
 		h.handleSetTarget(c, ev.Payload)
+	case protocol.TypeSetSavePoint:
+		h.handleSetSavePoint(c, ev.Payload)
 	default:
 		h.sendError(c, fmt.Sprintf("Unknown message type %q.", ev.Type))
 	}
@@ -351,6 +356,7 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	c.Joined = true
 
 	app := appearanceProto(profile)
+	spawnX, spawnY := game.SpawnPosition(profile.SavePointID)
 	wp := &protocol.WorldPlayer{
 		ID:         c.ID,
 		Name:       profile.Name,
@@ -360,8 +366,8 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 		SubJob:     profile.SubJob,
 		Level:      profile.MainJobLevel(),
 		Appearance: app,
-		X:          200 + float64(len(h.world)%5)*80,
-		Y:          200 + float64(len(h.world)/5%5)*80,
+		X:          spawnX,
+		Y:          spawnY,
 	}
 	h.world[c.ID] = wp
 
@@ -371,10 +377,11 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	})
 	tile, cols, rows, cells := game.OverworldMapPayload()
 	h.send(c, protocol.TypeWorldState, protocol.WorldStatePayload{
-		Players: h.worldPlayers(),
-		NPCs:    h.worldNPCs(),
-		Battles: h.battleInfos(),
-		Map:     protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
+		Players:    h.worldPlayers(),
+		NPCs:       h.worldNPCs(),
+		Battles:    h.battleInfos(),
+		SavePoints: worldSavePoints(),
+		Map:        protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
 	})
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerJoin, *wp))
 	h.sendSocialState(c)
@@ -395,7 +402,9 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 		ID: c.ID, X: wp.X, Y: wp.Y,
 	}))
-	h.engageFirstNPCAt(c, wp, wp.X, wp.Y)
+	if !h.engageFirstNPCAt(c, wp, wp.X, wp.Y) {
+		h.engagePartyMemberAt(c, wp, wp.X, wp.Y)
+	}
 }
 
 func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
@@ -754,6 +763,8 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		Hotbar:       hotbar,
 		Skills:       skills,
 		Friends:      append([]string(nil), p.Friends...),
+		SavePointID:  p.SavePointID,
+		SavePointName: savePointName(p.SavePointID),
 	}
 }
 

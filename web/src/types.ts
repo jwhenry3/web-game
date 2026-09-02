@@ -20,6 +20,7 @@ export type MessageType =
   | "leave_battle"
   | "action"
   | "set_target"
+  | "set_save_point"
   | "welcome"
   | "world_state"
   | "player_joined"
@@ -128,6 +129,8 @@ export interface ProfileInfo {
   hotbar: Record<string, HotbarBinding>;
   skills: SkillInfo[];
   friends?: string[];
+  save_point_id?: string;
+  save_point_name?: string;
 }
 
 export interface FriendInfo {
@@ -210,6 +213,13 @@ export interface WorldNPC {
   battle_id?: string;
 }
 
+export interface SavePoint {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
 export interface OverworldMap {
   tile: number;
   cols: number;
@@ -221,6 +231,7 @@ export interface WorldStatePayload {
   players: WorldPlayer[];
   npcs?: WorldNPC[];
   battles: BattleInfo[];
+  save_points?: SavePoint[];
   map?: OverworldMap;
 }
 

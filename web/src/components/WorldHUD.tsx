@@ -52,7 +52,9 @@ export function WorldHUD() {
         <p className="hint">
           {recovering
             ? `Invulnerable ${(immuneLeft / 1000).toFixed(1)}s`
-            : "Walk into a foe to fight. Open Social [O] for friends & party."}
+            : profile.save_point_name
+              ? `Save point: ${profile.save_point_name}. Click a crystal to change it.`
+              : "Click a save crystal to set your respawn point."}
         </p>
       </div>
     </div>

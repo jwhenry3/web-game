@@ -18,6 +18,7 @@ import type {
   BattleInvitePayload,
   SocialStatePayload,
   WelcomePayload,
+  SavePoint,
   WorldNPC,
   WorldPlayer,
   WorldStatePayload,
@@ -196,6 +197,9 @@ export const net = {
   },
   setTarget(targetId: string) {
     send("set_target", { target_id: targetId });
+  },
+  setSavePoint(savePointId: string) {
+    send("set_save_point", { save_point_id: savePointId });
   },
 
   clickEntity(target: { id: string; alive: boolean; is_player: boolean }) {
@@ -404,13 +408,15 @@ function handleMessage(env: Envelope) {
           selfWp && selfWeapon
             ? { ...s.players, [p.player_id]: { ...selfWp, weapon: selfWeapon } }
             : s.players;
+        // Mid-battle profile sync (e.g. consumable use) must not eject the player from combat.
+        const screen = s.screen === "battle" ? "battle" : "world";
         return {
           selfId: p.player_id,
           profile: p.profile,
           hasCharacter: true,
           characters,
           character: summary,
-          screen: "world",
+          screen,
           loginError: null,
           players,
         };
@@ -423,20 +429,27 @@ function handleMessage(env: Envelope) {
       for (const wp of p.players ?? []) players[wp.id] = wp;
       const npcs: Record<string, WorldNPC> = {};
       for (const n of p.npcs ?? []) npcs[n.id] = n;
+      const savePoints: Record<string, SavePoint> = {};
+      for (const sp of p.save_points ?? []) savePoints[sp.id] = sp;
       g.setState({
         players,
         npcs,
+        savePoints,
         battles: p.battles ?? [],
         overworld: p.map ?? g.getState().overworld,
       });
       break;
     }
-    case "player_joined":
     case "player_sync": {
+      const wp = env.payload as WorldPlayer;
+      g.setState((s) => ({ players: { ...s.players, [wp.id]: wp } }));
+      break;
+    }
+    case "player_joined": {
       const wp = env.payload as WorldPlayer;
       const already = !!g.getState().players[wp.id];
       g.setState((s) => ({ players: { ...s.players, [wp.id]: wp } }));
-      if (env.type === "player_joined" && wp.id !== g.getState().selfId && !already) {
+      if (wp.id !== g.getState().selfId && !already) {
         pushChat("social", `${wp.name} has joined the world.`);
       }
       break;
@@ -456,7 +469,6 @@ function handleMessage(env: Envelope) {
     }
     case "player_moved": {
       const p = env.payload as { id: string; x: number; y: number };
-      if (p.id === g.getState().selfId) break;
       g.setState((s) => {
         const wp = s.players[p.id];
         if (!wp) return s;

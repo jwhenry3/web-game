@@ -84,6 +84,44 @@ func TestPromptPartyDoesNotAutoJoin(t *testing.T) {
 	}
 }
 
+func TestMoveIntoPartyMemberJoinsBattle(t *testing.T) {
+	h, a, b := testSocialHub(t)
+	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
+	h.handlePartyInvite(a, raw)
+	h.handlePartyAccept(b)
+
+	room := NewBattleRoom("battle-test", 1, h)
+	h.battles[room.ID] = room
+	h.world[a.ID].InBattle = true
+	h.world[a.ID].BattleID = room.ID
+	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
+	h.world[b.ID].X, h.world[b.ID].Y = 400, 500
+
+	move, _ := json.Marshal(protocol.MovePayload{X: 500, Y: 500})
+	h.handleMove(b, move)
+
+	if !h.world[b.ID].InBattle || h.world[b.ID].BattleID != room.ID {
+		t.Fatalf("party mate should join by collision, got %+v", h.world[b.ID])
+	}
+}
+
+func TestMoveIntoNonPartyMemberDoesNotJoin(t *testing.T) {
+	h, a, b := testSocialHub(t)
+	room := NewBattleRoom("battle-test", 1, h)
+	h.battles[room.ID] = room
+	h.world[a.ID].InBattle = true
+	h.world[a.ID].BattleID = room.ID
+	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
+	h.world[b.ID].X, h.world[b.ID].Y = 400, 500
+
+	move, _ := json.Marshal(protocol.MovePayload{X: 500, Y: 500})
+	h.handleMove(b, move)
+
+	if h.world[b.ID].InBattle {
+		t.Fatal("non-party members must not auto-join by collision")
+	}
+}
+
 func TestPromptPartySkipsDistantMembers(t *testing.T) {
 	h, a, b := testSocialHub(t)
 	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})

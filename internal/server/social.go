@@ -366,6 +366,64 @@ func (h *Hub) handleDeclineBattleInvite(c *Client) {
 	delete(h.battleInvites, c.ID)
 }
 
+func (h *Hub) sameParty(aID, bID string) bool {
+	pa, oka := h.clientParty[aID]
+	pb, okb := h.clientParty[bID]
+	return oka && okb && pa != "" && pa == pb
+}
+
+func (h *Hub) battleParticipantCount(battleID string) int {
+	n := 0
+	for _, wp := range h.world {
+		if wp.InBattle && wp.BattleID == battleID {
+			n++
+		}
+	}
+	return n
+}
+
+// engagePartyMemberAt joins an in-progress battle when a party mate walks
+// into a combat-locked member on the overworld.
+func (h *Hub) engagePartyMemberAt(c *Client, wp *protocol.WorldPlayer, x, y float64) bool {
+	if wp.InBattle {
+		return false
+	}
+	partyID, ok := h.clientParty[c.ID]
+	if !ok || partyID == "" {
+		return false
+	}
+	party := h.parties[partyID]
+	if party == nil {
+		return false
+	}
+	for _, memberID := range party.MemberIDs {
+		if memberID == c.ID {
+			continue
+		}
+		ally := h.world[memberID]
+		if ally == nil || !ally.InBattle || ally.BattleID == "" {
+			continue
+		}
+		if !withinEngageRange(x, y, ally.X, ally.Y) {
+			continue
+		}
+		room, ok := h.battles[ally.BattleID]
+		if !ok {
+			continue
+		}
+		if h.battleParticipantCount(ally.BattleID) >= maxPartySize {
+			continue
+		}
+		profile, ok := h.store.Get(c.Name)
+		if !ok {
+			return false
+		}
+		h.enterBattle(c, wp, room, profile)
+		return true
+	}
+	return false
+}
+
 // promptPartyForBattle asks nearby party mates to opt into a fight. Anyone
 // in range who skips still earns passive EXP if the party wins.
 func (h *Hub) promptPartyForBattle(triggerID string, room *BattleRoom, x, y float64) {

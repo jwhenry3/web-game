@@ -3,16 +3,18 @@ import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { appearanceKey, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS, H99_WORLD_RING_Y } from "../characters/types";
-import type { OverworldMap, WorldNPC, CharacterAppearanceWire } from "../types";
+import type { OverworldMap, WorldNPC, CharacterAppearanceWire, SavePoint } from "../types";
 import { FILL, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W, slideMovePlayer, tileAt } from "../world/overworld";
 import { CharacterSprite } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
 import { enemyKindFromName } from "../characters/enemies";
+import { pushChat } from "../state/store";
 
 const WORLD_W = 1600;
 const WORLD_H = 1200;
 const SPEED = 240;
 const SEND_INTERVAL = 100;
+const SAVE_POINT_RANGE = 56;
 
 interface Avatar {
   wrapper: Phaser.GameObjects.Container;
@@ -30,14 +32,22 @@ interface FoeAvatar {
   lastY: number;
 }
 
+interface SavePointMarker {
+  wrapper: Phaser.GameObjects.Container;
+  label: Phaser.GameObjects.Text;
+  active: boolean;
+}
+
 export class WorldScene extends Phaser.Scene {
   private avatars = new Map<string, Avatar>();
   private foes = new Map<string, FoeAvatar>();
+  private savePoints = new Map<string, SavePointMarker>();
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<"W" | "A" | "S" | "D", Phaser.Input.Keyboard.Key>;
   private lastSent = 0;
   private lastSentX = -1;
   private lastSentY = -1;
+  private wasMoving = false;
   private selfSpawned = false;
   private terrain?: Phaser.GameObjects.Graphics;
   private terrainKey = "";
@@ -132,6 +142,61 @@ export class WorldScene extends Phaser.Scene {
     return av;
   }
 
+  private ensureSavePoint(sp: SavePoint, active: boolean): SavePointMarker {
+    let marker = this.savePoints.get(sp.id);
+    if (marker) {
+      marker.wrapper.setPosition(sp.x, sp.y);
+      if (marker.active !== active) {
+        marker.active = active;
+        marker.label.setColor(active ? "#fff6c8" : "#a8e8ff");
+      }
+      return marker;
+    }
+
+    const wrapper = this.add.container(sp.x, sp.y).setDepth(8);
+    const glow = this.add.circle(0, -14, 30, active ? 0xffe9a8 : 0x88ddff, active ? 0.22 : 0.14);
+    const crystal = this.add.graphics();
+    crystal.fillStyle(active ? 0xffe9a8 : 0xa8e8ff, 1);
+    crystal.fillTriangle(-10, 6, 10, 6, 0, -20);
+    crystal.fillStyle(0xffffff, 0.7);
+    crystal.fillCircle(0, -10, 5);
+    const label = this.add
+      .text(0, 18, sp.name, { fontSize: "10px", color: active ? "#fff6c8" : "#a8e8ff", fontFamily: "monospace" })
+      .setOrigin(0.5, 0);
+    const hit = this.add.circle(0, -8, 28, 0xffffff, 0.001).setInteractive({ useHandCursor: true });
+    hit.on("pointerdown", () => this.trySetSavePoint(sp));
+    wrapper.add([glow, crystal, label, hit]);
+    marker = { wrapper, label, active };
+    this.savePoints.set(sp.id, marker);
+    return marker;
+  }
+
+  private trySetSavePoint(sp: SavePoint) {
+    const state = useGame.getState();
+    const self = state.selfId ? state.players[state.selfId] : undefined;
+    if (!self || self.in_battle) return;
+    if (Math.hypot(self.x - sp.x, self.y - sp.y) > SAVE_POINT_RANGE) {
+      pushChat("system", "Move closer to the save point.");
+      return;
+    }
+    if (window.confirm(`Set ${sp.name} as your save point?`)) {
+      net.setSavePoint(sp.id);
+      pushChat("system", `Save point set to ${sp.name}.`);
+    }
+  }
+
+  private syncSavePoints(savePoints: Record<string, SavePoint>, activeId?: string) {
+    for (const [id, marker] of this.savePoints) {
+      if (!savePoints[id]) {
+        marker.wrapper.destroy();
+        this.savePoints.delete(id);
+      }
+    }
+    for (const sp of Object.values(savePoints)) {
+      this.ensureSavePoint(sp, sp.id === activeId);
+    }
+  }
+
   private ensureFoe(npc: WorldNPC): FoeAvatar {
     let av = this.foes.get(npc.id);
     if (av) return av;
@@ -185,6 +250,8 @@ export class WorldScene extends Phaser.Scene {
     }
 
     const selfLocked = state.players[selfId]?.in_battle ?? false;
+    const activeSave = useGame.getState().profile?.save_point_id;
+    this.syncSavePoints(state.savePoints, activeSave);
     for (const wp of Object.values(state.players)) {
       const av = this.ensureAvatar(wp.id, wp.race, wp.weapon, wp.appearance);
       const locked = wp.in_battle;
@@ -205,7 +272,18 @@ export class WorldScene extends Phaser.Scene {
 
       const isSelf = wp.id === selfId;
       if (!isSelf) {
-        av.sprite.setMoving(false);
+        if (Math.hypot(av.wrapper.x - wp.x, av.wrapper.y - wp.y) > 80) {
+          av.wrapper.setPosition(wp.x, wp.y);
+          av.sprite.setMoving(false);
+        } else {
+          const prevX = av.wrapper.x;
+          const prevY = av.wrapper.y;
+          av.wrapper.x = Phaser.Math.Linear(av.wrapper.x, wp.x, 0.25);
+          av.wrapper.y = Phaser.Math.Linear(av.wrapper.y, wp.y, 0.25);
+          const dx = av.wrapper.x - prevX;
+          const dy = av.wrapper.y - prevY;
+          av.sprite.setMoving(Math.hypot(dx, dy) > 0.3, dx, dy);
+        }
       }
 
       av.sprite.update(delta);
@@ -215,10 +293,9 @@ export class WorldScene extends Phaser.Scene {
           av.wrapper.setPosition(wp.x, wp.y);
           this.cameras.main.startFollow(av.wrapper, true, 0.15, 0.15);
           this.selfSpawned = true;
+        } else if (!locked && Math.hypot(av.wrapper.x - wp.x, av.wrapper.y - wp.y) > 80) {
+          av.wrapper.setPosition(wp.x, wp.y);
         }
-      } else {
-        av.wrapper.x = Phaser.Math.Linear(av.wrapper.x, wp.x, 0.25);
-        av.wrapper.y = Phaser.Math.Linear(av.wrapper.y, wp.y, 0.25);
       }
     }
 
@@ -274,8 +351,14 @@ export class WorldScene extends Phaser.Scene {
 
     if (dx === 0 && dy === 0) {
       av.sprite.setMoving(false);
+      if (this.wasMoving) {
+        this.sendPosition(time, av.wrapper.x, av.wrapper.y, true);
+        this.wasMoving = false;
+      }
       return;
     }
+
+    this.wasMoving = true;
 
     av.sprite.setMoving(true, dx, dy);
 
@@ -294,15 +377,17 @@ export class WorldScene extends Phaser.Scene {
     av.wrapper.x = slid.x;
     av.wrapper.y = slid.y;
 
-    if (time - this.lastSent > SEND_INTERVAL) {
-      const x = Math.round(av.wrapper.x);
-      const y = Math.round(av.wrapper.y);
-      if (x !== this.lastSentX || y !== this.lastSentY) {
-        net.move(x, y);
-        this.lastSent = time;
-        this.lastSentX = x;
-        this.lastSentY = y;
-      }
-    }
+    this.sendPosition(time, av.wrapper.x, av.wrapper.y, false);
+  }
+
+  private sendPosition(time: number, x: number, y: number, force: boolean) {
+    const rx = Math.round(x);
+    const ry = Math.round(y);
+    if (!force && time - this.lastSent <= SEND_INTERVAL) return;
+    if (rx === this.lastSentX && ry === this.lastSentY) return;
+    net.move(rx, ry);
+    this.lastSent = time;
+    this.lastSentX = rx;
+    this.lastSentY = ry;
   }
 }

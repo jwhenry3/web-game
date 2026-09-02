@@ -7,10 +7,11 @@ import (
 )
 
 type overworldFile struct {
-	Regions []Region       `json:"regions"`
-	NPCs    []patrolFile   `json:"npcs"`
-	Wander  wanderSettings `json:"wander"`
-	Map     mapPaintFile   `json:"map"`
+	Regions    []Region         `json:"regions"`
+	NPCs       []patrolFile     `json:"npcs"`
+	SavePoints []savePointFile  `json:"savePoints"`
+	Wander     wanderSettings   `json:"wander"`
+	Map        mapPaintFile     `json:"map"`
 }
 
 type patrolFile struct {
@@ -20,6 +21,12 @@ type patrolFile struct {
 	Level  int    `json:"level"`
 	Region string `json:"region"`
 	Home   [2]int `json:"home"`
+}
+
+type savePointFile struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Tile [2]int `json:"tile"`
 }
 
 type mapPaintFile struct {
@@ -94,6 +101,18 @@ func applyOverworld(raw overworldFile) error {
 		return err
 	}
 	OverworldCells = cells
+
+	SavePoints = make([]SavePoint, 0, len(raw.SavePoints))
+	for _, sp := range raw.SavePoints {
+		if sp.ID == "" || sp.Name == "" {
+			return fmt.Errorf("save point missing id or name")
+		}
+		tile := Tile{C: sp.Tile[0], R: sp.Tile[1]}
+		if !WalkableTile(tile.C, tile.R) {
+			return fmt.Errorf("save point %s tile (%d,%d) not walkable", sp.ID, tile.C, tile.R)
+		}
+		SavePoints = append(SavePoints, SavePoint{ID: sp.ID, Name: sp.Name, Tile: tile})
+	}
 	return nil
 }
 

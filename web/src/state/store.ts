@@ -16,6 +16,7 @@ import type {
   OverworldMap,
   WorldNPC,
   WorldPlayer,
+  SavePoint,
 } from "../types";
 
 export type Screen = "auth" | "select" | "create" | "world" | "battle";
@@ -63,6 +64,7 @@ interface GameState {
   profile: ProfileInfo | null;
   players: Record<string, WorldPlayer>;
   npcs: Record<string, WorldNPC>;
+  savePoints: Record<string, SavePoint>;
   overworld: OverworldMap | null;
   battles: BattleInfo[];
   chat: ChatLine[];
@@ -123,6 +125,7 @@ const initial = {
   profile: null,
   players: {},
   npcs: {},
+  savePoints: {},
   overworld: null,
   battles: [],
   chat: [] as ChatLine[],
