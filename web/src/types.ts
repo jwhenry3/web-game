@@ -46,6 +46,7 @@ export type MessageType =
   | "battle_event"
   | "battle_tick"
   | "battle_end"
+  | "battle_return"
   | "rt_battle_state"
   | "rt_battle_tick"
   | "rt_battle_event"
@@ -134,6 +135,7 @@ export interface ProfileInfo {
   main_job: string;
   sub_job: string;
   subjob_unlock_level: number;
+  unlocked_jobs: string[];
   appearance?: CharacterAppearanceWire;
   jobs: JobProgressInfo[];
   stats: StatBlock;

@@ -54,12 +54,21 @@ Buffs/debuffs (`internal/game/status.go`) tick with combat timing: defense/attac
 
 ## Jobs & progression
 
-- **22 jobs** in four weapon categories; six starters (WAR, MNK, WHM, BLM, RDM, THF).
-- Job level **5** unlocks a **subjob**; subjob skills use the sub-weapon slot at 50% effectiveness.
+- **22 jobs** in four weapon categories; six starters (WAR, MNK, WHM, BLM, RDM, THF). New characters pick **main only**; `profile.unlocked_jobs` starts as those six (advanced jobs unlock later).
+- Equipping a **subjob** requires main-job level ≥ `exp.subjob_unlock_level` (default **5**) and that both jobs appear in `unlocked_jobs`. `set_jobs` is validated server-side. Subjob skills use the sub-weapon slot at 50% effectiveness.
 - Each job has a **four-skill tree**; skills unlock at job levels 1 / 5 / 9 / 13 and train through use (up to skill level 5).
 - Equipment, hotbar, and skill progress are stored **per main/sub combo** (`store` loadouts). Eight equipment slots: main, sub, six armor.
 - Only **equipped** items contribute battle stats.
 - Procedural loot on victory; Mug improves rarity.
+
+### EXP rates (cluster-wide)
+
+Configured once in `config/cluster.json` under `exp` and applied by every map server via `game.DistributeJobXP`:
+
+1. Scale base award by `exp.rate`.
+2. If a subjob is set, split by `exp.main_percent` / `exp.sub_percent`; otherwise all EXP goes to main.
+
+Used for battle victory shares and party passive EXP. Defaults: rate `1.0`, main `75%`, sub `25%`.
 
 ## Social
 

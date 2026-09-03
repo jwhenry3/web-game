@@ -18,17 +18,34 @@ func TestSubjobEffectiveLevel(t *testing.T) {
 }
 
 func TestJobXPSplit(t *testing.T) {
-	main, sub := JobXPSplit(90, 10, 5)
-	if main != 60 || sub != 30 {
-		t.Fatalf("expected 60/30 split for 10:5 levels, got %d/%d", main, sub)
+	ConfigureExp(ExpRates{Rate: 1, MainPercent: 75, SubPercent: 25})
+	t.Cleanup(func() { ConfigureExp(DefaultExpRates()) })
+
+	main, sub := JobXPSplit(100, true)
+	if main != 75 || sub != 25 {
+		t.Fatalf("expected 75/25 split, got %d/%d", main, sub)
 	}
-	main, sub = JobXPSplit(100, 5, 0)
+	main, sub = JobXPSplit(100, false)
 	if main != 100 || sub != 0 {
 		t.Fatalf("solo main should take all XP, got %d/%d", main, sub)
 	}
-	main, sub = JobXPSplit(10, 5, 1)
+	main, sub = JobXPSplit(10, true)
 	if main+sub != 10 {
 		t.Fatalf("split should preserve total XP, got %d+%d", main, sub)
+	}
+}
+
+func TestDistributeJobXPAppliesRate(t *testing.T) {
+	ConfigureExp(ExpRates{Rate: 2, MainPercent: 50, SubPercent: 50})
+	t.Cleanup(func() { ConfigureExp(DefaultExpRates()) })
+
+	main, sub := DistributeJobXP(100, true)
+	if main != 100 || sub != 100 {
+		t.Fatalf("expected 2x then 50/50 → 100/100, got %d/%d", main, sub)
+	}
+	main, sub = DistributeJobXP(50, false)
+	if main != 100 || sub != 0 {
+		t.Fatalf("expected scaled solo main 100, got %d/%d", main, sub)
 	}
 }
 

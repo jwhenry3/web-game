@@ -26,7 +26,7 @@ Browser ──WS/HTTP──► Proxy (:8080) ──in-process──► Map node(
 - **Protocol** (`internal/protocol`) — JSON envelopes; mirrored in `web/src/types.ts`.
 - **Persistence** (`internal/store`) — `data/accounts.json`, `data/profiles.json`; live map list in `data/cluster.maps.json`.
 
-Bootstrap cluster: `config/cluster.json`. Details and diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Bootstrap cluster: `config/cluster.json`. Shared **EXP rates** (`exp.rate`, `exp.main_percent`, `exp.sub_percent`) apply to every map. Details and diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 The frontend (`web/`) uses **Phaser** for world/battle scenes and **React** + Zustand for menus/HUD. Title screen offers **Play Game** or **Game Designer**.
 

@@ -6,13 +6,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"ffv-web-game/internal/game"
 	"ffv-web-game/internal/servercfg"
 )
 
 // Config is the cluster document: one global proxy and N map servers.
 type Config struct {
-	Proxy ProxyConfig `json:"proxy"`
-	Maps  []MapSpec   `json:"maps"`
+	Proxy ProxyConfig  `json:"proxy"`
+	Exp   game.ExpRates `json:"exp"`
+	Maps  []MapSpec    `json:"maps"`
 }
 
 type ProxyConfig struct {
@@ -64,6 +66,7 @@ func Default() Config {
 			Data:     "data/profiles.json",
 			Static:   "web/dist",
 		},
+		Exp: game.DefaultExpRates(),
 		Maps: []MapSpec{
 			{ID: "greenwood", Name: "Greenwood", Addr: ":8091", Config: "config/server.json", Default: true},
 		},
@@ -152,6 +155,11 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Proxy.Static == "" {
 		c.Proxy.Static = d.Proxy.Static
+	}
+	if c.Exp == (game.ExpRates{}) {
+		c.Exp = game.DefaultExpRates()
+	} else {
+		c.Exp = game.NormalizeExpRates(c.Exp)
 	}
 }
 

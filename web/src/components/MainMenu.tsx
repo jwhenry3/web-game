@@ -24,6 +24,7 @@ export function MainMenuTrigger() {
       <button
         type="button"
         className={`xiv-menu-btn ${open ? "on" : ""}`}
+        tabIndex={-1}
         onClick={toggle}
         aria-label="Main Menu"
       >

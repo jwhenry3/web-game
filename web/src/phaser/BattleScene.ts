@@ -220,7 +220,7 @@ export class BattleScene extends Phaser.Scene {
     const state = useGame.getState();
     const sk = state.selectedAction;
     const self = state.selfId ? state.battle?.entities.find((x) => x.id === state.selfId) : undefined;
-    const targeted = self?.target_id === e.id;
+    const targeted = (state.battleTargetId ?? self?.target_id) === e.id;
     const targetable = !!sk && e.alive && (sk.heals ? e.is_player : !e.is_player);
     const gcdReady =
       e.is_player && e.alive && !casting && (e.skill_atb ?? e.atb ?? 0) >= 100;

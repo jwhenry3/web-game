@@ -1,5 +1,6 @@
 import { pushChat, useGame } from "../../state/store";
 import { battleEvents } from "../../net/socket";
+import { initialBattleFocus, withBattleFocus } from "../../battle/activeBattle";
 import type { PluginContext } from "../../core/plugins/contracts";
 import type {
   BattleInvitePayload,
@@ -26,11 +27,19 @@ const plugin = {
 
     ctx.registerHandler("rt_battle_state", (env) => {
       const p = env.payload as RTBattleStatePayload;
-      useGame.setState({
-        screen: "battle",
-        chatTab: "battle",
-        rtBattle: { battleId: p.battle_id, entities: p.entities, end: null },
-        battle: null,
+      useGame.setState((s) => {
+        const focus = initialBattleFocus(p.entities, s.selfId);
+        return {
+          screen: "battle" as const,
+          chatTab: "battle" as const,
+          battleTargetId: focus,
+          rtBattle: {
+            battleId: p.battle_id,
+            entities: withBattleFocus(p.entities, s.selfId, focus),
+            end: null,
+          },
+          battle: null,
+        };
       });
       pushChat("battle", "Realtime battle start!");
     });
@@ -38,7 +47,14 @@ const plugin = {
     ctx.registerHandler("rt_battle_tick", (env) => {
       const p = env.payload as RTBattleTickPayload;
       useGame.setState((s) =>
-        s.rtBattle ? { rtBattle: { ...s.rtBattle, entities: p.entities } } : s,
+        s.rtBattle
+          ? {
+              rtBattle: {
+                ...s.rtBattle,
+                entities: withBattleFocus(p.entities, s.selfId, s.battleTargetId),
+              },
+            }
+          : s,
       );
     });
 
@@ -47,7 +63,14 @@ const plugin = {
       if (p.message) pushChat("battle", p.message);
       battleEvents.emit("rt_event", p);
       useGame.setState((s) =>
-        s.rtBattle ? { rtBattle: { ...s.rtBattle, entities: p.entities } } : s,
+        s.rtBattle
+          ? {
+              rtBattle: {
+                ...s.rtBattle,
+                entities: withBattleFocus(p.entities, s.selfId, s.battleTargetId),
+              },
+            }
+          : s,
       );
     });
 
@@ -55,6 +78,7 @@ const plugin = {
       const p = env.payload as RTBattleEndPayload;
       useGame.setState((s) => ({
         selectedAction: null,
+        battleTargetId: null,
         rtBattle: s.rtBattle ? { ...s.rtBattle, end: p } : s.rtBattle,
       }));
       pushChat("battle", p.victory ? "Victory!" : "Defeat...");

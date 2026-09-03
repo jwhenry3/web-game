@@ -10,6 +10,7 @@ import (
 
 	"ffv-web-game/internal/auth"
 	"ffv-web-game/internal/cluster"
+	"ffv-web-game/internal/game"
 	"ffv-web-game/internal/mapnode"
 	"ffv-web-game/internal/proxy"
 	"ffv-web-game/internal/store"
@@ -30,6 +31,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("cluster: %v", err)
 	}
+	game.ConfigureExp(cfg.Exp)
+	log.Printf("exp rates: ×%.2f  main %d%% / sub %d%%  subjob unlock Lv%d",
+		cfg.Exp.Rate, cfg.Exp.MainPercent, cfg.Exp.SubPercent, cfg.Exp.SubjobUnlockLevel)
 
 	secret := *jwtSecret
 	if secret == "" {

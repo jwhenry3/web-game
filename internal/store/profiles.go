@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -28,6 +29,7 @@ type Profile struct {
 	Race              string                      `json:"race,omitempty"`
 	MainJob           string                      `json:"main_job"`
 	SubJob            string                      `json:"sub_job"`
+	UnlockedJobs      []string                    `json:"unlocked_jobs,omitempty"`
 	Appearance        Appearance                  `json:"appearance,omitempty"`
 	Jobs              map[string]game.JobProgress `json:"jobs"`
 	Loadouts          map[string]JobLoadout       `json:"loadouts"`
@@ -93,6 +95,7 @@ func Load(path string) *Store {
 		p.Inventory = game.CompactStacks(p.Inventory)
 		p.VisitedSavePoints = addVisited(p.VisitedSavePoints, p.SavePointID)
 		p.migrateJobs()
+		p.ensureUnlockedJobs()
 	}
 	return s
 }
@@ -165,42 +168,31 @@ func (s *Store) CreateCharacter(accountID, name string, race game.RaceID, mainJo
 		return Profile{}, "Unknown race."
 	}
 	mainJob = game.JobID(normalizeJobID(string(mainJob)))
-	if !game.ValidJob(mainJob) {
-		return Profile{}, "Unknown main job."
+	if !game.ValidStartingJob(mainJob) {
+		return Profile{}, "Choose a starting job."
 	}
-	subJob = game.JobID(normalizeJobID(string(subJob)))
-	if subJob != "" {
-		if !game.ValidJob(subJob) {
-			return Profile{}, "Unknown sub job."
-		}
-		if subJob == mainJob {
-			return Profile{}, "Sub job must differ from main job."
-		}
-	}
+	// Sub jobs unlock later via Job Master; creation never equips one.
+	subJob = ""
 
 	starter := game.StarterWeaponForJob(mainJob)
 	inv := append([]game.Item{starter}, game.StarterConsumables()...)
-	if subJob != "" {
-		subStarter := game.StarterWeaponForJob(subJob)
-		subStarter.ID = "starter-" + strings.ToLower(string(subJob)) + "-" + string(subStarter.Type)
-		inv = append(inv, subStarter)
-	}
 	jobs := map[string]game.JobProgress{}
 	for _, def := range game.AllJobs() {
 		jobs[string(def.ID)] = game.JobProgress{Level: 1, XP: 0}
 	}
 	appearance = NormalizeAppearance(string(race), appearance)
 	p := &Profile{
-		AccountID:  accountID,
-		Name:       name,
-		Race:       string(race),
-		MainJob:    string(mainJob),
-		SubJob:     string(subJob),
-		Appearance: appearance,
-		Jobs:       jobs,
-		Loadouts:   map[string]JobLoadout{},
-		Inventory:  inv,
-		Friends:    []string{},
+		AccountID:    accountID,
+		Name:         name,
+		Race:         string(race),
+		MainJob:      string(mainJob),
+		SubJob:       "",
+		UnlockedJobs: startingUnlockedJobs(),
+		Appearance:   appearance,
+		Jobs:         jobs,
+		Loadouts:     map[string]JobLoadout{},
+		Inventory:    inv,
+		Friends:      []string{},
 	}
 	p.ensureLoadout()
 	p.SyncSkillUnlocks()
@@ -226,12 +218,13 @@ func (s *Store) GetOrCreate(name string, startJob game.JobID) Profile {
 			jobs[string(def.ID)] = game.JobProgress{Level: 1, XP: 0}
 		}
 		p = &Profile{
-			Name:      name,
-			MainJob:   string(startJob),
-			Jobs:      jobs,
-			Loadouts:  map[string]JobLoadout{},
-			Inventory: inv,
-			Friends:   []string{},
+			Name:         name,
+			MainJob:      string(startJob),
+			UnlockedJobs: startingUnlockedJobs(),
+			Jobs:         jobs,
+			Loadouts:     map[string]JobLoadout{},
+			Inventory:    inv,
+			Friends:      []string{},
 		}
 		p.ensureLoadout()
 		p.SyncSkillUnlocks()
@@ -250,9 +243,13 @@ func (s *Store) SetJobs(name string, mainJob, subJob game.JobID) (Profile, strin
 	if !ok {
 		return Profile{}, "Unknown hero."
 	}
+	p.ensureUnlockedJobs()
 	mainJob = game.JobID(normalizeJobID(string(mainJob)))
 	if !game.ValidJob(mainJob) {
 		return *p, "Unknown main job."
+	}
+	if !p.HasUnlockedJob(mainJob) {
+		return *p, "You have not unlocked that job yet."
 	}
 	subJob = game.JobID(normalizeJobID(string(subJob)))
 	if subJob != "" {
@@ -262,8 +259,12 @@ func (s *Store) SetJobs(name string, mainJob, subJob game.JobID) (Profile, strin
 		if subJob == mainJob {
 			return *p, "Sub job must differ from main job."
 		}
-		if p.JobLevel(mainJob) < game.SubjobUnlockLevel {
-			return *p, "Sub job unlocks at main job level 5."
+		if !p.HasUnlockedJob(subJob) {
+			return *p, "You have not unlocked that job yet."
+		}
+		need := game.CurrentSubjobUnlockLevel()
+		if p.JobLevel(mainJob) < need {
+			return *p, fmt.Sprintf("Sub job unlocks at main job level %d.", need)
 		}
 	}
 	p.MainJob = string(mainJob)
@@ -694,6 +695,81 @@ func (p Profile) HasVisitedSavePoint(id string) bool {
 		}
 	}
 	return false
+}
+
+func startingUnlockedJobs() []string {
+	out := make([]string, len(game.StartingJobs))
+	for i, j := range game.StartingJobs {
+		out[i] = string(j)
+	}
+	return out
+}
+
+func (p *Profile) ensureUnlockedJobs() {
+	if p.UnlockedJobs == nil {
+		p.UnlockedJobs = []string{}
+	}
+	if len(p.UnlockedJobs) == 0 {
+		p.UnlockedJobs = startingUnlockedJobs()
+	}
+	p.addUnlockedJob(game.JobID(p.MainJob))
+	if p.SubJob != "" {
+		p.addUnlockedJob(game.JobID(p.SubJob))
+	}
+}
+
+func (p *Profile) addUnlockedJob(job game.JobID) {
+	if job == "" || !game.ValidJob(job) {
+		return
+	}
+	id := string(job)
+	for _, j := range p.UnlockedJobs {
+		if j == id {
+			return
+		}
+	}
+	p.UnlockedJobs = append(p.UnlockedJobs, id)
+}
+
+// HasUnlockedJob reports whether the hero may equip the job as main or sub.
+func (p Profile) HasUnlockedJob(job game.JobID) bool {
+	if job == "" {
+		return false
+	}
+	id := string(job)
+	for _, j := range p.UnlockedJobs {
+		if j == id {
+			return true
+		}
+	}
+	if len(p.UnlockedJobs) == 0 {
+		return game.ValidStartingJob(job)
+	}
+	return false
+}
+
+// UnlockJob permanently unlocks a job for the hero (quests / rewards).
+func (s *Store) UnlockJob(name string, job game.JobID) (Profile, string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.profiles[name]
+	if !ok {
+		return Profile{}, "Unknown hero."
+	}
+	job = game.JobID(normalizeJobID(string(job)))
+	if !game.ValidJob(job) {
+		return *p, "Unknown job."
+	}
+	p.ensureUnlockedJobs()
+	p.addUnlockedJob(job)
+	if p.Jobs == nil {
+		p.Jobs = map[string]game.JobProgress{}
+	}
+	if _, ok := p.Jobs[string(job)]; !ok {
+		p.Jobs[string(job)] = game.JobProgress{Level: 1, XP: 0}
+	}
+	s.save()
+	return *p, ""
 }
 
 func (s *Store) SetMapID(name, mapID string) (Profile, bool) {

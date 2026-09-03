@@ -40,6 +40,21 @@ const (
 	castMoveCancel    = 4.0 // px: moving this far interrupts a cast
 )
 
+// ResultsGracePeriod is how long results stay up before the server destroys the
+// room and returns remaining players to the overworld. Tests may set this to 0.
+var ResultsGracePeriod = 10 * time.Second
+
+func scheduleBattleDismiss(host contracts.CombatHost, roomID string, participantIDs []string, victory bool) {
+	grace := ResultsGracePeriod
+	if grace <= 0 {
+		host.FinishBattle(roomID, participantIDs, victory)
+		return
+	}
+	time.AfterFunc(grace, func() {
+		host.FinishBattle(roomID, participantIDs, victory)
+	})
+}
+
 type Room struct {
 	id    string
 	level int
@@ -397,10 +412,11 @@ func (r *Room) finish(victory bool) {
 	if victory {
 		r.host.NotifyPassiveRewards(rewards)
 	}
-	r.host.SendToClients(r.playerIDs(false), protocol.Encode(protocol.TypeRTBattleEnd, protocol.RTBattleEndPayload{
+	participants := r.playerIDs(false)
+	r.host.SendToClients(participants, protocol.Encode(protocol.TypeRTBattleEnd, protocol.RTBattleEndPayload{
 		Victory: victory, Rewards: rewards,
 	}))
-	r.host.FinishBattle(r.id, r.playerIDs(false), victory)
+	scheduleBattleDismiss(r.host, r.id, participants, victory)
 }
 
 func (r *Room) broadcastState() {

@@ -96,6 +96,8 @@ interface GameState {
   battleInvite: BattleInvitePayload | null;
   battle: BattleView | null;
   rtBattle: RTBattleView | null;
+  /** Client focus target; survives tick merges until cleared or battle ends. */
+  battleTargetId: string | null;
   combatMode: string | null;
   selectedAction: SelectedAction | null;
   openWindow: WindowId | null;
@@ -182,6 +184,7 @@ const initial = {
   battleInvite: null,
   battle: null,
   rtBattle: null,
+  battleTargetId: null as string | null,
   combatMode: null,
   selectedAction: null,
   openWindow: null,

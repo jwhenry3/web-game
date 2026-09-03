@@ -62,11 +62,11 @@ func (h *Hub) buildVictoryRewards(
 		if bonus {
 			xp = share * (100 + partyInBattleBonusPercent) / 100
 		}
-		mainXP := xp
-		subXP := 0
+		hasSub := false
 		if profile, ok := h.store.Get(f.Name); ok && profile.SubJob != "" {
-			mainXP, subXP = game.JobXPSplit(xp, profile.MainJobLevel(), profile.SubJobEffectiveLevel())
+			hasSub = true
 		}
+		mainXP, subXP := game.DistributeJobXP(xp, hasSub)
 		loot := game.GenerateLoot(rng, level, lootBonus)
 		updated, mainLevels, subLevels := h.store.AwardJobVictory(f.Name, mainXP, subXP, loot)
 		reward := protocol.PlayerReward{
@@ -101,11 +101,11 @@ func (h *Hub) buildVictoryRewards(
 			if fought[clientID] {
 				continue
 			}
-			passiveMain := passiveXP
-			passiveSub := 0
+			hasSub := false
 			if profile, ok := h.store.Get(name); ok && profile.SubJob != "" {
-				passiveMain, passiveSub = game.JobXPSplit(passiveXP, profile.MainJobLevel(), profile.SubJobEffectiveLevel())
+				hasSub = true
 			}
+			passiveMain, passiveSub := game.DistributeJobXP(passiveXP, hasSub)
 			updated, mainLevels, subLevels := h.store.AwardJobVictory(name, passiveMain, passiveSub, nil)
 			reward := protocol.PlayerReward{
 				PlayerID:        clientID,

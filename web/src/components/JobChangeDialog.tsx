@@ -29,6 +29,7 @@ export function JobChangeDialog() {
 
   const mode = dialog.mode;
   const canSub = profile.level >= profile.subjob_unlock_level;
+  const unlockedJobs = profile.unlocked_jobs ?? [];
 
   const applyMainJob = (next: string) => {
     setMainJob(next);
@@ -42,7 +43,20 @@ export function JobChangeDialog() {
         setError("Select a main job.");
         return;
       }
+      if (!unlockedJobs.includes(mainJob)) {
+        setError("You have not unlocked that job yet.");
+        return;
+      }
       const nextSub = subJob === mainJob ? "" : subJob;
+      if (nextSub && !unlockedJobs.includes(nextSub)) {
+        setError("You have not unlocked that sub job yet.");
+        return;
+      }
+      const newMainLevel = profile.jobs?.find((j) => j.id === mainJob)?.level ?? 1;
+      if (nextSub && newMainLevel < profile.subjob_unlock_level) {
+        setError(`Sub job unlocks at main job level ${profile.subjob_unlock_level}. Clear sub first or level this job.`);
+        return;
+      }
       if (mainJob === profile.main_job && nextSub === (profile.sub_job || "")) {
         close();
         return;
@@ -58,6 +72,10 @@ export function JobChangeDialog() {
     }
     if (subJob && !canSub) {
       setError(`Sub job unlocks at main job level ${profile.subjob_unlock_level}.`);
+      return;
+    }
+    if (subJob && !unlockedJobs.includes(subJob)) {
+      setError("You have not unlocked that job yet.");
       return;
     }
     if ((subJob || "") === (profile.sub_job || "")) {
@@ -88,6 +106,7 @@ export function JobChangeDialog() {
             step={mode}
             mainJob={mode === "main" ? mainJob : profile.main_job}
             subJob={subJob}
+            unlockedJobs={mode === "sub" && !canSub ? [] : unlockedJobs}
             onMainJob={applyMainJob}
             onSubJob={setSubJob}
           />

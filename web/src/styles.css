@@ -389,6 +389,27 @@ h3 {
   background: rgba(50, 40, 16, 0.9);
 }
 
+.job-card.locked,
+.job-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: rgba(120, 110, 90, 0.35);
+  background: rgba(12, 12, 14, 0.45);
+}
+
+.job-card.locked:hover,
+.job-card:disabled:hover {
+  border-color: rgba(120, 110, 90, 0.35);
+  background: rgba(12, 12, 14, 0.45);
+}
+
+.job-lock {
+  margin-left: auto;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .job-card--inline {
   flex-direction: row;
   align-items: center;
@@ -442,7 +463,8 @@ h3 {
 
 .hud button,
 .hud input,
-.hud .xiv-panel {
+.hud .xiv-panel,
+.hud .ff-parameter {
   pointer-events: auto;
 }
 
@@ -458,16 +480,39 @@ h3 {
 
 .xiv-param-world {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 220px;
-  pointer-events: auto;
+  left: 50%;
+  bottom: 220px;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: min(520px, 92vw);
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+.xiv-param-world .ff-gauge {
+  margin-bottom: 0;
+  min-width: 140px;
+}
+
+.hud-immune-note {
+  font-size: 11px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .xiv-world-cast {
   position: absolute;
   left: 50%;
-  bottom: 86px;
+  bottom: 258px;
   transform: translateX(-50%);
   width: min(280px, 70%);
   z-index: 41;
@@ -867,7 +912,7 @@ h3 {
 .xiv-chat {
   position: absolute;
   left: 12px;
-  bottom: 100px;
+  bottom: 30px;
   width: 280px;
   height: 196px;
   display: flex;
@@ -1896,26 +1941,56 @@ h3 {
   width: 210px;
 }
 
-.ff-enemy-list {
+.ff-enemy-dock {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  left: calc(50% + 310px);
+  bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   width: 200px;
+  pointer-events: auto;
+}
+
+.ff-enemy-list {
+  position: static;
+  width: 100%;
+  max-height: min(280px, 40vh);
+  overflow-y: auto;
 }
 
 .ff-target-info {
   position: absolute;
   left: 50%;
-  bottom: 168px;
+  top: 12px;
+  bottom: auto;
   transform: translateX(-50%);
   width: 300px;
 }
 
 .ff-parameter {
   position: absolute;
-  left: 308px;
-  bottom: 100px;
-  width: 220px;
+  left: 50%;
+  bottom: 220px;
+  transform: translateX(-50%);
+  width: auto;
+  max-width: min(520px, 94vw);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 14px;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.ff-parameter .ff-gauge {
+  margin-bottom: 0;
+  min-width: 140px;
 }
 
 .ff-parameter.ff-self-target {
@@ -1923,19 +1998,38 @@ h3 {
 }
 
 .ff-parameter.gcd-ready {
-  box-shadow:
-    0 0 0 1px rgba(250, 204, 21, 0.55),
-    0 0 18px rgba(250, 204, 21, 0.35);
+  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.55));
+}
+
+.ff-self-cast {
+  position: absolute;
+  left: 50%;
+  bottom: 258px;
+  transform: translateX(-50%);
+  width: min(220px, 50vw);
+  pointer-events: none;
+}
+
+.ff-self-cast .ff-gauge {
+  margin-bottom: 0;
 }
 
 .ff-flytext {
   position: absolute;
-  left: 540px;
-  bottom: 100px;
-  width: 240px;
+  left: 50%;
+  bottom: 290px;
+  transform: translateX(-50%);
+  width: min(320px, 70vw);
   max-height: 90px;
   overflow: hidden;
   font-size: 11px;
+  text-align: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  padding: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .ff-party-row,

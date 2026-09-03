@@ -135,21 +135,23 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
           {sortedJobs.map((j) => {
             const isMain = j.id === profile.main_job;
             const isSub = j.id === profile.sub_job;
+            const unlocked = (profile.unlocked_jobs ?? []).includes(j.id);
             return (
               <div
                 key={j.id}
-                className={`job-card job-card--inline job-card--readout ${isMain || isSub ? "selected" : ""}`}
+                className={`job-card job-card--inline job-card--readout ${isMain || isSub ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
               >
                 <span className="job-swatch" style={{ background: jobColor(j.id) }} />
                 <div className="job-card-body">
-                  <span className="job-name" style={{ color: jobColor(j.id) }}>
+                  <span className="job-name" style={{ color: unlocked ? jobColor(j.id) : undefined }}>
                     {j.name}
                     {isMain ? " (Main)" : isSub ? " (Sub)" : ""}
                   </span>
                   <span className="job-level-meta dim">
-                    Lv {j.level} · {j.xp}/{j.max_xp} EXP
+                    {unlocked ? `Lv ${j.level} · ${j.xp}/${j.max_xp} EXP` : "Not unlocked"}
                   </span>
                 </div>
+                {!unlocked && <span className="job-lock dim">Locked</span>}
               </div>
             );
           })}
@@ -615,6 +617,7 @@ export function WindowBar() {
           <button
             type="button"
             className={`xiv-menu-btn ${open === b.id ? "on" : ""}`}
+            tabIndex={-1}
             onClick={() => toggle(b.id)}
             aria-label={b.label}
           >

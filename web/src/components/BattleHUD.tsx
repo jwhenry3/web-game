@@ -35,15 +35,19 @@ function Gauge({
 function PartyRow({
   e,
   targetable,
+  focused,
   onClick,
 }: {
   e: BattleEntity;
   targetable?: boolean;
+  focused?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
-      className={`ff-party-row ${e.alive ? "" : "entity-dead"} ${targetable ? "targetable ff-focused" : ""}`}
+      type="button"
+      tabIndex={-1}
+      className={`ff-party-row ${e.alive ? "" : "entity-dead"} ${focused ? "ff-targeted" : ""} ${targetable ? "targetable ff-focused" : ""}`}
       onClick={onClick}
     >
       <div className="ff-party-name">{e.name}</div>
@@ -60,11 +64,14 @@ export function BattleHUD() {
   const battle: BattleView | null = useMemo(() => activeBattleView(battleRaw, rtBattle), [battleRaw, rtBattle]);
   const profile = useGame((s) => s.profile);
   const selfId = useGame((s) => s.selfId);
+  const battleTargetId = useGame((s) => s.battleTargetId);
   const selected = useGame((s) => s.selectedAction);
   const setSelected = useGame((s) => s.setSelectedAction);
 
   const self = battle?.entities.find((e) => e.id === selfId);
+  const focusId = battleTargetId ?? self?.target_id;
   const gcdReady = !!self && self.alive && (self.skill_atb ?? self.atb) >= 100 && !self.casting_skill_id && !battle?.end;
+  const battleEnded = !!battle?.end;
 
   useEffect(() => {
     if (!gcdReady && useGame.getState().selectedAction) setSelected(null);
@@ -74,7 +81,7 @@ export function BattleHUD() {
 
   const players = battle.entities.filter((e) => e.is_player);
   const enemies = battle.entities.filter((e) => !e.is_player);
-  const target = battle.entities.find((e) => e.id === self.target_id) ?? enemies.find((e) => e.alive);
+  const target = battle.entities.find((e) => e.id === focusId) ?? enemies.find((e) => e.alive);
   const end = battle.end;
   const myReward = end?.rewards?.find((r) => r.player_id === selfId);
 
@@ -87,24 +94,32 @@ export function BattleHUD() {
             key={e.id}
             e={e}
             targetable={!!selected?.heals && e.alive}
+            focused={e.id === focusId}
             onClick={() => net.clickEntity(e)}
           />
         ))}
       </div>
 
-      <div className="ff-enemy-list xiv-panel">
-        <div className="xiv-panel-head">Enemies</div>
-        {enemies.map((e) => (
-          <button
-            key={e.id}
-            className={`ff-enemy-row ${e.alive ? "" : "entity-dead"} ${e.id === self.target_id ? "ff-targeted" : ""} ${selected && !selected.heals && e.alive ? "targetable" : ""}`}
-            onClick={() => net.clickEntity(e)}
-          >
-            <span>{e.name}</span>
-            <StatusIcons statuses={e.statuses} className="status-icons--compact" />
-            <Gauge value={e.hp} max={e.max_hp} color="#c94a4a" />
-          </button>
-        ))}
+      <div className="ff-enemy-dock">
+        <button type="button" className="flee-btn" tabIndex={-1} onClick={() => net.leaveBattle()}>
+          Leave
+        </button>
+        <div className="ff-enemy-list xiv-panel">
+          <div className="xiv-panel-head">Enemies</div>
+          {enemies.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              tabIndex={-1}
+              className={`ff-enemy-row ${e.alive ? "" : "entity-dead"} ${e.id === focusId ? "ff-targeted" : ""} ${selected && !selected.heals && e.alive ? "targetable" : ""}`}
+              onClick={() => net.clickEntity(e)}
+            >
+              <span>{e.name}</span>
+              <StatusIcons statuses={e.statuses} className="status-icons--compact" />
+              <Gauge value={e.hp} max={e.max_hp} color="#c94a4a" />
+            </button>
+          ))}
+        </div>
       </div>
 
       {target && (
@@ -119,34 +134,23 @@ export function BattleHUD() {
       )}
 
       <div
-        className={`ff-parameter xiv-panel ${gcdReady ? "gcd-ready" : ""} ${selected?.heals && self.alive ? "targetable ff-self-target" : ""}`}
+        className={`ff-parameter ${gcdReady ? "gcd-ready" : ""} ${selected?.heals && self.alive ? "targetable ff-self-target" : ""}`}
         onClick={() => {
           if (selected?.heals && self.alive) net.clickEntity(self);
         }}
       >
-        <div className="ff-target-head">
-          <strong>{self.name}</strong>
-          <span className="lv-badge">Lv {self.level}</span>
-        </div>
         <Gauge value={self.hp} max={self.max_hp} color="#3dcc6e" label="HP" />
         <Gauge value={self.mp} max={self.max_mp} color="#4aa3e8" label="MP" />
-        <StatusIcons statuses={self.statuses} className="status-icons--self" />
-        {self.casting_skill_id && (
-          <Gauge value={self.cast_progress ?? 0} max={100} color="#a78bfa" label="Cast" />
-        )}
-        <button
-          className="flee-btn"
-          onClick={(e) => {
-            e.stopPropagation();
-            net.leaveBattle();
-          }}
-        >
-          Leave
-        </button>
       </div>
 
+      {self.casting_skill_id && (
+        <div className="ff-self-cast" aria-label="Casting">
+          <Gauge value={self.cast_progress ?? 0} max={100} color="#a78bfa" label="Cast" />
+        </div>
+      )}
+
       {selected && (
-        <div className="ff-flytext xiv-panel">
+        <div className="ff-flytext">
           <div className="log-line">
             {selected.name}: click {selected.heals ? "an ally (or press key again for self)" : "an enemy"}
           </div>
@@ -187,6 +191,9 @@ export function BattleHUD() {
             <button type="button" className="xiv-btn gold wide" onClick={() => net.leaveBattle()}>
               Return to World
             </button>
+            <p className="hint" style={{ marginTop: 8, textAlign: "center" }}>
+              Returning to the overworld in 10 seconds…
+            </p>
             </div>
           </div>
         </div>

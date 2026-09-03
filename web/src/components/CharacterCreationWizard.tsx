@@ -17,13 +17,12 @@ import { JobSelectionSteps } from "./JobSelectionSteps";
 
 const DEFAULT_RACE = "hume";
 
-const STEPS = ["appearance", "main", "sub", "name"] as const;
+const STEPS = ["appearance", "main", "name"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
   appearance: "Customize Appearance",
   main: "Choose Main Job",
-  sub: "Choose Sub Job",
   name: "Name Your Hero",
 };
 
@@ -61,10 +60,6 @@ export function CharacterCreationWizard() {
       setError("Select a main job.");
       return;
     }
-    if (step === "sub" && draft.subJob && draft.subJob === draft.mainJob) {
-      setError("Sub job must differ from main job.");
-      return;
-    }
     if (step === "name") {
       if (!draft.name.trim()) {
         setError("Enter a hero name.");
@@ -88,7 +83,6 @@ export function CharacterCreationWizard() {
       player_name: draft.name.trim(),
       race: DEFAULT_RACE,
       main_job: draft.mainJob,
-      sub_job: draft.subJob,
       appearance: appearanceToWire(draft.appearance),
     });
   };
@@ -152,13 +146,14 @@ export function CharacterCreationWizard() {
             </div>
           )}
 
-          {(step === "main" || step === "sub") && (
+          {step === "main" && (
             <JobSelectionSteps
-              step={step}
+              step="main"
               mainJob={draft.mainJob}
-              subJob={draft.subJob}
-              onMainJob={(id) => patch({ mainJob: id, subJob: draft.subJob === id ? "" : draft.subJob })}
-              onSubJob={(id) => patch({ subJob: id })}
+              subJob=""
+              startersOnly
+              onMainJob={(id) => patch({ mainJob: id, subJob: "" })}
+              onSubJob={() => {}}
             />
           )}
 
@@ -167,12 +162,7 @@ export function CharacterCreationWizard() {
               <div className="appearance-editor appearance-editor--compact">
                 <CharacterPreviewAnimated appearance={draft.appearance} hideWeapon />
                 <div className="xiv-creation-summary">
-                  <span>
-                    {ALL_JOBS.find((j) => j.id === draft.mainJob)?.name ?? draft.mainJob}
-                    {draft.subJob
-                      ? ` / ${ALL_JOBS.find((j) => j.id === draft.subJob)?.name ?? draft.subJob}`
-                      : ""}
-                  </span>
+                  <span>{ALL_JOBS.find((j) => j.id === draft.mainJob)?.name ?? draft.mainJob}</span>
                 </div>
               </div>
               <label className="field-label">Hero Name</label>

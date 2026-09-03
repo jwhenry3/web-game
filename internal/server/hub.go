@@ -479,15 +479,13 @@ func (h *Hub) handleEvent(ev Event) {
 	case protocol.TypePartyKick:
 		h.handlePartyKick(c, ev.Payload)
 	case protocol.TypeDeclineBattleInvite, protocol.TypeJoinBattle,
-		protocol.TypeLeaveBattle, protocol.TypeAction, protocol.TypeSetTarget,
+		protocol.TypeAction, protocol.TypeSetTarget,
 		protocol.TypeRTMove, protocol.TypeRTAttack:
-		if ev.Type == protocol.TypeLeaveBattle && c.BattleID == "" {
-			h.handleLeaveBattleReleased(c)
-			break
-		}
 		if h.combat != nil {
 			h.combat.HandleMessage(c.ID, ev.Type, ev.Payload)
 		}
+	case protocol.TypeLeaveBattle:
+		h.handleLeaveBattle(c)
 	case protocol.TypeSetSavePoint:
 		h.handleSetSavePoint(c, ev.Payload)
 	case protocol.TypeUseWorldSkill:
@@ -787,6 +785,28 @@ func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
 	h.sendWelcome(c, profile)
 }
 
+func (h *Hub) handleLeaveBattle(c *Client) {
+	wp := h.world[c.ID]
+	// Prefer the world player's battle id; Client.BattleID can desync after
+	// end-of-fight teardown races or reconnect-adjacent edge cases.
+	if wp != nil && wp.BattleID == "" && c.BattleID != "" {
+		wp.BattleID = c.BattleID
+		wp.InBattle = true
+	}
+	stillIn := c.BattleID != "" || (wp != nil && (wp.InBattle || wp.BattleID != ""))
+	if stillIn && h.combat != nil {
+		h.combat.HandleMessage(c.ID, protocol.TypeLeaveBattle, nil)
+	}
+	// Plugin Leave should unlock, but always force a clean release so a missed
+	// room teardown cannot leave the player combat-locked in the overworld.
+	if wp != nil && (wp.InBattle || wp.BattleID != "" || c.BattleID != "") {
+		h.releaseFromBattle(c.ID)
+		h.broadcastBattleList()
+		return
+	}
+	h.handleLeaveBattleReleased(c)
+}
+
 func (h *Hub) handleLeaveBattleReleased(c *Client) {
 	if wp, ok := h.world[c.ID]; ok && !wp.InBattle {
 		h.grantBattleImmunity(wp)
@@ -820,6 +840,8 @@ func (h *Hub) releaseFromBattle(clientID string) {
 			// proficiency gains, and any newly unlocked skills).
 			h.sendWelcome(c, profile)
 		}
+		// Force the client off the battle screen even if leave_battle was never sent.
+		h.send(c, protocol.TypeBattleReturn, map[string]any{})
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 	if partyID, ok := h.clientParty[clientID]; ok {
@@ -913,6 +935,13 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		p.EquippedItems(),
 	)
 
+	unlocked := append([]string(nil), p.UnlockedJobs...)
+	if len(unlocked) == 0 {
+		for _, j := range game.StartingJobs {
+			unlocked = append(unlocked, string(j))
+		}
+	}
+
 	jobs := make([]protocol.JobProgressInfo, 0, len(game.AllJobs()))
 	for _, def := range game.AllJobs() {
 		prog := p.Jobs[string(def.ID)]
@@ -939,7 +968,8 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		MaxXP:             game.XPToNext(mainLvl),
 		MainJob:           p.MainJob,
 		SubJob:            p.SubJob,
-		SubjobUnlock:      game.SubjobUnlockLevel,
+		SubjobUnlock:      game.CurrentSubjobUnlockLevel(),
+		UnlockedJobs:      unlocked,
 		Appearance:        appearanceProto(p),
 		Jobs:              jobs,
 		Stats:             protocol.StatBlock{HP: hp, MP: mp, Str: str, Mag: mag, Agi: agi},

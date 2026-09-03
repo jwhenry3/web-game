@@ -178,6 +178,28 @@ func TestReturnToWorldRefreshesImmunity(t *testing.T) {
 	}
 }
 
+func TestLeaveBattleUnlocksWhenClientBattleIDEmpty(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
+	// Desync: world still combat-locked but client battle id was cleared.
+	c.BattleID = ""
+	wp.InBattle = true
+	wp.BattleID = "battle-stuck"
+	h.handleLeaveBattle(c)
+	if wp.InBattle || wp.BattleID != "" || c.BattleID != "" {
+		t.Fatalf("leave must unlock desynced player, got in_battle=%v battle=%q client=%q",
+			wp.InBattle, wp.BattleID, c.BattleID)
+	}
+	if !battleImmune(wp) {
+		t.Fatal("leave should grant immunity")
+	}
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 4, Y: py})
+	h.handleMove(c, raw)
+	if wp.X == px && wp.Y == py {
+		t.Fatal("unlocked player should be able to move in the world")
+	}
+}
+
 func TestMapTransferGrantsImmunity(t *testing.T) {
 	h := mustTestHub()
 	h.SetMap("greenwood", "Greenwood", game.Loaded())

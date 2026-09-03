@@ -117,6 +117,17 @@ export function GameHotkeys() {
 
       if (!inGame) return;
 
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        if (chatFocused || dialogIsOpen(state)) return;
+        if (state.screen === "battle" && (state.battle || state.rtBattle)) {
+          const horizontal = e.key === "ArrowLeft" || e.key === "ArrowRight";
+          const dir: 1 | -1 = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+          net.cycleBattleTarget(horizontal ? "horizontal" : "vertical", dir);
+        }
+        return;
+      }
+
       const hotbarSlot = resolveHotbarSlot(e, keybinds);
       if (hotbarSlot) {
         const { screen, battle, rtBattle } = state;
@@ -137,8 +148,9 @@ export function GameHotkeys() {
         state.toggleWindow(win);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Capture phase so hotbar/targeting win over focused HUD buttons.
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, []);
   return null;
 }

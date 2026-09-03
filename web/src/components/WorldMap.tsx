@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AtlasMap } from "../types";
+import type { AtlasMap, VisitedSavePoint } from "../types";
 import { TILE_FILL_CSS } from "../world/overworld";
 import { markersForMap, type MapMarker } from "../world/mapMarkers";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { useGame } from "../state/store";
 import { fetchAtlas } from "../net/atlas";
+
+/** Stable fallback so Zustand selectors never return a fresh [] each snapshot. */
+const EMPTY_VISITED: VisitedSavePoint[] = [];
 
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
@@ -387,7 +390,7 @@ export function MapWindow() {
   const mapInfo = useGame((s) => s.mapInfo);
   const selfId = useGame((s) => s.selfId);
   const players = useGame((s) => s.players);
-  const visited = useGame((s) => s.profile?.visited_save_points ?? []);
+  const visited = useGame((s) => s.profile?.visited_save_points ?? EMPTY_VISITED);
   const [mapId, setMapId] = useState(mapInfo?.id ?? "");
 
   useEffect(() => {

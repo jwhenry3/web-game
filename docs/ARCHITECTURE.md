@@ -46,14 +46,21 @@ Internal transfer types (`cluster.TransferRequest`, attach payloads) are **never
 
 ### Bootstrap: `config/cluster.json`
 
-Proxy bind address, shared account/profile paths, static dir, and the **seed** map list (Greenwood, Northern Wastes).
+Proxy bind address, shared account/profile paths, static dir, **shared EXP rates**, and the **seed** map list (Greenwood, Northern Wastes).
 
 ```json
 {
   "proxy": { "addr": ":8080", "accounts": "data/accounts.json", "data": "data/profiles.json", "static": "web/dist" },
+  "exp": { "rate": 1.0, "main_percent": 75, "sub_percent": 25 },
   "maps": [ { "id": "greenwood", "config": "config/server.json", "default": true }, … ]
 }
 ```
+
+| Field | Meaning |
+|-------|---------|
+| `exp.rate` | Global job EXP multiplier (all maps, all award paths) |
+| `exp.main_percent` / `exp.sub_percent` | Split of awarded EXP when a subjob is equipped (normalized to their sum; no sub → 100% main) |
+| `exp.subjob_unlock_level` | Main-job level required before a subjob may be equipped (default `5`) |
 
 ### Live registry: `data/cluster.maps.json`
 

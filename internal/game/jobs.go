@@ -59,10 +59,22 @@ type JobDef struct {
 }
 
 const (
-	SubjobUnlockLevel     = 5
-	SubjobMinEffectiveLevel = 1 // sub always contributes at least Lv 1 when equipped
-	SubjobEffectRatio     = 0.5
+	DefaultSubjobUnlockLevel  = 5
+	SubjobMinEffectiveLevel   = 1 // sub always contributes at least Lv 1 when equipped
+	SubjobEffectRatio         = 0.5
 )
+
+// SubjobUnlockLevel is the main-job level required to equip a subjob.
+// Prefer CurrentSubjobUnlockLevel() after cluster config is loaded.
+var SubjobUnlockLevel = DefaultSubjobUnlockLevel
+
+// CurrentSubjobUnlockLevel returns the configured subjob unlock gate.
+func CurrentSubjobUnlockLevel() int {
+	if SubjobUnlockLevel < 1 {
+		return DefaultSubjobUnlockLevel
+	}
+	return SubjobUnlockLevel
+}
 
 var Jobs = map[JobID]JobDef{
 	JobWAR: {ID: JobWAR, Name: "Warrior", Abbr: "WAR", Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.12, STRMult: 1.15},
@@ -217,28 +229,6 @@ func SubjobEffectiveLevel(mainLevel, subLevel int) int {
 		effective = SubjobMinEffectiveLevel
 	}
 	return effective
-}
-
-// JobXPSplit divides battle XP between main and sub jobs proportional to their
-// effective levels. With no subjob, all XP goes to main.
-func JobXPSplit(totalXP, mainLvl, subEffectiveLvl int) (mainXP, subXP int) {
-	if totalXP < 1 {
-		return 0, 0
-	}
-	if subEffectiveLvl < 1 {
-		return totalXP, 0
-	}
-	if mainLvl < 1 {
-		mainLvl = 1
-	}
-	sum := mainLvl + subEffectiveLvl
-	mainXP = totalXP * mainLvl / sum
-	subXP = totalXP - mainXP
-	if mainXP < 1 {
-		mainXP = 1
-		subXP = totalXP - mainXP
-	}
-	return mainXP, subXP
 }
 
 func applyJobMult(v int, mult float64) int {

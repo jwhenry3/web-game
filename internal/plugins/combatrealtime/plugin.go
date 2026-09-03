@@ -157,13 +157,15 @@ func (p *Plugin) Join(clientID, battleID string) error {
 func (p *Plugin) Leave(clientID string) {
 	wp := p.host.WorldPlayer(clientID)
 	if wp == nil {
-		return
-	}
-	if wp.BattleID == "" {
 		p.host.ReleaseFromBattle(clientID)
 		return
 	}
-	if room, ok := p.rooms[wp.BattleID]; ok {
+	battleID := wp.BattleID
+	if battleID == "" {
+		p.host.ReleaseFromBattle(clientID)
+		return
+	}
+	if room, ok := p.rooms[battleID]; ok {
 		room.Leave(clientID)
 	}
 	p.host.ReleaseFromBattle(clientID)

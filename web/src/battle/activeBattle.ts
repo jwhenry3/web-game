@@ -43,3 +43,24 @@ export function activeBattleView(
   if (rtBattle) return rtBattleToView(rtBattle);
   return null;
 }
+
+/** Keep the local player's focus target across server entity snapshots. */
+export function withBattleFocus<T extends { id: string; target_id?: string }>(
+  entities: T[],
+  selfId: string | null | undefined,
+  focusId: string | null | undefined,
+): T[] {
+  if (!selfId || !focusId) return entities;
+  return entities.map((e) => (e.id === selfId ? { ...e, target_id: focusId } : e));
+}
+
+/** Initial focus from a battle snapshot (first living enemy / existing target). */
+export function initialBattleFocus(
+  entities: { id: string; is_player?: boolean; alive?: boolean; target_id?: string }[],
+  selfId: string | null | undefined,
+): string | null {
+  const self = selfId ? entities.find((e) => e.id === selfId) : undefined;
+  if (self?.target_id) return self.target_id;
+  const enemy = entities.find((e) => !e.is_player && e.alive);
+  return enemy?.id ?? null;
+}

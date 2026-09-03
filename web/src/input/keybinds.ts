@@ -98,6 +98,13 @@ export function mergeKeybinds(custom?: KeybindMap | null): KeybindMap {
   return out;
 }
 
+/** Physical digit from KeyboardEvent.code (layout-independent). */
+function digitFromCode(code: string): string | null {
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^Numpad[0-9]$/.test(code)) return code.slice(6);
+  return null;
+}
+
 /** Normalize a keyboard event to a binding string for comparison. */
 export function eventBinding(e: KeyboardEvent): string {
   const parts: string[] = [];
@@ -105,7 +112,11 @@ export function eventBinding(e: KeyboardEvent): string {
   if (e.shiftKey) parts.push("Shift");
   if (e.altKey) parts.push("Alt");
   let key = e.key;
-  if (key === " ") key = "Space";
+  // Prefer Digit/Numpad codes so hotbar 1–8 works on AZERTY and similar layouts
+  // where the unshifted key produces a symbol instead of the digit.
+  const digit = digitFromCode(e.code);
+  if (digit) key = digit;
+  else if (key === " ") key = "Space";
   else if (key.length === 1) key = key.toLowerCase();
   parts.push(key);
   return parts.join("+");

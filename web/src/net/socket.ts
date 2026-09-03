@@ -37,9 +37,10 @@ import { activeBattleView } from "../battle/activeBattle";
 export const battleEvents = new Phaser.Events.EventEmitter();
 
 function livingEnemyTarget(battle: { entities: BattleEntity[] }, self: BattleEntity): BattleEntity | undefined {
+  const focusId = useGame.getState().battleTargetId ?? self.target_id;
   const focus =
-    self.target_id &&
-    battle.entities.find((e) => e.id === self.target_id && e.alive && !e.is_player);
+    focusId &&
+    battle.entities.find((e) => e.id === focusId && e.alive && !e.is_player);
   if (focus) return focus;
   return battle.entities.find((e) => !e.is_player && e.alive);
 }
@@ -54,14 +55,42 @@ function battleContext(): { self: BattleEntity; entities: BattleEntity[]; ended:
   return { self, entities: view.entities, ended: !!view.end };
 }
 
+function patchSelfTarget(
+  entities: BattleEntity[],
+  selfId: string,
+  targetId: string,
+): BattleEntity[] {
+  return entities.map((e) => (e.id === selfId ? { ...e, target_id: targetId } : e));
+}
+
 function castEnemySkill(actionId: string, entities: BattleEntity[], self: BattleEntity) {
   const target = livingEnemyTarget({ entities }, self);
   if (!target) return;
   send("action", { action_id: actionId, target_id: target.id });
-  if (self.target_id !== target.id) {
+  const focusId = useGame.getState().battleTargetId ?? self.target_id;
+  if (focusId !== target.id) {
     send("set_target", { target_id: target.id });
   }
-  useGame.setState({ selectedAction: null });
+  useGame.setState((s) => {
+    if (!s.selfId) return { selectedAction: null, battleTargetId: target.id };
+    return {
+      selectedAction: null,
+      battleTargetId: target.id,
+      ...(s.battle
+        ? { battle: { ...s.battle, entities: patchSelfTarget(s.battle.entities, s.selfId, target.id) } }
+        : {}),
+      ...(s.rtBattle
+        ? {
+            rtBattle: {
+              ...s.rtBattle,
+              entities: s.rtBattle.entities.map((e) =>
+                e.id === s.selfId ? { ...e, target_id: target.id } : e,
+              ),
+            },
+          }
+        : {}),
+    };
+  });
 }
 
 let ws: WebSocket | null = null;
@@ -216,7 +245,16 @@ export const net = {
   },
   leaveBattle() {
     send("leave_battle");
-    useGame.setState({ battle: null, rtBattle: null, screen: "world", selectedAction: null });
+    // Optimistically leave the battle UI; server leave unlocks InBattle and
+    // player_sync confirms. If the server rejects/misses leave, world movement
+    // stays locked until a sync arrives — see handleLeaveBattle on the hub.
+    useGame.setState({
+      battle: null,
+      rtBattle: null,
+      battleTargetId: null,
+      screen: "world",
+      selectedAction: null,
+    });
   },
   rtMove(x: number, y: number) {
     send("rt_move", { x, y });
@@ -229,6 +267,44 @@ export const net = {
   },
   setTarget(targetId: string) {
     send("set_target", { target_id: targetId });
+    useGame.setState((s) => {
+      if (!s.selfId) return { battleTargetId: targetId };
+      return {
+        battleTargetId: targetId,
+        ...(s.battle
+          ? { battle: { ...s.battle, entities: patchSelfTarget(s.battle.entities, s.selfId, targetId) } }
+          : {}),
+        ...(s.rtBattle
+          ? {
+              rtBattle: {
+                ...s.rtBattle,
+                entities: s.rtBattle.entities.map((e) =>
+                  e.id === s.selfId ? { ...e, target_id: targetId } : e,
+                ),
+              },
+            }
+          : {}),
+      };
+    });
+  },
+
+  /** Arrow targeting: left/right cycle enemies, up/down cycle living party members. */
+  cycleBattleTarget(axis: "horizontal" | "vertical", dir: 1 | -1) {
+    const ctx = battleContext();
+    if (!ctx || ctx.ended) return;
+    const { self, entities } = ctx;
+    const focusId = useGame.getState().battleTargetId ?? self.target_id;
+    const pool =
+      axis === "horizontal"
+        ? entities.filter((e) => !e.is_player && e.alive)
+        : entities.filter((e) => e.is_player && e.alive);
+    if (pool.length === 0) return;
+    let idx = pool.findIndex((e) => e.id === focusId);
+    if (idx < 0) {
+      idx = dir > 0 ? -1 : 0;
+    }
+    const next = pool[(idx + dir + pool.length) % pool.length];
+    if (next) this.setTarget(next.id);
   },
   setSavePoint(savePointId: string) {
     send("set_save_point", { save_point_id: savePointId });
@@ -438,6 +514,17 @@ function handleMessage(env: Envelope) {
       })();
       break;
     }
+    case "battle_return": {
+      g.setState({
+        battle: null,
+        rtBattle: null,
+        battleTargetId: null,
+        screen: "world",
+        selectedAction: null,
+        chatTab: "general",
+      });
+      break;
+    }
     case "map_config": {
       const p = env.payload as MapConfigPayload;
       if (p.map) applyMapSnapshotToGame(p.map);
@@ -465,7 +552,22 @@ function handleMessage(env: Envelope) {
     }
     case "player_sync": {
       const wp = env.payload as WorldPlayer;
-      g.setState((s) => ({ players: { ...s.players, [wp.id]: wp } }));
+      g.setState((s) => {
+        const players = { ...s.players, [wp.id]: wp };
+        // If we left combat on the server, drop any stale battle UI (e.g. end
+        // modal) so the world is interactive again.
+        if (wp.id === s.selfId && !wp.in_battle && s.screen === "battle") {
+          return {
+            players,
+            screen: "world",
+            battle: null,
+            rtBattle: null,
+            battleTargetId: null,
+            selectedAction: null,
+          };
+        }
+        return { players };
+      });
       break;
     }
     case "player_joined": {

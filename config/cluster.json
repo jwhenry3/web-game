@@ -7,6 +7,12 @@
     "static": "web/dist",
     "internal_secret": ""
   },
+  "exp": {
+    "rate": 1.0,
+    "main_percent": 75,
+    "sub_percent": 25,
+    "subjob_unlock_level": 5
+  },
   "maps": [
     {
       "id": "greenwood",

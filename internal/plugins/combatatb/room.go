@@ -30,6 +30,21 @@ const (
 	atbMax             = 100.0
 )
 
+// ResultsGracePeriod is how long results stay up before the server destroys the
+// room and returns remaining players to the overworld. Tests may set this to 0.
+var ResultsGracePeriod = 10 * time.Second
+
+func scheduleBattleDismiss(host contracts.CombatHost, roomID string, participantIDs []string, victory bool) {
+	grace := ResultsGracePeriod
+	if grace <= 0 {
+		host.FinishBattle(roomID, participantIDs, victory)
+		return
+	}
+	time.AfterFunc(grace, func() {
+		host.FinishBattle(roomID, participantIDs, victory)
+	})
+}
+
 // BattleTickWindow returns the action-window duration for a battle-speed multiplier.
 // Lower speed values lengthen each tick, slowing ATB fill and status ticks.
 func BattleTickWindow(speed float64) time.Duration {
@@ -900,6 +915,9 @@ func (b *BattleRoom) checkEnd() {
 }
 
 func (b *BattleRoom) finish(victory bool) {
+	if b.ended {
+		return
+	}
 	b.ended = true
 
 	// Skill usage persists on victory AND defeat.
@@ -922,6 +940,7 @@ func (b *BattleRoom) finish(victory bool) {
 		b.host.NotifyPassiveRewards(payload.Rewards)
 	}
 
+	participants := b.playerIDs(false)
 	b.broadcast(protocol.Encode(protocol.TypeBattleEnd, payload))
-	b.host.FinishBattle(b.ID, b.playerIDs(false), victory)
+	scheduleBattleDismiss(b.host, b.ID, participants, victory)
 }

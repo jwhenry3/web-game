@@ -13,6 +13,12 @@ import (
 	"ffv-web-game/internal/store"
 )
 
+func TestMain(m *testing.M) {
+	// Tests assert FinishBattle synchronously after checkEnd/finish.
+	ResultsGracePeriod = 0
+	m.Run()
+}
+
 // mockHost captures broadcasts so battle logic can be tested synchronously,
 // without a hub or real websocket clients.
 type mockHost struct {
@@ -60,11 +66,11 @@ func (m *mockHost) BuildVictoryRewards(
 	var out []protocol.PlayerReward
 	for _, f := range converted {
 		loot := game.GenerateLoot(rng, level, lootBonus)
-		mainXP := share
-		subXP := 0
+		hasSub := false
 		if profile, ok := m.store.Get(f.Name); ok && profile.SubJob != "" {
-			mainXP, subXP = game.JobXPSplit(share, profile.MainJobLevel(), profile.SubJobEffectiveLevel())
+			hasSub = true
 		}
+		mainXP, subXP := game.DistributeJobXP(share, hasSub)
 		profile, levels, _ := m.store.AwardJobVictory(f.Name, mainXP, subXP, loot)
 		out = append(out, protocol.PlayerReward{
 			PlayerID: f.ClientID, XP: mainXP, SubXP: subXP, LevelsGained: levels,

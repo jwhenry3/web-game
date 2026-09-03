@@ -63,6 +63,7 @@ const (
 	TypeBattleEvent     MessageType = "battle_event" // batched action-window results
 	TypeBattleTick      MessageType = "battle_tick"  // lightweight ATB sync
 	TypeBattleEnd       MessageType = "battle_end"
+	TypeBattleReturn    MessageType = "battle_return" // server force/ack return to overworld
 	TypeError           MessageType = "error"
 	TypeMapConfig       MessageType = "map_config"
 	// Realtime combat plugin (combat.realtime)
@@ -235,6 +236,7 @@ type ProfileInfo struct {
 	MainJob           string                   `json:"main_job"`
 	SubJob            string                   `json:"sub_job"`
 	SubjobUnlock      int                      `json:"subjob_unlock_level"`
+	UnlockedJobs      []string                 `json:"unlocked_jobs"`
 	Appearance        CharacterAppearance      `json:"appearance,omitempty"`
 	Jobs              []JobProgressInfo        `json:"jobs"`
 	Stats             StatBlock                `json:"stats"`

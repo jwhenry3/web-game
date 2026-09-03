@@ -1,6 +1,7 @@
 import { appendBattleLog, pushChat, useGame } from "../../state/store";
 import { battleEvents } from "../../net/socket";
 import { DEFAULT_BATTLE_SPEED } from "../../phaser/battleAnim";
+import { initialBattleFocus, withBattleFocus } from "../../battle/activeBattle";
 import type { PluginContext } from "../../core/plugins/contracts";
 import type {
   ActionResult,
@@ -89,17 +90,23 @@ const plugin = {
       const p = env.payload as BattleStatePayload;
       const fresh = useGame.getState().battle?.battleId !== p.battle_id;
       const battleSpeed = p.battle_speed && p.battle_speed > 0 ? p.battle_speed : DEFAULT_BATTLE_SPEED;
-      useGame.setState((s) => ({
-        screen: "battle",
-        chatTab: "battle",
-        battle: {
-          battleId: p.battle_id,
-          entities: p.entities,
-          battleSpeed,
-          log: s.battle?.battleId === p.battle_id ? s.battle.log : ["Battle start!"],
-          end: s.battle?.battleId === p.battle_id ? s.battle.end : null,
-        },
-      }));
+      useGame.setState((s) => {
+        const focus = fresh
+          ? initialBattleFocus(p.entities, s.selfId)
+          : (s.battleTargetId ?? initialBattleFocus(p.entities, s.selfId));
+        return {
+          screen: "battle" as const,
+          chatTab: "battle" as const,
+          battleTargetId: focus,
+          battle: {
+            battleId: p.battle_id,
+            entities: withBattleFocus(p.entities, s.selfId, focus),
+            battleSpeed,
+            log: s.battle?.battleId === p.battle_id ? s.battle.log : ["Battle start!"],
+            end: s.battle?.battleId === p.battle_id ? s.battle.end : null,
+          },
+        };
+      });
       if (fresh) pushChat("battle", "Battle start!");
     });
 
@@ -112,7 +119,7 @@ const plugin = {
       useGame.setState((s) => {
         if (!s.battle) return s;
         const byId = new Map(p.entities.map((u) => [u.id, u]));
-        const entities = s.battle.entities.map((e) => {
+        let entities = s.battle.entities.map((e) => {
           const u = byId.get(e.id);
           return u
             ? mergeEntityCast(e, {
@@ -144,6 +151,7 @@ const plugin = {
             }
           }
         }
+        entities = withBattleFocus(entities, s.selfId, s.battleTargetId);
         return { battle: { ...s.battle, entities } };
       });
     });
@@ -152,21 +160,25 @@ const plugin = {
       const p = env.payload as BattleTickPayload;
       useGame.setState((s) => {
         if (!s.battle) return s;
-        const entities = s.battle.entities.map((e) => {
-          const skill = p.skill_atb?.[e.id] ?? p.atb?.[e.id];
-          const hp = p.hp?.[e.id];
-          const alive = p.alive?.[e.id];
-          const statuses = p.statuses?.[e.id];
-          let next = {
-            ...e,
-            ...(skill !== undefined ? { atb: skill, skill_atb: skill } : {}),
-            ...(hp !== undefined ? { hp } : {}),
-            ...(alive !== undefined ? { alive } : {}),
-            ...(statuses !== undefined ? { statuses } : {}),
-          };
-          next = applyTickCast(next, p);
-          return next;
-        });
+        const entities = withBattleFocus(
+          s.battle.entities.map((e) => {
+            const skill = p.skill_atb?.[e.id] ?? p.atb?.[e.id];
+            const hp = p.hp?.[e.id];
+            const alive = p.alive?.[e.id];
+            const statuses = p.statuses?.[e.id];
+            let next = {
+              ...e,
+              ...(skill !== undefined ? { atb: skill, skill_atb: skill } : {}),
+              ...(hp !== undefined ? { hp } : {}),
+              ...(alive !== undefined ? { alive } : {}),
+              ...(statuses !== undefined ? { statuses } : {}),
+            };
+            next = applyTickCast(next, p);
+            return next;
+          }),
+          s.selfId,
+          s.battleTargetId,
+        );
         return { battle: { ...s.battle, entities } };
       });
     });
@@ -176,6 +188,7 @@ const plugin = {
       appendBattleLog(p.victory ? "Victory!" : "The party has fallen...");
       useGame.setState((s) => ({
         selectedAction: null,
+        battleTargetId: null,
         battle: s.battle ? { ...s.battle, end: p } : s.battle,
       }));
     });
