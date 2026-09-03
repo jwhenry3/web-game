@@ -91,6 +91,22 @@ func (n *Node) pump(c *server.Client) {
 	}
 }
 
+// ReloadOverworld reloads the map from disk (including overrides) and streams
+// the updated world to clients connected to this map node.
+func (n *Node) ReloadOverworld() error {
+	cfg, err := servercfg.Load(n.Spec.Config)
+	if err != nil {
+		return err
+	}
+	ow, err := game.LoadOverworldData(cfg.Server.Overworld)
+	if err != nil {
+		return err
+	}
+	n.OW = ow
+	n.Hub.ApplyOverworldReload(n.Spec.ID, n.Spec.Name, ow)
+	return nil
+}
+
 func (n *Node) Detach(clientID string) {
 	n.mu.Lock()
 	c, ok := n.sessions[clientID]
@@ -101,6 +117,33 @@ func (n *Node) Detach(clientID string) {
 	if ok {
 		n.Hub.Unregister(c)
 	}
+}
+
+// SessionIDs returns client IDs currently attached to this map node.
+func (n *Node) SessionIDs() []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	out := make([]string, 0, len(n.sessions))
+	for id := range n.sessions {
+		out = append(out, id)
+	}
+	return out
+}
+
+// Stop detaches remaining sessions and shuts down the hub loop.
+func (n *Node) Stop() {
+	n.mu.Lock()
+	ids := make([]string, 0, len(n.sessions))
+	for id := range n.sessions {
+		ids = append(ids, id)
+	}
+	n.mu.Unlock()
+	for _, id := range ids {
+		n.Detach(id)
+	}
+	game.UnregisterSavePointsForMap(n.Spec.ID)
+	n.Hub.Stop()
+	log.Printf("map %s stopped", n.Spec.ID)
 }
 
 func (n *Node) Handle(clientID string, env protocol.Envelope) {

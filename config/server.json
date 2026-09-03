@@ -5,7 +5,7 @@
     "data": "data/profiles.json",
     "accounts": "data/accounts.json",
     "static": "web/dist",
-    "overworld": "config/overworld.json",
+    "overworld": "maps/greenwood.map.json",
     "battle_speed": 0.75
   },
   "plugins": {

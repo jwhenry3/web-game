@@ -1,5 +1,10 @@
 package game
 
+import (
+	"fmt"
+	"strings"
+)
+
 // FFXI-style job system: each job levels independently. Players equip a main
 // job and (once unlocked) a subjob whose stats and abilities contribute at
 // half strength, capped at floor(main_level / 2).
@@ -42,7 +47,9 @@ type JobDef struct {
 	Name     string
 	Abbr     string
 	Category Category
-	Weapon   WeaponType
+	Weapon   WeaponType // default starter / display weapon
+	// AllowedWeapons lists equip types for this job's hand. Empty means {Weapon} only.
+	AllowedWeapons []WeaponType
 	// Multipliers applied to BaseStats for this job at full strength.
 	HPMult  float64
 	MPMult  float64
@@ -60,29 +67,29 @@ const (
 var Jobs = map[JobID]JobDef{
 	JobWAR: {ID: JobWAR, Name: "Warrior", Abbr: "WAR", Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.12, STRMult: 1.15},
 	JobMNK: {ID: JobMNK, Name: "Monk", Abbr: "MNK", Category: CatSwordplay, Weapon: WeaponSword, STRMult: 1.12, AGIMult: 1.10},
-	JobPLD: {ID: JobPLD, Name: "Paladin", Abbr: "PLD", Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.10, STRMult: 1.08, MAGMult: 0.95},
-	JobDRK: {ID: JobDRK, Name: "Dark Knight", Abbr: "DRK", Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.08, STRMult: 1.12, MAGMult: 1.05},
+	JobPLD: {ID: JobPLD, Name: "Paladin", Abbr: "PLD", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponMace}, HPMult: 1.10, STRMult: 1.08, MAGMult: 0.95},
+	JobDRK: {ID: JobDRK, Name: "Dark Knight", Abbr: "DRK", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponMace}, HPMult: 1.08, STRMult: 1.12, MAGMult: 1.05},
 	JobSAM: {ID: JobSAM, Name: "Samurai", Abbr: "SAM", Category: CatSwordplay, Weapon: WeaponSword, STRMult: 1.18, AGIMult: 1.05},
-	JobDRG: {ID: JobDRG, Name: "Dragoon", Abbr: "DRG", Category: CatSwordplay, Weapon: WeaponSword, STRMult: 1.14, AGIMult: 1.08},
-	JobBLU: {ID: JobBLU, Name: "Blue Mage", Abbr: "BLU", Category: CatSwordplay, Weapon: WeaponSword, MAGMult: 1.10, STRMult: 1.05},
-	JobRUN: {ID: JobRUN, Name: "Rune Fencer", Abbr: "RUN", Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.06, STRMult: 1.10, MAGMult: 1.05},
+	JobDRG: {ID: JobDRG, Name: "Dragoon", Abbr: "DRG", Category: CatSwordplay, Weapon: WeaponSpear, AllowedWeapons: []WeaponType{WeaponSpear, WeaponSword}, STRMult: 1.14, AGIMult: 1.08},
+	JobBLU: {ID: JobBLU, Name: "Blue Mage", Abbr: "BLU", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponDagger, WeaponStaff}, MAGMult: 1.10, STRMult: 1.05},
+	JobRUN: {ID: JobRUN, Name: "Rune Fencer", Abbr: "RUN", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponMace}, HPMult: 1.06, STRMult: 1.10, MAGMult: 1.05},
 
 	JobTHF: {ID: JobTHF, Name: "Thief", Abbr: "THF", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.18, STRMult: 1.02},
 	JobNIN: {ID: JobNIN, Name: "Ninja", Abbr: "NIN", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.14, STRMult: 1.08},
 	JobDNC: {ID: JobDNC, Name: "Dancer", Abbr: "DNC", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.16, STRMult: 1.04},
 	JobBST: {ID: JobBST, Name: "Beastmaster", Abbr: "BST", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.08, STRMult: 1.06},
 	JobRNG: {ID: JobRNG, Name: "Ranger", Abbr: "RNG", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.12, STRMult: 1.10},
-	JobCOR: {ID: JobCOR, Name: "Corsair", Abbr: "COR", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.10, MAGMult: 1.05},
+	JobCOR: {ID: JobCOR, Name: "Corsair", Abbr: "COR", Category: CatStealth, Weapon: WeaponDagger, AllowedWeapons: []WeaponType{WeaponDagger, WeaponSword}, AGIMult: 1.10, MAGMult: 1.05},
 
 	JobBLM: {ID: JobBLM, Name: "Black Mage", Abbr: "BLM", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.20, MPMult: 1.10},
 	JobSMN: {ID: JobSMN, Name: "Summoner", Abbr: "SMN", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.16, MPMult: 1.14, HPMult: 0.95},
 	JobBRD: {ID: JobBRD, Name: "Bard", Abbr: "BRD", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.08, AGIMult: 1.08, MPMult: 1.08},
-	JobGEO: {ID: JobGEO, Name: "Geomancer", Abbr: "GEO", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.14, MPMult: 1.06},
+	JobGEO: {ID: JobGEO, Name: "Geomancer", Abbr: "GEO", Category: CatSorcery, Weapon: WeaponStaff, AllowedWeapons: []WeaponType{WeaponStaff, WeaponMace}, MAGMult: 1.14, MPMult: 1.06},
 
 	JobWHM: {ID: JobWHM, Name: "White Mage", Abbr: "WHM", Category: CatDevotion, Weapon: WeaponMace, MAGMult: 1.12, MPMult: 1.14, HPMult: 1.04},
-	JobRDM: {ID: JobRDM, Name: "Red Mage", Abbr: "RDM", Category: CatDevotion, Weapon: WeaponMace, MAGMult: 1.10, STRMult: 1.06, MPMult: 1.08},
-	JobSCH: {ID: JobSCH, Name: "Scholar", Abbr: "SCH", Category: CatDevotion, Weapon: WeaponMace, MAGMult: 1.14, MPMult: 1.12},
-	JobPUP: {ID: JobPUP, Name: "Puppetmaster", Abbr: "PUP", Category: CatDevotion, Weapon: WeaponMace, MAGMult: 1.08, STRMult: 1.06, HPMult: 1.02},
+	JobRDM: {ID: JobRDM, Name: "Red Mage", Abbr: "RDM", Category: CatDevotion, Weapon: WeaponMace, AllowedWeapons: []WeaponType{WeaponMace, WeaponSword, WeaponStaff}, MAGMult: 1.10, STRMult: 1.06, MPMult: 1.08},
+	JobSCH: {ID: JobSCH, Name: "Scholar", Abbr: "SCH", Category: CatDevotion, Weapon: WeaponMace, AllowedWeapons: []WeaponType{WeaponMace, WeaponStaff}, MAGMult: 1.14, MPMult: 1.12},
+	JobPUP: {ID: JobPUP, Name: "Puppetmaster", Abbr: "PUP", Category: CatDevotion, Weapon: WeaponMace, AllowedWeapons: []WeaponType{WeaponMace, WeaponSword}, MAGMult: 1.08, STRMult: 1.06, HPMult: 1.02},
 }
 
 // StartingJobs are the six jobs a new hero may choose (classic FFXI starters).
@@ -131,6 +138,51 @@ func JobWeapon(id JobID) WeaponType {
 	return WeaponSword
 }
 
+// JobAllowedWeapons returns weapon types a job may equip in its hand slot.
+func JobAllowedWeapons(id JobID) []WeaponType {
+	def, ok := Jobs[id]
+	if !ok {
+		return []WeaponType{WeaponSword}
+	}
+	if len(def.AllowedWeapons) > 0 {
+		return def.AllowedWeapons
+	}
+	return []WeaponType{def.Weapon}
+}
+
+func JobAllowsWeapon(id JobID, weapon WeaponType) bool {
+	for _, w := range JobAllowedWeapons(id) {
+		if w == weapon {
+			return true
+		}
+	}
+	return false
+}
+
+// FormatWeaponList renders weapon types for player-facing messages.
+func FormatWeaponList(types []WeaponType) string {
+	if len(types) == 0 {
+		return "none"
+	}
+	names := make([]string, len(types))
+	for i, t := range types {
+		names[i] = string(t)
+	}
+	if len(names) == 1 {
+		return names[0]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
+}
+
+// EquipWeaponDeniedMessage explains why a weapon cannot go in a job's hand.
+func EquipWeaponDeniedMessage(job JobID, weapon WeaponType) string {
+	name := string(job)
+	if def, ok := Jobs[job]; ok {
+		name = def.Name
+	}
+	return fmt.Sprintf("%s cannot equip %s weapons (allowed: %s).", name, weapon, FormatWeaponList(JobAllowedWeapons(job)))
+}
+
 // WeaponDefaultJob maps a legacy starting weapon to a default main job.
 func WeaponDefaultJob(w WeaponType) JobID {
 	switch w {
@@ -140,6 +192,8 @@ func WeaponDefaultJob(w WeaponType) JobID {
 		return JobBLM
 	case WeaponMace:
 		return JobWHM
+	case WeaponSpear:
+		return JobDRG
 	default:
 		return JobWAR
 	}

@@ -64,6 +64,7 @@ const (
 	TypeBattleTick      MessageType = "battle_tick"  // lightweight ATB sync
 	TypeBattleEnd       MessageType = "battle_end"
 	TypeError           MessageType = "error"
+	TypeMapConfig       MessageType = "map_config"
 	// Realtime combat plugin (combat.realtime)
 	TypeRTBattleState MessageType = "rt_battle_state"
 	TypeRTBattleTick  MessageType = "rt_battle_tick"
@@ -115,8 +116,9 @@ type CharacterAppearance struct {
 }
 
 type SetJobsPayload struct {
-	MainJob string `json:"main_job"`
-	SubJob  string `json:"sub_job"` // "" clears subjob
+	MainJob      string `json:"main_job"`
+	SubJob       string `json:"sub_job"` // "" clears subjob
+	JobChangerID string `json:"job_changer_id"`
 }
 
 type MovePayload struct {
@@ -269,7 +271,28 @@ type MapSnapshot struct {
 	Capabilities []string     `json:"capabilities"`
 	Modules      []MapModule  `json:"modules"`
 	Overworld    OverworldMap `json:"overworld"`
-	Portals      []MapPortal  `json:"portals,omitempty"`
+	TiledMap      string       `json:"tiled_map,omitempty"`
+	Portals       []MapPortal  `json:"portals,omitempty"`
+	TileOverrides *MapTileOverrides `json:"tile_overrides,omitempty"`
+	TerrainLayers *MapTerrainLayers `json:"terrain_layers,omitempty"`
+}
+
+// MapTerrainLayers is the composed ground/collision grid from the map editor config.
+type MapTerrainLayers struct {
+	Ground    []int `json:"ground"`
+	Collision []int `json:"collision"`
+}
+
+// MapConfigPayload pushes an updated map snapshot after editor override reload.
+type MapConfigPayload struct {
+	Map *MapSnapshot `json:"map"`
+}
+
+// MapTileOverrides is a sparse set of tile patches per layer for client rendering.
+type MapTileOverrides struct {
+	MapID     string                    `json:"map_id"`
+	Layers    map[string]map[string]int `json:"layers"`
+	UpdatedAt string                    `json:"updated_at,omitempty"`
 }
 
 // MapPortal is a zone-border strip on the current map. Destination is not sent.
@@ -367,12 +390,20 @@ type SavePoint struct {
 	Y    float64 `json:"y"`
 }
 
+type JobChanger struct {
+	ID   string  `json:"id"`
+	Name string  `json:"name"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+}
+
 type WorldStatePayload struct {
-	Players    []WorldPlayer `json:"players"`
-	NPCs       []WorldNPC    `json:"npcs"`
-	Battles    []BattleInfo  `json:"battles"`
-	SavePoints []SavePoint   `json:"save_points"`
-	Map        OverworldMap  `json:"map"`
+	Players     []WorldPlayer `json:"players"`
+	NPCs        []WorldNPC    `json:"npcs"`
+	Battles     []BattleInfo  `json:"battles"`
+	SavePoints  []SavePoint   `json:"save_points"`
+	JobChangers []JobChanger  `json:"job_changers"`
+	Map         OverworldMap  `json:"map"`
 }
 
 type NPCStatePayload struct {

@@ -9,6 +9,23 @@ import (
 	"ffv-web-game/internal/protocol"
 )
 
+// wildernessXY is a walkable point outside any sanctuary on the loaded map.
+func wildernessXY() (float64, float64) {
+	ow := game.Loaded()
+	if ow == nil {
+		return 2000, 700
+	}
+	for r := 10; r < ow.Rows-10; r++ {
+		for c := int(float64(ow.Cols) * 0.55); c < ow.Cols-10; c++ {
+			if ow.WalkableTile(c, r) && !ow.SanctuaryAt(c, r) {
+				center := ow.TileCenter(game.Tile{C: c, R: r})
+				return center.X, center.Y
+			}
+		}
+	}
+	return 2000, 700
+}
+
 func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *protocol.WorldPlayer) {
 	t.Helper()
 	h := mustTestHub()
@@ -27,26 +44,28 @@ func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *protocol.Wor
 }
 
 func TestWithinEngageRange(t *testing.T) {
-	if !withinEngageRange(100, 100, 100+engageRange, 100) {
+	if !withinEngageRange(100, 100, 100+engageRangePx(), 100) {
 		t.Fatal("edge of radius should engage")
 	}
-	if withinEngageRange(100, 100, 100+engageRange+1, 100) {
+	if withinEngageRange(100, 100, 100+engageRangePx()+1, 100) {
 		t.Fatal("outside radius must not engage")
 	}
 }
 
 func TestClampMoveRejectsTeleport(t *testing.T) {
 	h := mustTestHub()
-	x, y := h.clampMove(200, 200, 800, 800)
-	if dist(200, 200, x, y) > maxMoveStep+0.01 {
-		t.Fatalf("teleport must be clamped, moved %f", dist(200, 200, x, y))
+	x0, y0 := wildernessXY()
+	x, y := h.clampMove(x0, y0, x0+800, y0+800)
+	if dist(x0, y0, x, y) > maxMoveStep+0.01 {
+		t.Fatalf("teleport must be clamped, moved %f", dist(x0, y0, x, y))
 	}
 }
 
 func TestMoveOntoNPCStartsBattle(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 410, Y: 400}
-	raw, _ := json.Marshal(protocol.MovePayload{X: 408, Y: 400})
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 10, Y: py}
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
 	if !wp.InBattle || wp.BattleID == "" {
 		t.Fatalf("collision should lock the player into a battle, got %+v", wp)
@@ -65,9 +84,10 @@ func TestMoveOntoNPCStartsBattle(t *testing.T) {
 }
 
 func TestMoveFarFromNPCDoesNotStartBattle(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 700, Y: 700}
-	raw, _ := json.Marshal(protocol.MovePayload{X: 420, Y: 400})
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 300, Y: py + 300}
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 20, Y: py})
 	h.handleMove(c, raw)
 	if wp.InBattle {
 		t.Fatal("distant npc must not start a battle")
@@ -78,11 +98,12 @@ func TestMoveFarFromNPCDoesNotStartBattle(t *testing.T) {
 }
 
 func TestLockedPlayerDoesNotReengage(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
 	wp.InBattle = true
 	wp.BattleID = "existing-battle"
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 400, Y: 400}
-	raw, _ := json.Marshal(protocol.MovePayload{X: 402, Y: 400})
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px, Y: py}
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 2, Y: py})
 	h.handleMove(c, raw)
 	if wp.BattleID != "existing-battle" {
 		t.Fatal("combat-locked players cannot start another battle")
@@ -110,7 +131,8 @@ func TestSeededNPCsStayInRegion(t *testing.T) {
 }
 
 func TestReleaseFromBattleGrantsImmunity(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
 	c.BattleID = "battle-1"
 	wp.InBattle = true
 	wp.BattleID = "battle-1"
@@ -125,8 +147,8 @@ func TestReleaseFromBattleGrantsImmunity(t *testing.T) {
 		t.Fatalf("immunity should last about 5s, until %d", wp.ImmuneUntil)
 	}
 
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 410, Y: 400}
-	raw, _ := json.Marshal(protocol.MovePayload{X: 408, Y: 400})
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 10, Y: py}
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
 	if wp.InBattle || wp.BattleID != "" {
 		t.Fatal("immune player must not start a battle by walking onto an npc")
@@ -134,10 +156,11 @@ func TestReleaseFromBattleGrantsImmunity(t *testing.T) {
 }
 
 func TestExpiredImmunityAllowsBattle(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
 	wp.ImmuneUntil = time.Now().Add(-time.Second).UnixMilli()
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 410, Y: 400}
-	raw, _ := json.Marshal(protocol.MovePayload{X: 408, Y: 400})
+	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 10, Y: py}
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
 	if !wp.InBattle {
 		t.Fatal("expired invul should not block collision")
@@ -146,7 +169,8 @@ func TestExpiredImmunityAllowsBattle(t *testing.T) {
 }
 
 func TestReturnToWorldRefreshesImmunity(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
 	wp.ImmuneUntil = time.Now().Add(-time.Second).UnixMilli()
 	h.handleLeaveBattleReleased(c)
 	if !battleImmune(wp) {
@@ -154,13 +178,40 @@ func TestReturnToWorldRefreshesImmunity(t *testing.T) {
 	}
 }
 
+func TestMapTransferGrantsImmunity(t *testing.T) {
+	h := mustTestHub()
+	h.SetMap("greenwood", "Greenwood", game.Loaded())
+	h.store.GetOrCreate("Bartz", game.JobWAR)
+	px, py := wildernessXY()
+	c := &Client{
+		ID:          "xfer-1",
+		Send:        make(chan []byte, 16),
+		Hub:         h,
+		UseSpawn:    true,
+		SpawnX:      px,
+		SpawnY:      py,
+		SpawnFacing: "right",
+	}
+	h.clients[c.ID] = c
+	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: "Bartz"})
+	h.handleJoinWorld(c, raw)
+	wp := h.world[c.ID]
+	if wp == nil {
+		t.Fatal("expected world player after transfer join")
+	}
+	if !battleImmune(wp) {
+		t.Fatal("map transfer should grant 5s invulnerability")
+	}
+}
+
 func TestNPCTickSkipsImmunePlayer(t *testing.T) {
-	h, _, wp := testHubWithPlayer(t, 500, 500)
+	px, py := wildernessXY()
+	h, _, wp := testHubWithPlayer(t, px, py)
 	wp.ImmuneUntil = time.Now().Add(5 * time.Second).UnixMilli()
 	h.npcs["npc-1"] = &worldNPC{
 		ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: 500 + engageRange - 4, Y: 500,
-		path: []game.Vec2{{X: 500, Y: 500}},
+		X: px + engageRangePx() - 4, Y: py,
+		path: []game.Vec2{{X: px, Y: py}},
 	}
 	h.tickNPCs()
 	if wp.InBattle {
@@ -169,13 +220,14 @@ func TestNPCTickSkipsImmunePlayer(t *testing.T) {
 }
 
 func TestNPCDespawnsUntilSpawnWindow(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	px, py := wildernessXY()
+	h, c, wp := testHubWithPlayer(t, px, py)
 	h.npcs["g1"] = &worldNPC{
 		ID: "g1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: 410, Y: 400,
+		X: px + 10, Y: py,
 		patrol: game.NPCPatrols[0],
 	}
-	raw, _ := json.Marshal(protocol.MovePayload{X: 408, Y: 400})
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
 	if !wp.InBattle {
 		t.Fatal("expected a battle")
@@ -224,11 +276,12 @@ func hasWorldNPC(h *Hub, id string) bool {
 }
 
 func TestNPCTickWalksIntoPlayer(t *testing.T) {
-	h, _, wp := testHubWithPlayer(t, 500, 500)
+	px, py := wildernessXY()
+	h, _, wp := testHubWithPlayer(t, px, py)
 	h.npcs["npc-1"] = &worldNPC{
 		ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: 500 + engageRange - 4, Y: 500,
-		path: []game.Vec2{{X: 500, Y: 500}},
+		X: px + engageRangePx() - 4, Y: py,
+		path: []game.Vec2{{X: px, Y: py}},
 	}
 	h.tickNPCs()
 	if !wp.InBattle {

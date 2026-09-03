@@ -6,7 +6,6 @@ import type { BattleEntity } from "../types";
 import type { BattleView } from "../state/store";
 import { RARITY_COLORS } from "../types";
 import { StatusIcons } from "../ui/StatusIcons";
-import { focusPrimaryDialogButton } from "../ui/dialogFocus";
 
 function Gauge({
   value,
@@ -71,18 +70,12 @@ export function BattleHUD() {
     if (!gcdReady && useGame.getState().selectedAction) setSelected(null);
   }, [gcdReady, setSelected]);
 
-  const end = battle?.end;
-  useEffect(() => {
-    if (!end) return;
-    const t = window.setTimeout(() => focusPrimaryDialogButton(), 0);
-    return () => window.clearTimeout(t);
-  }, [end]);
-
   if (!battle || !profile || !self) return null;
 
   const players = battle.entities.filter((e) => e.is_player);
   const enemies = battle.entities.filter((e) => !e.is_player);
   const target = battle.entities.find((e) => e.id === self.target_id) ?? enemies.find((e) => e.alive);
+  const end = battle.end;
   const myReward = end?.rewards?.find((r) => r.player_id === selfId);
 
   return (
@@ -191,8 +184,8 @@ export function BattleHUD() {
               </div>
             )}
             {!end.victory && <p className="hint">Your party was wiped out. No rewards this time.</p>}
-            <button type="button" className="xiv-btn gold wide" aria-label="Return to World" onClick={() => net.leaveBattle()}>
-              <span aria-hidden="true">Return to World</span>
+            <button type="button" className="xiv-btn gold wide" onClick={() => net.leaveBattle()}>
+              Return to World
             </button>
             </div>
           </div>

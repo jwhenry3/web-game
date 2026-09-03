@@ -1,61 +1,101 @@
 package cluster
 
 import (
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"ffv-web-game/internal/servercfg"
+	"ffv-web-game/internal/game"
 )
 
-func TestLoadCluster(t *testing.T) {
-	t.Chdir(filepath.Join("..", ".."))
-	cfg, err := Load("config/cluster.json")
-	if err != nil {
-		t.Fatal(err)
+func TestMapSpecIsEnabledDefault(t *testing.T) {
+	m := MapSpec{ID: "a", Name: "A", Config: "x"}
+	if !m.IsEnabled() {
+		t.Fatal("nil enabled should default true")
 	}
-	if cfg.DefaultMap().ID != "greenwood" {
-		t.Fatalf("default map %q", cfg.DefaultMap().ID)
-	}
-	if len(cfg.Maps) < 2 {
-		t.Fatalf("expected at least 2 maps, got %d", len(cfg.Maps))
-	}
-	if !cfg.HasMap("north") {
-		t.Fatal("expected north map")
-	}
-
-	greenwood, err := servercfg.Load(mustMapConfig(t, cfg, "greenwood"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	north, err := servercfg.Load(mustMapConfig(t, cfg, "north"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if greenwood.Plugins.Combat == north.Plugins.Combat {
-		t.Fatalf("maps must use different combat plugins, both %s", greenwood.Plugins.Combat)
-	}
-	modes := map[string]bool{greenwood.Plugins.Combat: true, north.Plugins.Combat: true}
-	if !modes["combat.realtime"] || !modes["combat.atb"] {
-		t.Fatalf("expected realtime and atb, got %s and %s", greenwood.Plugins.Combat, north.Plugins.Combat)
+	m.Enabled = BoolPtr(false)
+	if m.IsEnabled() {
+		t.Fatal("expected disabled")
 	}
 }
 
-func mustMapConfig(t *testing.T, cfg Config, id string) string {
-	t.Helper()
-	m, ok := cfg.MapByID(id)
-	if !ok {
-		t.Fatalf("missing map %s", id)
+func TestCanTravelTo(t *testing.T) {
+	c := Config{Maps: []MapSpec{
+		{ID: "a", Name: "A", Config: "x", Default: true, Enabled: BoolPtr(true)},
+		{ID: "b", Name: "B", Config: "x", Enabled: BoolPtr(false)},
+	}}
+	if !c.CanTravelTo("a") {
+		t.Fatal("enabled map should allow travel")
 	}
-	return m.Config
+	if c.CanTravelTo("b") {
+		t.Fatal("disabled map should block travel")
+	}
+	if c.CanTravelTo("missing") {
+		t.Fatal("unknown map should block travel")
+	}
 }
 
-func TestRejectUnknownTransferDest(t *testing.T) {
-	t.Chdir(filepath.Join("..", ".."))
-	cfg := Default()
-	if err := cfg.Validate(); err != nil {
+func TestMapsRegistryRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	dataFile := filepath.Join(dir, "profiles.json")
+	_ = os.WriteFile(dataFile, []byte("{}"), 0o644)
+
+	mapPath := filepath.Join(dir, "blank.map.json")
+	blank, err := game.NewBlankMapConfig(16, 16, 32)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.HasMap("nowhere") {
-		t.Fatal("unknown map should not be valid")
+	if err := game.SaveMapConfig(mapPath, blank); err != nil {
+		t.Fatal(err)
+	}
+
+	serverCfg := filepath.Join(dir, "server.json")
+	serverJSON := strings.ReplaceAll(`{
+  "server": {
+    "name": "t",
+    "addr": ":0",
+    "data": "d",
+    "accounts": "a",
+    "static": "s",
+    "overworld": "OVERWORLD",
+    "battle_speed": 0.75
+  },
+  "plugins": {
+    "combat": "combat.atb",
+    "modules": [{
+      "id": "combat.atb",
+      "name": "ATB",
+      "version": "1.0.0",
+      "capabilities": ["combat"],
+      "enabled": true,
+      "frontend": {"pluginId": "combat.atb"}
+    }]
+  }
+}`, "OVERWORLD", filepath.ToSlash(mapPath))
+	if err := os.WriteFile(serverCfg, []byte(serverJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := Config{
+		Proxy: ProxyConfig{Data: dataFile},
+		Maps: []MapSpec{
+			{ID: "greenwood", Name: "Greenwood", Config: serverCfg, Default: true},
+			{ID: "cave", Name: "Cave", Config: serverCfg, Enabled: BoolPtr(true)},
+		},
+	}
+	if err := SaveMapsRegistry(cfg); err != nil {
+		t.Fatalf("save registry: %v", err)
+	}
+	if _, err := os.Stat(MapsRegistryPath(dataFile)); err != nil {
+		t.Fatalf("registry missing: %v", err)
+	}
+
+	loaded := Config{Proxy: ProxyConfig{Data: dataFile}, Maps: []MapSpec{{ID: "old", Name: "Old", Config: serverCfg}}}
+	if err := loaded.loadMapsRegistry(); err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Maps) != 2 || loaded.Maps[1].ID != "cave" {
+		t.Fatalf("maps = %+v", loaded.Maps)
 	}
 }

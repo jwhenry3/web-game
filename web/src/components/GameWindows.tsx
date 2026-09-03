@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { net } from "../net/socket";
@@ -6,6 +6,8 @@ import { useGame } from "../state/store";
 import {
   equipSlotsForProfile,
   equippedSlotForItem,
+  ARMOURY_TABS,
+  type ArmouryTabId,
   jobColor,
   jobLabel,
   mainWeaponTypeFromProfile,
@@ -23,8 +25,6 @@ import { ItemListRow, ItemSlot } from "./ItemBits";
 import { SocialPane } from "./SocialPane";
 import { MainMenuTrigger } from "./MainMenu";
 import { MapWindow } from "./WorldMap";
-import { focusPrimaryDialogButton } from "../ui/dialogFocus";
-import { treeNavDirection, treeNeighbor } from "../ui/skillTreeNav";
 
 const TITLES: Record<WindowId, string> = {
   character: "Character",
@@ -39,12 +39,6 @@ export function GameWindows() {
   const open = useGame((s) => s.openWindow);
   const close = useGame((s) => s.closeWindow);
   const profile = useGame((s) => s.profile);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = window.setTimeout(() => focusPrimaryDialogButton(), 0);
-    return () => window.clearTimeout(t);
-  }, [open]);
 
   if (!open || !profile) return null;
 
@@ -71,14 +65,12 @@ export function GameWindows() {
 }
 
 function CharacterPane({ profile }: { profile: ProfileInfo }) {
-  const locked = useGame((s) => {
-    const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_battle ?? s.screen === "battle";
-  });
+  const [tab, setTab] = useState<"overview" | "jobs">("overview");
   const stats = profile.stats ?? { hp: 0, mp: 0, str: 0, mag: 0, agi: 0 };
   const xpPct = Math.min(100, (profile.xp / Math.max(profile.max_xp, 1)) * 100);
   const canSub = profile.level >= profile.subjob_unlock_level;
   const sortedJobs = [...(profile.jobs ?? [])].sort((a, b) => a.abbr.localeCompare(b.abbr));
+  const subJobProgress = profile.jobs?.find((j) => j.id === profile.sub_job);
 
   return (
     <div className="xiv-char">
@@ -87,8 +79,7 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
           <div className="xiv-char-name">{profile.name}</div>
           <div className="dim">
             {profile.race ? `${profile.race} · ` : ""}
-            {profile.main_job}
-            {profile.sub_job ? ` / ${profile.sub_job}` : ""} · Lv {profile.level}
+            Lv {profile.level}
           </div>
         </div>
         <div className="xiv-xp">
@@ -101,66 +92,69 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
         </div>
       </div>
 
-      <div className="xiv-section-label">Job Combo</div>
-      <p className="hint">Equipment, skills, and hotbar are saved per main/sub combo.</p>
-      <div className="xiv-job-row">
-        <label className="field-label">Main</label>
-        <select
-          className="xiv-input"
-          value={profile.main_job}
-          disabled={locked}
-          onChange={(e) => {
-            const next = e.target.value;
-            const sub = profile.sub_job === next ? "" : profile.sub_job;
-            net.setJobs(next, sub);
-          }}
-        >
-          {sortedJobs.map((j) => (
-            <option key={j.id} value={j.id}>
-              {j.abbr} Lv{j.level}
-            </option>
-          ))}
-        </select>
+      <div className="xiv-tabs">
+        <button type="button" className={`xiv-tab ${tab === "overview" ? "on" : ""}`} onClick={() => setTab("overview")}>
+          Overview
+        </button>
+        <button type="button" className={`xiv-tab ${tab === "jobs" ? "on" : ""}`} onClick={() => setTab("jobs")}>
+          Job Levels
+        </button>
       </div>
-      <div className="xiv-job-row">
-        <label className="field-label">Sub</label>
-        <select
-          className="xiv-input"
-          value={profile.sub_job}
-          disabled={locked || !canSub}
-          onChange={(e) => net.setJobs(profile.main_job, e.target.value)}
-        >
-          <option value="">None</option>
-          {sortedJobs
-            .filter((j) => j.id !== profile.main_job)
-            .map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.abbr} Lv{j.level}
-              </option>
-            ))}
-        </select>
-      </div>
-      {!canSub && <p className="hint">Sub job unlocks at main job level {profile.subjob_unlock_level}.</p>}
 
-      <div className="xiv-params">
-        <Param label="HP" value={stats.hp} />
-        <Param label="MP" value={stats.mp} />
-        <Param label="STR" value={stats.str} />
-        <Param label="MAG" value={stats.mag} />
-        <Param label="AGI" value={stats.agi} />
-      </div>
-      <div className="xiv-section-label">Job Levels</div>
-      {sortedJobs
-        .filter((j) => j.level > 1 || j.id === profile.main_job || j.id === profile.sub_job)
-        .map((j) => (
-          <div key={j.id} className="xiv-spec-row">
-            <span style={{ color: jobColor(j.id) }}>{j.abbr}</span>
-            <span>Lv {j.level}</span>
-            <span className="dim">
-              {j.xp}/{j.max_xp} EXP
-            </span>
+      {tab === "overview" && (
+        <>
+          <div className="xiv-char-jobs">
+            <div className="xiv-char-job">
+              <span className="field-label">Main</span>
+              <span className="xiv-job-readout">{jobLabel(profile.main_job)} Lv{profile.level}</span>
+            </div>
+            <div className="xiv-char-job">
+              <span className="field-label">Sub</span>
+              <span className="xiv-job-readout">
+                {profile.sub_job
+                  ? `${jobLabel(profile.sub_job)} Lv${subJobProgress?.level ?? 1}`
+                  : "None"}
+              </span>
+            </div>
           </div>
-        ))}
+          {!canSub && <p className="hint">Sub job unlocks at main job level {profile.subjob_unlock_level}.</p>}
+          <p className="hint">Visit a Job Master in the world to change jobs.</p>
+
+          <div className="xiv-params">
+            <Param label="HP" value={stats.hp} />
+            <Param label="MP" value={stats.mp} />
+            <Param label="STR" value={stats.str} />
+            <Param label="MAG" value={stats.mag} />
+            <Param label="AGI" value={stats.agi} />
+          </div>
+        </>
+      )}
+
+      {tab === "jobs" && (
+        <div className="job-grid job-grid-compact xiv-char-job-grid">
+          {sortedJobs.map((j) => {
+            const isMain = j.id === profile.main_job;
+            const isSub = j.id === profile.sub_job;
+            return (
+              <div
+                key={j.id}
+                className={`job-card job-card--inline job-card--readout ${isMain || isSub ? "selected" : ""}`}
+              >
+                <span className="job-swatch" style={{ background: jobColor(j.id) }} />
+                <div className="job-card-body">
+                  <span className="job-name" style={{ color: jobColor(j.id) }}>
+                    {j.name}
+                    {isMain ? " (Main)" : isSub ? " (Sub)" : ""}
+                  </span>
+                  <span className="job-level-meta dim">
+                    Lv {j.level} · {j.xp}/{j.max_xp} EXP
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -190,6 +184,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   });
   const byId = new Map(profile.inventory.map((i) => [i.id, i]));
   const [focus, setFocus] = useState<Item | null>(null);
+  const [armouryTab, setArmouryTab] = useState<ArmouryTabId>("weapon");
 
   const slots = equipSlotsForProfile(profile.sub_job);
   const previewWeapon = previewWeaponForEquipment(profile, focus);
@@ -206,7 +201,10 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
     [selfId, profile, previewWeapon],
   );
   const previewingWeapon = !!focus && previewWeapon !== mainWeaponTypeFromProfile(profile);
-  const armouryItems = profile.inventory.filter((i) => i.kind !== "consumable" && i.slot);
+  const armouryItems = profile.inventory.filter(
+    (i) => i.kind !== "consumable" && i.slot === armouryTab,
+  );
+  const armouryTabLabel = ARMOURY_TABS.find((t) => t.id === armouryTab)?.label ?? armouryTab;
 
   const dollSlot = (slotId: string, label: string) => {
     const enabled = slots.some((s) => s.id === slotId);
@@ -231,7 +229,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
       {locked && <p className="hint">Gear cannot be changed while engaged.</p>}
       <div className="xiv-doll">
         <div className="xiv-equip-preview">
-          <CharacterPreviewAnimated appearance={previewAppearance} />
+          <CharacterPreviewAnimated appearance={previewAppearance} scale={1.25} />
           {previewingWeapon && <span className="xiv-equip-preview-label">Preview</span>}
         </div>
         {dollSlot("weapon", "Main")}
@@ -245,6 +243,21 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <div className="xiv-equip-side">
         <div className="xiv-section-label">Armoury Chest</div>
+        <div className="xiv-tabs xiv-equip-tabs">
+          {ARMOURY_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`xiv-tab ${armouryTab === t.id ? "on" : ""}`}
+              onClick={() => {
+                setArmouryTab(t.id);
+                if (focus && focus.slot !== t.id) setFocus(null);
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <div className="xiv-item-list">
           {armouryItems.map((item) => (
             <ItemListRow
@@ -258,7 +271,9 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
               onClick={() => setFocus(item)}
             />
           ))}
-          {armouryItems.length === 0 && <p className="hint xiv-item-list-empty">No gear in the armoury chest.</p>}
+          {armouryItems.length === 0 && (
+            <p className="hint xiv-item-list-empty">No {armouryTabLabel.toLowerCase()} gear in the armoury chest.</p>
+          )}
         </div>
       </div>
     </div>
@@ -288,13 +303,14 @@ function InventoryPane({ profile }: { profile: ProfileInfo }) {
         ))}
       </div>
       <div className="xiv-inv-list">
-        <div className="xiv-item-list">
+        <div className="xiv-item-list xiv-item-list--grid-3">
           {items.map((item) => (
             <ItemListRow
               key={item.id}
               item={item}
               profile={profile}
               locked={locked}
+              showLevel={false}
               equipped={!!equippedSlotForItem(profile.equipped, item.id)}
               equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
               selected={focus?.id === item.id}
@@ -364,7 +380,6 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
   });
   const [tab, setTab] = useState<ActionTab>("general");
   const [focusId, setFocusId] = useState<string | null>(null);
-  const treeRef = useRef<HTMLDivElement>(null);
   const byId = new Map(profile.skills.map((s) => [s.id, s]));
   const tabs = jobTabs(profile);
   const activeJob = tab === "general" ? null : tab;
@@ -373,31 +388,6 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
     : profile.skills.filter((s) => s.id === "attack" || s.world_only);
   const layout = useMemo(() => layoutSkillTree(tree), [tree]);
   const focus = (focusId && byId.get(focusId)) || tree[0];
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const dir = treeNavDirection(e.key);
-      if (!dir) return;
-      const active = document.activeElement;
-      if (!active?.closest(".xiv-tree")) return;
-
-      e.preventDefault();
-      e.stopPropagation();
-
-      const currentId = focusId ?? tree[0]?.id;
-      if (!currentId) return;
-      const nextId = treeNeighbor(layout, currentId, dir);
-      if (!nextId) return;
-      setFocusId(nextId);
-      requestAnimationFrame(() => {
-        treeRef.current
-          ?.querySelector<HTMLButtonElement>(`[data-skill-id="${nextId}"]`)
-          ?.focus();
-      });
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [layout, focusId, tree]);
 
   const maxX = layout.reduce((m, n) => Math.max(m, n.x), 0);
   const maxY = layout.reduce((m, n) => Math.max(m, n.y), 0);
@@ -429,7 +419,7 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
           ? "Attack, Return, and Teleport are always available. Drag them onto the hotbar; Return and Teleport are used in the field."
           : "Skills unlock as your jobs level up. Use them in battle to raise skill level."}
       </p>
-      <div ref={treeRef} className="xiv-tree" style={{ width, height }}>
+      <div className="xiv-tree" style={{ width, height }}>
         <svg className="xiv-tree-links" width={width} height={height}>
           {tree.map((sk) => {
             if (!sk.prereq) return null;
@@ -486,8 +476,6 @@ function SkillNode({
   const node = (
     <button
       type="button"
-      data-skill-id={sk.id}
-      aria-label={sk.name}
       className={`xiv-tree-node ${sk.unlocked ? "learned" : ""} ${selected ? "selected" : ""} ${!prereqMet ? "locked" : ""}`}
       style={style}
       draggable={sk.unlocked}
@@ -496,9 +484,8 @@ function SkillNode({
         writeHotbarDrag(e, { kind: "skill", id: sk.id });
       }}
       onClick={onSelect}
-      onFocus={onSelect}
     >
-      <span className={`xiv-slot ${sk.unlocked ? "equipped" : "empty"}`} aria-hidden="true">
+      <span className={`xiv-slot ${sk.unlocked ? "equipped" : "empty"}`}>
         <span className="xiv-slot-glyph">
           <GameIcon
               src={
@@ -515,7 +502,7 @@ function SkillNode({
           />
         </span>
       </span>
-      <span className="xiv-tree-name" aria-hidden="true">
+      <span className="xiv-tree-name">
         {sk.name}
         {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
       </span>

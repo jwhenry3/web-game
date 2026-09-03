@@ -10,7 +10,7 @@ func TestZoneBordersBetweenGreenwoodAndNorth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	northPath := filepath.Join(filepath.Dir(defaultOverworldPath()), "overworld.north.json")
+	northPath := filepath.Join(filepath.Dir(defaultOverworldPath()), "north.map.json")
 	north, err := LoadOverworldData(northPath)
 	if err != nil {
 		t.Fatal(err)
@@ -36,16 +36,16 @@ func TestZoneBordersBetweenGreenwoodAndNorth(t *testing.T) {
 	assertInlandSpawn(t, "greenwood spawn from north", greenwood, toGreenwood)
 
 	// Zone strips sit on the connecting east/west road, not in the rock border.
-	if toNorth.MinC < OverworldCols-4 {
-		t.Fatalf("greenwood exit should be on the east edge, minC=%d", toNorth.MinC)
+	if toNorth.MinC < greenwood.Cols-16 {
+		t.Fatalf("greenwood exit should be on the east edge, minC=%d cols=%d", toNorth.MinC, greenwood.Cols)
 	}
-	if toGreenwood.MaxC > 3 {
+	if toGreenwood.MaxC > 12 {
 		t.Fatalf("north exit should be on the west edge, maxC=%d", toGreenwood.MaxC)
 	}
-	if FacingFromExit(toNorth) != FacingRight {
+	if FacingFromExit(toNorth, greenwood.Cols) != FacingRight {
 		t.Fatal("crossing Greenwood east should keep facing right")
 	}
-	if FacingFromExit(toGreenwood) != FacingLeft {
+	if FacingFromExit(toGreenwood, north.Cols) != FacingLeft {
 		t.Fatal("crossing Northern Wastes west should keep facing left")
 	}
 }
@@ -74,7 +74,7 @@ func exitTo(ow *Overworld, dest string) (MapExit, bool) {
 func assertInlandSpawn(t *testing.T, name string, dest *Overworld, from MapExit) {
 	t.Helper()
 	if !dest.BoundsWalkableAt(from.DestX, from.DestY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
-		tile := WorldToTile(from.DestX, from.DestY)
+		tile := dest.WorldToTile(from.DestX, from.DestY)
 		t.Fatalf("%s (%0.f,%0.f) tile (%d,%d) is not walkable on dest map", name, from.DestX, from.DestY, tile.C, tile.R)
 	}
 	if _, onExit := dest.ExitAt(from.DestX, from.DestY); onExit {

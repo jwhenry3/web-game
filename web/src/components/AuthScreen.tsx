@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { login, register, setStoredToken } from "../net/auth";
 import { useGame } from "../state/store";
-import { useMenuPanelFocus } from "../ui/useMenuPanelFocus";
 
 type Mode = "login" | "register";
 
@@ -12,8 +11,6 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const setAuth = useGame((s) => s.setAuth);
-
-  useMenuPanelFocus(mode);
 
   const submit = async () => {
     setError(null);
@@ -49,7 +46,6 @@ export function AuthScreen() {
             <button
               type="button"
               className={`xiv-tab ${mode === "login" ? "on" : ""}`}
-              aria-label="Log In"
               onClick={() => setMode("login")}
             >
               Log In
@@ -57,7 +53,6 @@ export function AuthScreen() {
             <button
               type="button"
               className={`xiv-tab ${mode === "register" ? "on" : ""}`}
-              aria-label="Register"
               onClick={() => setMode("register")}
             >
               Register
@@ -92,11 +87,10 @@ export function AuthScreen() {
           <button
             type="button"
             className="xiv-btn gold wide"
-            aria-label={submitLabel}
             disabled={busy || username.trim().length < 3 || password.length < 6}
             onClick={submit}
           >
-            <span aria-hidden="true">{submitLabel}</span>
+            {submitLabel}
           </button>
         </div>
       </div>

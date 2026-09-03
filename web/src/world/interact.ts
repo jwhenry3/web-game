@@ -1,19 +1,61 @@
 import { net } from "../net/socket";
+import { openJobMasterDialog } from "./npcDialogue";
 import { pushChat, useGame } from "../state/store";
 
-const SAVE_POINT_RANGE = 80;
-const INTERACT_RANGE = 80;
+import { bindingToDisplay, mergeKeybinds, type KeybindMap } from "../input/keybinds";
+
+export const SAVE_POINT_RANGE = 80;
+export const JOB_CHANGER_RANGE = 80;
+export const INTERACT_RANGE = 80;
+
+export function interactKeyLabel(keybinds?: KeybindMap | null): string {
+  return bindingToDisplay(mergeKeybinds(keybinds).interact ?? "Space");
+}
+
+type InteractPromptState = {
+  screen: string;
+  selfId: string | null;
+  mainMenuOpen: boolean;
+  openWindow: string | null;
+  worldSkillDialog: string | null;
+  npcDialog: unknown;
+  jobChangeDialog: unknown;
+  players: Record<string, { in_battle?: boolean }>;
+  battles: { battle_id: string; participants: number; max_players: number }[];
+};
+
+export function canShowWorldInteractPrompts(state: InteractPromptState): boolean {
+  if (state.screen !== "world" || !state.selfId) return false;
+  if (state.mainMenuOpen || state.openWindow || state.worldSkillDialog || state.npcDialog || state.jobChangeDialog) return false;
+  const self = state.players[state.selfId];
+  return !!self && !self.in_battle;
+}
+
+export function battleJoinable(state: Pick<InteractPromptState, "battles">, battleId?: string): boolean {
+  if (!battleId) return false;
+  const info = state.battles.find((b) => b.battle_id === battleId);
+  return !info || info.participants < info.max_players;
+}
 
 export function tryWorldInteract(): boolean {
   const state = useGame.getState();
-  if (state.screen !== "world" || !state.selfId) return false;
-  if (state.mainMenuOpen || state.openWindow || state.worldSkillDialog) return false;
+  if (!canShowWorldInteractPrompts(state)) return false;
 
-  const self = state.players[state.selfId];
-  if (!self || self.in_battle) return false;
-
+  const self = state.players[state.selfId!];
   const x = self.x;
   const y = self.y;
+
+  let nearestJobChanger: { id: string; name: string; dist: number } | null = null;
+  for (const jc of Object.values(state.jobChangers)) {
+    const dist = Math.hypot(x - jc.x, y - jc.y);
+    if (dist <= JOB_CHANGER_RANGE && (!nearestJobChanger || dist < nearestJobChanger.dist)) {
+      nearestJobChanger = { id: jc.id, name: jc.name, dist };
+    }
+  }
+  if (nearestJobChanger) {
+    openJobMasterDialog({ id: nearestJobChanger.id, name: nearestJobChanger.name });
+    return true;
+  }
 
   let nearestSave: { id: string; name: string; dist: number } | null = null;
   for (const sp of Object.values(state.savePoints)) {
@@ -31,8 +73,7 @@ export function tryWorldInteract(): boolean {
   for (const npc of Object.values(state.npcs)) {
     if (!npc.in_battle || !npc.battle_id) continue;
     if (Math.hypot(x - npc.x, y - npc.y) > INTERACT_RANGE) continue;
-    const info = state.battles.find((b) => b.battle_id === npc.battle_id);
-    if (info && info.participants >= info.max_players) continue;
+    if (!battleJoinable(state, npc.battle_id)) continue;
     net.joinBattle(npc.battle_id);
     return true;
   }
@@ -40,8 +81,7 @@ export function tryWorldInteract(): boolean {
   for (const p of Object.values(state.players)) {
     if (p.id === state.selfId || !p.in_battle || !p.battle_id) continue;
     if (Math.hypot(x - p.x, y - p.y) > INTERACT_RANGE) continue;
-    const info = state.battles.find((b) => b.battle_id === p.battle_id);
-    if (info && info.participants >= info.max_players) continue;
+    if (!battleJoinable(state, p.battle_id)) continue;
     net.joinBattle(p.battle_id);
     return true;
   }

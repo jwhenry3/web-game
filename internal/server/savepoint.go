@@ -33,6 +33,11 @@ func (h *Hub) AtlasMap() protocol.AtlasMap {
 			ID: sp.ID, Kind: "save_point", Name: sp.Name, X: sp.X, Y: sp.Y,
 		})
 	}
+	for _, jc := range h.worldJobChangers() {
+		pois = append(pois, protocol.AtlasPOI{
+			ID: jc.ID, Kind: "job_changer", Name: jc.Name, X: jc.X, Y: jc.Y,
+		})
+	}
 	id, name := h.mapID, h.mapName
 	if id == "" {
 		id = "world"

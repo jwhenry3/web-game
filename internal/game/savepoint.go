@@ -1,8 +1,8 @@
 package game
 
-// Default spawn when no save point is set (haven plaza).
-const DefaultSpawnX = 200.0
-const DefaultSpawnY = 200.0
+// Default spawn when no save point is set (haven plaza, tile ~22,22 on scaled map).
+const DefaultSpawnX = 720.0
+const DefaultSpawnY = 720.0
 
 // SavePoint is an interactable respawn location on the overworld.
 type SavePoint struct {

@@ -20,9 +20,13 @@ import type {
   RTBattleView,
   SavePoint,
   AtlasMap,
+  JobChanger,
+  MapTileOverrides,
+  MapTerrainLayers,
 } from "../types";
+import type { NpcDialogueTarget } from "../world/npcDialogue";
 
-export type Screen = "auth" | "select" | "create" | "world" | "battle";
+export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "battle" | "map_editor";
 
 import type { CharacterAppearance } from "../characters/types";
 import { appearanceFromRace } from "../characters/types";
@@ -58,6 +62,8 @@ interface GameState {
   connected: boolean;
   loginError: string | null;
   authToken: string | null;
+  adminToken: string | null;
+  isAdmin: boolean;
   username: string | null;
   characters: CharacterSummary[];
   hasCharacter: boolean;
@@ -68,8 +74,17 @@ interface GameState {
   players: Record<string, WorldPlayer>;
   npcs: Record<string, WorldNPC>;
   savePoints: Record<string, SavePoint>;
+  jobChangers: Record<string, JobChanger>;
   overworld: OverworldMap | null;
-  mapInfo: { id: string; name: string; combat: string; capabilities: string[]; portals: { x: number; y: number; w: number; h: number }[] } | null;
+  mapInfo: {
+    id: string;
+    name: string;
+    combat: string;
+    capabilities: string[];
+    portals: { x: number; y: number; w: number; h: number }[];
+    tileOverrides?: MapTileOverrides;
+    terrainLayers?: MapTerrainLayers;
+  } | null;
   battles: BattleInfo[];
   chat: ChatLine[];
   chatTab: ChatChannel;
@@ -89,6 +104,8 @@ interface GameState {
   mainMenuView: MainMenuView;
   options: GameOptions;
   worldSkillDialog: "return" | "teleport" | null;
+  npcDialog: NpcDialogueTarget | null;
+  jobChangeDialog: { id: string; name: string; mode: "main" | "sub" } | null;
   teleportConfirm: { id: string; name: string } | null;
   atlas: AtlasMap[];
 
@@ -104,7 +121,10 @@ interface GameState {
     characters: CharacterSummary[];
     hasCharacter: boolean;
     character: CharacterSummary | null;
+    is_admin?: boolean;
   }) => void;
+  setAdminAuth: (auth: { token: string; username: string }) => void;
+  clearAdminAuth: () => void;
   setCharacters: (characters: CharacterSummary[]) => void;
   setCreation: (draft: CreationDraft) => void;
   openMainMenu: () => void;
@@ -114,6 +134,10 @@ interface GameState {
   setOptions: (options: GameOptions) => void;
   openWorldSkillDialog: (kind: "return" | "teleport") => void;
   closeWorldSkillDialog: () => void;
+  openNpcDialog: (target: NpcDialogueTarget) => void;
+  closeNpcDialog: () => void;
+  openJobChangeDialog: (target: { id: string; name: string; mode: "main" | "sub" }) => void;
+  closeJobChangeDialog: () => void;
   openTeleportConfirm: (target: { id: string; name: string }) => void;
   closeTeleportConfirm: () => void;
   setAtlas: (maps: AtlasMap[]) => void;
@@ -122,10 +146,12 @@ interface GameState {
 }
 
 const initial = {
-  screen: "auth" as Screen,
+  screen: "title" as Screen,
   connected: false,
   loginError: null,
   authToken: null,
+  adminToken: null,
+  isAdmin: false,
   username: null,
   characters: [] as CharacterSummary[],
   hasCharacter: false,
@@ -142,6 +168,7 @@ const initial = {
   players: {},
   npcs: {},
   savePoints: {},
+  jobChangers: {},
   overworld: null,
   mapInfo: null,
   battles: [],
@@ -163,6 +190,8 @@ const initial = {
   mainMenuView: "menu" as MainMenuView,
   options: loadOptions(),
   worldSkillDialog: null as "return" | "teleport" | null,
+  npcDialog: null as NpcDialogueTarget | null,
+  jobChangeDialog: null as { id: string; name: string; mode: "main" | "sub" } | null,
   teleportConfirm: null as { id: string; name: string } | null,
   atlas: [] as AtlasMap[],
 };
@@ -185,7 +214,16 @@ export const useGame = create<GameState>((set) => ({
       character: auth.character,
       screen: auth.characters.length > 0 ? "select" : "create",
       loginError: null,
+      isAdmin: auth.is_admin ?? false,
     }),
+  setAdminAuth: (auth) =>
+    set({
+      adminToken: auth.token,
+      username: auth.username,
+      isAdmin: true,
+      loginError: null,
+    }),
+  clearAdminAuth: () => set({ adminToken: null, isAdmin: false }),
   setCharacters: (characters) =>
     set({
       characters,
@@ -201,6 +239,8 @@ export const useGame = create<GameState>((set) => ({
       bindSlot: null,
       selectedAction: null,
       worldSkillDialog: null,
+      npcDialog: null,
+      jobChangeDialog: null,
       teleportConfirm: null,
     }),
   closeMainMenu: () => set({ mainMenuOpen: false, mainMenuView: "menu" }),
@@ -215,6 +255,8 @@ export const useGame = create<GameState>((set) => ({
             bindSlot: null,
             selectedAction: null,
             worldSkillDialog: null,
+            npcDialog: null,
+            jobChangeDialog: null,
             teleportConfirm: null,
           },
     ),
@@ -230,17 +272,37 @@ export const useGame = create<GameState>((set) => ({
     }, 0);
   },
   closeWorldSkillDialog: () => set({ worldSkillDialog: null, teleportConfirm: null }),
+  openNpcDialog: (target) =>
+    set({
+      npcDialog: target,
+      mainMenuOpen: false,
+      openWindow: null,
+      bindSlot: null,
+      selectedAction: null,
+      jobChangeDialog: null,
+    }),
+  closeNpcDialog: () => set({ npcDialog: null }),
+  openJobChangeDialog: (target) =>
+    set({
+      jobChangeDialog: target,
+      npcDialog: null,
+      mainMenuOpen: false,
+      openWindow: null,
+      bindSlot: null,
+      selectedAction: null,
+    }),
+  closeJobChangeDialog: () => set({ jobChangeDialog: null }),
   openTeleportConfirm: (target) => set({ teleportConfirm: target, mainMenuOpen: false }),
   closeTeleportConfirm: () => set({ teleportConfirm: null }),
   setAtlas: (maps) => set({ atlas: maps }),
   logout: () => {
     setStoredToken(null);
-    set({ ...initial, options: loadOptions() });
+    set({ ...initial, screen: "title" as Screen, options: loadOptions() });
   },
   reset: () =>
     set((s) => ({
       ...initial,
-      screen: "auth" as Screen,
+      screen: "title" as Screen,
       authToken: s.authToken,
       username: s.username,
       characters: s.characters,

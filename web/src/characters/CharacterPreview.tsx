@@ -45,7 +45,7 @@ function drawFrame(
   const row = Math.floor(sheetFrame / 8);
   const sx = col * 100;
   const sy = row * 40;
-  const footX = margin + ox;
+  const footX = w / 2;
   const footY = h - margin;
   const dx = footX - ox;
   const dy = footY - oy;
@@ -62,18 +62,19 @@ export function CharacterPreviewAnimated({
   className = "",
   hideWeapon = false,
   hideCloth = false,
+  scale = 2,
 }: {
   appearance: CharacterAppearance;
   className?: string;
   hideWeapon?: boolean;
   hideCloth?: boolean;
+  scale?: number;
 }) {
   const frameRef = useRef(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgsRef = useRef<HTMLImageElement[] | null>(null);
   const loadKeyRef = useRef("");
 
-  const scale = 2;
   const fw = 100 * H99_DISPLAY_SCALE * scale;
   const fh = 40 * H99_DISPLAY_SCALE * scale;
   const ox = fw * H99_ORIGIN.x;

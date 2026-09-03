@@ -4,15 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 type overworldFile struct {
-	Regions    []Region         `json:"regions"`
-	NPCs       []patrolFile     `json:"npcs"`
-	SavePoints []savePointFile  `json:"savePoints"`
-	Wander     wanderSettings   `json:"wander"`
-	Map        mapPaintFile     `json:"map"`
-	Exits      []exitFile       `json:"exits"`
+	Regions     []Region         `json:"regions"`
+	NPCs        []patrolFile     `json:"npcs"`
+	SavePoints  []savePointFile  `json:"savePoints"`
+	JobChangers []jobChangerFile `json:"jobChangers"`
+	Wander      wanderSettings   `json:"wander"`
+	Map         mapPaintFile     `json:"map"`
+	Exits       []exitFile       `json:"exits"`
 }
 
 type exitFile struct {
@@ -31,6 +34,12 @@ type patrolFile struct {
 }
 
 type savePointFile struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Tile [2]int `json:"tile"`
+}
+
+type jobChangerFile struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Tile [2]int `json:"tile"`
@@ -63,8 +72,18 @@ type mapPoint struct {
 	Tile string `json:"tile"`
 }
 
-// LoadOverworldData reads a map file without installing it as the process default.
+// LoadOverworldData reads a map file (.map.json config, .tmj Tiled, or legacy .json paint).
 func LoadOverworldData(path string) (*Overworld, error) {
+	if IsMapConfigPath(path) {
+		return LoadOverworldFromMapConfig(path)
+	}
+	if strings.ToLower(filepath.Ext(path)) == ".tmj" {
+		ow, err := LoadOverworldFromTiled(path)
+		if err != nil {
+			return nil, err
+		}
+		return ow, nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read overworld %s: %w", path, err)
@@ -78,6 +97,13 @@ func LoadOverworldData(path string) (*Overworld, error) {
 		return nil, fmt.Errorf("apply overworld %s: %w", path, err)
 	}
 	ow.Path = path
+	if ow.Cols == 0 {
+		ow.Cols = OverworldCols
+		ow.Rows = OverworldRows
+		ow.TileSize = TileSize
+		ow.WorldW = ow.Cols * ow.TileSize
+		ow.WorldH = ow.Rows * ow.TileSize
+	}
 	return ow, nil
 }
 
@@ -140,6 +166,18 @@ func parseOverworld(raw overworldFile) (*Overworld, error) {
 			return nil, fmt.Errorf("save point %s tile (%d,%d) not walkable", sp.ID, tile.C, tile.R)
 		}
 		ow.SavePoints = append(ow.SavePoints, SavePoint{ID: sp.ID, Name: sp.Name, Tile: tile})
+	}
+
+	ow.JobChangers = make([]JobChanger, 0, len(raw.JobChangers))
+	for _, jc := range raw.JobChangers {
+		if jc.ID == "" || jc.Name == "" {
+			return nil, fmt.Errorf("job changer missing id or name")
+		}
+		tile := Tile{C: jc.Tile[0], R: jc.Tile[1]}
+		if !ow.WalkableTile(tile.C, tile.R) {
+			return nil, fmt.Errorf("job changer %s tile (%d,%d) not walkable", jc.ID, tile.C, tile.R)
+		}
+		ow.JobChangers = append(ow.JobChangers, JobChanger{ID: jc.ID, Name: jc.Name, Tile: tile})
 	}
 
 	for _, e := range raw.Exits {

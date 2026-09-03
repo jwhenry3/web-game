@@ -10,11 +10,17 @@ import { pluginHost } from "./core/plugins/pluginHost";
 import { SidePanel } from "./components/SidePanel";
 import { GameWindows, WindowBar } from "./components/GameWindows";
 import { WorldSkillDialogs } from "./components/WorldSkillDialogs";
+import { NpcDialog } from "./components/NpcDialog";
+import { JobChangeDialog } from "./components/JobChangeDialog";
 import { Hotbar } from "./components/Hotbar";
 import { GameHotkeys } from "./components/GameHotkeys";
 import { MainMenu } from "./components/MainMenu";
 import { ExpBar } from "./components/ExpBar";
+import { ItemMenuProvider } from "./components/ItemContextMenu";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
+import { TitleScreen } from "./components/TitleScreen";
+import { AdminLoginScreen } from "./components/AdminLoginScreen";
+import { MapEditorScreen } from "./components/MapEditorScreen";
 
 function AppBody() {
   const screen = useGame((s) => s.screen);
@@ -62,6 +68,18 @@ function AppBody() {
     );
   }
 
+  if (screen === "title") {
+    return <TitleScreen />;
+  }
+
+  if (screen === "admin_auth") {
+    return <AdminLoginScreen />;
+  }
+
+  if (screen === "map_editor") {
+    return <MapEditorScreen />;
+  }
+
   if (screen === "auth") {
     return <AuthScreen />;
   }
@@ -78,20 +96,24 @@ function AppBody() {
   const CombatHUD = combat.HUD;
 
   return (
-    <div className="game-layout">
-      <div className="game-stage">
-        <PhaserGame />
-        {screen === combat.battleScreen ? <CombatHUD /> : <WorldHUD />}
-        <SidePanel />
-        <Hotbar />
-        <ExpBar />
-        <WindowBar />
-        <GameWindows />
-        <WorldSkillDialogs />
-        <InviteToasts />
-        <MainMenu />
+    <ItemMenuProvider>
+      <div className="game-layout">
+        <div className="game-stage">
+          <PhaserGame />
+          {screen === combat.battleScreen ? <CombatHUD /> : <WorldHUD />}
+          <SidePanel />
+          <Hotbar />
+          <ExpBar />
+          <WindowBar />
+          <GameWindows />
+          <WorldSkillDialogs />
+          <NpcDialog />
+          <JobChangeDialog />
+          <InviteToasts />
+          <MainMenu />
+        </div>
       </div>
-    </div>
+    </ItemMenuProvider>
   );
 }
 

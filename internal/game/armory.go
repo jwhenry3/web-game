@@ -15,9 +15,10 @@ const (
 	WeaponDagger WeaponType = "dagger"
 	WeaponStaff  WeaponType = "staff"
 	WeaponMace   WeaponType = "mace"
+	WeaponSpear    WeaponType = "spear"
 )
 
-var WeaponTypes = []WeaponType{WeaponSword, WeaponDagger, WeaponStaff, WeaponMace}
+var WeaponTypes = []WeaponType{WeaponSword, WeaponDagger, WeaponStaff, WeaponMace, WeaponSpear}
 
 func ValidWeapon(w WeaponType) bool {
 	for _, t := range WeaponTypes {
@@ -43,7 +44,7 @@ var Categories = []Category{CatSwordplay, CatStealth, CatSorcery, CatDevotion}
 // each weapon type.
 func WeaponCategory(w WeaponType) Category {
 	switch w {
-	case WeaponSword:
+	case WeaponSword, WeaponSpear:
 		return CatSwordplay
 	case WeaponDagger:
 		return CatStealth
@@ -255,6 +256,7 @@ var starterNames = map[WeaponType]string{
 	WeaponDagger: "Chipped Daggers",
 	WeaponStaff:  "Gnarled Staff",
 	WeaponMace:   "Worn Mace",
+	WeaponSpear:  "Rusty Spear",
 }
 
 // StarterWeapon is the guaranteed first piece of equipment for new heroes.

@@ -5,7 +5,6 @@ import { useGame } from "../state/store";
 import type { VisitedSavePoint } from "../types";
 import { WorldMap, loadAtlasIfNeeded } from "./WorldMap";
 import { markersForMap } from "../world/mapMarkers";
-import { focusPrimaryDialogButton } from "../ui/dialogFocus";
 
 function groupVisitedByMap(visited: VisitedSavePoint[], currentMap?: string) {
   const groups = new Map<string, VisitedSavePoint[]>();
@@ -160,15 +159,11 @@ export function WorldSkillDialogs() {
   useEffect(() => {
     if (!confirm) return;
     confirmIgnore.current = performance.now() + 280;
-    const t = window.setTimeout(() => focusPrimaryDialogButton(), 300);
-    return () => window.clearTimeout(t);
   }, [confirm]);
 
   useEffect(() => {
     if (!dialog) return;
     ignoreUntil.current = performance.now() + 400;
-    const t = window.setTimeout(() => focusPrimaryDialogButton(), 420);
-    return () => window.clearTimeout(t);
   }, [dialog]);
 
   if (!dialog && !confirm) return null;

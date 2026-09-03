@@ -41,6 +41,7 @@ type authResponse struct {
 	Token        string             `json:"token"`
 	Username     string             `json:"username"`
 	HasCharacter bool               `json:"has_character"`
+	IsAdmin      bool               `json:"is_admin"`
 	Characters   []characterSummary `json:"characters"`
 	Character    *characterSummary  `json:"character,omitempty"` // legacy: first character
 }
@@ -70,6 +71,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Token:        token,
 		Username:     account.Username,
 		HasCharacter: len(chars) > 0,
+		IsAdmin:      account.IsAdmin,
 		Characters:   chars,
 	})
 }
@@ -99,6 +101,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Token:        token,
 		Username:     account.Username,
 		HasCharacter: len(chars) > 0,
+		IsAdmin:      account.IsAdmin,
 		Characters:   chars,
 	}
 	if len(chars) > 0 {
@@ -138,6 +141,7 @@ func (h *AuthHandler) meGet(w http.ResponseWriter, r *http.Request) {
 	resp := authResponse{
 		Username:     account.Username,
 		HasCharacter: len(chars) > 0,
+		IsAdmin:      account.IsAdmin,
 		Characters:   chars,
 	}
 	if len(chars) > 0 {

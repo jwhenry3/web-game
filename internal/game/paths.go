@@ -16,7 +16,7 @@ func defaultOverworldPath() string {
 	}
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		return "config/overworld.json"
+		return "maps/greenwood.map.json"
 	}
-	return filepath.Join(filepath.Dir(file), "..", "..", "config", "overworld.json")
+	return filepath.Join(filepath.Dir(file), "..", "..", "maps", "greenwood.map.json")
 }

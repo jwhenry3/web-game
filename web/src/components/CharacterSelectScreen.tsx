@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { deleteCharacter, MAX_CHARACTERS } from "../net/auth";
 import { net } from "../net/socket";
+import { prefetchMapConfig } from "../net/mapConfig";
 import { useGame } from "../state/store";
 import { ALL_JOBS, RACES } from "../types";
-import { useMenuPanelFocus } from "../ui/useMenuPanelFocus";
 
 export function CharacterSelectScreen() {
   const username = useGame((s) => s.username);
@@ -17,11 +17,13 @@ export function CharacterSelectScreen() {
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  useMenuPanelFocus(characters.length, confirmDelete);
-
   useEffect(() => {
     if (loginError) setBusy(null);
   }, [loginError]);
+
+  useEffect(() => {
+    prefetchMapConfig("greenwood").catch(() => {});
+  }, []);
 
   const raceName = (id: string) => RACES.find((r) => r.id === id)?.name ?? id;
   const jobName = (id: string) => ALL_JOBS.find((j) => j.id === id)?.abbr ?? id;
@@ -86,20 +88,18 @@ export function CharacterSelectScreen() {
                       <button
                         type="button"
                         className="xiv-btn danger"
-                        aria-label={`Confirm delete ${c.name}`}
                         disabled={busy !== null}
                         onClick={() => doDelete(c.name)}
                       >
-                        <span aria-hidden="true">Confirm</span>
+                        Confirm
                       </button>
                       <button
                         type="button"
                         className="xiv-btn"
-                        aria-label="Cancel delete"
                         disabled={busy !== null}
                         onClick={() => setConfirmDelete(null)}
                       >
-                        <span aria-hidden="true">Cancel</span>
+                        Cancel
                       </button>
                     </>
                   ) : (
@@ -107,20 +107,18 @@ export function CharacterSelectScreen() {
                       <button
                         type="button"
                         className="xiv-btn gold"
-                        aria-label={`Play as ${c.name}`}
                         disabled={busy !== null}
                         onClick={() => play(c.name)}
                       >
-                        <span aria-hidden="true">{busy === c.name ? "Entering…" : "Play"}</span>
+                        {busy === c.name ? "Entering…" : "Play"}
                       </button>
                       <button
                         type="button"
                         className="xiv-btn danger"
-                        aria-label={`Delete ${c.name}`}
                         disabled={busy !== null}
                         onClick={() => setConfirmDelete(c.name)}
                       >
-                        <span aria-hidden="true">Delete</span>
+                        Delete
                       </button>
                     </>
                   )}
@@ -132,20 +130,18 @@ export function CharacterSelectScreen() {
           <button
             type="button"
             className="xiv-btn wide"
-            aria-label={createLabel}
             disabled={atLimit || busy !== null}
             onClick={startCreate}
           >
-            <span aria-hidden="true">{createLabel}</span>
+            {createLabel}
           </button>
           <button
             type="button"
             className="xiv-btn wide logout-btn"
-            aria-label="Log Out"
             disabled={busy !== null}
             onClick={doLogout}
           >
-            <span aria-hidden="true">Log Out</span>
+            Log Out
           </button>
         </div>
       </div>

@@ -39,6 +39,7 @@ type Profile struct {
 	SavePointID       string                      `json:"save_point_id,omitempty"`
 	VisitedSavePoints []string                    `json:"visited_save_points,omitempty"`
 	MapID             string                      `json:"map_id,omitempty"`
+	PrevMapID         string                      `json:"prev_map_id,omitempty"`
 	WorldX            float64                     `json:"world_x,omitempty"`
 	WorldY            float64                     `json:"world_y,omitempty"`
 	Facing            string                      `json:"facing,omitempty"`
@@ -529,19 +530,19 @@ func (s *Store) SetHotbar(name, slot, kind, id string) (Profile, bool) {
 	return *p, true
 }
 
-func (s *Store) Equip(name, itemID, equipSlot string) (Profile, bool) {
+func (s *Store) Equip(name, itemID, equipSlot string) (Profile, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.profiles[name]
 	if !ok {
-		return Profile{}, false
+		return Profile{}, "Character not found."
 	}
 	for _, item := range p.Inventory {
 		if item.ID != itemID {
 			continue
 		}
 		if item.Kind != game.KindEquipment {
-			return Profile{}, false
+			return Profile{}, "That item is not equipment."
 		}
 		l := p.ActiveLoadout()
 		targetSlot := equipSlot
@@ -550,26 +551,23 @@ func (s *Store) Equip(name, itemID, equipSlot string) (Profile, bool) {
 				targetSlot = game.SlotWeapon
 			}
 			if targetSlot != game.SlotWeapon && targetSlot != game.SlotSubWeapon {
-				return Profile{}, false
+				return Profile{}, "Invalid weapon slot."
 			}
-			var allowed game.WeaponType
-			switch targetSlot {
-			case game.SlotSubWeapon:
-				if p.SubJob == "" {
-					return Profile{}, false
-				}
-				allowed = game.JobWeapon(game.JobID(p.SubJob))
-			default:
-				allowed = game.JobWeapon(game.JobID(p.MainJob))
+			if targetSlot == game.SlotSubWeapon && p.SubJob == "" {
+				return Profile{}, "Equip a sub job to use the off-hand weapon slot."
 			}
-			if game.WeaponType(item.Type) != allowed {
-				return Profile{}, false
+			job := game.JobID(p.MainJob)
+			if targetSlot == game.SlotSubWeapon {
+				job = game.JobID(p.SubJob)
+			}
+			if !game.JobAllowsWeapon(job, game.WeaponType(item.Type)) {
+				return Profile{}, game.EquipWeaponDeniedMessage(job, game.WeaponType(item.Type))
 			}
 		} else {
 			targetSlot = item.Slot
 		}
 		if !game.ValidEquipSlot(targetSlot) {
-			return Profile{}, false
+			return Profile{}, "Invalid equipment slot."
 		}
 		l.Equipped[targetSlot] = item.ID
 		if item.Slot == game.SlotWeapon {
@@ -583,9 +581,9 @@ func (s *Store) Equip(name, itemID, equipSlot string) (Profile, bool) {
 		}
 		p.Loadouts[p.ComboKey()] = *l
 		s.save()
-		return *p, true
+		return *p, ""
 	}
-	return Profile{}, false
+	return Profile{}, "You do not own that item."
 }
 
 func (s *Store) Unequip(name, slot string) (Profile, bool) {
@@ -712,6 +710,7 @@ func (s *Store) SetMapID(name, mapID string) (Profile, bool) {
 
 // SetWorldLocation stores the hero's last map and overworld position.
 // Memory is always updated; the JSON file is written when flush is true.
+// When mapID changes, the previous MapID is retained in PrevMapID.
 func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing string, flush bool) (Profile, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -720,6 +719,9 @@ func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing string
 		return Profile{}, false
 	}
 	if mapID != "" {
+		if p.MapID != "" && p.MapID != mapID {
+			p.PrevMapID = p.MapID
+		}
 		p.MapID = mapID
 	}
 	p.WorldX = x

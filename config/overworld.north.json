@@ -18,6 +18,9 @@
     { "id": "frostgate_crystal", "name": "Frostgate Crystal", "tile": [5, 14] },
     { "id": "wastes_cairn", "name": "Wastes Cairn", "tile": [20, 12] }
   ],
+  "jobChangers": [
+    { "id": "frostgate_job_master", "name": "Job Master", "tile": [7, 14] }
+  ],
   "wander": {
     "minDistance": 6,
     "pauseSec": 4,

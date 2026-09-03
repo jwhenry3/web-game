@@ -58,3 +58,24 @@ func TestJobComboKey(t *testing.T) {
 		t.Fatal("combo key")
 	}
 }
+
+func TestJobAllowsWeapon(t *testing.T) {
+	if !JobAllowsWeapon(JobBLM, WeaponStaff) {
+		t.Fatal("BLM should allow staff")
+	}
+	if JobAllowsWeapon(JobBLM, WeaponSword) {
+		t.Fatal("BLM should not allow sword")
+	}
+	if !JobAllowsWeapon(JobRDM, WeaponSword) || !JobAllowsWeapon(JobRDM, WeaponStaff) {
+		t.Fatal("RDM should allow sword and staff")
+	}
+	if !JobAllowsWeapon(JobDRG, WeaponSpear) {
+		t.Fatal("DRG should allow spear")
+	}
+	if JobWeapon(JobDRG) != WeaponSpear {
+		t.Fatalf("DRG default weapon = %q, want spear", JobWeapon(JobDRG))
+	}
+	if len(JobAllowedWeapons(JobWAR)) != 1 || JobAllowedWeapons(JobWAR)[0] != WeaponSword {
+		t.Fatalf("WAR allowlist = %v, want [sword]", JobAllowedWeapons(JobWAR))
+	}
+}

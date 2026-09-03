@@ -25,6 +25,10 @@
     { "id": "wolfrun_camp", "name": "Wolfrun Camp", "tile": [28, 12] },
     { "id": "hollow_ward", "name": "Hollow Ward", "tile": [12, 22] }
   ],
+  "jobChangers": [
+    { "id": "haven_job_master", "name": "Job Master", "tile": [7, 5] },
+    { "id": "greenwood_job_master", "name": "Job Master", "tile": [19, 8] }
+  ],
   "wander": {
     "minDistance": 8,
     "pauseSec": 5,

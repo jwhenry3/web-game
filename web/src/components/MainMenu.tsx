@@ -3,7 +3,6 @@ import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { saveOptions } from "../state/optionsStorage";
 import { HoverTooltip } from "../ui/HoverTooltip";
-import { focusPrimaryDialogButton } from "../ui/dialogFocus";
 import {
   KEYBIND_SECTIONS,
   actionLabel,
@@ -24,9 +23,7 @@ export function MainMenuTrigger() {
     <HoverTooltip content="Main Menu [Esc]">
       <button
         type="button"
-        tabIndex={-1}
         className={`xiv-menu-btn ${open ? "on" : ""}`}
-        onMouseDown={(e) => e.preventDefault()}
         onClick={toggle}
         aria-label="Main Menu"
       >
@@ -51,17 +48,10 @@ function MenuButton({
     <button
       type="button"
       className={`main-menu-btn ${variant !== "default" ? variant : ""}`}
-      aria-label={hint ? `${label}. ${hint}` : label}
       onClick={onClick}
     >
-      <span className="main-menu-btn-label" aria-hidden="true">
-        {label}
-      </span>
-      {hint && (
-        <span className="main-menu-btn-hint" aria-hidden="true">
-          {hint}
-        </span>
-      )}
+      <span className="main-menu-btn-label">{label}</span>
+      {hint && <span className="main-menu-btn-hint">{hint}</span>}
     </button>
   );
 }
@@ -280,7 +270,7 @@ function MenuPanel() {
           </>
         )}
       </div>
-      <p className="hint main-menu-hint">Esc close · WASD move · Space confirm · Enter chat</p>
+      <p className="hint main-menu-hint">Esc close · Space confirm · Enter chat</p>
     </>
   );
 }
@@ -289,12 +279,6 @@ export function MainMenu() {
   const open = useGame((s) => s.mainMenuOpen);
   const view = useGame((s) => s.mainMenuView);
   const closeMainMenu = useGame((s) => s.closeMainMenu);
-
-  useEffect(() => {
-    if (!open) return;
-    const t = window.setTimeout(() => focusPrimaryDialogButton(), 0);
-    return () => window.clearTimeout(t);
-  }, [open, view]);
 
   if (!open) return null;
 

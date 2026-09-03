@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { focusPrimaryDialogButton } from "../ui/dialogFocus";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import type { FriendRequestPayload } from "../types";
@@ -76,12 +75,6 @@ export function InviteToasts() {
   const showBattle =
     !!profile && !!selfId && !!battleInvite && battleKey !== dismissedBattle && !inBattle;
   const hasToast = showParty || showBattle || visibleFriendRequests.length > 0;
-
-  useEffect(() => {
-    if (!hasToast) return;
-    const t = window.setTimeout(() => focusPrimaryDialogButton(), 0);
-    return () => window.clearTimeout(t);
-  }, [hasToast, showParty, showBattle, visibleFriendRequests.length]);
 
   if (!profile || !selfId) return null;
   if (!hasToast) return null;

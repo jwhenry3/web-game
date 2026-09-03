@@ -9,13 +9,6 @@ import {
   resolveHotbarSlot,
   resolveWindowToggle,
 } from "../input/keybinds";
-import {
-  clickFocusedDialogButton,
-  focusPrimaryDialogButton,
-  getActiveDialogRoot,
-  handleDialogArrowKey,
-  isFocusedDialogButton,
-} from "../ui/dialogFocus";
 import { tryWorldInteract } from "../world/interact";
 
 function inGameScreen(screen: string): boolean {
@@ -26,19 +19,15 @@ function dialogIsOpen(state: ReturnType<typeof useGame.getState>): boolean {
   return !!(
     state.mainMenuOpen ||
     state.worldSkillDialog ||
+    state.npcDialog ||
+    state.jobChangeDialog ||
     state.teleportConfirm ||
-    state.openWindow ||
-    getActiveDialogRoot()
+    state.openWindow
   );
 }
 
 export function GameHotkeys() {
   useEffect(() => {
-    const onArrow = (e: KeyboardEvent) => {
-      if (isKeybindCaptureActive()) return;
-      handleDialogArrowKey(e);
-    };
-
     const onKey = (e: KeyboardEvent) => {
       if (isKeybindCaptureActive()) return;
 
@@ -53,12 +42,7 @@ export function GameHotkeys() {
       const inGame = inGameScreen(state.screen);
 
       if (e.key === "Enter") {
-        if (inFormField && !isFocusedDialogButton()) return;
-        if (isFocusedDialogButton()) {
-          e.preventDefault();
-          clickFocusedDialogButton();
-          return;
-        }
+        if (inFormField) return;
         if (chatFocused) return;
         if (inGame && dialogIsOpen(state)) return;
         if (inGame && chat) {
@@ -79,6 +63,14 @@ export function GameHotkeys() {
         }
         if (state.worldSkillDialog) {
           state.closeWorldSkillDialog();
+          return;
+        }
+        if (state.npcDialog) {
+          state.closeNpcDialog();
+          return;
+        }
+        if (state.jobChangeDialog) {
+          state.closeJobChangeDialog();
           return;
         }
         if (state.mainMenuOpen) {
@@ -105,14 +97,7 @@ export function GameHotkeys() {
 
       if (bindingMatchesEvent(keybinds.interact ?? "Space", e)) {
         e.preventDefault();
-        if (isFocusedDialogButton()) {
-          clickFocusedDialogButton();
-          return;
-        }
-        if (dialogIsOpen(state)) {
-          focusPrimaryDialogButton();
-          return;
-        }
+        if (dialogIsOpen(state)) return;
         if (!inGame) return;
         if (state.teleportConfirm) {
           net.useWorldSkill("teleport", state.teleportConfirm.id);
@@ -152,12 +137,8 @@ export function GameHotkeys() {
         state.toggleWindow(win);
       }
     };
-    window.addEventListener("keydown", onArrow, true);
     window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("keydown", onArrow, true);
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
   return null;
 }

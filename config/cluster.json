@@ -4,7 +4,8 @@
     "addr": ":8080",
     "accounts": "data/accounts.json",
     "data": "data/profiles.json",
-    "static": "web/dist"
+    "static": "web/dist",
+    "internal_secret": ""
   },
   "maps": [
     {

@@ -6,17 +6,22 @@ import (
 )
 
 const (
-	TileSize    = 40
-	OverworldW  = 1600
-	OverworldH  = 1200
-	OverworldCols = OverworldW / TileSize
-	OverworldRows = OverworldH / TileSize
+	DefaultTileSize = 32
+)
+
+// Active map dimensions (updated when an overworld is installed).
+var (
+	TileSize      = DefaultTileSize
+	OverworldW    = 1600
+	OverworldH    = 1200
+	OverworldCols = 40
+	OverworldRows = 30
 
 	// Heroes 99 at display scale 1.25 — keep in sync with web/src/characters/heroes99.ts.
-	playerSpriteW         = 100.0 * 1.25
-	playerSpriteH         = 40.0 * 1.25
-	PlayerCollisionHalfW  = playerSpriteW / 8
-	PlayerCollisionHalfH  = playerSpriteH / 4
+	playerSpriteW        = 100.0 * 1.25
+	playerSpriteH        = 40.0 * 1.25
+	PlayerCollisionHalfW = playerSpriteW / 8
+	PlayerCollisionHalfH = playerSpriteH / 4
 )
 
 // Tile kinds for the shared overworld. Walkable: H . , R
@@ -40,13 +45,31 @@ type Vec2 struct {
 }
 
 type Region struct {
-	ID         string
-	MinC, MinR int
-	MaxC, MaxR int
+	ID        string `json:"id"`
+	MinC      int    `json:"minC"`
+	MinR      int    `json:"minR"`
+	MaxC      int    `json:"maxC"`
+	MaxR      int    `json:"maxR"`
+	Sanctuary bool   `json:"sanctuary,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	// Polygon is absolute tile-space vertices. Empty means use AABB Min/Max.
+	Polygon []Vec2 `json:"polygon,omitempty"`
 }
 
 func (reg Region) Contains(c, r int) bool {
+	if len(reg.Polygon) >= 3 {
+		return pointInPolygonTile(c, r, reg.Polygon)
+	}
 	return c >= reg.MinC && c <= reg.MaxC && r >= reg.MinR && r <= reg.MaxR
+}
+
+// EnsurePolygon fills Polygon from the AABB when missing (legacy maps).
+func (reg Region) EnsurePolygon() Region {
+	if len(reg.Polygon) >= 3 {
+		return reg
+	}
+	reg.Polygon = rectPolygonTile(reg.MinC, reg.MinR, reg.MaxC, reg.MaxR)
+	return reg
 }
 
 type Patrol struct {
@@ -137,13 +160,15 @@ func WalkableTile(c, r int) bool {
 }
 
 func WorldToTile(x, y float64) Tile {
-	c := int(math.Floor(x / TileSize))
-	r := int(math.Floor(y / TileSize))
+	ts := float64(TileSize)
+	c := int(math.Floor(x / ts))
+	r := int(math.Floor(y / ts))
 	return Tile{C: c, R: r}
 }
 
 func TileCenter(t Tile) Vec2 {
-	return Vec2{X: (float64(t.C) + 0.5) * TileSize, Y: (float64(t.R) + 0.5) * TileSize}
+	ts := float64(TileSize)
+	return Vec2{X: (float64(t.C) + 0.5) * ts, Y: (float64(t.R) + 0.5) * ts}
 }
 
 func WalkableAt(x, y float64) bool {
@@ -153,14 +178,15 @@ func WalkableAt(x, y float64) bool {
 
 // BoundsWalkableAt checks a foot-anchored box (cx, cy) with halfW × halfH extending upward.
 func BoundsWalkableAt(cx, cy, halfW, halfH float64) bool {
+	ts := float64(TileSize)
 	left := cx - halfW
 	right := cx + halfW
 	top := cy - halfH
 	bottom := cy
-	c0 := int(math.Floor(left / TileSize))
-	c1 := int(math.Floor(right / TileSize))
-	r0 := int(math.Floor(top / TileSize))
-	r1 := int(math.Floor(bottom / TileSize))
+	c0 := int(math.Floor(left / ts))
+	c1 := int(math.Floor(right / ts))
+	r0 := int(math.Floor(top / ts))
+	r1 := int(math.Floor(bottom / ts))
 	for r := r0; r <= r1; r++ {
 		for c := c0; c <= c1; c++ {
 			if !WalkableTile(c, r) {

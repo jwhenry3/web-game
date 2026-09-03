@@ -56,6 +56,20 @@ func RegisterSavePoints(mapID, mapName string, points []SavePoint) {
 	}
 }
 
+// UnregisterSavePointsForMap removes crystals owned by mapID from the cluster index.
+func UnregisterSavePointsForMap(mapID string) {
+	if mapID == "" {
+		return
+	}
+	savePointMu.Lock()
+	defer savePointMu.Unlock()
+	for id, sp := range savePointReg {
+		if sp.MapID == mapID {
+			delete(savePointReg, id)
+		}
+	}
+}
+
 // LookupSavePoint returns a registered crystal by id.
 func LookupSavePoint(id string) (RegisteredSavePoint, bool) {
 	savePointMu.RLock()

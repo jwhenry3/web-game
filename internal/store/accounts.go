@@ -26,6 +26,7 @@ type Account struct {
 	Username      string `json:"username"`
 	PasswordHash  string `json:"password_hash"`
 	CharacterName string `json:"character_name,omitempty"`
+	IsAdmin       bool   `json:"is_admin,omitempty"`
 }
 
 type AccountStore struct {
@@ -108,6 +109,41 @@ func (s *AccountStore) Login(username, password string) (Account, error) {
 		return Account{}, ErrInvalidLogin
 	}
 	return *a, nil
+}
+
+// EnsureDefaultAdmin creates the default admin/admin account if missing.
+func (s *AccountStore) EnsureDefaultAdmin() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.byName["admin"]; ok {
+		if a := s.accounts[s.byName["admin"]]; a != nil && !a.IsAdmin {
+			a.IsAdmin = true
+			s.save()
+		}
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("store: default admin hash error: %v", err)
+		return
+	}
+	a := &Account{
+		ID:           "acc-admin",
+		Username:     "admin",
+		PasswordHash: string(hash),
+		IsAdmin:      true,
+	}
+	s.accounts[a.ID] = a
+	s.byName["admin"] = a.ID
+	s.save()
+	log.Printf("store: created default admin account (username: admin, password: admin)")
+}
+
+func (s *AccountStore) IsAdmin(accountID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.accounts[accountID]
+	return ok && a.IsAdmin
 }
 
 func (s *AccountStore) Get(id string) (Account, bool) {

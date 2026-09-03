@@ -12,6 +12,7 @@ export interface AuthResult {
   token: string;
   username: string;
   has_character: boolean;
+  is_admin?: boolean;
   characters: CharacterSummary[];
   character?: CharacterSummary;
 }
@@ -59,6 +60,7 @@ function normalizeAuth(data: Omit<AuthResult, "token"> & { token?: string }): Om
   return {
     username: data.username,
     has_character: data.has_character ?? characters.length > 0,
+    is_admin: data.is_admin ?? false,
     characters,
     character: data.character ?? characters[0],
   };

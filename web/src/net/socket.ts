@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { pushChat, useGame } from "../state/store";
 import { pluginHost, applyMapSnapshot } from "../core/plugins/pluginHost";
 import { fetchAtlas } from "./atlas";
+import { applyMapSnapshotToGame, prefetchMapConfig, defaultMapId } from "./mapConfig";
 import { loadDraftAppearance, saveAppearance } from "../characters/appearanceStorage";
 import { appearanceFromWire } from "../characters/types";
 import type { CharacterAppearanceWire } from "../characters/heroes99";
@@ -15,7 +16,9 @@ import type {
   FriendRequestPayload,
   SocialStatePayload,
   WelcomePayload,
+  MapConfigPayload,
   SavePoint,
+  JobChanger,
   WorldNPC,
   WorldPlayer,
   WorldStatePayload,
@@ -130,6 +133,7 @@ export const net = {
       useGame.setState({ loginError: "Not signed in." });
       return;
     }
+    void prefetchMapConfig(defaultMapId());
     const join = () => send("join_world", payload);
     if (ws && ws.readyState === WebSocket.OPEN) {
       join();
@@ -157,8 +161,12 @@ export const net = {
   unequip(slot: string) {
     send("unequip", { slot });
   },
-  setJobs(mainJob: string, subJob: string) {
-    send("set_jobs", { main_job: mainJob, sub_job: subJob });
+  setJobs(mainJob: string, subJob: string, jobChangerId?: string) {
+    send("set_jobs", {
+      main_job: mainJob,
+      sub_job: subJob,
+      job_changer_id: jobChangerId ?? "",
+    });
   },
   setHotbar(slot: string, kind: string, id: string) {
     send("set_hotbar", { slot, kind, id });
@@ -421,22 +429,18 @@ function handleMessage(env: Envelope) {
             screen,
             loginError: null,
             players,
-            mapInfo: p.map
-              ? {
-                  id: p.map.id,
-                  name: p.map.name,
-                  combat: p.map.combat,
-                  capabilities: p.map.capabilities ?? [],
-                  portals: p.map.portals ?? [],
-                }
-              : s.mapInfo,
-            overworld: p.map?.overworld ?? s.overworld,
           };
         });
+        if (p.map) applyMapSnapshotToGame(p.map);
         fetchAtlas()
           .then((atlas) => useGame.setState({ atlas: atlas.maps ?? [] }))
           .catch(() => {});
       })();
+      break;
+    }
+    case "map_config": {
+      const p = env.payload as MapConfigPayload;
+      if (p.map) applyMapSnapshotToGame(p.map);
       break;
     }
     case "world_state": {
@@ -447,10 +451,13 @@ function handleMessage(env: Envelope) {
       for (const n of p.npcs ?? []) npcs[n.id] = n;
       const savePoints: Record<string, SavePoint> = {};
       for (const sp of p.save_points ?? []) savePoints[sp.id] = sp;
+      const jobChangers: Record<string, JobChanger> = {};
+      for (const jc of p.job_changers ?? []) jobChangers[jc.id] = jc;
       g.setState({
         players,
         npcs,
         savePoints,
+        jobChangers,
         battles: p.battles ?? [],
         overworld: p.map ?? g.getState().overworld,
       });

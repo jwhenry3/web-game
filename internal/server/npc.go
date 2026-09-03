@@ -13,13 +13,15 @@ import (
 // Overworld foes are owned by the hub. Clients may predict motion, but only
 // this process decides when a collision becomes a battle.
 const (
-	npcCount     = 12
-	npcRadius    = 22.0
-	playerRadius = game.PlayerCollisionHalfW
-	engageRange  = npcRadius + playerRadius
-	npcTickSec   = 0.25
-	maxMoveStep  = 80.0 // ~240 px/s plus slack; rejects teleports
+	npcCount    = 12
+	npcRadius   = 22.0
+	npcTickSec  = 0.25
+	maxMoveStep = 80.0 // ~240 px/s plus slack; rejects teleports
 )
+
+func engageRangePx() float64 {
+	return npcRadius + game.PlayerCollisionHalfW
+}
 
 type worldNPC struct {
 	ID       string
@@ -53,7 +55,7 @@ func dist(ax, ay, bx, by float64) float64 {
 }
 
 func withinEngageRange(ax, ay, bx, by float64) bool {
-	return dist(ax, ay, bx, by) <= engageRange
+	return dist(ax, ay, bx, by) <= engageRangePx()
 }
 
 func (n *worldNPC) snapshot() protocol.WorldNPC {
@@ -96,6 +98,34 @@ func (h *Hub) seedNPCs(count int) {
 		}
 		n.beginWander()
 		h.npcs[n.ID] = n
+	}
+}
+
+// reseedNPCsPreservingBattles rebuilds overworld foes from the current map
+// config while keeping any NPCs that are mid-battle.
+func (h *Hub) reseedNPCsPreservingBattles(count int) {
+	prev := h.npcs
+	h.seedNPCs(count)
+	for id, n := range h.npcs {
+		old, ok := prev[id]
+		if !ok || !old.InBattle {
+			continue
+		}
+		n.InBattle = true
+		n.BattleID = old.BattleID
+		n.despawned = old.despawned
+		n.respawnAt = old.respawnAt
+		n.X, n.Y = old.X, old.Y
+	}
+	for id, old := range prev {
+		if !old.InBattle {
+			continue
+		}
+		if _, ok := h.npcs[id]; ok {
+			continue
+		}
+		old.ow = h.overworld
+		h.npcs[id] = old
 	}
 }
 
@@ -252,9 +282,17 @@ func (h *Hub) checkNPCPlayerCollisions() {
 	}
 }
 
+func (h *Hub) worldSize() (w, hgt float64) {
+	if h.overworld != nil && h.overworld.WorldW > 0 {
+		return float64(h.overworld.WorldW), float64(h.overworld.WorldH)
+	}
+	return float64(game.OverworldW), float64(game.OverworldH)
+}
+
 func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
-	toX = clamp(toX, game.PlayerCollisionHalfW, worldWidth-game.PlayerCollisionHalfW)
-	toY = clamp(toY, game.PlayerCollisionHalfH, worldHeight)
+	worldW, worldH := h.worldSize()
+	toX = clamp(toX, game.PlayerCollisionHalfW, worldW-game.PlayerCollisionHalfW)
+	toY = clamp(toY, game.PlayerCollisionHalfH, worldH)
 	dx, dy := toX-fromX, toY-fromY
 	d := math.Hypot(dx, dy)
 	if d > maxMoveStep {
@@ -275,6 +313,9 @@ func battleImmune(wp *protocol.WorldPlayer) bool {
 
 func (h *Hub) engageFirstNPCAt(c *Client, wp *protocol.WorldPlayer, x, y float64) bool {
 	if wp.InBattle || battleImmune(wp) {
+		return false
+	}
+	if h.overworld != nil && h.overworld.SanctuaryAtWorld(x, y) {
 		return false
 	}
 	for _, n := range h.npcs {

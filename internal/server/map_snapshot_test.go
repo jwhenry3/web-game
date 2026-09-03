@@ -49,8 +49,11 @@ func TestAtlasMapIncludesSavePoints(t *testing.T) {
 		t.Fatal("expected save-point POIs from map config")
 	}
 	for _, poi := range atlas.POIs {
-		if poi.Kind != "save_point" || poi.ID == "" || poi.Name == "" {
+		if poi.ID == "" || poi.Name == "" {
 			t.Fatalf("poi %+v", poi)
+		}
+		if poi.Kind != "save_point" && poi.Kind != "job_changer" {
+			t.Fatalf("unexpected poi kind %+v", poi)
 		}
 	}
 }

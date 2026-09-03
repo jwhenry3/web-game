@@ -116,6 +116,7 @@ var weaponBases = map[WeaponType][]string{
 	WeaponDagger: {"Twin Dirks", "Twin Kris", "Matched Stilettos"},
 	WeaponStaff:  {"Staff", "Rod", "Scepter"},
 	WeaponMace:   {"Mace", "Cudgel", "Morningstar"},
+	WeaponSpear:  {"Spear", "Lance", "Pike"},
 }
 
 var armorBases = map[string][]string{

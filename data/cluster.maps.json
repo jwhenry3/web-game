@@ -1,0 +1,29 @@
+{
+  "maps": [
+    {
+      "id": "greenwood",
+      "name": "Greenwood",
+      "addr": ":8091",
+      "config": "config/server.json",
+      "default": true
+    },
+    {
+      "id": "north",
+      "name": "Northern Wastes",
+      "addr": ":8092",
+      "config": "config/server.north.json"
+    },
+    {
+      "id": "cave",
+      "name": "Misty Cave",
+      "config": "maps/cave.server.json",
+      "enabled": true
+    },
+    {
+      "id": "easternshore",
+      "name": "Eastern Shore",
+      "config": "maps/easternshore.server.json",
+      "enabled": true
+    }
+  ]
+}

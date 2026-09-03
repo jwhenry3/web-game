@@ -46,21 +46,28 @@ func main() {
 
 	profiles := store.Load(cfg.Proxy.Data)
 	accounts := store.LoadAccounts(cfg.Proxy.Accounts)
+	accounts.EnsureDefaultAdmin()
 	tokens := auth.NewTokenIssuer(secret)
-	px := proxy.New(cfg, tokens, accounts, profiles)
+	px := proxy.New(cfg, path, tokens, accounts, profiles, os.Getenv("ADMIN_SECRET"))
 
 	if cfg.Proxy.Name != "" {
 		log.Printf("proxy: %s", cfg.Proxy.Name)
 	}
+	started := 0
 	for _, spec := range cfg.Maps {
+		if !spec.IsEnabled() {
+			log.Printf("map %s (%s) disabled — not starting", spec.ID, spec.Name)
+			continue
+		}
 		n, err := mapnode.Start(spec, profiles, accounts)
 		if err != nil {
 			log.Fatalf("map %s: %v", spec.ID, err)
 		}
 		px.RegisterMap(n)
+		started++
 	}
 
-	log.Printf("cluster maps: %d (default %s)", len(cfg.Maps), cfg.DefaultMap().ID)
+	log.Printf("cluster maps: %d running / %d registered (default %s)", started, len(cfg.Maps), cfg.DefaultMap().ID)
 	log.Printf("FF5-Multiplayer proxy listening on %s", cfg.Proxy.Addr)
 	if err := http.ListenAndServe(cfg.Proxy.Addr, px.Handler()); err != nil {
 		log.Fatal("ListenAndServe:", err)

@@ -111,6 +111,9 @@ func walkableTilesInRegion(walkable func(c, r int) bool, region Region) []Tile {
 	out := make([]Tile, 0, (region.MaxC-region.MinC+1)*(region.MaxR-region.MinR+1))
 	for r := region.MinR; r <= region.MaxR; r++ {
 		for c := region.MinC; c <= region.MaxC; c++ {
+			if !region.Contains(c, r) {
+				continue
+			}
 			if walkable(c, r) {
 				out = append(out, Tile{C: c, R: r})
 			}

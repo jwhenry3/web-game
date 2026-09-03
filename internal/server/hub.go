@@ -75,6 +75,10 @@ type Hub struct {
 	mapID      string
 	mapName    string
 	OnTransfer func(clientID, destMap string, destX, destY float64, facing string)
+
+	quit     chan struct{}
+	done     chan struct{}
+	stopOnce sync.Once
 }
 
 func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer, battleSpeed float64, modCfg plugins.Config) (*Hub, error) {
@@ -101,6 +105,8 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		battleSpeed:   battleSpeed,
 		modCfg:        modCfg,
 		overworld:     game.Loaded(),
+		quit:          make(chan struct{}),
+		done:          make(chan struct{}),
 	}
 	combat, err := plugins.NewCombatPlugin(modCfg, h)
 	if err != nil {
@@ -125,7 +131,68 @@ func (h *Hub) SetMap(id, name string, ow *game.Overworld) {
 	}
 }
 
+// BroadcastMapConfig notifies connected clients that map terrain/collision changed.
+func (h *Hub) BroadcastMapConfig() {
+	snap := h.mapSnapshot()
+	if snap == nil {
+		return
+	}
+	h.broadcastAll(protocol.Encode(protocol.TypeMapConfig, protocol.MapConfigPayload{Map: snap}))
+}
+
+// ApplyOverworldReload installs a freshly loaded overworld on this map hub and
+// streams map_config + world_state to connected clients. Safe to call from any
+// goroutine; work runs on the hub loop.
+func (h *Hub) ApplyOverworldReload(id, name string, ow *game.Overworld) {
+	done := make(chan struct{})
+	task := func() {
+		defer close(done)
+		h.reloadOverworld(id, name, ow)
+	}
+	select {
+	case h.tasks <- task:
+		select {
+		case <-done:
+		case <-h.done:
+		}
+	case <-h.done:
+	}
+}
+
+func (h *Hub) reloadOverworld(id, name string, ow *game.Overworld) {
+	h.SetMap(id, name, ow)
+	h.reseedNPCsPreservingBattles(npcCount)
+	h.BroadcastMapConfig()
+	h.broadcastWorldState()
+	nClients := 0
+	h.mu.RLock()
+	for _, c := range h.clients {
+		if c.Joined {
+			nClients++
+		}
+	}
+	h.mu.RUnlock()
+	log.Printf("map %s (%s) reloaded; streamed to %d client(s)", id, name, nClients)
+}
+
+func (h *Hub) broadcastWorldState() {
+	tile, cols, rows, cells := h.mapCells()
+	h.broadcastAll(protocol.Encode(protocol.TypeWorldState, protocol.WorldStatePayload{
+		Players:     h.worldPlayers(),
+		NPCs:        h.worldNPCs(),
+		Battles:     h.battleInfos(),
+		SavePoints:  h.worldSavePoints(),
+		JobChangers: h.worldJobChangers(),
+		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
+	}))
+}
+
 func (h *Hub) MapID() string { return h.mapID }
+
+// MapSnapshot returns the current map configuration for clients (REST + welcome).
+func (h *Hub) MapSnapshot() *protocol.MapSnapshot {
+	return h.mapSnapshot()
+}
 
 func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 	if h.mapID == "" || h.overworld == nil {
@@ -144,12 +211,13 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		caps = append(caps, m.Capabilities...)
 	}
 	portals := make([]protocol.MapPortal, 0, len(h.overworld.Exits))
+	ts := float64(h.overworld.TileSizePx())
 	for _, e := range h.overworld.Exits {
 		portals = append(portals, protocol.MapPortal{
-			X: float64(e.MinC) * game.TileSize,
-			Y: float64(e.MinR) * game.TileSize,
-			W: float64(e.MaxC-e.MinC+1) * game.TileSize,
-			H: float64(e.MaxR-e.MinR+1) * game.TileSize,
+			X: float64(e.MinC) * ts,
+			Y: float64(e.MinR) * ts,
+			W: float64(e.MaxC-e.MinC+1) * ts,
+			H: float64(e.MaxR-e.MinR+1) * ts,
 		})
 	}
 	return &protocol.MapSnapshot{
@@ -159,7 +227,31 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		Capabilities: caps,
 		Modules:      mods,
 		Overworld:    protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
+		TiledMap:      "",
 		Portals:      portals,
+		TileOverrides: tileOverridesPayload(h.overworld.TileOverrides),
+		TerrainLayers: terrainLayersPayload(h.overworld),
+	}
+}
+
+func terrainLayersPayload(ow *game.Overworld) *protocol.MapTerrainLayers {
+	if ow == nil || len(ow.Ground) == 0 || len(ow.Collision) == 0 {
+		return nil
+	}
+	return &protocol.MapTerrainLayers{
+		Ground:    ow.Ground,
+		Collision: ow.Collision,
+	}
+}
+
+func tileOverridesPayload(o *game.MapTileOverrides) *protocol.MapTileOverrides {
+	if o == nil || len(o.Layers) == 0 {
+		return nil
+	}
+	return &protocol.MapTileOverrides{
+		MapID:     o.MapID,
+		Layers:    o.Layers,
+		UpdatedAt: o.UpdatedAt,
 	}
 }
 
@@ -206,6 +298,7 @@ func (h *Hub) KickByCharacterName(name string) {
 }
 
 func (h *Hub) Run() {
+	defer close(h.done)
 	h.initSocial()
 	h.seedNPCs(npcCount)
 	ticker := time.NewTicker(time.Duration(npcTickSec * float64(time.Second)))
@@ -214,6 +307,9 @@ func (h *Hub) Run() {
 	defer castTicker.Stop()
 	for {
 		select {
+		case <-h.quit:
+			return
+
 		case client := <-h.register:
 			h.mu.Lock()
 			h.clients[client.ID] = client
@@ -236,6 +332,14 @@ func (h *Hub) Run() {
 			h.finishDueWorldCasts(time.Now())
 		}
 	}
+}
+
+// Stop signals the hub loop to exit and waits for it to finish.
+func (h *Hub) Stop() {
+	h.stopOnce.Do(func() {
+		close(h.quit)
+	})
+	<-h.done
 }
 
 // ---- roomHost implementation (safe to call from battle goroutines) ----
@@ -475,17 +579,22 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 		Y:          spawnY,
 		Facing:     facing,
 	}
+	// Zone transfers attach with UseSpawn — grant the same post-battle invuln window.
+	if c.UseSpawn {
+		h.grantBattleImmunity(wp)
+	}
 	h.world[c.ID] = wp
 	h.persistWorldLocation(c, wp, true)
 
 	h.sendWelcome(c, profile)
 	tile, cols, rows, cells := h.mapCells()
 	h.send(c, protocol.TypeWorldState, protocol.WorldStatePayload{
-		Players:    h.worldPlayers(),
-		NPCs:       h.worldNPCs(),
-		Battles:    h.battleInfos(),
-		SavePoints: h.worldSavePoints(),
-		Map:        protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
+		Players:     h.worldPlayers(),
+		NPCs:        h.worldNPCs(),
+		Battles:     h.battleInfos(),
+		SavePoints:  h.worldSavePoints(),
+		JobChangers: h.worldJobChangers(),
+		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
 	})
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerJoin, *wp))
 	h.sendSocialState(c)
@@ -544,7 +653,7 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 		if exit, ok := h.overworld.ExitAt(wp.X, wp.Y); ok && exit.DestMap != h.mapID {
 			facing := wp.Facing
 			if facing == "" {
-				facing = game.FacingFromExit(exit)
+				facing = game.FacingFromExit(exit, h.overworld.Cols)
 			}
 			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, facing)
 			return
@@ -585,9 +694,9 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	profile, ok := h.store.Equip(c.Name, p.ItemID, p.Slot)
-	if !ok {
-		h.sendError(c, "You do not own that item.")
+	profile, errMsg := h.store.Equip(c.Name, p.ItemID, p.Slot)
+	if errMsg != "" {
+		h.sendError(c, errMsg)
 		return
 	}
 	wp.Weapon = string(profile.WeaponType())
@@ -629,6 +738,14 @@ func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
 	var p protocol.SetJobsPayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		h.sendError(c, "Malformed job request.")
+		return
+	}
+	if p.JobChangerID == "" {
+		h.sendError(c, "Visit a Job Master to change jobs.")
+		return
+	}
+	if !h.nearJobChanger(wp.X, wp.Y, p.JobChangerID) {
+		h.sendError(c, "Move closer to the Job Master.")
 		return
 	}
 	profile, errMsg := h.store.SetJobs(c.Name, game.JobID(p.MainJob), game.JobID(p.SubJob))

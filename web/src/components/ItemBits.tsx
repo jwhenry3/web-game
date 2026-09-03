@@ -5,6 +5,8 @@ import { hotbarSlotLabel } from "../input/keybinds";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { EmptySlotTooltipContent, ItemTooltipContent } from "../ui/tooltipContent";
 import { setHotbarDragImage, writeHotbarDrag } from "../ui/hotbarDrag";
+import { useItemContextMenu } from "./ItemContextMenu";
+import { runPrimaryItemAction } from "../ui/itemActions";
 
 import { GameIcon } from "../ui/GameIcon";
 import { consumableIconSrc, itemIconSrc } from "../ui/itemDisplay";
@@ -37,90 +39,6 @@ export function BindButtons({ kind, id }: { kind: "skill" | "item"; id: string }
   );
 }
 
-function ItemActionMenu({
-  item,
-  profile,
-  equippedSlot,
-  locked,
-}: {
-  item: Item;
-  profile: ProfileInfo;
-  equippedSlot?: string;
-  locked?: boolean;
-}) {
-  const bindSlot = useGame((s) => s.bindSlot);
-  const consumable = item.kind === "consumable";
-  const isWeapon = item.slot === "weapon";
-  const hasSub = !!profile.sub_job;
-  const gearLocked = !!locked && !consumable;
-
-  const runAction = (value: string) => {
-    if (value === "use") {
-      net.useItemFromBag(item.id);
-      return;
-    }
-    if (value.startsWith("hotbar:")) {
-      net.setHotbar(value.slice(7), "item", item.consumable || item.id);
-      return;
-    }
-    if (value.startsWith("unequip:")) {
-      net.unequip(value.slice(8));
-      return;
-    }
-    if (value === "equip:weapon") {
-      net.equip(item.id, "weapon");
-      return;
-    }
-    if (value === "equip:sub_weapon") {
-      net.equip(item.id, "sub_weapon");
-      return;
-    }
-    if (value === "equip") {
-      net.equip(item.id);
-    }
-  };
-
-  return (
-    <select
-      className="xiv-select xiv-item-action"
-      defaultValue=""
-      disabled={gearLocked}
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-      onChange={(e) => {
-        const value = e.target.value;
-        e.target.value = "";
-        if (value) runAction(value);
-      }}
-    >
-      <option value="">Actions…</option>
-      {consumable ? (
-        <>
-          <option value="use">Use</option>
-          {bindSlot ? (
-            <option value={`hotbar:${bindSlot}`}>Set to {bindSlot}</option>
-          ) : (
-            HOTBAR_SLOTS.map((slot) => (
-              <option key={slot} value={`hotbar:${slot}`}>
-                Hotbar {hotbarSlotLabel(slot)}
-              </option>
-            ))
-          )}
-        </>
-      ) : equippedSlot ? (
-        <option value={`unequip:${equippedSlot}`}>Unequip</option>
-      ) : isWeapon ? (
-        <>
-          <option value="equip:weapon">Equip (Main)</option>
-          {hasSub && <option value="equip:sub_weapon">Equip (Sub)</option>}
-        </>
-      ) : (
-        <option value="equip">Equip</option>
-      )}
-    </select>
-  );
-}
-
 export function ItemListRow({
   item,
   profile,
@@ -128,6 +46,7 @@ export function ItemListRow({
   equipped,
   equippedSlot,
   locked,
+  showLevel = true,
   onClick,
 }: {
   item: Item;
@@ -136,8 +55,10 @@ export function ItemListRow({
   equipped?: boolean;
   equippedSlot?: string;
   locked?: boolean;
+  showLevel?: boolean;
   onClick?: () => void;
 }) {
+  const { open: openContextMenu } = useItemContextMenu();
   const consumable = item.kind === "consumable";
   const qty = itemQty(item);
   const row = (
@@ -146,6 +67,22 @@ export function ItemListRow({
         type="button"
         className="xiv-item-row"
         onClick={onClick}
+        onDoubleClick={(e) => {
+          e.preventDefault();
+          runPrimaryItemAction(item, profile, equippedSlot, locked);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openContextMenu({
+            item,
+            profile,
+            equippedSlot,
+            locked,
+            x: e.clientX,
+            y: e.clientY,
+          });
+        }}
         draggable={consumable}
         onDragStart={(e) => {
           if (!consumable || !item.consumable) return;
@@ -155,19 +92,20 @@ export function ItemListRow({
       >
         <span className="xiv-item-row-icon">
           <GameIcon src={itemIconSrc(item)} alt="" size={20} />
+          {equipped && (
+            <span className="xiv-item-row-equipped" title="Equipped">
+              E
+            </span>
+          )}
         </span>
         <span className="xiv-item-row-name" style={{ color: RARITY_COLORS[item.rarity] }}>
           {item.name}
         </span>
-        {equipped && (
-          <span className="xiv-item-row-equipped" title="Equipped">
-            E
-          </span>
-        )}
         {consumable && qty > 1 && <span className="xiv-item-row-meta">×{qty}</span>}
-        {!consumable && item.level > 0 && <span className="xiv-item-row-meta">i{item.level}</span>}
+        {showLevel && !consumable && item.level > 0 && (
+          <span className="xiv-item-row-meta">i{item.level}</span>
+        )}
       </button>
-      <ItemActionMenu item={item} profile={profile} equippedSlot={equippedSlot} locked={locked} />
     </div>
   );
 

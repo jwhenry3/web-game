@@ -46,25 +46,29 @@ type session struct {
 
 // Proxy is the global edge: auth, one client WebSocket, and map routing.
 type Proxy struct {
-	cfg      cluster.Config
-	tokens   *auth.TokenIssuer
-	accounts *store.AccountStore
-	profiles *store.Store
-	auth     *server.AuthHandler
+	cfg         cluster.Config
+	cfgPath     string
+	tokens      *auth.TokenIssuer
+	accounts    *store.AccountStore
+	profiles    *store.Store
+	auth        *server.AuthHandler
+	adminSecret string
 
 	mu   sync.Mutex
 	maps map[string]*mapnode.Node
 	sess map[string]*session
 }
 
-func New(cfg cluster.Config, tokens *auth.TokenIssuer, accounts *store.AccountStore, profiles *store.Store) *Proxy {
+func New(cfg cluster.Config, cfgPath string, tokens *auth.TokenIssuer, accounts *store.AccountStore, profiles *store.Store, adminSecret string) *Proxy {
 	p := &Proxy{
-		cfg:      cfg,
-		tokens:   tokens,
-		accounts: accounts,
-		profiles: profiles,
-		maps:     map[string]*mapnode.Node{},
-		sess:     map[string]*session{},
+		cfg:         cfg,
+		cfgPath:     cfgPath,
+		tokens:      tokens,
+		accounts:    accounts,
+		profiles:    profiles,
+		adminSecret: adminSecret,
+		maps:        map[string]*mapnode.Node{},
+		sess:        map[string]*session{},
 	}
 	p.auth = server.NewAuthHandler(accounts, profiles, tokens, p)
 	return p
@@ -104,6 +108,17 @@ func (p *Proxy) Handler() http.Handler {
 	apiMux := http.NewServeMux()
 	server.RegisterAPIRoutes(apiMux, p.auth, modCfg)
 	apiMux.HandleFunc("/atlas", p.handleAtlas)
+	admin := &AdminMapsHandler{
+		Secret:   p.adminSecret,
+		Accounts: p.accounts,
+		Tokens:   p.tokens,
+		Proxy:    p,
+	}
+	admin.Register(apiMux)
+	publicMaps := &PublicMapsHandler{
+		Proxy: p,
+	}
+	publicMaps.Register(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
@@ -126,9 +141,13 @@ func (p *Proxy) handleAtlas(w http.ResponseWriter, r *http.Request) {
 	for id, n := range p.maps {
 		nodes[id] = n
 	}
+	specs := append([]cluster.MapSpec(nil), p.cfg.Maps...)
 	p.mu.Unlock()
-	maps := make([]protocol.AtlasMap, 0, len(p.cfg.Maps))
-	for _, spec := range p.cfg.Maps {
+	maps := make([]protocol.AtlasMap, 0, len(specs))
+	for _, spec := range specs {
+		if !spec.IsEnabled() {
+			continue
+		}
 		n := nodes[spec.ID]
 		if n == nil {
 			continue
@@ -259,7 +278,7 @@ func (p *Proxy) pickMap(s *session, env protocol.Envelope) string {
 	if name == "" {
 		return def
 	}
-	if prof, ok := p.profiles.Get(name); ok && prof.MapID != "" && p.cfg.HasMap(prof.MapID) {
+	if prof, ok := p.profiles.Get(name); ok && prof.MapID != "" && p.cfg.CanTravelTo(prof.MapID) && p.mapRunning(prof.MapID) {
 		if s.acctID != "" && prof.AccountID != "" && prof.AccountID != s.acctID {
 			return def
 		}
@@ -284,20 +303,23 @@ func (p *Proxy) attach(s *session, mapID string, req cluster.AttachRequest) bool
 }
 
 func (p *Proxy) handleTransfer(req cluster.TransferRequest) {
-	if !p.cfg.HasMap(req.DestMap) {
-		log.Printf("proxy: rejected transfer to unknown map %q", req.DestMap)
+	if !p.cfg.CanTravelTo(req.DestMap) {
+		log.Printf("proxy: rejected transfer to unavailable map %q", req.DestMap)
 		p.sendToClient(req.ClientID, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Cannot travel there."}))
 		return
 	}
 	p.mu.Lock()
 	s := p.sess[req.ClientID]
 	var src *mapnode.Node
+	srcMapID := ""
 	if s != nil {
+		srcMapID = s.mapID
 		src = p.maps[s.mapID]
 	}
 	dst := p.maps[req.DestMap]
 	p.mu.Unlock()
 	if s == nil || dst == nil {
+		p.sendToClient(req.ClientID, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Destination unavailable."}))
 		return
 	}
 	if src != nil && src.Spec.ID == req.DestMap {
@@ -312,6 +334,12 @@ func (p *Proxy) handleTransfer(req cluster.TransferRequest) {
 		ClientID: s.id, AccountID: s.acctID, Username: s.user,
 		SpawnX: req.DestX, SpawnY: req.DestY, UseSpawn: true, Facing: req.Facing,
 	}) {
+		// Reattach to source if possible so the player is not stranded.
+		if srcMapID != "" && srcMapID != req.DestMap && p.mapRunning(srcMapID) {
+			_ = p.attach(s, srcMapID, cluster.AttachRequest{
+				ClientID: s.id, AccountID: s.acctID, Username: s.user,
+			})
+		}
 		p.sendToClient(s.id, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Destination unavailable."}))
 		return
 	}

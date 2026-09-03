@@ -130,12 +130,12 @@ func (p *Profile) syncWeaponSlots(l *JobLoadout) {
 		delete(l.Equipped, game.SlotSubWeapon)
 	}
 	if l.Equipped[game.SlotWeapon] == "" {
-		if id := findWeaponInInventory(p.Inventory, game.JobWeapon(game.JobID(p.MainJob))); id != "" {
+		if id := findWeaponForJob(p.Inventory, game.JobID(p.MainJob)); id != "" {
 			l.Equipped[game.SlotWeapon] = id
 		}
 	}
 	if p.SubJob != "" && l.Equipped[game.SlotSubWeapon] == "" {
-		if id := findWeaponInInventory(p.Inventory, game.JobWeapon(game.JobID(p.SubJob))); id != "" {
+		if id := findWeaponForJob(p.Inventory, game.JobID(p.SubJob)); id != "" {
 			l.Equipped[game.SlotSubWeapon] = id
 		}
 	}
@@ -184,13 +184,11 @@ func (p *Profile) newLoadout() JobLoadout {
 		SkillUsage:  map[string]int{},
 		Proficiency: map[string]int{},
 	}
-	mainWeapon := game.JobWeapon(game.JobID(p.MainJob))
-	if id := findWeaponInInventory(p.Inventory, mainWeapon); id != "" {
+	if id := findWeaponForJob(p.Inventory, game.JobID(p.MainJob)); id != "" {
 		l.Equipped[game.SlotWeapon] = id
 	}
 	if p.SubJob != "" {
-		subWeapon := game.JobWeapon(game.JobID(p.SubJob))
-		if id := findWeaponInInventory(p.Inventory, subWeapon); id != "" {
+		if id := findWeaponForJob(p.Inventory, game.JobID(p.SubJob)); id != "" {
 			l.Equipped[game.SlotSubWeapon] = id
 		}
 	}
@@ -201,13 +199,22 @@ func (p *Profile) grantJobWeaponIfMissing(job game.JobID) {
 	if job == "" {
 		return
 	}
-	weapon := game.JobWeapon(job)
-	if findWeaponInInventory(p.Inventory, weapon) != "" {
+	if findWeaponForJob(p.Inventory, job) != "" {
 		return
 	}
+	weapon := game.JobWeapon(job)
 	starter := game.StarterWeapon(weapon)
 	starter.ID = "starter-" + strings.ToLower(string(job)) + "-" + string(weapon)
 	p.Inventory = append(p.Inventory, starter)
+}
+
+func findWeaponForJob(inv []game.Item, job game.JobID) string {
+	for _, w := range game.JobAllowedWeapons(job) {
+		if id := findWeaponInInventory(inv, w); id != "" {
+			return id
+		}
+	}
+	return ""
 }
 
 func findWeaponInInventory(inv []game.Item, weapon game.WeaponType) string {

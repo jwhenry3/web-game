@@ -5,7 +5,7 @@
     "data": "data/north-profiles.json",
     "accounts": "data/accounts.json",
     "static": "web/dist",
-    "overworld": "config/overworld.north.json",
+    "overworld": "maps/north.map.json",
     "battle_speed": 0.75
   },
   "plugins": {

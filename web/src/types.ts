@@ -28,6 +28,7 @@ export type MessageType =
   | "rt_move"
   | "rt_attack"
   | "welcome"
+  | "map_config"
   | "world_state"
   | "player_joined"
   | "player_left"
@@ -223,6 +224,34 @@ export interface MapSnapshot {
   }>;
   overworld: OverworldMap;
   portals?: MapPortal[];
+  tile_overrides?: MapTileOverrides;
+  terrain_layers?: MapTerrainLayers;
+}
+
+export interface MapTerrainLayers {
+  ground: number[];
+  collision: number[];
+}
+
+export interface MapConfigPayload {
+  map?: MapSnapshot;
+}
+
+export interface MapTileOverrides {
+  map_id: string;
+  layers: Record<string, Record<string, number>>;
+  objects?: Array<{
+    id?: number;
+    name: string;
+    type: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    point?: boolean;
+    properties?: Array<{ name: string; type: string; value: string | number | boolean }>;
+  }>;
+  updated_at?: string;
 }
 
 export interface MapPortal {
@@ -277,6 +306,13 @@ export interface SavePoint {
   y: number;
 }
 
+export interface JobChanger {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
 export interface OverworldMap {
   tile: number;
   cols: number;
@@ -310,6 +346,7 @@ export interface WorldStatePayload {
   npcs?: WorldNPC[];
   battles: BattleInfo[];
   save_points?: SavePoint[];
+  job_changers?: JobChanger[];
   map?: OverworldMap;
 }
 
@@ -548,6 +585,7 @@ export const STARTING_JOBS = [
 /** @deprecated use STARTING_JOBS */
 export const WEAPONS = [
   { id: "sword", name: "Sword", color: 0xd9704a, category: "swordplay", desc: "Heavy blows. Trains Swordplay." },
+  { id: "spear", name: "Spear", color: 0xd9704a, category: "swordplay", desc: "Reach and thrust. Trains Swordplay." },
   { id: "dagger", name: "Dagger", color: 0x54c47a, category: "stealth", desc: "Fast strikes. Trains Stealth." },
   { id: "staff", name: "Staff", color: 0x7a6ff0, category: "sorcery", desc: "Boosts Sorcery magic." },
   { id: "mace", name: "Mace", color: 0xe8c95a, category: "devotion", desc: "Boosts Devotion magic." },
@@ -568,7 +606,58 @@ export const CATEGORIES = [
   { id: "devotion", name: "Devotion", color: "#e8c95a", weapon: "mace" },
 ] as const;
 
+const CATEGORY_WEAPONS: Record<string, readonly string[]> = {
+  swordplay: ["sword"],
+  stealth: ["dagger"],
+  sorcery: ["staff"],
+  devotion: ["mace"],
+};
+
+/** Per-job weapon allowlists (hybrid jobs). Others use their category default. */
+const JOB_WEAPON_OVERRIDES: Record<string, readonly string[]> = {
+  PLD: ["sword", "mace"],
+  DRK: ["sword", "mace"],
+  DRG: ["spear", "sword"],
+  BLU: ["sword", "dagger", "staff"],
+  RUN: ["sword", "mace"],
+  COR: ["dagger", "sword"],
+  GEO: ["staff", "mace"],
+  RDM: ["mace", "sword", "staff"],
+  SCH: ["mace", "staff"],
+  PUP: ["mace", "sword"],
+};
+
+export function jobAllowedWeapons(jobId: string | undefined): readonly string[] {
+  if (!jobId) return [];
+  if (JOB_WEAPON_OVERRIDES[jobId]) return JOB_WEAPON_OVERRIDES[jobId];
+  const cat = ALL_JOBS.find((j) => j.id === jobId)?.category;
+  return cat ? (CATEGORY_WEAPONS[cat] ?? []) : [];
+}
+
+export function jobAllowsWeapon(jobId: string | undefined, weaponType: string | undefined): boolean {
+  if (!jobId || !weaponType) return false;
+  return jobAllowedWeapons(jobId).includes(weaponType);
+}
+
+export function formatWeaponList(types: readonly string[]): string {
+  if (types.length === 0) return "none";
+  if (types.length === 1) return types[0];
+  return `${types.slice(0, -1).join(", ")}, or ${types[types.length - 1]}`;
+}
+
 export const ARMOR_SLOTS = ["head", "chest", "hands", "legs", "feet", "back"] as const;
+
+export const ARMOURY_TABS = [
+  { id: "weapon", label: "Weapon" },
+  { id: "head", label: "Head" },
+  { id: "chest", label: "Chest" },
+  { id: "hands", label: "Hands" },
+  { id: "legs", label: "Legs" },
+  { id: "feet", label: "Feet" },
+  { id: "back", label: "Back" },
+] as const;
+
+export type ArmouryTabId = (typeof ARMOURY_TABS)[number]["id"];
 
 export const WEAPON_SLOTS = [
   { id: "weapon", label: "Main Weapon" },

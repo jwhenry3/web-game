@@ -41,7 +41,7 @@ func Default() Config {
 			Data:        "data/profiles.json",
 			Accounts:    "data/accounts.json",
 			Static:      "web/dist",
-			Overworld:   "config/overworld.json",
+			Overworld:   "maps/greenwood.tmj",
 			BattleSpeed: combatatb.DefaultBattleSpeed,
 		},
 		Plugins: plugins.Config{

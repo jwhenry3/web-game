@@ -4,6 +4,18 @@ export type EnemyKind = "goblin" | "dire_wolf" | "stone_imp";
 
 export const ENEMY_KINDS: EnemyKind[] = ["goblin", "dire_wolf", "stone_imp"];
 
+export const ENEMY_KIND_LABELS: Record<EnemyKind, string> = {
+  goblin: "Goblin",
+  dire_wolf: "Dire Wolf",
+  stone_imp: "Stone Imp",
+};
+
+export const ENEMY_SPRITE_SRC: Record<EnemyKind, string> = {
+  goblin: "/assets/enemies/goblin.svg",
+  dire_wolf: "/assets/enemies/dire_wolf.svg",
+  stone_imp: "/assets/enemies/stone_imp.svg",
+};
+
 export const ENEMY_KIND_BY_NAME: Record<string, EnemyKind> = {
   Goblin: "goblin",
   "Dire Wolf": "dire_wolf",

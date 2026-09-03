@@ -1,0 +1,30 @@
+package game
+
+import (
+	"path/filepath"
+	"testing"
+)
+
+func TestGenerateSanctuaryWallOverrideGreenwood(t *testing.T) {
+	o, err := GenerateSanctuaryWallOverride(defaultOverworldPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o == nil || len(o.Layers["collision"]) == 0 {
+		t.Fatal("expected sanctuary wall collision patches")
+	}
+	if len(o.Layers["ground"]) == 0 {
+		t.Fatal("expected sanctuary wall ground patches")
+	}
+}
+
+func TestGenerateSanctuaryWallOverrideNorth(t *testing.T) {
+	northPath := filepath.Join(filepath.Dir(defaultOverworldPath()), "north.tmj")
+	o, err := GenerateSanctuaryWallOverride(northPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o == nil || len(o.Layers["collision"]) == 0 {
+		t.Fatal("expected sanctuary wall collision patches")
+	}
+}
