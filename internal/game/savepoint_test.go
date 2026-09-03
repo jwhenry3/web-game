@@ -4,7 +4,7 @@ import "testing"
 
 func TestSavePointsLoadWalkable(t *testing.T) {
 	if len(SavePoints) == 0 {
-		t.Fatal("expected save points from config/overworld.json")
+		t.Fatal("expected save points from map config")
 	}
 	for _, sp := range SavePoints {
 		if !WalkableTile(sp.Tile.C, sp.Tile.R) {

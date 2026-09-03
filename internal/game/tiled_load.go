@@ -82,7 +82,7 @@ func LoadOverworldFromTiled(path string) (*Overworld, error) {
 
 func tiledPublicPath(path string) string {
 	base := filepath.Base(path)
-	// maps/foo.tmj -> maps/foo.tmj served from web/public/assets/maps/
+	// Historical client asset path when a .tmj was published; hub may send empty tiled_map.
 	return "maps/" + base
 }
 

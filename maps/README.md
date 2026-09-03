@@ -1,91 +1,83 @@
-# World maps (Tiled)
+# World maps
 
-Maps are authored as **Tiled JSON** (`.tmj`) and loaded by the game server as the single source of truth.
+Runtime maps are **server-authoritative** `.map.json` files. The Game Designer edits sparse overrides on top of those bases. The client renders terrain from API layer data (not Tiled assets).
 
-## Files
+Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Editor: [docs/GAME_DESIGNER.md](../docs/GAME_DESIGNER.md).
+
+## Runtime artifacts
+
+| Artifact | Role |
+|----------|------|
+| `maps/{id}.map.json` | **Loaded by the server** — terrain grids, regions, NPCs, save points, exits, objects |
+| `maps/overrides/{id}.json` | Sparse patches from **Game Designer** (tile diffs + objects); hot-reloaded |
+| `maps/{id}.server.json` | Per-map server config for maps created in Game Designer |
+| `base_chip.tsx` / `base_chip.png` | Base terrain tileset definition (GID centers for paint / walls) |
+
+Loader order (`game.LoadOverworldData`): `.map.json` → else `.tmj` (optional import path) → else legacy paint JSON.
+
+Stock configs point at `.map.json` (e.g. `config/server.json` → `maps/greenwood.map.json`).
+
+## Stock files
 
 | File | Description |
 |------|-------------|
-| `greenwood.tmj` | Main overworld (160×120 tiles @ 32px) |
-| `north.tmj` | Northern Wastes |
-| `base_chip.tsx` | **Tileset config** — terrain types, autotile centers, collision/water props |
-| `base_chip.png` | Base terrain tileset image (orchestrated by `base_chip.tsx`) |
-| `pipoya_waterfall.png` | Animated waterfall strips (optional detail) |
-| `pipoya_grass.png` | Animated grass overlay |
-| `pipoya_water.png` | Animated water autotiles |
-| `pipoya_flower.png` | Flower decoration decals |
-| `pipoya_longgrass.png` | Long-grass autotile patches (type3) |
+| `greenwood.map.json` | Main overworld (160×120 @ 32px) |
+| `north.map.json` | Northern Wastes |
+| `cave.map.json` / `easternshore.map.json` | Additional maps (cluster registry) |
+| `base_chip.tsx` / `base_chip.png` | Base terrain tileset |
 
-Regenerate from legacy paint JSON:
+Maps created in Game Designer register in `data/cluster.maps.json`.
+
+## Tooling
 
 ```bash
-go run ./cmd/genmaps
+# Merge sanctuary wall patches into overrides
+go run ./cmd/genmapwalls
 ```
 
-This reads `maps/base_chip.tsx` for terrain/autotile rules, copies overlay Pipoya assets from `compressed/pipoya/`, and publishes to `web/public/assets/maps/`.
+Optional: `game.ExportMapConfigFromTiled` can still convert an external `.tmj` if you bring one in.
 
-## Tileset GID layout
+## Base chip GID layout
 
 | firstgid | Tileset | Purpose |
 |----------|---------|---------|
-| 1 | waterfall | Waterfall animation |
-| 577 | BaseChip_pipo (`base_chip.png`) | Grass, dirt, cobble, cliffs, trees — from `base_chip.tsx` |
-| 1641 | grass | Animated grass overlay |
-| 2169 | water | Animated lakes/rivers on `water` |
-| 5241 | flower | Flower decals on `grass` |
-| 5289 | longgrass | Tall grass patches on `grass` |
+| 577 | BaseChip_pipo (`base_chip.png`) | Grass, dirt, cobble, cliffs, trees |
 
-See `maps/base_chip.tsx`, `internal/game/base_chip.go`, and `internal/game/pipoya_tilesets.go`.
+See `maps/base_chip.tsx`, `internal/game/base_chip.go`, `internal/game/pipoya_tilesets.go`.
 
-## Base chip terrain (`base_chip.tsx`)
+### Base chip centers (`base_chip.tsx`)
 
 | Terrain | Center tile | Use |
 |---------|-------------|-----|
-| Grass Base | 48 | Default walkable ground |
+| Grass Base | 48 | Default walkable ground (GID 625 with firstgid 577) |
 | Dirt / Path Base | 112 | Paths, ruins |
-| Cliff Ledge | 52 | Blocking rocks (`collides`) |
+| Cliff Ledge | 52 | Blocking rocks |
 | Cobblestone | 116 | Haven / sanctuary floors |
-| Water | 176 | Water (`collides`, `water`) |
+| Water | 176 | Water |
 
-## Tiled layer conventions (bottom → top)
+## Object types
 
-| Layer | Tilesets | Purpose |
-|-------|----------|---------|
-| **ground** | BaseChip_pipo | Autotiled floor terrain |
-| **grass** | flower, longgrass | Flowers, tall grass |
-| **water** | water | Animated water bodies |
-| **water_grass** | BaseChip_pipo | Shoreline grass at water edges |
-| **tree** | BaseChip_pipo | Tree canopies (collision on `collision`) |
-| **collision** | — | Non-zero = blocked (server) |
-| **objects** | — | Regions, POIs, NPCs, exits |
+- `region` — wilderness polygon zone (`id`, `kind`)
+- `sanctuary` — safe-zone polygon (`id`, `kind`); legacy: `region` + `sanctuary` bool
+- `save_point` — `id`, `name` (**required** inside every sanctuary)
+- `job_changer` / service NPC — sanctuary services
+- `npc` — combat/service entities
+- `exit` — `destMap`, `destX`, `destY`
 
-Map properties: `wanderMinDistance`, `wanderPauseSec`, `wanderSpeed`.
-
-Object types on **objects** layer:
-
-- `region` — props: `id`, `sanctuary` (bool), `kind` (town/camp/…)
-- `save_point` — props: `id`, `name` (required inside every sanctuary)
-- `job_changer` — props: `id`, `name` (optional, sanctuary only)
-- `npc` — props: `id`, `kind`, `name`, `level`, `region`
-- `exit` — props: `destMap`, `destX`, `destY`
+`.map.json` can also store regions / save points / NPCs / exits as first-class arrays; Game Designer works primarily through the **objects** list.
 
 ## Sanctuaries
 
-Every sanctuary region must contain at least one save point. Job masters are optional (towns yes, camps maybe not). Enemies cannot path into or engage players inside sanctuaries.
+Every sanctuary region must contain at least one save point. Job masters are optional. Enemies cannot path into or engage players inside sanctuaries.
 
-## In-game map editor (admin)
+## Game Designer & APIs
 
-Set `ADMIN_SECRET` in the server environment (optional legacy fallback), or sign in with the default **admin / admin** account.
+Title → **Game Designer** → admin login (**admin / admin**).
 
-- Title screen → **Map Editor** → admin login
-- Side panel tool groups: Terrain, Collision, NPCs & POIs, Scene & Regions, Prefabs (coming soon)
+- Paints **overrides** on top of base `.map.json` (`maps/overrides/{mapId}.json`); base files are not rewritten.
+- Editable layers: `ground`, `collision`, plus objects.
+- `PUT /api/admin/maps/{id}/overrides` — save + hot-reload; clients get `map_config`.
+- `GET /api/maps`, `GET /api/maps/{id}` — public map config for client prefetch.
+- Create / enable / disable / remove maps via admin APIs (see [docs/GAME_DESIGNER.md](../docs/GAME_DESIGNER.md)).
 
-- Paints **sparse overrides** on top of the base `.tmj` (stored in `maps/overrides/{mapId}.json`)
-- Loads **ground** and **collision** from the base `.tmj`; saves only diffs from that base
-- Editable layers: `ground`, `collision`
-- `PUT /api/admin/maps/{id}/overrides` — save and hot-reload the map server; connected clients receive `map_config`
-- `GET /api/maps` — public map list with terrain, overrides, and tiled asset paths (for client prefetch)
-- `GET /api/maps/{id}` — public map config for one map
-- When overrides exist, the game renders the patched **ground** layer (matching the editor) instead of the full genmaps decorative stack
-
-Base maps from `go run ./cmd/genmaps` or Tiled are never modified directly.
+When overrides exist, the live game renders the patched ground layer to match the editor.

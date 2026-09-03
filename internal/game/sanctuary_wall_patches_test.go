@@ -19,7 +19,7 @@ func TestGenerateSanctuaryWallOverrideGreenwood(t *testing.T) {
 }
 
 func TestGenerateSanctuaryWallOverrideNorth(t *testing.T) {
-	northPath := filepath.Join(filepath.Dir(defaultOverworldPath()), "north.tmj")
+	northPath := filepath.Join(filepath.Dir(defaultOverworldPath()), "north.map.json")
 	o, err := GenerateSanctuaryWallOverride(northPath)
 	if err != nil {
 		t.Fatal(err)

@@ -35,7 +35,7 @@ type BaseChipConfig struct {
 	TreeTiles []int // decorative tree variants (local tile ids)
 }
 
-// DefaultBaseChipPath is the repo tileset definition used by genmaps and tests.
+// DefaultBaseChipPath is the repo tileset definition used by paint tools and tests.
 func DefaultBaseChipPath() string {
 	return filepath.Join("maps", "base_chip.tsx")
 }

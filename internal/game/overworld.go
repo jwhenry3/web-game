@@ -92,7 +92,7 @@ func RegionByID(id string) (Region, bool) {
 	return Region{}, false
 }
 
-// NPCPatrols are overworld foe spawn definitions loaded from config/overworld.json.
+// NPCPatrols are overworld foe spawn definitions loaded from map config / objects.
 var NPCPatrols []Patrol
 
 // OverworldCells is the authoritative 40×30 tile map (row-major).

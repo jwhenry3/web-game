@@ -12,7 +12,7 @@ const (
 	wanderPickAttempts   = 24
 )
 
-// Wander tuning loaded from config/overworld.json.
+// Wander tuning loaded from map config wander settings.
 var Wander = wanderSettings{
 	MinDistance: defaultWanderMinDist,
 	PauseSec:    defaultWanderPause,

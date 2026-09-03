@@ -1,9 +1,6 @@
 package game
 
-import (
-	"path/filepath"
-	"testing"
-)
+import "testing"
 
 func TestLoadGreenwoodMapConfigFile(t *testing.T) {
 	cfg, err := LoadMapConfig(defaultOverworldPath())
@@ -21,9 +18,8 @@ func TestLoadGreenwoodMapConfigFile(t *testing.T) {
 	}
 }
 
-func TestExportAndReloadMapConfig(t *testing.T) {
-	tmj := filepath.Join(filepath.Dir(defaultOverworldPath()), "greenwood.tmj")
-	exported, err := ExportMapConfigFromTiled(tmj)
+func TestReloadMapConfigMatchesRegions(t *testing.T) {
+	cfg, err := LoadMapConfig(defaultOverworldPath())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +27,7 @@ func TestExportAndReloadMapConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(loaded.Regions) != len(exported.Regions) {
-		t.Fatalf("region count %d want %d", len(loaded.Regions), len(exported.Regions))
+	if len(loaded.Regions) != len(cfg.Regions) {
+		t.Fatalf("region count %d want %d", len(loaded.Regions), len(cfg.Regions))
 	}
 }

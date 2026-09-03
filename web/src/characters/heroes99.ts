@@ -24,7 +24,7 @@ export const H99_LAYER_ORDER = [
 
 export type H99LayerId = (typeof H99_LAYER_ORDER)[number];
 
-/** Frame numbers from frameguide_v2.png (1-based); converted to 0-based sheet indices. */
+/** Frame numbers from the Heroes 99 frame guide (1-based); converted to 0-based sheet indices. */
 function frames(...nums: number[]): number[] {
   return nums.map((n) => n - 1);
 }
@@ -56,7 +56,7 @@ export function layerOffsetX(_facing: CharacterFacing): number {
 }
 
 /**
- * Sheet layout (800×680, 8×17 grid of 100×40 cells). See frameguide_v2.png.
+ * Sheet layout (800×680, 8×17 grid of 100×40 cells).
  * Frame numbers in the guide are 1-based; we store 0-based sheet indices.
  * Row 1 (frames 9–14): walk stride. Row 2 (frames 17–24): run cycle.
  * Indices 14–15 are blank padding between rows — never include them.
