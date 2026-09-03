@@ -15,7 +15,7 @@ export function setAdminToken(token: string | null) {
 export async function adminLogin(username: string, password: string) {
   const result = await login(username, password);
   if (!result.is_admin) {
-    throw new Error("This account does not have map editor access.");
+    throw new Error("This account does not have Game Designer access.");
   }
   setAdminToken(result.token);
   return result;

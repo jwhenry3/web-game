@@ -16,7 +16,7 @@ export function AdminLoginScreen() {
     try {
       const result = await adminLogin(username, password);
       if (!result.is_admin) {
-        throw new Error("This account does not have map editor access.");
+        throw new Error("This account does not have Game Designer access.");
       }
       setAdminAuth({ token: result.token, username: result.username });
       setScreen("map_editor");
@@ -31,7 +31,7 @@ export function AdminLoginScreen() {
     <div className="login-screen">
       <div className="xiv-window login-panel map-editor-panel">
         <div className="xiv-titlebar">
-          <span className="xiv-title">Map Editor — Admin Login</span>
+          <span className="xiv-title">Game Designer — Admin Login</span>
         </div>
         <div className="xiv-body">
           <p className="subtitle">Sign in with an admin account to edit world maps.</p>
@@ -60,7 +60,7 @@ export function AdminLoginScreen() {
           {error && <p className="error-text">{error}</p>}
           <div className="map-editor-actions">
             <button type="button" className="xiv-btn gold" disabled={busy} onClick={() => void submit()}>
-              {busy ? "Signing in…" : "Enter Map Editor"}
+              {busy ? "Signing in…" : "Enter Game Designer"}
             </button>
             <button type="button" className="xiv-btn" onClick={() => setScreen("title")}>
               Back

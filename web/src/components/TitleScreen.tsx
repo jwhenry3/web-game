@@ -15,9 +15,9 @@ export function TitleScreen() {
             Play Game
           </button>
           <button type="button" className="xiv-btn wide title-btn" onClick={() => setScreen("admin_auth")}>
-            Map Editor
+            Game Designer
           </button>
-          <p className="dim title-hint">Map Editor requires an admin account (default: admin / admin)</p>
+          <p className="dim title-hint">Game Designer requires an admin account (default: admin / admin)</p>
         </div>
       </div>
     </div>
