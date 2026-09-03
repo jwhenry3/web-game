@@ -239,3 +239,37 @@ func ActiveJobs(main JobID, sub JobID) []JobID {
 	}
 	return out
 }
+
+// JobSkillTreeNode is one skill slot in a job's exported ability tree.
+type JobSkillTreeNode struct {
+	SkillID       string `json:"skill_id"`
+	PrereqSkillID string `json:"prereq_skill_id,omitempty"`
+}
+
+// JobSkillTree returns the skill tree for catalog export (prereqs are per-job).
+func JobSkillTree(job JobID) []JobSkillTreeNode {
+	tree, ok := jobAbilityTrees[job]
+	if !ok {
+		return nil
+	}
+	ids := make([]string, len(tree))
+	for i, ab := range tree {
+		ids[i] = skillID(job, ab.Suffix)
+	}
+	out := make([]JobSkillTreeNode, len(tree))
+	for i, ab := range tree {
+		prereqIdx := ab.Prereq
+		if i == 0 && prereqIdx == 0 {
+			prereqIdx = -1
+		}
+		prereq := ""
+		if prereqIdx >= 0 && prereqIdx < len(ids) {
+			prereq = ids[prereqIdx]
+		}
+		out[i] = JobSkillTreeNode{
+			SkillID:       ids[i],
+			PrereqSkillID: prereq,
+		}
+	}
+	return out
+}

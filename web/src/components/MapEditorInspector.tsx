@@ -4,6 +4,7 @@ import { propNumber, propString, setProp } from "../editor/editorTypes";
 import { isNpcEntity, normalizeNpcObject } from "../editor/npcEntity";
 import { OBJECT_TYPE_LABELS } from "../editor/sceneCatalog";
 import type { AdminMapInfo } from "../net/adminMaps";
+import type { ItemDef, QuestDef } from "../editor/contentStore";
 import type { ImportedTileset } from "../editor/tilesetConfig";
 import { EntityTypeInspector, usesEntityTypeInspector } from "./EntityTypeInspector";
 import { TransitionDestPicker } from "./TransitionDestPicker";
@@ -28,6 +29,8 @@ interface Props {
   };
   /** Entity template editor — hides map-only fields. */
   templateMode?: boolean;
+  items?: ItemDef[];
+  quests?: QuestDef[];
 }
 
 export function MapEditorInspector({
@@ -40,6 +43,8 @@ export function MapEditorInspector({
   prefabSettings,
   entitySettings,
   templateMode,
+  items,
+  quests,
 }: Props) {
   if (prefabSettings && !obj) {
     return <PrefabInspector settings={prefabSettings} />;
@@ -98,7 +103,13 @@ export function MapEditorInspector({
           )}
 
           {usesEntityTypeInspector(obj) ? (
-            <EntityTypeInspector obj={obj} onUpdate={onUpdate} templateMode={templateMode} />
+            <EntityTypeInspector
+              obj={obj}
+              onUpdate={onUpdate}
+              templateMode={templateMode}
+              items={items}
+              quests={quests}
+            />
           ) : (
             <>
               <div className="map-editor-group-label">{typeLabel}</div>

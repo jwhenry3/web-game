@@ -19,10 +19,11 @@ import {
   panToCenterWorldPoint,
   ZOOM_STEP,
 } from "../editor/editorCanvasUtils";
-import { capturePrefabFromMap, loadPrefabs, resizePrefab, savePrefabs, stampPrefab, type MapPrefab } from "../editor/prefabs";
-import { loadTileset, saveTileset, type ImportedTileset } from "../editor/tilesetConfig";
+import { capturePrefabFromMap, resizePrefab, stampPrefab, type MapPrefab } from "../editor/prefabs";
+import { persistEntities, persistItems, persistJobs, persistPrefabs, persistQuests, persistSkills, persistTileset, syncAllContentCatalogs, type ItemDef, type JobDef, type QuestDef, type SkillDef } from "../editor/contentStore";
+import type { ImportedTileset } from "../editor/tilesetConfig";
 import { objectsMatch } from "../editor/objectProps";
-import { entityFromPlacementTool, instantiateEntity, loadEntities, type EntityDefinition } from "../editor/entities";
+import { entityFromPlacementTool, instantiateEntity, type EntityDefinition } from "../editor/entities";
 import { drawEntityPlacementGhost, drawPrefabPlacementGhost, drawTerrainPaintGhost, type PlacementHover } from "../editor/placementGhost";
 import { drawEditorObject, ensureEditorSpritesLoaded, sortObjectsForDraw } from "../editor/editorEntitySprites";
 import {
@@ -69,6 +70,9 @@ import { MapEditorInspector } from "./MapEditorInspector";
 import { MapEditorToolbox } from "./MapEditorToolbox";
 import { PrefabEditorView } from "./PrefabEditorView";
 import { EntityEditorPage } from "./EntityEditorPage";
+import { ItemsEditorPage } from "./ItemsEditorPage";
+import { QuestsEditorPage, SkillsEditorPage } from "./ContentCatalogPages";
+import { JobsEditorPage } from "./JobsEditorPage";
 import { CreateMapDialog } from "./CreateMapDialog";
 
 export function MapEditorScreen() {
@@ -94,14 +98,18 @@ export function MapEditorScreen() {
   polygonDraftRef.current = polygonDraft;
   const commitPolygonDraftRef = useRef<(() => void) | null>(null);
   const [selectedObj, setSelectedObj] = useState<EditorObject | null>(null);
-  const [tileset, setTileset] = useState<ImportedTileset | null>(() => loadTileset());
+  const [tileset, setTileset] = useState<ImportedTileset | null>(null);
   const [selectedTileIndex, setSelectedTileIndex] = useState<number | null>(null);
-  const [prefabs, setPrefabs] = useState<MapPrefab[]>(() => loadPrefabs());
+  const [prefabs, setPrefabs] = useState<MapPrefab[]>([]);
   const [activePrefabId, setActivePrefabId] = useState<string | null>(null);
   const [editingPrefabId, setEditingPrefabId] = useState<string | null>(null);
   const [editingPrefab, setEditingPrefab] = useState<MapPrefab | null>(null);
   const [prefabEditorKey, setPrefabEditorKey] = useState(0);
-  const [entities, setEntities] = useState<EntityDefinition[]>(() => loadEntities());
+  const [entities, setEntities] = useState<EntityDefinition[]>([]);
+  const [items, setItems] = useState<ItemDef[]>([]);
+  const [quests, setQuests] = useState<QuestDef[]>([]);
+  const [jobs, setJobs] = useState<JobDef[]>([]);
+  const [skills, setSkills] = useState<SkillDef[]>([]);
   const [activeEntityId, setActiveEntityId] = useState<string | null>(null);
   const [entityStampMode, setEntityStampMode] = useState(false);
   const [stampMode, setStampMode] = useState(false);
@@ -167,6 +175,19 @@ export function MapEditorScreen() {
   activeEntityRef.current = activeEntity;
   toolRef.current = tool;
   selectedTileIndexRef.current = selectedTileIndex;
+
+  useEffect(() => {
+    void syncAllContentCatalogs().then(({ entities: ent, prefabs: pf, tileset: ts, items: it, quests: qu, jobs: jb, skills: sk }) => {
+      setEntities(ent);
+      setPrefabs(pf);
+      setTileset(ts);
+      setItems(it);
+      setQuests(qu);
+      setJobs(jb);
+      setSkills(sk);
+      tilesetRef.current = ts;
+    });
+  }, []);
 
   useEffect(() => {
     ensureEditorSpritesLoaded()
@@ -249,7 +270,7 @@ export function MapEditorScreen() {
   }, [selectedId, maps, loadMapData]);
 
   const onTilesetChange = (ts: ImportedTileset | null) => {
-    saveTileset(ts);
+    persistTileset(ts);
     setTileset(ts);
     tilesetRef.current = ts;
   };
@@ -559,7 +580,7 @@ export function MapEditorScreen() {
       );
       const next = [...prefabs, pf];
       setPrefabs(next);
-      savePrefabs(next);
+      persistPrefabs(next);
       setActivePrefabId(pf.id);
       setCaptureMode(false);
       setStatus(`Captured prefab "${pf.name}"`);
@@ -836,7 +857,7 @@ export function MapEditorScreen() {
   const closePrefabEditor = () => {
     if (editingPrefab) {
       const next = prefabs.map((p) => (p.id === editingPrefab.id ? editingPrefab : p));
-      savePrefabs(next);
+      persistPrefabs(next);
       setPrefabs(next);
     }
     setEditingPrefabId(null);
@@ -847,7 +868,7 @@ export function MapEditorScreen() {
   const saveEditingPrefab = () => {
     if (!editingPrefab) return;
     const next = prefabs.map((p) => (p.id === editingPrefab.id ? editingPrefab : p));
-    savePrefabs(next);
+    persistPrefabs(next);
     setPrefabs(next);
     setStatus(`Saved prefab "${editingPrefab.name}"`);
   };
@@ -1065,7 +1086,12 @@ export function MapEditorScreen() {
         <EditorWorkspaceNav page={workspacePage} onPage={switchWorkspacePage} onExit={onExit} />
         <EntityEditorPage
           entities={entities}
-          onEntitiesChange={setEntities}
+          onEntitiesChange={(next) => {
+            setEntities(next);
+            persistEntities(next);
+          }}
+          items={items}
+          quests={quests}
           tileset={tileset}
           maps={maps}
           currentMapId={selectedId}
@@ -1074,6 +1100,79 @@ export function MapEditorScreen() {
           onStatus={setStatus}
           openNewDialog={pendingNewEntityDialog}
           onNewDialogHandled={() => setPendingNewEntityDialog(false)}
+        />
+      </div>
+    );
+  }
+
+  if (workspacePage === "items" && !inPrefabMode) {
+    return (
+      <div className="map-editor-shell">
+        <EditorWorkspaceNav page={workspacePage} onPage={switchWorkspacePage} onExit={onExit} />
+        <ItemsEditorPage
+          items={items}
+          onItemsChange={(next) => {
+            setItems(next);
+            persistItems(next);
+          }}
+          status={status}
+          error={error}
+          onStatus={setStatus}
+        />
+      </div>
+    );
+  }
+
+  if (workspacePage === "quests" && !inPrefabMode) {
+    return (
+      <div className="map-editor-shell">
+        <EditorWorkspaceNav page={workspacePage} onPage={switchWorkspacePage} onExit={onExit} />
+        <QuestsEditorPage
+          items={quests}
+          onItemsChange={(next) => {
+            setQuests(next);
+            persistQuests(next);
+          }}
+          status={status}
+          error={error}
+          onStatus={setStatus}
+        />
+      </div>
+    );
+  }
+
+  if (workspacePage === "jobs" && !inPrefabMode) {
+    return (
+      <div className="map-editor-shell">
+        <EditorWorkspaceNav page={workspacePage} onPage={switchWorkspacePage} onExit={onExit} />
+        <JobsEditorPage
+          items={jobs}
+          skills={skills}
+          onItemsChange={(next) => {
+            setJobs(next);
+            persistJobs(next);
+          }}
+          status={status}
+          error={error}
+          onStatus={setStatus}
+        />
+      </div>
+    );
+  }
+
+  if (workspacePage === "skills" && !inPrefabMode) {
+    return (
+      <div className="map-editor-shell">
+        <EditorWorkspaceNav page={workspacePage} onPage={switchWorkspacePage} onExit={onExit} />
+        <SkillsEditorPage
+          items={skills}
+          onItemsChange={(next) => {
+            setSkills(next);
+            persistSkills(next);
+          }}
+          status={status}
+          error={error}
+          onStatus={setStatus}
         />
       </div>
     );
@@ -1307,6 +1406,8 @@ export function MapEditorScreen() {
         maps={maps}
         currentMapId={selectedId}
         tileset={tileset}
+        items={items}
+        quests={quests}
         onUpdate={updateObject}
         onDelete={deleteObject}
         prefabSettings={
@@ -1338,6 +1439,10 @@ function EditorWorkspaceNav({
   const tabs: { id: EditorWorkspacePage; label: string }[] = [
     { id: "map", label: "Map" },
     { id: "entities", label: "Entities" },
+    { id: "items", label: "Items" },
+    { id: "quests", label: "Quests" },
+    { id: "jobs", label: "Jobs" },
+    { id: "skills", label: "Skills" },
   ];
   return (
     <div className="map-editor-workspace-nav">

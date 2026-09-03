@@ -1,0 +1,690 @@
+[
+  {
+    "id": "WAR",
+    "name": "Warrior",
+    "abbr": "WAR",
+    "category": "swordplay",
+    "weapon": "sword",
+    "stat_mults": {
+      "hp": 1.12,
+      "str": 1.15
+    },
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "war_heavy_swing"
+      },
+      {
+        "skill_id": "war_berserk",
+        "prereq_skill_id": "war_heavy_swing"
+      },
+      {
+        "skill_id": "war_war_cry",
+        "prereq_skill_id": "war_heavy_swing"
+      },
+      {
+        "skill_id": "war_rampage",
+        "prereq_skill_id": "war_berserk"
+      }
+    ]
+  },
+  {
+    "id": "MNK",
+    "name": "Monk",
+    "abbr": "MNK",
+    "category": "swordplay",
+    "weapon": "sword",
+    "stat_mults": {
+      "str": 1.12,
+      "agi": 1.1
+    },
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "mnk_combo"
+      },
+      {
+        "skill_id": "mnk_boost",
+        "prereq_skill_id": "mnk_combo"
+      },
+      {
+        "skill_id": "mnk_tackle",
+        "prereq_skill_id": "mnk_combo"
+      },
+      {
+        "skill_id": "mnk_focus",
+        "prereq_skill_id": "mnk_boost"
+      }
+    ]
+  },
+  {
+    "id": "WHM",
+    "name": "White Mage",
+    "abbr": "WHM",
+    "category": "devotion",
+    "weapon": "mace",
+    "stat_mults": {
+      "hp": 1.04,
+      "mp": 1.14,
+      "mag": 1.12
+    },
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "whm_cure"
+      },
+      {
+        "skill_id": "whm_dia",
+        "prereq_skill_id": "whm_cure"
+      },
+      {
+        "skill_id": "whm_curaga",
+        "prereq_skill_id": "whm_cure"
+      },
+      {
+        "skill_id": "whm_banish",
+        "prereq_skill_id": "whm_dia"
+      }
+    ]
+  },
+  {
+    "id": "BLM",
+    "name": "Black Mage",
+    "abbr": "BLM",
+    "category": "sorcery",
+    "weapon": "staff",
+    "stat_mults": {
+      "mp": 1.1,
+      "mag": 1.2
+    },
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "blm_fire"
+      },
+      {
+        "skill_id": "blm_thunder",
+        "prereq_skill_id": "blm_fire"
+      },
+      {
+        "skill_id": "blm_blizzard",
+        "prereq_skill_id": "blm_fire"
+      },
+      {
+        "skill_id": "blm_firaga",
+        "prereq_skill_id": "blm_blizzard"
+      }
+    ]
+  },
+  {
+    "id": "RDM",
+    "name": "Red Mage",
+    "abbr": "RDM",
+    "category": "devotion",
+    "weapon": "mace",
+    "allowed_weapons": [
+      "mace",
+      "sword",
+      "staff"
+    ],
+    "stat_mults": {
+      "mp": 1.08,
+      "str": 1.06,
+      "mag": 1.1
+    },
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "rdm_enfire"
+      },
+      {
+        "skill_id": "rdm_enthunder",
+        "prereq_skill_id": "rdm_enfire"
+      },
+      {
+        "skill_id": "rdm_enblizzard",
+        "prereq_skill_id": "rdm_enfire"
+      },
+      {
+        "skill_id": "rdm_phalanx",
+        "prereq_skill_id": "rdm_enfire"
+      }
+    ]
+  },
+  {
+    "id": "THF",
+    "name": "Thief",
+    "abbr": "THF",
+    "category": "stealth",
+    "weapon": "dagger",
+    "stat_mults": {
+      "str": 1.02,
+      "agi": 1.18
+    },
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "thf_steal"
+      },
+      {
+        "skill_id": "thf_mug",
+        "prereq_skill_id": "thf_steal"
+      },
+      {
+        "skill_id": "thf_sneak_attack",
+        "prereq_skill_id": "thf_steal"
+      },
+      {
+        "skill_id": "thf_trick_attack",
+        "prereq_skill_id": "thf_mug"
+      }
+    ]
+  },
+  {
+    "id": "PLD",
+    "name": "Paladin",
+    "abbr": "PLD",
+    "category": "swordplay",
+    "weapon": "sword",
+    "allowed_weapons": [
+      "sword",
+      "mace"
+    ],
+    "stat_mults": {
+      "hp": 1.1,
+      "str": 1.08,
+      "mag": 0.95
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "pld_shield_bash"
+      },
+      {
+        "skill_id": "pld_sentinel",
+        "prereq_skill_id": "pld_shield_bash"
+      },
+      {
+        "skill_id": "pld_cover",
+        "prereq_skill_id": "pld_shield_bash"
+      },
+      {
+        "skill_id": "pld_requiescat",
+        "prereq_skill_id": "pld_sentinel"
+      }
+    ]
+  },
+  {
+    "id": "DRK",
+    "name": "Dark Knight",
+    "abbr": "DRK",
+    "category": "swordplay",
+    "weapon": "sword",
+    "allowed_weapons": [
+      "sword",
+      "mace"
+    ],
+    "stat_mults": {
+      "hp": 1.08,
+      "str": 1.12,
+      "mag": 1.05
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "drk_last_resort"
+      },
+      {
+        "skill_id": "drk_drain",
+        "prereq_skill_id": "drk_last_resort"
+      },
+      {
+        "skill_id": "drk_absorb",
+        "prereq_skill_id": "drk_last_resort"
+      },
+      {
+        "skill_id": "drk_weapon_bash",
+        "prereq_skill_id": "drk_drain"
+      }
+    ]
+  },
+  {
+    "id": "BST",
+    "name": "Beastmaster",
+    "abbr": "BST",
+    "category": "stealth",
+    "weapon": "dagger",
+    "stat_mults": {
+      "str": 1.06,
+      "agi": 1.08
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "bst_charm"
+      },
+      {
+        "skill_id": "bst_gauge",
+        "prereq_skill_id": "bst_charm"
+      },
+      {
+        "skill_id": "bst_reward",
+        "prereq_skill_id": "bst_charm"
+      },
+      {
+        "skill_id": "bst_call_beast",
+        "prereq_skill_id": "bst_gauge"
+      }
+    ]
+  },
+  {
+    "id": "BRD",
+    "name": "Bard",
+    "abbr": "BRD",
+    "category": "sorcery",
+    "weapon": "staff",
+    "stat_mults": {
+      "mp": 1.08,
+      "mag": 1.08,
+      "agi": 1.08
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "brd_minne"
+      },
+      {
+        "skill_id": "brd_minuet",
+        "prereq_skill_id": "brd_minne"
+      },
+      {
+        "skill_id": "brd_madrigal",
+        "prereq_skill_id": "brd_minne"
+      },
+      {
+        "skill_id": "brd_etude",
+        "prereq_skill_id": "brd_minuet"
+      }
+    ]
+  },
+  {
+    "id": "RNG",
+    "name": "Ranger",
+    "abbr": "RNG",
+    "category": "stealth",
+    "weapon": "dagger",
+    "stat_mults": {
+      "str": 1.1,
+      "agi": 1.12
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "rng_barrage"
+      },
+      {
+        "skill_id": "rng_sharpshot",
+        "prereq_skill_id": "rng_barrage"
+      },
+      {
+        "skill_id": "rng_shadowbind",
+        "prereq_skill_id": "rng_barrage"
+      },
+      {
+        "skill_id": "rng_camouflage",
+        "prereq_skill_id": "rng_sharpshot"
+      }
+    ]
+  },
+  {
+    "id": "SAM",
+    "name": "Samurai",
+    "abbr": "SAM",
+    "category": "swordplay",
+    "weapon": "sword",
+    "stat_mults": {
+      "str": 1.18,
+      "agi": 1.05
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "sam_third_eye"
+      },
+      {
+        "skill_id": "sam_hasso",
+        "prereq_skill_id": "sam_third_eye"
+      },
+      {
+        "skill_id": "sam_meditate",
+        "prereq_skill_id": "sam_third_eye"
+      },
+      {
+        "skill_id": "sam_tachi",
+        "prereq_skill_id": "sam_hasso"
+      }
+    ]
+  },
+  {
+    "id": "NIN",
+    "name": "Ninja",
+    "abbr": "NIN",
+    "category": "stealth",
+    "weapon": "dagger",
+    "stat_mults": {
+      "str": 1.08,
+      "agi": 1.14
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "nin_utsusemi"
+      },
+      {
+        "skill_id": "nin_katon",
+        "prereq_skill_id": "nin_utsusemi"
+      },
+      {
+        "skill_id": "nin_hyoton",
+        "prereq_skill_id": "nin_utsusemi"
+      },
+      {
+        "skill_id": "nin_raiton",
+        "prereq_skill_id": "nin_katon"
+      }
+    ]
+  },
+  {
+    "id": "DRG",
+    "name": "Dragoon",
+    "abbr": "DRG",
+    "category": "swordplay",
+    "weapon": "spear",
+    "allowed_weapons": [
+      "spear",
+      "sword"
+    ],
+    "stat_mults": {
+      "str": 1.14,
+      "agi": 1.08
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "drg_jump"
+      },
+      {
+        "skill_id": "drg_high_jump",
+        "prereq_skill_id": "drg_jump"
+      },
+      {
+        "skill_id": "drg_penta_thrust",
+        "prereq_skill_id": "drg_jump"
+      },
+      {
+        "skill_id": "drg_super_jump",
+        "prereq_skill_id": "drg_high_jump"
+      }
+    ]
+  },
+  {
+    "id": "SMN",
+    "name": "Summoner",
+    "abbr": "SMN",
+    "category": "sorcery",
+    "weapon": "staff",
+    "stat_mults": {
+      "hp": 0.95,
+      "mp": 1.14,
+      "mag": 1.16
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "smn_stone"
+      },
+      {
+        "skill_id": "smn_aero",
+        "prereq_skill_id": "smn_stone"
+      },
+      {
+        "skill_id": "smn_water",
+        "prereq_skill_id": "smn_stone"
+      },
+      {
+        "skill_id": "smn_meteor",
+        "prereq_skill_id": "smn_water"
+      }
+    ]
+  },
+  {
+    "id": "BLU",
+    "name": "Blue Mage",
+    "abbr": "BLU",
+    "category": "swordplay",
+    "weapon": "sword",
+    "allowed_weapons": [
+      "sword",
+      "dagger",
+      "staff"
+    ],
+    "stat_mults": {
+      "str": 1.05,
+      "mag": 1.1
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "blu_head_butt"
+      },
+      {
+        "skill_id": "blu_screwdriver",
+        "prereq_skill_id": "blu_head_butt"
+      },
+      {
+        "skill_id": "blu_actinic_burst",
+        "prereq_skill_id": "blu_head_butt"
+      },
+      {
+        "skill_id": "blu_bludgeon",
+        "prereq_skill_id": "blu_screwdriver"
+      }
+    ]
+  },
+  {
+    "id": "COR",
+    "name": "Corsair",
+    "abbr": "COR",
+    "category": "stealth",
+    "weapon": "dagger",
+    "allowed_weapons": [
+      "dagger",
+      "sword"
+    ],
+    "stat_mults": {
+      "mag": 1.05,
+      "agi": 1.1
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "cor_quick_draw"
+      },
+      {
+        "skill_id": "cor_wild_card",
+        "prereq_skill_id": "cor_quick_draw"
+      },
+      {
+        "skill_id": "cor_fold",
+        "prereq_skill_id": "cor_quick_draw"
+      },
+      {
+        "skill_id": "cor_roulette",
+        "prereq_skill_id": "cor_wild_card"
+      }
+    ]
+  },
+  {
+    "id": "PUP",
+    "name": "Puppetmaster",
+    "abbr": "PUP",
+    "category": "devotion",
+    "weapon": "mace",
+    "allowed_weapons": [
+      "mace",
+      "sword"
+    ],
+    "stat_mults": {
+      "hp": 1.02,
+      "str": 1.06,
+      "mag": 1.08
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "pup_deploy"
+      },
+      {
+        "skill_id": "pup_activate",
+        "prereq_skill_id": "pup_deploy"
+      },
+      {
+        "skill_id": "pup_repair",
+        "prereq_skill_id": "pup_deploy"
+      },
+      {
+        "skill_id": "pup_maneuver",
+        "prereq_skill_id": "pup_activate"
+      }
+    ]
+  },
+  {
+    "id": "DNC",
+    "name": "Dancer",
+    "abbr": "DNC",
+    "category": "stealth",
+    "weapon": "dagger",
+    "stat_mults": {
+      "str": 1.04,
+      "agi": 1.16
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "dnc_flourish"
+      },
+      {
+        "skill_id": "dnc_drain_samba",
+        "prereq_skill_id": "dnc_flourish"
+      },
+      {
+        "skill_id": "dnc_haste_samba",
+        "prereq_skill_id": "dnc_flourish"
+      },
+      {
+        "skill_id": "dnc_waltz",
+        "prereq_skill_id": "dnc_flourish"
+      }
+    ]
+  },
+  {
+    "id": "SCH",
+    "name": "Scholar",
+    "abbr": "SCH",
+    "category": "devotion",
+    "weapon": "mace",
+    "allowed_weapons": [
+      "mace",
+      "staff"
+    ],
+    "stat_mults": {
+      "mp": 1.12,
+      "mag": 1.14
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "sch_adloquium"
+      },
+      {
+        "skill_id": "sch_accession",
+        "prereq_skill_id": "sch_adloquium"
+      },
+      {
+        "skill_id": "sch_celerity",
+        "prereq_skill_id": "sch_adloquium"
+      },
+      {
+        "skill_id": "sch_embrava",
+        "prereq_skill_id": "sch_accession"
+      }
+    ]
+  },
+  {
+    "id": "GEO",
+    "name": "Geomancer",
+    "abbr": "GEO",
+    "category": "sorcery",
+    "weapon": "staff",
+    "allowed_weapons": [
+      "staff",
+      "mace"
+    ],
+    "stat_mults": {
+      "mp": 1.06,
+      "mag": 1.14
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "geo_indi_haste"
+      },
+      {
+        "skill_id": "geo_geo_regen",
+        "prereq_skill_id": "geo_indi_haste"
+      },
+      {
+        "skill_id": "geo_indi_wilt",
+        "prereq_skill_id": "geo_indi_haste"
+      },
+      {
+        "skill_id": "geo_geo_poison",
+        "prereq_skill_id": "geo_indi_wilt"
+      }
+    ]
+  },
+  {
+    "id": "RUN",
+    "name": "Rune Fencer",
+    "abbr": "RUN",
+    "category": "swordplay",
+    "weapon": "sword",
+    "allowed_weapons": [
+      "sword",
+      "mace"
+    ],
+    "stat_mults": {
+      "hp": 1.06,
+      "str": 1.1,
+      "mag": 1.05
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "run_valiance"
+      },
+      {
+        "skill_id": "run_pflug",
+        "prereq_skill_id": "run_valiance"
+      },
+      {
+        "skill_id": "run_swordplay",
+        "prereq_skill_id": "run_valiance"
+      },
+      {
+        "skill_id": "run_dimidiation",
+        "prereq_skill_id": "run_pflug"
+      }
+    ]
+  }
+]

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { persistEntities, type ItemDef, type QuestDef } from "../editor/contentStore";
 import {
   createDefaultTemplate,
   createEntityDefinition,
-  saveEntities,
   type EntityDefinition,
   type EntityKind,
 } from "../editor/entities";
@@ -25,6 +25,8 @@ import { NewEntityDialog } from "./NewEntityDialog";
 interface Props {
   entities: EntityDefinition[];
   onEntitiesChange: (entities: EntityDefinition[]) => void;
+  items: ItemDef[];
+  quests: QuestDef[];
   tileset: ImportedTileset | null;
   maps: AdminMapInfo[];
   currentMapId: string;
@@ -140,6 +142,8 @@ function ToolbarIconButton({
 export function EntityEditorPage({
   entities,
   onEntitiesChange,
+  items,
+  quests,
   tileset,
   maps,
   currentMapId,
@@ -191,7 +195,7 @@ export function EntityEditorPage({
 
   const persist = useCallback(
     (next: EntityDefinition[]) => {
-      saveEntities(next);
+      persistEntities(next);
       onEntitiesChange(next);
     },
     [onEntitiesChange],
@@ -330,6 +334,8 @@ export function EntityEditorPage({
           maps={maps}
           currentMapId={currentMapId}
           tileset={tileset}
+          items={items}
+          quests={quests}
           onUpdate={updateTemplate}
           onDelete={() => {}}
           templateMode

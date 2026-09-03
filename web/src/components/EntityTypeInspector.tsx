@@ -16,6 +16,8 @@ import {
   enemyKindFromName,
   type EnemyKind,
 } from "../characters/enemies";
+import type { ItemDef, QuestDef } from "../editor/contentStore";
+import { ContentIdMultiSelect, ContentIdSelect } from "./ContentIdSelect";
 
 const STORAGE_TYPES = [
   { id: "personal", label: "Personal bank" },
@@ -40,6 +42,8 @@ interface Props {
   onUpdate: (obj: EditorObject) => void;
   /** When true, hide map-placement-only fields like patrol region. */
   templateMode?: boolean;
+  items?: ItemDef[];
+  quests?: QuestDef[];
 }
 
 function ReadonlyId({ label = "Unique ID", value }: { label?: string; value: string }) {
@@ -78,7 +82,7 @@ function EnemySpritePicker({
   );
 }
 
-export function EntityTypeInspector({ obj, onUpdate, templateMode }: Props) {
+export function EntityTypeInspector({ obj, onUpdate, templateMode, items = [], quests = [] }: Props) {
   const patch = (next: Partial<EditorObject>) => {
     const merged = { ...obj, ...next };
     onUpdate(isNpcEntity(merged) ? normalizeNpcObject(merged) : merged);
@@ -191,12 +195,11 @@ export function EntityTypeInspector({ obj, onUpdate, templateMode }: Props) {
                   placeholder="e.g. greenwood_general"
                 />
                 <label className="field-label">Shop items</label>
-                <textarea
-                  className="xiv-input map-editor-textarea"
-                  rows={3}
+                <ContentIdMultiSelect
                   value={propString(npc.properties, "shopItems")}
-                  onChange={(e) => patchProp("shopItems", "string", e.target.value)}
-                  placeholder="Comma-separated item ids, e.g. potion,ether,bronze_sword"
+                  onChange={(next) => patchProp("shopItems", "string", next)}
+                  options={items}
+                  emptyHint="Seed items with npm run seed:content"
                 />
               </>
             )}
@@ -212,12 +215,11 @@ export function EntityTypeInspector({ obj, onUpdate, templateMode }: Props) {
                   placeholder="storyline / pool id"
                 />
                 <label className="field-label">Quest IDs</label>
-                <textarea
-                  className="xiv-input map-editor-textarea"
-                  rows={3}
+                <ContentIdMultiSelect
                   value={propString(npc.properties, "questIds")}
-                  onChange={(e) => patchProp("questIds", "string", e.target.value)}
-                  placeholder="Comma-separated quest ids offered by this NPC"
+                  onChange={(next) => patchProp("questIds", "string", next)}
+                  options={quests}
+                  emptyHint="Seed quests with npm run seed:content"
                 />
               </>
             )}
@@ -269,11 +271,11 @@ export function EntityTypeInspector({ obj, onUpdate, templateMode }: Props) {
           onChange={(e) => patchProp("name", "string", e.target.value)}
         />
         <label className="field-label">Quest ID</label>
-        <input
-          className="xiv-input"
+        <ContentIdSelect
           value={propString(obj.properties, "questId")}
-          onChange={(e) => patchProp("questId", "string", e.target.value)}
-          placeholder="quest or storyline key"
+          onChange={(next) => patchProp("questId", "string", next)}
+          options={quests}
+          emptyLabel="— select quest —"
         />
         <label className="field-label">Trigger mode</label>
         <select
@@ -319,11 +321,11 @@ export function EntityTypeInspector({ obj, onUpdate, templateMode }: Props) {
           onChange={(e) => patchProp("name", "string", e.target.value)}
         />
         <label className="field-label">Item ID</label>
-        <input
-          className="xiv-input"
+        <ContentIdSelect
           value={propString(obj.properties, "itemId")}
-          onChange={(e) => patchProp("itemId", "string", e.target.value)}
-          placeholder="inventory item key"
+          onChange={(next) => patchProp("itemId", "string", next)}
+          options={items}
+          emptyLabel="— select item —"
         />
         <label className="field-label">Quantity</label>
         <input

@@ -71,7 +71,6 @@ export function BattleHUD() {
   const self = battle?.entities.find((e) => e.id === selfId);
   const focusId = battleTargetId ?? self?.target_id;
   const gcdReady = !!self && self.alive && (self.skill_atb ?? self.atb) >= 100 && !self.casting_skill_id && !battle?.end;
-  const battleEnded = !!battle?.end;
 
   useEffect(() => {
     if (!gcdReady && useGame.getState().selectedAction) setSelected(null);

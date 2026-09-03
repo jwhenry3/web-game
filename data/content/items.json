@@ -1,0 +1,220 @@
+{
+  "kind": "items",
+  "updated_at": "2026-09-03T14:28:36.439Z",
+  "data": [
+    {
+      "id": "ether",
+      "name": "Ether",
+      "kind": "consumable",
+      "description": "Restores MP.",
+      "target": "ally",
+      "effects": {
+        "restore_mp": 35,
+        "per_level": 6
+      },
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "hi_potion",
+      "name": "Hi-Potion",
+      "kind": "consumable",
+      "description": "Restores a large amount of HP.",
+      "target": "ally",
+      "effects": {
+        "heal_hp": 130,
+        "per_level": 14
+      },
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "potion",
+      "name": "Potion",
+      "kind": "consumable",
+      "description": "Restores a moderate amount of HP.",
+      "target": "ally",
+      "effects": {
+        "heal_hp": 50,
+        "per_level": 8
+      },
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "starter-back",
+      "name": "Worn Cloak",
+      "kind": "equipment",
+      "description": "Basic worn armor template using common loot naming.",
+      "slot": "back",
+      "allowed_slots": [
+        "back"
+      ],
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "mag": 2
+      }
+    },
+    {
+      "id": "starter-chest",
+      "name": "Worn Cuirass",
+      "kind": "equipment",
+      "description": "Basic worn armor template using common loot naming.",
+      "slot": "chest",
+      "allowed_slots": [
+        "chest"
+      ],
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "hp": 6
+      }
+    },
+    {
+      "id": "starter-dagger",
+      "name": "Chipped Daggers",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "dagger",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    },
+    {
+      "id": "starter-feet",
+      "name": "Worn Boots",
+      "kind": "equipment",
+      "description": "Basic worn armor template using common loot naming.",
+      "slot": "feet",
+      "allowed_slots": [
+        "feet"
+      ],
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "agi": 2
+      }
+    },
+    {
+      "id": "starter-hands",
+      "name": "Worn Gauntlets",
+      "kind": "equipment",
+      "description": "Basic worn armor template using common loot naming.",
+      "slot": "hands",
+      "allowed_slots": [
+        "hands"
+      ],
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    },
+    {
+      "id": "starter-head",
+      "name": "Worn Helm",
+      "kind": "equipment",
+      "description": "Basic worn armor template using common loot naming.",
+      "slot": "head",
+      "allowed_slots": [
+        "head"
+      ],
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "hp": 6
+      }
+    },
+    {
+      "id": "starter-legs",
+      "name": "Worn Greaves",
+      "kind": "equipment",
+      "description": "Basic worn armor template using common loot naming.",
+      "slot": "legs",
+      "allowed_slots": [
+        "legs"
+      ],
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "agi": 2
+      }
+    },
+    {
+      "id": "starter-mace",
+      "name": "Worn Mace",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "mace",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "mag": 2
+      }
+    },
+    {
+      "id": "starter-spear",
+      "name": "Rusty Spear",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "spear",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    },
+    {
+      "id": "starter-staff",
+      "name": "Gnarled Staff",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "staff",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "mag": 2
+      }
+    },
+    {
+      "id": "starter-sword",
+      "name": "Rusty Sword",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "sword",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    }
+  ]
+}

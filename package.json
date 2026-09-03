@@ -15,6 +15,7 @@
     "web:build": "npm run build --prefix web",
     "web:preview": "npm run preview --prefix web",
     "build": "npm run web:build",
+    "seed:content": "node scripts/seed-content-catalogs.mjs",
     "test": "npm run server:test"
   }
 }

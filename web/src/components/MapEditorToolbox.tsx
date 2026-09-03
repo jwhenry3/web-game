@@ -10,7 +10,8 @@ import {
   isEntityTemplateKind,
 } from "../editor/entityCatalog";
 import type { MapPrefab } from "../editor/prefabs";
-import { createEmptyPrefab, savePrefabs } from "../editor/prefabs";
+import { createEmptyPrefab } from "../editor/prefabs";
+import { persistPrefabs } from "../editor/contentStore";
 import { TERRAIN_COLORS } from "../editor/tilePalette";
 import type { EditorInteractMode, ToolboxTab } from "../editor/sceneCatalog";
 import type { ImportedTileset } from "../editor/tilesetConfig";
@@ -447,7 +448,7 @@ function PrefabsTab({
   const active = prefabs.find((p) => p.id === activePrefabId) ?? null;
 
   const persist = (next: MapPrefab[]) => {
-    savePrefabs(next);
+    persistPrefabs(next);
     onPrefabsChange(next);
   };
 

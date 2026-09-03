@@ -3102,6 +3102,241 @@ h3 {
   flex-direction: column;
 }
 
+.map-editor-layout--catalog-tabbed {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-editor-catalog-tabbed {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-editor-catalog-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 6px 8px 0;
+  border-bottom: 1px solid #3a3a48;
+  flex-shrink: 0;
+}
+
+.map-editor-catalog-view-tab {
+  font-size: 11px;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: #a8a49a;
+  cursor: pointer;
+  border-radius: 3px 3px 0 0;
+}
+
+.map-editor-catalog-view-tab:hover:not(:disabled) {
+  color: #f0ead8;
+}
+
+.map-editor-catalog-view-tab.on {
+  color: #f0ead8;
+  background: #2a2a34;
+}
+
+.map-editor-catalog-view-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.map-editor-catalog-dirty {
+  color: #c8a050;
+}
+
+.map-editor-catalog-view-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.map-editor-catalog-detail-tabs {
+  flex-shrink: 0;
+}
+
+.map-editor-catalog-detail-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.map-editor-catalog-table-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.map-editor-catalog-table-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.map-editor-catalog-table-count {
+  font-size: 0.85em;
+  margin-left: auto;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.map-editor-catalog-table-search {
+  flex: 1 1 140px;
+  min-width: 120px;
+}
+
+.map-editor-catalog-table-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.85em;
+}
+
+.map-editor-catalog-table-filter select {
+  min-width: 100px;
+}
+
+.map-editor-catalog-table-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.map-editor-catalog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9em;
+}
+
+.map-editor-catalog-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(20, 18, 16, 0.98);
+}
+
+.map-editor-catalog-table th,
+.map-editor-catalog-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.map-editor-catalog-table th {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.map-editor-catalog-table tbody tr {
+  cursor: pointer;
+}
+
+.map-editor-catalog-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.map-editor-catalog-table tbody tr.selected {
+  background: rgba(200, 160, 80, 0.15);
+}
+
+.map-editor-catalog-table tbody tr.selected td:first-child {
+  box-shadow: inset 3px 0 0 rgba(200, 160, 80, 0.8);
+}
+
+.map-editor-catalog-table-empty {
+  padding: 12px 4px;
+}
+
+
+.map-editor-skill-tree-node-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+}
+
+.map-editor-skill-tree-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.map-editor-skill-tree-tier {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.map-editor-skill-tree-node-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+  padding: 10px 12px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.map-editor-skill-tree-node-name {
+  font-weight: 600;
+}
+
+.map-editor-skill-tree-node-prereq {
+  font-size: 0.85em;
+}
+
+
+.map-editor-catalog-detail {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-editor-catalog-detail > .xiv-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.map-editor-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .map-editor-layout--entities {
   flex: 1;
   min-height: 0;

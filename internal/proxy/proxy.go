@@ -115,6 +115,8 @@ func (p *Proxy) Handler() http.Handler {
 		Proxy:    p,
 	}
 	admin.Register(apiMux)
+	content := &AdminContentHandler{Maps: admin}
+	content.Register(apiMux)
 	publicMaps := &PublicMapsHandler{
 		Proxy: p,
 	}

@@ -1,7 +1,7 @@
 import type { EditorObject, EditorTool } from "./editorTypes";
 import { isNpcEntity, npcDisplayLabel, NPC_SERVICE_ROLES, type NpcServiceRole } from "./npcEntity";
 
-export type EditorWorkspacePage = "map" | "entities";
+export type EditorWorkspacePage = "map" | "entities" | "items" | "quests" | "jobs" | "skills";
 
 /** Map canvas interaction mode — filters selection and drives the toolbox. */
 export type EditorInteractMode = "terrain" | "entity" | "region";

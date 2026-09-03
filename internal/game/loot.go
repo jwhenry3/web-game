@@ -218,6 +218,48 @@ func GenerateItem(rng *rand.Rand, level int, rarityBonus int) Item {
 	return item
 }
 
+// CatalogEquipment returns static equipment templates for content authoring
+// (starter weapons from armory.go and worn armor bases from loot tables).
+func CatalogEquipment() []Item {
+	out := make([]Item, 0, len(WeaponTypes)+len(ArmorSlots))
+	for _, w := range WeaponTypes {
+		out = append(out, StarterWeapon(w))
+	}
+	for _, slot := range ArmorSlots {
+		out = append(out, starterArmorTemplate(slot))
+	}
+	return out
+}
+
+func starterArmorTemplate(slot string) Item {
+	bases := armorBases[slot]
+	prefix := rarityPrefixes[RarityCommon][0]
+	return Item{
+		ID:     "starter-" + slot,
+		Name:   prefix + " " + bases[0],
+		Kind:   KindEquipment,
+		Slot:   slot,
+		Rarity: RarityCommon,
+		Level:  1,
+		Stats:  starterArmorStats(slot),
+	}
+}
+
+func starterArmorStats(slot string) map[string]int {
+	switch slot {
+	case SlotHead, SlotChest:
+		return map[string]int{"hp": 6}
+	case SlotHands:
+		return map[string]int{"str": 2}
+	case SlotLegs, SlotFeet:
+		return map[string]int{"agi": 2}
+	case SlotBack:
+		return map[string]int{"mag": 2}
+	default:
+		return map[string]int{"hp": 3}
+	}
+}
+
 // GenerateLoot produces a victory drop: one guaranteed piece of gear, a
 // chance of a second, and a good chance of a consumable.
 func GenerateLoot(rng *rand.Rand, level int, rarityBonus int) []Item {
