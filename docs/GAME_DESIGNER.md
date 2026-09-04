@@ -17,6 +17,7 @@ Use `npm run wails:dev` (or `wails:dev:standalone`) so you get the live Wails fr
 | Area | Component | Purpose |
 |------|-----------|---------|
 | Top chrome | `MapEditorChrome` | Map picker, save, New map / Enable / Disable / Remove, Terrain · Entity · Region modes |
+| Inspector (no selection) | `MapServerInspector` | Display name, spin-up toggle, combat plugin, battle speed, listen addr |
 | Hierarchy | `MapEditorHierarchy` | Object tree for the current map |
 | Toolbox | `MapEditorToolbox` | Terrain palette, prefabs, entities, region tools |
 | Canvas | `MapEditorScreen` viewport | Pan/zoom paint & place surface |
@@ -66,6 +67,7 @@ Chrome actions (world mode):
 | **New map** | `POST /api/admin/maps` | Blank grass map + sanctuary + spawn crystal; `data/maps/{id}.map.json`, `data/maps/{id}.server.json`; registry update; node starts |
 | **Enable** | `POST …/enable` | Mark enabled, start node |
 | **Disable** | `POST …/disable` | Evacuate players, stop node |
+| **Server options** | `GET` / `PUT …/server` | Read/update `*.server.json` (name, combat, battle speed, addr) + enable/disable; restarts the node when combat/speed change while running |
 | **Remove** | `DELETE …/{id}` | Evacuate, stop, delete registry entry + map files |
 
 Ids: lowercase letter start, then letters/digits/underscore (`^[a-z][a-z0-9_]{1,31}$`). Size defaults 80×60 (min 16×16, max 512×512).

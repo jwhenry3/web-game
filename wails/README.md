@@ -27,12 +27,12 @@ cmd/server/    dedicated multiplayer server entry
 | Standalone binary | `npm run wails:build:standalone` | Writes `bin/fantasy-standalone.exe` (`-tags standalone`) |
 
 Standalone keeps **accounts** and **profiles** as external JSON on disk (never
-`go:embed`’d into the binary). Stock maps/config/content are embedded and written
+`go:embed`’d into the binary). Stock maps/content are embedded and written
 under `data/` next to the exe when missing:
 
 | Mode | Player saves | Stock world data |
 |------|--------------|------------------|
-| Production standalone exe | `<exeDir>/data/accounts.json` (+ profiles) | `<exeDir>/data/{cluster,config,maps,content}` (seeded if absent) |
+| Production standalone exe | `<exeDir>/data/accounts.json` (+ profiles) | `<exeDir>/data/{cluster,maps,content}` (seeded if absent) |
 | Dev (`FANTASY_STANDALONE=1`) | `data/standalone/…` under the repo | Repo `data/` (already present) |
 | Override | `FANTASY_DATA_DIR` → accounts/profiles only | Still install-root `data/` |
 

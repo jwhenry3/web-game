@@ -16,7 +16,6 @@ import (
 // FS holds cluster config, map assets, and content catalogs from the repo data/ tree.
 //
 //go:embed cluster.json
-//go:embed config
 //go:embed maps
 //go:embed content
 var FS embed.FS

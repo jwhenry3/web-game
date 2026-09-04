@@ -18,14 +18,14 @@
       "id": "greenwood",
       "name": "Greenwood",
       "addr": ":8091",
-      "config": "data/config/server.json",
+      "config": "data/maps/greenwood.server.json",
       "default": true
     },
     {
       "id": "north",
       "name": "Northern Wastes",
       "addr": ":8092",
-      "config": "data/config/server.north.json"
+      "config": "data/maps/north.server.json"
     }
   ]
 }

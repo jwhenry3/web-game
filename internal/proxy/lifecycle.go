@@ -158,6 +158,10 @@ func (p *Proxy) CreateMap(req CreateMapRequest) (cluster.MapSpec, error) {
 func (p *Proxy) EnableMap(id string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.enableMapLocked(id)
+}
+
+func (p *Proxy) enableMapLocked(id string) error {
 	spec, ok := p.cfg.MapByID(id)
 	if !ok {
 		return fmt.Errorf("map %q not found", id)
@@ -172,6 +176,175 @@ func (p *Proxy) EnableMap(id string) error {
 		return err
 	}
 	return p.startMapLocked(spec)
+}
+
+// MapServerInfo is the admin view of a map's server.json + registry flags.
+type MapServerInfo struct {
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Enabled       bool     `json:"enabled"`
+	Running       bool     `json:"running"`
+	Default       bool     `json:"default"`
+	ConfigPath    string   `json:"config_path"`
+	Overworld     string   `json:"overworld"`
+	Addr          string   `json:"addr"`
+	BattleSpeed   float64  `json:"battle_speed"`
+	Combat        string   `json:"combat"`
+	CombatOptions []string `json:"combat_options"`
+}
+
+// MapServerUpdate is the admin PUT body for map server options.
+type MapServerUpdate struct {
+	Enabled     *bool    `json:"enabled"`
+	Name        *string  `json:"name"`
+	Addr        *string  `json:"addr"`
+	BattleSpeed *float64 `json:"battle_speed"`
+	Combat      *string  `json:"combat"`
+}
+
+func (p *Proxy) MapServerInfo(id string) (MapServerInfo, error) {
+	p.mu.Lock()
+	spec, ok := p.cfg.MapByID(id)
+	p.mu.Unlock()
+	if !ok {
+		return MapServerInfo{}, fmt.Errorf("map %q not found", id)
+	}
+	return p.mapServerInfo(spec)
+}
+
+func (p *Proxy) mapServerInfo(spec cluster.MapSpec) (MapServerInfo, error) {
+	cfg, err := servercfg.Load(spec.Config)
+	if err != nil {
+		return MapServerInfo{}, err
+	}
+	return MapServerInfo{
+		ID:            spec.ID,
+		Name:          spec.Name,
+		Enabled:       spec.IsEnabled(),
+		Running:       p.mapRunning(spec.ID),
+		Default:       spec.Default,
+		ConfigPath:    filepath.ToSlash(spec.Config),
+		Overworld:     cfg.Server.Overworld,
+		Addr:          cfg.Server.Addr,
+		BattleSpeed:   cfg.Server.BattleSpeed,
+		Combat:        cfg.Plugins.Combat,
+		CombatOptions: []string{"combat.realtime", "combat.atb"},
+	}, nil
+}
+
+// UpdateMapServer writes editable server.json fields and optionally toggles the map server.
+func (p *Proxy) UpdateMapServer(id string, patch MapServerUpdate) (MapServerInfo, error) {
+	p.mu.Lock()
+	spec, ok := p.cfg.MapByID(id)
+	if !ok {
+		p.mu.Unlock()
+		return MapServerInfo{}, fmt.Errorf("map %q not found", id)
+	}
+	cfgPath := spec.Config
+	wasRunning := p.maps[id] != nil
+	wasEnabled := spec.IsEnabled()
+	p.mu.Unlock()
+
+	cfg, err := servercfg.Load(cfgPath)
+	if err != nil {
+		return MapServerInfo{}, err
+	}
+	restart := false
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		if name == "" {
+			return MapServerInfo{}, fmt.Errorf("name required")
+		}
+		if name != cfg.Server.Name {
+			cfg.Server.Name = name
+			restart = true
+		}
+	}
+	if patch.Addr != nil {
+		addr := strings.TrimSpace(*patch.Addr)
+		if addr != cfg.Server.Addr {
+			cfg.Server.Addr = addr
+			restart = true
+		}
+	}
+	if patch.BattleSpeed != nil {
+		if *patch.BattleSpeed <= 0 {
+			return MapServerInfo{}, fmt.Errorf("battle_speed must be > 0")
+		}
+		if *patch.BattleSpeed != cfg.Server.BattleSpeed {
+			cfg.SetBattleSpeed(*patch.BattleSpeed)
+			restart = true
+		}
+	}
+	if patch.Combat != nil {
+		combat := strings.TrimSpace(*patch.Combat)
+		if combat != cfg.Plugins.Combat {
+			if err := cfg.SetCombat(combat); err != nil {
+				return MapServerInfo{}, err
+			}
+			restart = true
+		}
+	}
+	if err := servercfg.Save(cfgPath, cfg); err != nil {
+		return MapServerInfo{}, err
+	}
+
+	wantEnabled := wasEnabled
+	if patch.Enabled != nil {
+		wantEnabled = *patch.Enabled
+	}
+	if patch.Name != nil {
+		name := strings.TrimSpace(*patch.Name)
+		p.mu.Lock()
+		_ = p.cfg.UpdateMap(id, func(m *cluster.MapSpec) {
+			m.Name = name
+		})
+		_ = p.persistCluster()
+		p.mu.Unlock()
+	}
+
+	if wantEnabled != wasEnabled {
+		if wantEnabled {
+			if err := p.EnableMap(id); err != nil {
+				return MapServerInfo{}, err
+			}
+		} else {
+			if err := p.DisableMap(id); err != nil {
+				return MapServerInfo{}, err
+			}
+		}
+	} else if wasRunning && restart {
+		if err := p.evacuateMap(id); err != nil {
+			log.Printf("proxy: evacuate %s before server restart: %v", id, err)
+		}
+		p.mu.Lock()
+		spec, ok = p.cfg.MapByID(id)
+		if !ok {
+			p.mu.Unlock()
+			return MapServerInfo{}, fmt.Errorf("map %q not found", id)
+		}
+		p.stopMapLocked(id)
+		err := p.startMapLocked(spec)
+		p.mu.Unlock()
+		if err != nil {
+			return MapServerInfo{}, fmt.Errorf("restart map server: %w", err)
+		}
+		log.Printf("proxy: restarted map %s after server config change", id)
+	}
+
+	p.mu.Lock()
+	spec, ok = p.cfg.MapByID(id)
+	running := p.maps[id] != nil
+	p.mu.Unlock()
+	if !ok {
+		return MapServerInfo{}, fmt.Errorf("map %q not found", id)
+	}
+	info, err := p.mapServerInfo(spec)
+	if err != nil {
+		return MapServerInfo{}, err
+	}
+	info.Running = running
+	return info, nil
 }
 
 // DisableMap evacuates players, stops the map server, and marks it disabled.
@@ -225,7 +398,7 @@ func (p *Proxy) disableOrRemove(id string, remove bool) error {
 		}
 		if spec.Config != "" {
 			slash := filepath.ToSlash(spec.Config)
-			if strings.HasPrefix(slash, "data/config/server.") || strings.HasPrefix(slash, "config/server.") || strings.HasSuffix(slash, ".server.json") {
+			if strings.HasSuffix(slash, ".server.json") || strings.HasPrefix(slash, "data/config/server.") || strings.HasPrefix(slash, "config/server.") {
 				_ = os.Remove(spec.Config)
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"ffv-web-game/internal/plugins"
 	"ffv-web-game/internal/plugins/combatatb"
@@ -75,6 +76,87 @@ func Load(path string) (Config, error) {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// Save writes cfg as indented JSON to path.
+func Save(path string, cfg Config) error {
+	cfg.applyDefaults()
+	if err := cfg.validate(); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(raw, '\n'), 0o644)
+}
+
+// SetCombat selects the active combat plugin and ensures stock ATB/realtime modules exist.
+func (c *Config) SetCombat(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("combat plugin id required")
+	}
+	c.ensureCombatModules()
+	found := false
+	for i := range c.Plugins.Modules {
+		m := &c.Plugins.Modules[i]
+		if m.ID == id {
+			m.Enabled = true
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("unknown combat plugin %q", id)
+	}
+	c.Plugins.Combat = id
+	return nil
+}
+
+// SetBattleSpeed updates server.battle_speed and ATB module config when present.
+func (c *Config) SetBattleSpeed(speed float64) {
+	if speed <= 0 {
+		return
+	}
+	c.Server.BattleSpeed = speed
+	for i := range c.Plugins.Modules {
+		if c.Plugins.Modules[i].ID != "combat.atb" {
+			continue
+		}
+		if c.Plugins.Modules[i].Config == nil {
+			c.Plugins.Modules[i].Config = map[string]any{}
+		}
+		c.Plugins.Modules[i].Config["battle_speed"] = speed
+	}
+}
+
+func (c *Config) ensureCombatModules() {
+	have := map[string]bool{}
+	for _, m := range c.Plugins.Modules {
+		have[m.ID] = true
+	}
+	if !have["combat.atb"] {
+		c.Plugins.Modules = append(c.Plugins.Modules, plugins.ModuleConfig{
+			ID:           "combat.atb",
+			Name:         "ATB Combat",
+			Version:      "1.0.0",
+			Capabilities: []string{"combat"},
+			Enabled:      true,
+			Frontend:     plugins.FrontendConfig{PluginID: "combat.atb"},
+			Config:       map[string]any{"battle_speed": c.Server.BattleSpeed},
+		})
+	}
+	if !have["combat.realtime"] {
+		c.Plugins.Modules = append(c.Plugins.Modules, plugins.ModuleConfig{
+			ID:           "combat.realtime",
+			Name:         "Realtime Combat",
+			Version:      "1.0.0",
+			Capabilities: []string{"combat"},
+			Enabled:      true,
+			Frontend:     plugins.FrontendConfig{PluginID: "combat.realtime"},
+			Config:       map[string]any{},
+		})
+	}
 }
 
 func (c *Config) ApplyOverrides(o Overrides) error {

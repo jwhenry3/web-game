@@ -119,8 +119,7 @@ internal/server/     Hub, battles, NPCs, social, auth HTTP
 internal/store/      Accounts & profiles
 data/                Portable game + player data (seeded from binary when missing)
   cluster.json       Bootstrap cluster
-  config/            Stock map server JSON
-  maps/              .map.json, overrides/, created *.server.json
+  maps/              .map.json, .server.json, overrides/
   content/           Game Designer catalogs
   accounts.json      Player accounts (not embedded)
   profiles.json      Player profiles (not embedded)

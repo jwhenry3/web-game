@@ -1438,6 +1438,9 @@ export function MapEditorScreen() {
         drops={drops}
         onUpdate={updateObject}
         onDelete={deleteObject}
+        onServerApplied={() => void loadMaps()}
+        onServerStatus={setStatus}
+        onServerError={setError}
         prefabSettings={
           inPrefabMode && editingPrefab
             ? {

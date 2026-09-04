@@ -54,7 +54,7 @@ Proxy bind address, shared account/profile paths, static dir, **shared EXP rates
 {
   "proxy": { "addr": ":8080", "accounts": "data/accounts.json", "data": "data/profiles.json", "static": "" },
   "exp": { "rate": 1.0, "main_percent": 75, "sub_percent": 25 },
-  "maps": [ { "id": "greenwood", "config": "data/config/server.json", "default": true }, … ]
+  "maps": [ { "id": "greenwood", "config": "data/maps/greenwood.server.json", "default": true }, … ]
 }
 ```
 
@@ -74,22 +74,20 @@ Each map has a `MapSpec`: `id`, `name`, `config` (path to a server JSON), option
 
 | Path | Typical use |
 |------|-------------|
-| `data/config/server.json` | Greenwood — overworld path + combat plugin |
-| `data/config/server.north.json` | Northern Wastes |
-| `data/maps/{id}.server.json` | Maps created in Game Designer |
+| `data/maps/{id}.server.json` | Every map — overworld path, combat plugin, battle speed |
 
 Important fields: `server.overworld` (usually `data/maps/{id}.map.json`), `server.battle_speed`, `plugins.combat` (`combat.realtime` or `combat.atb`).
 
 ### Portable `data/` tree
 
-Stock assets (`cluster.json`, `config/`, `maps/`, `content/`) are committed and **embedded** in standalone binaries. On first run (or whenever a stock file is missing), `data.Materialize` writes them next to the executable. Existing files are never overwritten.
+Stock assets (`cluster.json`, `maps/`, `content/`) are committed and **embedded** in standalone binaries. On first run (or whenever a stock file is missing), `data.Materialize` writes them next to the executable. Existing files are never overwritten.
 
 | File | Contents | Embedded? |
 |------|----------|-----------|
 | `accounts.json` | Logins, bcrypt hashes, `is_admin` | No |
 | `profiles.json` | Characters: jobs, loadouts, inventory, map/position, save points | No |
 | `cluster.maps.json` | Live map registry | No |
-| `cluster.json`, `config/`, `maps/`, `content/` | Stock world + catalogs | Yes (seed if missing) |
+| `cluster.json`, `maps/`, `content/` | Stock world + catalogs | Yes (seed if missing) |
 
 Default admin account is ensured on startup: **admin / admin**.
 

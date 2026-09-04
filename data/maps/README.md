@@ -9,13 +9,13 @@ Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Editor: [do
 | Artifact | Role |
 |----------|------|
 | `data/maps/{id}.map.json` | **Loaded by the server** — terrain grids, regions, NPCs, save points, exits, objects |
+| `data/maps/{id}.server.json` | Per-map server config (combat, battle speed, overworld path) |
 | `data/maps/overrides/{id}.json` | Sparse patches from **Game Designer** (tile diffs + objects); hot-reloaded |
-| `data/maps/{id}.server.json` | Per-map server config for maps created in Game Designer |
 | `base_chip.tsx` / `base_chip.png` | Base terrain tileset definition (GID centers for paint / walls) |
 
 Loader order (`game.LoadOverworldData`): `.map.json` → else `.tmj` (optional import path) → else legacy paint JSON.
 
-Stock configs point at `.map.json` (e.g. `data/config/server.json` → `data/maps/greenwood.map.json`).
+Stock and designer maps both use `data/maps/{id}.server.json` → `data/maps/{id}.map.json`.
 
 ## Stock files
 

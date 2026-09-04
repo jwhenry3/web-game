@@ -2,7 +2,7 @@
   "server": {
     "name": "Northern Wastes",
     "addr": ":8081",
-    "data": "data/north-profiles.json",
+    "data": "data/profiles.json",
     "accounts": "data/accounts.json",
     "static": "",
     "overworld": "data/maps/north.map.json",

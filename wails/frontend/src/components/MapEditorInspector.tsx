@@ -7,6 +7,7 @@ import type { AdminMapInfo } from "../net/adminMaps";
 import type { DropPoolDef, ItemDef, QuestDef } from "../editor/contentStore";
 import type { ImportedTileset } from "../editor/tilesetConfig";
 import { EntityTypeInspector, usesEntityTypeInspector } from "./EntityTypeInspector";
+import { MapServerInspector } from "./MapServerInspector";
 import { TransitionDestPicker } from "./TransitionDestPicker";
 
 interface Props {
@@ -32,6 +33,10 @@ interface Props {
   items?: ItemDef[];
   quests?: QuestDef[];
   drops?: DropPoolDef[];
+  /** When no object is selected, show map server options for the current map. */
+  onServerApplied?: () => void;
+  onServerStatus?: (msg: string | null) => void;
+  onServerError?: (msg: string | null) => void;
 }
 
 export function MapEditorInspector({
@@ -47,6 +52,9 @@ export function MapEditorInspector({
   items,
   quests,
   drops,
+  onServerApplied,
+  onServerStatus,
+  onServerError,
 }: Props) {
   if (prefabSettings && !obj) {
     return <PrefabInspector settings={prefabSettings} />;
@@ -65,6 +73,13 @@ export function MapEditorInspector({
               <label className="field-label">Template name</label>
               <input className="xiv-input" value={entitySettings.name} onChange={(e) => entitySettings.onName(e.target.value)} />
             </div>
+          ) : currentMapId && !templateMode ? (
+            <MapServerInspector
+              mapId={currentMapId}
+              onApplied={onServerApplied}
+              onStatus={onServerStatus}
+              onError={onServerError}
+            />
           ) : (
             <p className="dim map-editor-inspector-empty">Select an object in the scene or hierarchy.</p>
           )}

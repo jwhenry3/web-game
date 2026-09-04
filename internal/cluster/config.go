@@ -68,7 +68,7 @@ func Default() Config {
 		},
 		Exp: game.DefaultExpRates(),
 		Maps: []MapSpec{
-			{ID: "greenwood", Name: "Greenwood", Addr: ":8091", Config: "data/config/server.json", Default: true},
+			{ID: "greenwood", Name: "Greenwood", Addr: ":8091", Config: "data/maps/greenwood.server.json", Default: true},
 		},
 	}
 }

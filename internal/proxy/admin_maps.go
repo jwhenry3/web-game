@@ -160,6 +160,8 @@ func (h *AdminMapsHandler) handleMapByID(w http.ResponseWriter, r *http.Request)
 	switch parts[1] {
 	case "overrides":
 		h.handleOverrides(w, r, mapID)
+	case "server":
+		h.handleServerConfig(w, r, mapID)
 	case "enable":
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -200,6 +202,38 @@ func (h *AdminMapsHandler) handleMapByID(w http.ResponseWriter, r *http.Request)
 		writeAdminJSON(w, info)
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+func (h *AdminMapsHandler) handleServerConfig(w http.ResponseWriter, r *http.Request, mapID string) {
+	switch r.Method {
+	case http.MethodGet:
+		if !h.checkAuth(w, r) {
+			return
+		}
+		info, err := h.Proxy.MapServerInfo(mapID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeAdminJSON(w, info)
+	case http.MethodPut:
+		if !h.checkAuth(w, r) {
+			return
+		}
+		var body MapServerUpdate
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
+		info, err := h.Proxy.UpdateMapServer(mapID, body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeAdminJSON(w, info)
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 	}
 }
 

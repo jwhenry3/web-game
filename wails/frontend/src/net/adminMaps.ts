@@ -98,6 +98,39 @@ export async function clearMapOverrides(id: string): Promise<void> {
   await adminFetch(`/admin/maps/${id}/overrides`, { method: "DELETE" });
 }
 
+export interface MapServerInfo {
+  id: string;
+  name: string;
+  enabled: boolean;
+  running: boolean;
+  default: boolean;
+  config_path: string;
+  overworld: string;
+  addr: string;
+  battle_speed: number;
+  combat: string;
+  combat_options: string[];
+}
+
+export type MapServerUpdate = {
+  enabled?: boolean;
+  name?: string;
+  addr?: string;
+  battle_speed?: number;
+  combat?: string;
+};
+
+export async function fetchMapServerConfig(id: string): Promise<MapServerInfo> {
+  return adminFetch(`/admin/maps/${encodeURIComponent(id)}/server`);
+}
+
+export async function updateMapServerConfig(id: string, body: MapServerUpdate): Promise<MapServerInfo> {
+  return adminFetch(`/admin/maps/${encodeURIComponent(id)}/server`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
 export function diffLayers(
   mapId: string,
   base: Record<string, number[]>,

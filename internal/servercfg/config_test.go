@@ -53,3 +53,34 @@ func TestApplyOverridesBattleSpeed(t *testing.T) {
 		t.Fatalf("battle speed = %v", cfg.Server.BattleSpeed)
 	}
 }
+
+func TestSetCombatAndSave(t *testing.T) {
+	dir := t.TempDir()
+	overworld := filepath.Join(dir, "overworld.json")
+	if err := os.WriteFile(overworld, []byte(minOverworldJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Default()
+	cfg.Server.Overworld = overworld
+	cfg.SetBattleSpeed(1.1)
+	if err := cfg.SetCombat("combat.realtime"); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Plugins.Combat != "combat.realtime" {
+		t.Fatalf("combat = %q", cfg.Plugins.Combat)
+	}
+	path := filepath.Join(dir, "server.json")
+	if err := Save(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Plugins.Combat != "combat.realtime" {
+		t.Fatalf("reloaded combat = %q", got.Plugins.Combat)
+	}
+	if got.Server.BattleSpeed != 1.1 {
+		t.Fatalf("reloaded battle_speed = %v", got.Server.BattleSpeed)
+	}
+}
