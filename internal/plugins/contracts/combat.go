@@ -3,8 +3,8 @@ package contracts
 import (
 	"encoding/json"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 // NPCSnapshot is the combat-relevant NPC view used when starting fights.

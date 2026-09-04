@@ -25,7 +25,7 @@ function groupVisitedByMap(visited: VisitedSavePoint[], currentMap?: string) {
   return names.map((name) => ({ name, points: groups.get(name)! }));
 }
 
-function TeleportDialog({
+function PortDialog({
   visited,
   onClose,
 }: {
@@ -100,23 +100,23 @@ function TeleportDialog({
   };
 
   return (
-    <div className="xiv-panel xiv-skill-dialog xiv-skill-dialog--teleport" onPointerDown={(e) => e.stopPropagation()}>
-      <div className="xiv-panel-head">Teleport</div>
+    <div className="cm-panel cm-skill-dialog cm-skill-dialog--teleport" onPointerDown={(e) => e.stopPropagation()}>
+      <div className="cm-panel-head">Port</div>
       {visited.length === 0 ? (
         <p className="hint">Attune to a save crystal first. Click a crystal in the world to remember it.</p>
       ) : (
         <>
           <p className="hint">Select a crystal from the list or map, then click again to teleport. Drag the map to pan.</p>
-          <div className="xiv-teleport-layout">
-            <div className="xiv-teleport-list">
+          <div className="cm-teleport-layout">
+            <div className="cm-teleport-list">
               {groupVisitedByMap(visited, mapInfo?.name).map((group) => (
-                <section key={group.name} className="xiv-teleport-section">
-                  <h3 className="xiv-section-label">{group.name}</h3>
+                <section key={group.name} className="cm-teleport-section">
+                  <h3 className="cm-section-label">{group.name}</h3>
                   {group.points.map((sp) => (
                     <button
                       key={sp.id}
                       type="button"
-                      className={`xiv-btn ${sp.home ? "gold" : ""} ${picked === sp.id ? "on" : ""}`}
+                      className={`cm-btn ${sp.home ? "gold" : ""} ${picked === sp.id ? "on" : ""}`}
                       onClick={() => handleListClick(sp)}
                     >
                       {sp.name}
@@ -140,7 +140,7 @@ function TeleportDialog({
           </div>
         </>
       )}
-      <button type="button" className="xiv-btn" onClick={onClose}>
+      <button type="button" className="cm-btn" onClick={onClose}>
         Cancel
       </button>
     </div>
@@ -179,8 +179,8 @@ export function WorldSkillDialogs() {
 
   const body =
     dialog === "return" ? (
-      <div className="xiv-panel xiv-skill-dialog" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="xiv-panel-head">Return</div>
+      <div className="cm-panel cm-skill-dialog" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="cm-panel-head">Return</div>
         {hasHome ? (
           <p className="hint">
             Warp back to <strong>{homeName}</strong>?
@@ -188,53 +188,53 @@ export function WorldSkillDialogs() {
         ) : (
           <p className="hint">Set a save crystal first. Click a crystal in the world to attune and set it as home.</p>
         )}
-        <div className="xiv-social-invite-btns">
+        <div className="cm-social-invite-btns">
           {hasHome && (
-            <button type="button" className="xiv-btn gold" onClick={() => net.useWorldSkill("return")}>
+            <button type="button" className="cm-btn gold" onClick={() => net.useWorldSkill("return")}>
               Return
             </button>
           )}
-          <button type="button" className="xiv-btn" onClick={close}>
+          <button type="button" className="cm-btn" onClick={close}>
             Cancel
           </button>
         </div>
       </div>
-    ) : dialog === "teleport" ? (
-      <TeleportDialog visited={visited} onClose={close} />
+    ) : dialog === "port" ? (
+      <PortDialog visited={visited} onClose={close} />
     ) : null;
 
   return createPortal(
     <>
       {dialog && body && (
-        <div className="xiv-skill-dialog-layer" onPointerDown={dismissBackdrop}>
+        <div className="cm-skill-dialog-layer" onPointerDown={dismissBackdrop}>
           {body}
         </div>
       )}
       {confirm && (
         <div
-          className="xiv-skill-dialog-layer xiv-skill-dialog-layer--confirm"
+          className="cm-skill-dialog-layer cm-skill-dialog-layer--confirm"
           onPointerDown={() => {
             if (performance.now() < confirmIgnore.current) return;
             closeConfirm();
           }}
         >
-          <div className="xiv-panel xiv-skill-dialog" onPointerDown={(e) => e.stopPropagation()}>
-            <div className="xiv-panel-head">Teleport</div>
+          <div className="cm-panel cm-skill-dialog" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="cm-panel-head">Port</div>
             <p className="hint">
               Warp to <strong>{confirm.name}</strong>?
             </p>
-            <div className="xiv-social-invite-btns">
+            <div className="cm-social-invite-btns">
               <button
                 type="button"
-                className="xiv-btn gold"
+                className="cm-btn gold"
                 onClick={() => {
-                  net.useWorldSkill("teleport", confirm.id);
+                  net.useWorldSkill("port", confirm.id);
                   useGame.getState().closeWindow();
                 }}
               >
-                Teleport
+                Port
               </button>
-              <button type="button" className="xiv-btn" onClick={closeConfirm}>
+              <button type="button" className="cm-btn" onClick={closeConfirm}>
                 Cancel
               </button>
             </div>

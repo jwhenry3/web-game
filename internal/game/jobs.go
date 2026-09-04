@@ -5,70 +5,83 @@ import (
 	"strings"
 )
 
-// FFXI-style job system: each job levels independently. Players equip a main
-// job and (once unlocked) a subjob whose stats and abilities contribute at
-// half strength, capped at floor(main_level / 2).
+// Clara Mundi class system: nine cores, one primary weapon each, clear roles.
+// Niche fantasy names are combo aliases (main+sub pairs), not separate trees.
+//
+// JobID is the persisted identifier (historical field name on profiles/wire).
 
 type JobID string
 
+type ClassID = JobID
+
+type JobRole string
+
 const (
-	JobWAR JobID = "WAR"
-	JobMNK JobID = "MNK"
-	JobWHM JobID = "WHM"
-	JobBLM JobID = "BLM"
-	JobRDM JobID = "RDM"
-	JobTHF JobID = "THF"
-	JobPLD JobID = "PLD"
-	JobDRK JobID = "DRK"
-	JobBST JobID = "BST"
-	JobBRD JobID = "BRD"
-	JobRNG JobID = "RNG"
-	JobSAM JobID = "SAM"
-	JobNIN JobID = "NIN"
-	JobDRG JobID = "DRG"
-	JobSMN JobID = "SMN"
-	JobBLU JobID = "BLU"
-	JobCOR JobID = "COR"
-	JobPUP JobID = "PUP"
-	JobDNC JobID = "DNC"
-	JobSCH JobID = "SCH"
-	JobGEO JobID = "GEO"
-	JobRUN JobID = "RUN"
+	RoleTank    JobRole = "tank"
+	RoleHealer  JobRole = "healer"
+	RoleSupport JobRole = "support"
+	RoleDPS     JobRole = "dps"
 )
 
-// JobProgress is per-job level and experience.
+// CombatStyle is melee / magic / ranged emphasis for UI and filtering.
+type CombatStyle string
+
+const (
+	StyleMelee  CombatStyle = "melee"
+	StyleMagic  CombatStyle = "magic"
+	StyleRanged CombatStyle = "ranged"
+)
+
+const (
+	JobVAN JobID = "VAN" // Vanguard — Tank — sword
+	JobAEG JobID = "AEG" // Aegis — Tank — hammer
+	JobBRW JobID = "BRW" // Brawler — Melee DPS — knuckles
+	JobRVR JobID = "RVR" // Reaver — Melee DPS — axe
+	JobLNC JobID = "LNC" // Lancer — Melee/reach DPS — spear
+	JobRON JobID = "RON" // Ronin — Melee DPS — katana
+	JobHEX JobID = "HEX" // Hexwright — Magic DPS — staff
+	JobSAN JobID = "SAN" // Sanctifier — Healer — wand
+	JobCAN JobID = "CAN" // Cantor — Support — wand (shared implement family with healer; primary wand)
+	JobCUT JobID = "CUT" // Cutpurse — Scout DPS — dagger
+)
+
 type JobProgress struct {
 	Level int `json:"level"`
 	XP    int `json:"xp"`
 }
 
 type JobDef struct {
-	ID       JobID
-	Name     string
-	Abbr     string
-	Category Category
-	Weapon   WeaponType // default starter / display weapon
-	// AllowedWeapons lists equip types for this job's hand. Empty means {Weapon} only.
+	ID             JobID
+	Name           string
+	Abbr           string
+	Role           JobRole
+	Style          CombatStyle
+	Category       Category
+	Weapon         WeaponType
 	AllowedWeapons []WeaponType
-	// Multipliers applied to BaseStats for this job at full strength.
-	HPMult  float64
-	MPMult  float64
-	STRMult float64
-	MAGMult float64
-	AGIMult float64
+	HPMult         float64
+	MPMult         float64
+	STRMult        float64
+	MAGMult        float64
+	AGIMult        float64
+}
+
+type ComboAlias struct {
+	ID    string
+	Name  string
+	Main  JobID
+	Sub   JobID
+	Blurb string
 }
 
 const (
-	DefaultSubjobUnlockLevel  = 5
-	SubjobMinEffectiveLevel   = 1 // sub always contributes at least Lv 1 when equipped
-	SubjobEffectRatio         = 0.5
+	DefaultSubjobUnlockLevel = 5
+	SubjobMinEffectiveLevel  = 1
+	SubjobEffectRatio        = 0.5
 )
 
-// SubjobUnlockLevel is the main-job level required to equip a subjob.
-// Prefer CurrentSubjobUnlockLevel() after cluster config is loaded.
 var SubjobUnlockLevel = DefaultSubjobUnlockLevel
 
-// CurrentSubjobUnlockLevel returns the configured subjob unlock gate.
 func CurrentSubjobUnlockLevel() int {
 	if SubjobUnlockLevel < 1 {
 		return DefaultSubjobUnlockLevel
@@ -77,44 +90,47 @@ func CurrentSubjobUnlockLevel() int {
 }
 
 var Jobs = map[JobID]JobDef{
-	JobWAR: {ID: JobWAR, Name: "Warrior", Abbr: "WAR", Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.12, STRMult: 1.15},
-	JobMNK: {ID: JobMNK, Name: "Monk", Abbr: "MNK", Category: CatSwordplay, Weapon: WeaponSword, STRMult: 1.12, AGIMult: 1.10},
-	JobPLD: {ID: JobPLD, Name: "Paladin", Abbr: "PLD", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponMace}, HPMult: 1.10, STRMult: 1.08, MAGMult: 0.95},
-	JobDRK: {ID: JobDRK, Name: "Dark Knight", Abbr: "DRK", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponMace}, HPMult: 1.08, STRMult: 1.12, MAGMult: 1.05},
-	JobSAM: {ID: JobSAM, Name: "Samurai", Abbr: "SAM", Category: CatSwordplay, Weapon: WeaponSword, STRMult: 1.18, AGIMult: 1.05},
-	JobDRG: {ID: JobDRG, Name: "Dragoon", Abbr: "DRG", Category: CatSwordplay, Weapon: WeaponSpear, AllowedWeapons: []WeaponType{WeaponSpear, WeaponSword}, STRMult: 1.14, AGIMult: 1.08},
-	JobBLU: {ID: JobBLU, Name: "Blue Mage", Abbr: "BLU", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponDagger, WeaponStaff}, MAGMult: 1.10, STRMult: 1.05},
-	JobRUN: {ID: JobRUN, Name: "Rune Fencer", Abbr: "RUN", Category: CatSwordplay, Weapon: WeaponSword, AllowedWeapons: []WeaponType{WeaponSword, WeaponMace}, HPMult: 1.06, STRMult: 1.10, MAGMult: 1.05},
-
-	JobTHF: {ID: JobTHF, Name: "Thief", Abbr: "THF", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.18, STRMult: 1.02},
-	JobNIN: {ID: JobNIN, Name: "Ninja", Abbr: "NIN", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.14, STRMult: 1.08},
-	JobDNC: {ID: JobDNC, Name: "Dancer", Abbr: "DNC", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.16, STRMult: 1.04},
-	JobBST: {ID: JobBST, Name: "Beastmaster", Abbr: "BST", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.08, STRMult: 1.06},
-	JobRNG: {ID: JobRNG, Name: "Ranger", Abbr: "RNG", Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.12, STRMult: 1.10},
-	JobCOR: {ID: JobCOR, Name: "Corsair", Abbr: "COR", Category: CatStealth, Weapon: WeaponDagger, AllowedWeapons: []WeaponType{WeaponDagger, WeaponSword}, AGIMult: 1.10, MAGMult: 1.05},
-
-	JobBLM: {ID: JobBLM, Name: "Black Mage", Abbr: "BLM", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.20, MPMult: 1.10},
-	JobSMN: {ID: JobSMN, Name: "Summoner", Abbr: "SMN", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.16, MPMult: 1.14, HPMult: 0.95},
-	JobBRD: {ID: JobBRD, Name: "Bard", Abbr: "BRD", Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.08, AGIMult: 1.08, MPMult: 1.08},
-	JobGEO: {ID: JobGEO, Name: "Geomancer", Abbr: "GEO", Category: CatSorcery, Weapon: WeaponStaff, AllowedWeapons: []WeaponType{WeaponStaff, WeaponMace}, MAGMult: 1.14, MPMult: 1.06},
-
-	JobWHM: {ID: JobWHM, Name: "White Mage", Abbr: "WHM", Category: CatDevotion, Weapon: WeaponMace, MAGMult: 1.12, MPMult: 1.14, HPMult: 1.04},
-	JobRDM: {ID: JobRDM, Name: "Red Mage", Abbr: "RDM", Category: CatDevotion, Weapon: WeaponMace, AllowedWeapons: []WeaponType{WeaponMace, WeaponSword, WeaponStaff}, MAGMult: 1.10, STRMult: 1.06, MPMult: 1.08},
-	JobSCH: {ID: JobSCH, Name: "Scholar", Abbr: "SCH", Category: CatDevotion, Weapon: WeaponMace, AllowedWeapons: []WeaponType{WeaponMace, WeaponStaff}, MAGMult: 1.14, MPMult: 1.12},
-	JobPUP: {ID: JobPUP, Name: "Puppetmaster", Abbr: "PUP", Category: CatDevotion, Weapon: WeaponMace, AllowedWeapons: []WeaponType{WeaponMace, WeaponSword}, MAGMult: 1.08, STRMult: 1.06, HPMult: 1.02},
+	JobVAN: {ID: JobVAN, Name: "Vanguard", Abbr: "VAN", Role: RoleTank, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.18, STRMult: 1.08},
+	JobAEG: {ID: JobAEG, Name: "Aegis", Abbr: "AEG", Role: RoleTank, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponHammer, HPMult: 1.20, STRMult: 1.06},
+	JobBRW: {ID: JobBRW, Name: "Brawler", Abbr: "BRW", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponKnuckles, STRMult: 1.16, AGIMult: 1.10},
+	JobRVR: {ID: JobRVR, Name: "Reaver", Abbr: "RVR", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponAxe, STRMult: 1.18, HPMult: 1.06},
+	JobLNC: {ID: JobLNC, Name: "Lancer", Abbr: "LNC", Role: RoleDPS, Style: StyleRanged, Category: CatSwordplay, Weapon: WeaponSpear, STRMult: 1.14, AGIMult: 1.08},
+	JobRON: {ID: JobRON, Name: "Ronin", Abbr: "RON", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponKatana, STRMult: 1.16, AGIMult: 1.08},
+	JobHEX: {ID: JobHEX, Name: "Hexwright", Abbr: "HEX", Role: RoleDPS, Style: StyleMagic, Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.22, MPMult: 1.10},
+	JobSAN: {ID: JobSAN, Name: "Sanctifier", Abbr: "SAN", Role: RoleHealer, Style: StyleMagic, Category: CatDevotion, Weapon: WeaponWand, MAGMult: 1.12, MPMult: 1.16, HPMult: 1.04},
+	JobCAN: {ID: JobCAN, Name: "Cantor", Abbr: "CAN", Role: RoleSupport, Style: StyleMagic, Category: CatSorcery, Weapon: WeaponWand, AllowedWeapons: []WeaponType{WeaponWand, WeaponStaff}, MAGMult: 1.08, AGIMult: 1.08, MPMult: 1.10},
+	JobCUT: {ID: JobCUT, Name: "Cutpurse", Abbr: "CUT", Role: RoleDPS, Style: StyleMelee, Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.20, STRMult: 1.04},
 }
 
-// StartingJobs are the six jobs a new hero may choose (classic FFXI starters).
-var StartingJobs = []JobID{JobWAR, JobMNK, JobWHM, JobBLM, JobRDM, JobTHF}
+// StartingJobs are available at character creation (2 per mother city).
+var StartingJobs = []JobID{JobVAN, JobSAN, JobBRW, JobHEX, JobCUT, JobCAN}
+
+// AdvancedJobs unlock later; still full cores with skill trees.
+var AdvancedJobs = []JobID{JobAEG, JobRVR, JobLNC, JobRON}
+
+var ComboAliases = []ComboAlias{
+	{ID: "spellblade", Name: "Spellblade", Main: JobVAN, Sub: JobHEX, Blurb: "Sword and hexfire."},
+	{ID: "shadeblade", Name: "Shadeblade", Main: JobCUT, Sub: JobHEX, Blurb: "Dagger and dark hexes."},
+	{ID: "nightveil", Name: "Nightveil", Main: JobCUT, Sub: JobCAN, Blurb: "Scout cuts under song."},
+	{ID: "sigilblade", Name: "Sigilblade", Main: JobVAN, Sub: JobCAN, Blurb: "Shield wall paced by hymns."},
+	{ID: "leybinder", Name: "Leybinder", Main: JobHEX, Sub: JobCAN, Blurb: "Hexes woven with tempo."},
+	{ID: "lorekeeper", Name: "Lorekeeper", Main: JobSAN, Sub: JobCAN, Blurb: "Healing craft and support arts."},
+	{ID: "conjurer", Name: "Conjurer", Main: JobHEX, Sub: JobSAN, Blurb: "Arcane fury with restoration."},
+	{ID: "reveler", Name: "Reveler", Main: JobCAN, Sub: JobCUT, Blurb: "Songs into sudden cuts."},
+	{ID: "privateer", Name: "Privateer", Main: JobCUT, Sub: JobBRW, Blurb: "Harbor scrap and knuckles."},
+	{ID: "beastward", Name: "Beastward", Main: JobBRW, Sub: JobCAN, Blurb: "Fists paced by rhythm."},
+	{ID: "echoist", Name: "Echoist", Main: JobCAN, Sub: JobHEX, Blurb: "Hymns answered by hexfire."},
+	{ID: "artificer", Name: "Artificer", Main: JobBRW, Sub: JobSAN, Blurb: "Muscle with emergency mending."},
+	{ID: "marksman", Name: "Marksman", Main: JobCUT, Sub: JobLNC, Blurb: "Scout precision and reach."},
+	{ID: "paladin", Name: "Wardkeeper", Main: JobAEG, Sub: JobSAN, Blurb: "Hammer and sacred wards."},
+	{ID: "berserker", Name: "Berserker", Main: JobRVR, Sub: JobBRW, Blurb: "Axe and raw fists."},
+	{ID: "duelist", Name: "Duelist", Main: JobRON, Sub: JobCUT, Blurb: "Katana guided by scout cunning."},
+}
 
 func AllJobs() []JobDef {
-	out := make([]JobDef, 0, len(Jobs))
-	for _, id := range []JobID{
-		JobWAR, JobMNK, JobWHM, JobBLM, JobRDM, JobTHF,
-		JobPLD, JobDRK, JobBST, JobBRD, JobRNG, JobSAM,
-		JobNIN, JobDRG, JobSMN, JobBLU, JobCOR, JobPUP,
-		JobDNC, JobSCH, JobGEO, JobRUN,
-	} {
+	order := append(append([]JobID{}, StartingJobs...), AdvancedJobs...)
+	out := make([]JobDef, 0, len(order))
+	for _, id := range order {
 		if def, ok := Jobs[id]; ok {
 			out = append(out, def)
 		}
@@ -143,6 +159,13 @@ func JobCategory(id JobID) Category {
 	return ""
 }
 
+func JobRoleOf(id JobID) JobRole {
+	if def, ok := Jobs[id]; ok {
+		return def.Role
+	}
+	return ""
+}
+
 func JobWeapon(id JobID) WeaponType {
 	if def, ok := Jobs[id]; ok {
 		return def.Weapon
@@ -150,7 +173,6 @@ func JobWeapon(id JobID) WeaponType {
 	return WeaponSword
 }
 
-// JobAllowedWeapons returns weapon types a job may equip in its hand slot.
 func JobAllowedWeapons(id JobID) []WeaponType {
 	def, ok := Jobs[id]
 	if !ok {
@@ -163,15 +185,15 @@ func JobAllowedWeapons(id JobID) []WeaponType {
 }
 
 func JobAllowsWeapon(id JobID, weapon WeaponType) bool {
+	weapon = NormalizeWeapon(string(weapon))
 	for _, w := range JobAllowedWeapons(id) {
-		if w == weapon {
+		if NormalizeWeapon(string(w)) == weapon {
 			return true
 		}
 	}
 	return false
 }
 
-// FormatWeaponList renders weapon types for player-facing messages.
 func FormatWeaponList(types []WeaponType) string {
 	if len(types) == 0 {
 		return "none"
@@ -186,7 +208,6 @@ func FormatWeaponList(types []WeaponType) string {
 	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
 }
 
-// EquipWeaponDeniedMessage explains why a weapon cannot go in a job's hand.
 func EquipWeaponDeniedMessage(job JobID, weapon WeaponType) string {
 	name := string(job)
 	if def, ok := Jobs[job]; ok {
@@ -195,24 +216,63 @@ func EquipWeaponDeniedMessage(job JobID, weapon WeaponType) string {
 	return fmt.Sprintf("%s cannot equip %s weapons (allowed: %s).", name, weapon, FormatWeaponList(JobAllowedWeapons(job)))
 }
 
-// WeaponDefaultJob maps a legacy starting weapon to a default main job.
 func WeaponDefaultJob(w WeaponType) JobID {
+	w = NormalizeWeapon(string(w))
 	switch w {
-	case WeaponDagger:
-		return JobTHF
-	case WeaponStaff:
-		return JobBLM
-	case WeaponMace:
-		return JobWHM
+	case WeaponHammer:
+		return JobAEG
+	case WeaponAxe:
+		return JobRVR
 	case WeaponSpear:
-		return JobDRG
+		return JobLNC
+	case WeaponKatana:
+		return JobRON
+	case WeaponKnuckles:
+		return JobBRW
+	case WeaponDagger:
+		return JobCUT
+	case WeaponStaff:
+		return JobHEX
+	case WeaponWand:
+		return JobSAN
 	default:
-		return JobWAR
+		return JobVAN
 	}
 }
 
-// SubjobEffectiveLevel is the classic FFXI cap: min(sub level, floor(main/2)),
-// floored at SubjobMinEffectiveLevel so a subjob always contributes something.
+func AliasForCombo(main, sub JobID) (ComboAlias, bool) {
+	if sub == "" {
+		return ComboAlias{}, false
+	}
+	for _, a := range ComboAliases {
+		if a.Main == main && a.Sub == sub {
+			return a, true
+		}
+	}
+	return ComboAlias{}, false
+}
+
+func ComboForAlias(id string) (ComboAlias, bool) {
+	id = strings.ToLower(strings.TrimSpace(id))
+	for _, a := range ComboAliases {
+		if a.ID == id {
+			return a, true
+		}
+	}
+	return ComboAlias{}, false
+}
+
+func ComboDisplayName(main, sub JobID) string {
+	if a, ok := AliasForCombo(main, sub); ok {
+		return a.Name
+	}
+	mainName := JobName(main)
+	if sub == "" {
+		return mainName
+	}
+	return mainName + " / " + JobName(sub)
+}
+
 func SubjobEffectiveLevel(mainLevel, subLevel int) int {
 	if subLevel < 1 {
 		return 0
@@ -238,7 +298,6 @@ func applyJobMult(v int, mult float64) int {
 	return int(float64(v) * mult)
 }
 
-// JobBaseStats returns combat stats for a single job at the given level.
 func JobBaseStats(job JobID, level int) (hp, mp, str, mag, agi int) {
 	hp, mp, str, mag, agi = BaseStats(level)
 	def, ok := Jobs[job]
@@ -253,7 +312,6 @@ func JobBaseStats(job JobID, level int) (hp, mp, str, mag, agi int) {
 	return
 }
 
-// ComputeJobStats combines main and subjob stats (sub at half) plus gear.
 func ComputeJobStats(mainJob JobID, mainLvl int, subJob JobID, subLvl int, equipped []Item) (hp, mp, str, mag, agi int) {
 	mainHP, mainMP, mainStr, mainMag, mainAgi := JobBaseStats(mainJob, mainLvl)
 	if subJob == "" || subLvl < 1 {
@@ -275,15 +333,20 @@ func ComputeJobStats(mainJob JobID, mainLvl int, subJob JobID, subLvl int, equip
 	return
 }
 
-// StarterWeaponForJob returns the guaranteed first weapon for a new hero.
 func StarterWeaponForJob(job JobID) Item {
 	return StarterWeapon(JobWeapon(job))
 }
 
-// JobComboKey identifies a main/sub loadout slot. Subjob omitted when empty.
 func JobComboKey(main, sub JobID) string {
 	if sub == "" {
 		return string(main)
 	}
 	return string(main) + "/" + string(sub)
+}
+
+func JobName(id JobID) string {
+	if def, ok := Jobs[id]; ok {
+		return def.Name
+	}
+	return string(id)
 }

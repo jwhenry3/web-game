@@ -1,29 +1,113 @@
 {
   "maps": [
     {
-      "id": "greenwood",
-      "name": "Greenwood",
       "addr": ":8091",
       "config": "data/maps/greenwood.server.json",
-      "default": true
+      "default": true,
+      "id": "greenwood",
+      "name": "Greenwood"
     },
     {
-      "id": "north",
-      "name": "Northern Wastes",
       "addr": ":8092",
-      "config": "data/maps/north.server.json"
+      "config": "data/maps/timberroad.server.json",
+      "id": "timberroad",
+      "name": "Timber Road"
     },
     {
-      "id": "cave",
-      "name": "Misty Cave",
-      "config": "data/maps/cave.server.json",
-      "enabled": true
+      "addr": ":8093",
+      "config": "data/maps/deepcanopy.server.json",
+      "id": "deepcanopy",
+      "name": "Deep Canopy"
     },
     {
-      "id": "easternshore",
-      "name": "Eastern Shore",
-      "config": "data/maps/easternshore.server.json",
-      "enabled": true
+      "addr": ":8094",
+      "config": "data/maps/willowford.server.json",
+      "id": "willowford",
+      "name": "Willowford"
+    },
+    {
+      "addr": ":8095",
+      "config": "data/maps/sanctuarygrove.server.json",
+      "id": "sanctuarygrove",
+      "name": "Sanctuary Grove"
+    },
+    {
+      "addr": ":8096",
+      "config": "data/maps/northwatch.server.json",
+      "id": "northwatch",
+      "name": "Northwatch March"
+    },
+    {
+      "addr": ":8097",
+      "config": "data/maps/frostkeep.server.json",
+      "id": "frostkeep",
+      "name": "Frostkeep"
+    },
+    {
+      "addr": ":8098",
+      "config": "data/maps/windswept.server.json",
+      "id": "windswept",
+      "name": "Windswept Flats"
+    },
+    {
+      "addr": ":8099",
+      "config": "data/maps/icehollow.server.json",
+      "id": "icehollow",
+      "name": "Icehollow Crags"
+    },
+    {
+      "addr": ":8100",
+      "config": "data/maps/stillstone.server.json",
+      "id": "stillstone",
+      "name": "Stillstone Monastery"
+    },
+    {
+      "addr": ":8101",
+      "config": "data/maps/cairnwatch.server.json",
+      "id": "cairnwatch",
+      "name": "Cairnwatch"
+    },
+    {
+      "addr": ":8102",
+      "config": "data/maps/frostmarch.server.json",
+      "id": "frostmarch",
+      "name": "Frostmarch Gate"
+    },
+    {
+      "addr": ":8103",
+      "config": "data/maps/tidecourt.server.json",
+      "id": "tidecourt",
+      "name": "Tide Court"
+    },
+    {
+      "addr": ":8104",
+      "config": "data/maps/brinecoast.server.json",
+      "id": "brinecoast",
+      "name": "Brine Coast"
+    },
+    {
+      "addr": ":8105",
+      "config": "data/maps/dunesreach.server.json",
+      "id": "dunesreach",
+      "name": "Dunesreach"
+    },
+    {
+      "addr": ":8106",
+      "config": "data/maps/redsash.server.json",
+      "id": "redsash",
+      "name": "Red Sash Quay"
+    },
+    {
+      "addr": ":8107",
+      "config": "data/maps/cliffhaven.server.json",
+      "id": "cliffhaven",
+      "name": "Cliffhaven"
+    },
+    {
+      "addr": ":8108",
+      "config": "data/maps/westwharf.server.json",
+      "id": "westwharf",
+      "name": "West Wharf Road"
     }
   ]
 }

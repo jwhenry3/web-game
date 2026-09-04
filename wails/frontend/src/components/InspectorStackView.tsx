@@ -36,7 +36,7 @@ function CrumbBar({
           </span>
         );
       })}
-      <button type="button" className="xiv-btn inspector-stack-back" onClick={onPop} aria-label="Back">
+      <button type="button" className="cm-btn inspector-stack-back" onClick={onPop} aria-label="Back">
         Back
       </button>
     </div>
@@ -72,14 +72,14 @@ export function InspectorStackHost({
       <CrumbBar rootTitle={rootTitle} stack={stack} onPopTo={popTo} onPop={pop} />
       <div className="inspector-stack-panels">
         <section
-          className={`inspector-stack-panel xiv-window ${stack.length === 0 ? "inspector-stack-panel--active" : "inspector-stack-panel--ancestor"}`}
+          className={`inspector-stack-panel cm-window ${stack.length === 0 ? "inspector-stack-panel--active" : "inspector-stack-panel--ancestor"}`}
           style={{ minWidth: minPanelWidth }}
           aria-label={rootTitle}
         >
-          <div className="xiv-titlebar inspector-stack-panel-title">
+          <div className="cm-titlebar inspector-stack-panel-title">
             <span>{rootTitle}</span>
           </div>
-          <div className="xiv-body inspector-stack-panel-body">{root}</div>
+          <div className="cm-body inspector-stack-panel-body">{root}</div>
         </section>
 
         {stack.map((frame, i) => {
@@ -87,19 +87,19 @@ export function InspectorStackHost({
           return (
             <section
               key={frame.id}
-              className={`inspector-stack-panel xiv-window ${isTop ? "inspector-stack-panel--active" : "inspector-stack-panel--ancestor"}`}
+              className={`inspector-stack-panel cm-window ${isTop ? "inspector-stack-panel--active" : "inspector-stack-panel--ancestor"}`}
               style={{ minWidth: minPanelWidth }}
               aria-label={frame.title}
             >
-              <div className="xiv-titlebar inspector-stack-panel-title">
+              <div className="cm-titlebar inspector-stack-panel-title">
                 <span>{frame.title}</span>
                 {isTop && (
-                  <button type="button" className="xiv-btn inspector-stack-panel-close" onClick={pop} aria-label="Close">
+                  <button type="button" className="cm-btn inspector-stack-panel-close" onClick={pop} aria-label="Close">
                     ×
                   </button>
                 )}
               </div>
-              <div className="xiv-body inspector-stack-panel-body">{frame.render()}</div>
+              <div className="cm-body inspector-stack-panel-body">{frame.render()}</div>
             </section>
           );
         })}
@@ -125,7 +125,7 @@ export function InspectorDrillButton({
   return (
     <button
       type="button"
-      className={`${className ?? "xiv-btn wide"} ${active ? "on" : ""}`}
+      className={`${className ?? "cm-btn wide"} ${active ? "on" : ""}`}
       disabled={disabled}
       onClick={() => open(frame)}
     >

@@ -13,6 +13,12 @@ export function itemIconSrc(item: Item): string {
   if (item.kind === "consumable") {
     return consumableIconSrc(item.consumable ?? "");
   }
+  if (item.kind === "decoration") {
+    return ICONS.menuInventory;
+  }
+  if (item.kind === "crafting" || item.kind === "material") {
+    return ICONS.default;
+  }
   switch (item.slot) {
     case "weapon":
       return ICONS.weapon;
@@ -44,6 +50,7 @@ export function consumableIconSrc(consumableId: string): string {
 
 export function skillIconSrc(skillId: string, unlocked = true): string {
   if (skillId === "attack") return ICONS.attack;
+  if (skillId === "capture") return ICONS.hands;
   return unlocked ? ICONS.skillUnlocked : ICONS.skillLocked;
 }
 

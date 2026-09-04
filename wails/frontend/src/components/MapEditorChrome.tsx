@@ -53,11 +53,11 @@ export function MapEditorChrome({
   const canToggle = !!selected && !selected.default;
 
   return (
-    <div className="map-editor-chrome map-editor-chrome--toolbar xiv-window">
+    <div className="map-editor-chrome map-editor-chrome--toolbar cm-window">
       <div className="map-editor-chrome-toolbar">
         {mode === "world" && onMapChange && (
           <select
-            className="xiv-input map-editor-chrome-map-select"
+            className="cm-input map-editor-chrome-map-select"
             value={selectedMapId}
             aria-label="Map"
             onChange={(e) => onMapChange(e.target.value)}
@@ -102,28 +102,28 @@ export function MapEditorChrome({
 
         <div className="map-editor-chrome-actions">
           {mode === "world" && onCreateMap && (
-            <button type="button" className="xiv-btn" onClick={onCreateMap} title="Create map">
+            <button type="button" className="cm-btn" onClick={onCreateMap} title="Create map">
               New map
             </button>
           )}
           {mode === "world" && canToggle && selected && !selected.enabled && onEnableMap && (
-            <button type="button" className="xiv-btn gold" onClick={onEnableMap} title="Enable map server">
+            <button type="button" className="cm-btn gold" onClick={onEnableMap} title="Enable map server">
               Enable
             </button>
           )}
           {mode === "world" && canToggle && selected?.enabled && onDisableMap && (
-            <button type="button" className="xiv-btn" onClick={onDisableMap} title="Disable map server">
+            <button type="button" className="cm-btn" onClick={onDisableMap} title="Disable map server">
               Disable
             </button>
           )}
           {mode === "world" && canToggle && onRemoveMap && (
-            <button type="button" className="xiv-btn" onClick={onRemoveMap} title="Remove map">
+            <button type="button" className="cm-btn" onClick={onRemoveMap} title="Remove map">
               Remove
             </button>
           )}
           <button
             type="button"
-            className="xiv-btn gold map-editor-chrome-icon-btn"
+            className="cm-btn gold map-editor-chrome-icon-btn"
             onClick={onSave}
             title={mode === "prefab" ? "Save prefab" : "Save"}
             aria-label={mode === "prefab" ? "Save prefab" : "Save"}
@@ -132,7 +132,7 @@ export function MapEditorChrome({
             <SaveIcon />
           </button>
           {mode === "prefab" && onBack && (
-            <button type="button" className="xiv-btn" onClick={onBack}>
+            <button type="button" className="cm-btn" onClick={onBack}>
               Back to map
             </button>
           )}

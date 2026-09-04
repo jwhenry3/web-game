@@ -76,9 +76,9 @@ export function MapEditorToolbox({
   const prefabTab: ToolboxTab = tab === "prefabs" ? "terrain" : tab === "region" ? "entities" : tab;
 
   return (
-    <div className="map-editor-toolbox xiv-window">
-      <div className="xiv-titlebar">
-        <span className="xiv-title">Toolbox</span>
+    <div className="map-editor-toolbox cm-window">
+      <div className="cm-titlebar">
+        <span className="cm-title">Toolbox</span>
       </div>
 
       {scope === "prefab" && (
@@ -192,7 +192,7 @@ function TerrainTools({
         </div>
       )}
       <div className="map-editor-panel-scroll">
-        <button type="button" className={`xiv-btn wide ${tool === "select" ? "on" : ""}`} onClick={() => onTool("select")}>
+        <button type="button" className={`cm-btn wide ${tool === "select" ? "on" : ""}`} onClick={() => onTool("select")}>
           Select (V)
         </button>
         <div className="map-editor-group-label">Paint terrain</div>
@@ -208,7 +208,7 @@ function TerrainTools({
         <div className="map-editor-tool-list">
           <button
             type="button"
-            className={`xiv-btn map-editor-tool-btn ${tool === "collision_block" ? "on" : ""}`}
+            className={`cm-btn map-editor-tool-btn ${tool === "collision_block" ? "on" : ""}`}
             onClick={() => onTool("collision_block")}
           >
             <span className="map-editor-swatch" style={{ background: TERRAIN_COLORS.collision }} />
@@ -216,7 +216,7 @@ function TerrainTools({
           </button>
           <button
             type="button"
-            className={`xiv-btn map-editor-tool-btn ${tool === "collision_walk" ? "on" : ""}`}
+            className={`cm-btn map-editor-tool-btn ${tool === "collision_walk" ? "on" : ""}`}
             onClick={() => onTool("collision_walk")}
           >
             Walkable
@@ -249,7 +249,7 @@ function TerrainBtn({
   onTool: (t: EditorTool) => void;
 }) {
   return (
-    <button type="button" className={`xiv-btn map-editor-tool-btn ${tool === id ? "on" : ""}`} onClick={() => onTool(id)}>
+    <button type="button" className={`cm-btn map-editor-tool-btn ${tool === id ? "on" : ""}`} onClick={() => onTool(id)}>
       <span className="map-editor-swatch" style={{ background: color }} />
       {label}
     </button>
@@ -260,7 +260,7 @@ function RegionTools({ tool, onTool }: { tool: EditorTool; onTool: (t: EditorToo
   return (
     <div className="map-editor-panel-stack">
       <div className="map-editor-panel-scroll">
-        <button type="button" className={`xiv-btn wide ${tool === "select" ? "on" : ""}`} onClick={() => onTool("select")}>
+        <button type="button" className={`cm-btn wide ${tool === "select" ? "on" : ""}`} onClick={() => onTool("select")}>
           Select (V)
         </button>
         <div className="map-editor-group-label">Regions</div>
@@ -270,7 +270,7 @@ function RegionTools({ tool, onTool }: { tool: EditorTool; onTool: (t: EditorToo
               key={entry.tool}
               type="button"
               data-map-editor-keep-placement=""
-              className={`xiv-btn wide ${tool === entry.tool ? "on" : ""}`}
+              className={`cm-btn wide ${tool === entry.tool ? "on" : ""}`}
               title={entry.hint}
               onClick={() => onTool(entry.tool)}
             >
@@ -363,7 +363,7 @@ function PlaceEntitiesTab({
 
       {onRequestNewEntity && (
         <div className="map-editor-panel-toolbar">
-          <button type="button" className="xiv-btn gold wide" onClick={onRequestNewEntity}>
+          <button type="button" className="cm-btn gold wide" onClick={onRequestNewEntity}>
             New entity…
           </button>
         </div>
@@ -378,7 +378,7 @@ function PlaceEntitiesTab({
                   key={entry.tool}
                   type="button"
                   data-map-editor-keep-placement=""
-                  className={`xiv-btn wide ${tool === entry.tool ? "on" : ""}`}
+                  className={`cm-btn wide ${tool === entry.tool ? "on" : ""}`}
                   title={entry.hint}
                   onClick={() => onTool(entry.tool)}
                 >
@@ -403,7 +403,7 @@ function PlaceEntitiesTab({
                     key={ent.id}
                     type="button"
                     data-map-editor-keep-placement=""
-                    className={`xiv-btn wide map-editor-prefab-item ${activeEntityId === ent.id && entityStampMode ? "on" : ""}`}
+                    className={`cm-btn wide map-editor-prefab-item ${activeEntityId === ent.id && entityStampMode ? "on" : ""}`}
                     onClick={() => onActiveEntity(ent.id)}
                   >
                     <span>{ent.name}</span>
@@ -465,19 +465,19 @@ function PrefabsTab({
   return (
     <div className="map-editor-panel-stack">
       <div className="map-editor-panel-toolbar">
-        <button type="button" className="xiv-btn gold wide" onClick={createNew}>
+        <button type="button" className="cm-btn gold wide" onClick={createNew}>
           New prefab
         </button>
         <button
           type="button"
           data-map-editor-keep-placement=""
-          className={`xiv-btn wide ${capturing ? "on" : ""}`}
+          className={`cm-btn wide ${capturing ? "on" : ""}`}
           onClick={onCaptureMode}
         >
           {capturing ? "Drag on map…" : "Capture from map"}
         </button>
         {active && !editingPrefabId && (
-          <button type="button" className="xiv-btn wide" onClick={() => onEditPrefab(active.id)}>
+          <button type="button" className="cm-btn wide" onClick={() => onEditPrefab(active.id)}>
             Open editor
           </button>
         )}
@@ -491,7 +491,7 @@ function PrefabsTab({
               <button
                 type="button"
                 data-map-editor-keep-placement=""
-                className={`xiv-btn map-editor-prefab-item ${activePrefabId === p.id && stampMode ? "on" : ""}`}
+                className={`cm-btn map-editor-prefab-item ${activePrefabId === p.id && stampMode ? "on" : ""}`}
                 onClick={() => onActivePrefab(p.id)}
               >
                 <span>{p.name}</span>
@@ -499,7 +499,7 @@ function PrefabsTab({
                   {p.widthTiles}×{p.heightTiles}
                 </span>
               </button>
-              <button type="button" className="xiv-btn map-editor-prefab-edit" onClick={() => onEditPrefab(p.id)}>
+              <button type="button" className="cm-btn map-editor-prefab-edit" onClick={() => onEditPrefab(p.id)}>
                 Edit
               </button>
             </div>

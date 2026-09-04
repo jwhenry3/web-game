@@ -7,6 +7,8 @@ export function rtEntityToBattle(e: RTBattleEntity): BattleEntity {
     name: e.name,
     kind: e.kind,
     is_player: e.is_player,
+    is_ally: e.is_ally,
+    owner_id: e.owner_id,
     hp: e.hp,
     max_hp: e.max_hp,
     mp: e.mp ?? 0,
@@ -15,6 +17,8 @@ export function rtEntityToBattle(e: RTBattleEntity): BattleEntity {
     atb: e.skill_atb ?? 100,
     target_id: e.target_id,
     alive: e.alive,
+    capturable: e.capturable,
+    has_queued_action: e.has_queued_action,
     statuses: e.statuses,
     casting_skill_id: e.casting_skill_id,
     cast_target_id: e.cast_target_id,
@@ -56,11 +60,11 @@ export function withBattleFocus<T extends { id: string; target_id?: string }>(
 
 /** Initial focus from a battle snapshot (first living enemy / existing target). */
 export function initialBattleFocus(
-  entities: { id: string; is_player?: boolean; alive?: boolean; target_id?: string }[],
+  entities: { id: string; is_player?: boolean; is_ally?: boolean; alive?: boolean; target_id?: string }[],
   selfId: string | null | undefined,
 ): string | null {
   const self = selfId ? entities.find((e) => e.id === selfId) : undefined;
   if (self?.target_id) return self.target_id;
-  const enemy = entities.find((e) => !e.is_player && e.alive);
+  const enemy = entities.find((e) => !e.is_player && !e.is_ally && e.alive);
   return enemy?.id ?? null;
 }

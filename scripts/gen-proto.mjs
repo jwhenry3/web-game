@@ -27,7 +27,7 @@ const protoc = process.env.PROTOC || "protoc";
 const args = [
   `-I${path.join(root, "proto")}`,
   `--go_out=${root}`,
-  `--go_opt=module=ffv-web-game`,
+  `--go_opt=module=clara-mundi`,
   "fantasy/v1/common.proto",
   "fantasy/v1/messages.proto",
 ];

@@ -12,6 +12,25 @@ type EncounterEnemy struct {
 	LevelMin   int    `json:"levelMin"`
 	LevelMax   int    `json:"levelMax"`
 	DropPoolID string `json:"dropPoolId"`
+	// Capturable defaults true when omitted from JSON.
+	Capturable bool `json:"capturable"`
+}
+
+func (e *EncounterEnemy) UnmarshalJSON(data []byte) error {
+	type raw EncounterEnemy
+	aux := struct {
+		Capturable *bool `json:"capturable"`
+		*raw
+	}{raw: (*raw)(e)}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.Capturable == nil {
+		e.Capturable = true
+	} else {
+		e.Capturable = *aux.Capturable
+	}
+	return nil
 }
 
 // EncounterConfig controls enemy count, types, levels, and drop pools for a combat NPC.
@@ -33,9 +52,10 @@ func DefaultEncounter(kind string, level int) EncounterConfig {
 		MinEnemies: 2,
 		MaxEnemies: 3,
 		Enemies: []EncounterEnemy{{
-			Kind:     kind,
-			LevelMin: level,
-			LevelMax: level,
+			Kind:       kind,
+			LevelMin:   level,
+			LevelMax:   level,
+			Capturable: true,
 		}},
 	}
 }

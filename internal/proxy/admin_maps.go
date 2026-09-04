@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"strings"
 
-	"ffv-web-game/internal/auth"
-	"ffv-web-game/internal/cluster"
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/servercfg"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/auth"
+	"clara-mundi/internal/cluster"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/servercfg"
+	"clara-mundi/internal/store"
 )
 
 // AdminMapsHandler serves map override and lifecycle admin APIs.

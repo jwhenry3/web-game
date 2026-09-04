@@ -50,10 +50,10 @@ func TestDistributeJobXPAppliesRate(t *testing.T) {
 }
 
 func TestSkillUnlockLevel(t *testing.T) {
-	if SkillUnlockLevel("war_heavy_swing") != 1 {
+	if SkillUnlockLevel("van_cuneus") != 1 {
 		t.Fatal("tier 0 should unlock at 1")
 	}
-	if SkillUnlockLevel("war_berserk") != 5 {
+	if SkillUnlockLevel("van_clamor_castra") != 5 {
 		t.Fatal("tier 1 should unlock at 5")
 	}
 }
@@ -68,31 +68,65 @@ func TestSkillLevelPotency(t *testing.T) {
 }
 
 func TestJobComboKey(t *testing.T) {
-	if JobComboKey(JobWAR, "") != "WAR" {
+	if JobComboKey(JobVAN, "") != "VAN" {
 		t.Fatal("solo main key")
 	}
-	if JobComboKey(JobWAR, JobTHF) != "WAR/THF" {
+	if JobComboKey(JobVAN, JobCUT) != "VAN/CUT" {
 		t.Fatal("combo key")
 	}
 }
 
 func TestJobAllowsWeapon(t *testing.T) {
-	if !JobAllowsWeapon(JobBLM, WeaponStaff) {
-		t.Fatal("BLM should allow staff")
+	if !JobAllowsWeapon(JobHEX, WeaponStaff) {
+		t.Fatal("Hexwright should allow staff")
 	}
-	if JobAllowsWeapon(JobBLM, WeaponSword) {
-		t.Fatal("BLM should not allow sword")
+	if JobAllowsWeapon(JobHEX, WeaponSword) {
+		t.Fatal("Hexwright should not allow sword")
 	}
-	if !JobAllowsWeapon(JobRDM, WeaponSword) || !JobAllowsWeapon(JobRDM, WeaponStaff) {
-		t.Fatal("RDM should allow sword and staff")
+	if !JobAllowsWeapon(JobSAN, WeaponWand) {
+		t.Fatal("Sanctifier should allow wand")
 	}
-	if !JobAllowsWeapon(JobDRG, WeaponSpear) {
-		t.Fatal("DRG should allow spear")
+	if !JobAllowsWeapon(JobAEG, WeaponHammer) {
+		t.Fatal("Aegis should allow hammer")
 	}
-	if JobWeapon(JobDRG) != WeaponSpear {
-		t.Fatalf("DRG default weapon = %q, want spear", JobWeapon(JobDRG))
+	if !JobAllowsWeapon(JobRVR, WeaponAxe) {
+		t.Fatal("Reaver should allow axe")
 	}
-	if len(JobAllowedWeapons(JobWAR)) != 1 || JobAllowedWeapons(JobWAR)[0] != WeaponSword {
-		t.Fatalf("WAR allowlist = %v, want [sword]", JobAllowedWeapons(JobWAR))
+	if !JobAllowsWeapon(JobRON, WeaponKatana) {
+		t.Fatal("Ronin should allow katana")
+	}
+	if !JobAllowsWeapon(JobBRW, WeaponKnuckles) {
+		t.Fatal("Brawler should allow knuckles")
+	}
+	if !JobAllowsWeapon(JobLNC, WeaponSpear) {
+		t.Fatal("Lancer should allow spear")
+	}
+	if len(JobAllowedWeapons(JobVAN)) != 1 || JobAllowedWeapons(JobVAN)[0] != WeaponSword {
+		t.Fatalf("Vanguard allowlist = %v, want [sword]", JobAllowedWeapons(JobVAN))
+	}
+}
+
+func TestEveryWeaponHasACore(t *testing.T) {
+	covered := map[WeaponType]bool{}
+	for _, def := range AllJobs() {
+		covered[def.Weapon] = true
+		for _, w := range def.AllowedWeapons {
+			covered[w] = true
+		}
+	}
+	for _, w := range WeaponTypes {
+		if !covered[w] {
+			t.Fatalf("weapon %s has no core class", w)
+		}
+	}
+}
+
+func TestComboAliasSpellblade(t *testing.T) {
+	a, ok := AliasForCombo(JobVAN, JobHEX)
+	if !ok || a.Name != "Spellblade" {
+		t.Fatalf("VAN/HEX alias = %+v, ok=%v", a, ok)
+	}
+	if ComboDisplayName(JobVAN, JobHEX) != "Spellblade" {
+		t.Fatal("display should use alias name")
 	}
 }

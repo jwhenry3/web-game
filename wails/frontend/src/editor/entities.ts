@@ -24,7 +24,7 @@ export interface EntityDefinition {
   template: EditorObject;
 }
 
-const STORAGE_KEY = "ffv_map_entities";
+const STORAGE_KEY = "cm_map_entities";
 
 export function loadEntities(): EntityDefinition[] {
   try {
@@ -113,7 +113,7 @@ export function createDefaultTemplate(kind: EntityKind, serviceRoles: NpcService
         width,
         height,
         properties: [
-          { name: "destMap", type: "string", value: "north" },
+          { name: "destMap", type: "string", value: "timberroad" },
           { name: "destX", type: "float", value: 100 },
           { name: "destY", type: "float", value: 100 },
         ],

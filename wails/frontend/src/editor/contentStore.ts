@@ -32,7 +32,11 @@ import {
   DEFAULT_SKILL_CATALOG,
 } from "./seedCatalog";
 import type { ImportedTileset } from "./tilesetConfig";
-import { loadTileset as loadTilesetLocal, saveTileset as saveTilesetLocal } from "./tilesetConfig";
+import {
+  loadDefaultPipoyaTileset,
+  loadTileset as loadTilesetLocal,
+  saveTileset as saveTilesetLocal,
+} from "./tilesetConfig";
 import { fetchAdminContent, saveAdminContent, type ContentKind } from "../net/adminContent";
 
 export type { DropPoolDef, ItemDef, JobDef, QuestDef, SkillDef } from "./contentCatalogs";
@@ -186,7 +190,16 @@ export async function syncAllContentCatalogs(): Promise<ContentCatalogs> {
       DEFAULT_DROP_CATALOG,
     ),
   ]);
-  return { entities, prefabs, tileset, items, quests, jobs, skills, drops };
+  let resolvedTileset = tileset;
+  if (!resolvedTileset) {
+    try {
+      resolvedTileset = await loadDefaultPipoyaTileset();
+      saveTilesetLocal(resolvedTileset);
+    } catch {
+      resolvedTileset = null;
+    }
+  }
+  return { entities, prefabs, tileset: resolvedTileset, items, quests, jobs, skills, drops };
 }
 
 export function persistEntities(entities: EntityDefinition[]): void {

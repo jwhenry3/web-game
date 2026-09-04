@@ -16,13 +16,13 @@ import (
 	"sync"
 	"time"
 
-	"ffv-web-game/data"
-	"ffv-web-game/internal/auth"
-	"ffv-web-game/internal/cluster"
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/mapnode"
-	"ffv-web-game/internal/proxy"
-	"ffv-web-game/internal/store"
+	"clara-mundi/data"
+	"clara-mundi/internal/auth"
+	"clara-mundi/internal/cluster"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/mapnode"
+	"clara-mundi/internal/proxy"
+	"clara-mundi/internal/store"
 )
 
 // Options configure a cluster host.
@@ -158,7 +158,7 @@ func Start(opts Options) (*Runtime, error) {
 
 	if !opts.Quiet {
 		log.Printf("cluster maps: %d running / %d registered (default %s)", started, len(cfg.Maps), cfg.DefaultMap().ID)
-		log.Printf("FF5-Multiplayer proxy listening on %s", addr)
+		log.Printf("Clara Mundi proxy listening on %s", addr)
 	}
 
 	go func() {

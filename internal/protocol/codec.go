@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"ffv-web-game/internal/protocol/pb"
+	"clara-mundi/internal/protocol/pb"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -30,9 +30,12 @@ func ParseCodec(s string) Codec {
 }
 
 var (
+	// EmitUnpopulated is required: proto3 omits zeros on the wire, and without
+	// re-emitting them as JSON the React client treats missing hp/alive/victory
+	// as undefined (NaN HP bars, silent defeat screens).
 	protoMarshal = protojson.MarshalOptions{
 		UseProtoNames:   true,
-		EmitUnpopulated: false,
+		EmitUnpopulated: true,
 	}
 	protoUnmarshal = protojson.UnmarshalOptions{
 		DiscardUnknown: true,
@@ -61,8 +64,31 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.PlayerNamePayload{}
 	case TypePartyKick:
 		return &pb.PartyKickPayload{}
-	case TypePartyAccept, TypePartyDecline, TypePartyLeave, TypeDeclineBattleInvite, TypeLeaveBattle, TypeBattleReturn:
+	case TypePartyAccept, TypePartyDecline, TypePartyLeave, TypeDeclineBattleInvite,
+		TypeLeaveBattle, TypeBattleReturn, TypeLeaveHouse:
 		return &pb.EmptyPayload{}
+	case TypeEnterHouse:
+		return &pb.EnterHousePayload{}
+	case TypeHouseInteract:
+		return &pb.HouseInteractPayload{}
+	case TypeHouseStorageDeposit, TypeHouseStorageWithdraw:
+		return &pb.HouseStorageMovePayload{}
+	case TypeHousePlaceFurniture:
+		return &pb.HousePlaceFurniturePayload{}
+	case TypeHousePickFurniture:
+		return &pb.HousePickFurniturePayload{}
+	case TypeSetCampSkin:
+		return &pb.SetCampSkinPayload{}
+	case TypePetSetFollow, TypePetSetBattle, TypePetRelease:
+		return &pb.PetIDPayload{}
+	case TypeCampState:
+		return &pb.CampStatePayload{}
+	case TypeHouseState:
+		return &pb.HouseStatePayload{}
+	case TypeHouseReturn:
+		return &pb.HouseReturnPayload{}
+	case TypePetState:
+		return &pb.PetStatePayload{}
 	case TypeJoinBattle:
 		return &pb.JoinBattlePayload{}
 	case TypeAction:
@@ -156,8 +182,10 @@ func decodeProtobuf(data []byte) (Envelope, error) {
 	if err != nil {
 		return Envelope{}, err
 	}
-	// Empty message → omit payload (match JSON omitempty).
-	if isEmptyProto(msg) {
+	// Truly empty client acks (leave_battle, etc.) may omit payload. Keep an
+	// explicit {} for types whose all-zero value is meaningful (e.g. defeat:
+	// victory=false with no rewards still must reach the UI).
+	if isEmptyProto(msg) && !keepsEmptyPayload(t) {
 		return Envelope{Type: t}, nil
 	}
 	return Envelope{Type: t, Payload: raw}, nil
@@ -165,6 +193,15 @@ func decodeProtobuf(data []byte) (Envelope, error) {
 
 func isEmptyProto(msg proto.Message) bool {
 	return proto.Size(msg) == 0
+}
+
+func keepsEmptyPayload(t MessageType) bool {
+	switch t {
+	case TypeBattleEnd, TypeRTBattleEnd:
+		return true
+	default:
+		return false
+	}
 }
 
 // EncodeFrame encodes a hub JSON frame (from Encode) for the client codec.
@@ -224,13 +261,18 @@ var messageTypeSet = map[MessageType]struct{}{
 	TypeAddFriend: {}, TypeAcceptFriend: {}, TypeDeclineFriend: {}, TypeRemoveFriend: {},
 	TypePartyInvite: {}, TypePartyAccept: {}, TypePartyDecline: {}, TypePartyLeave: {}, TypePartyKick: {},
 	TypeDeclineBattleInvite: {}, TypeJoinBattle: {}, TypeLeaveBattle: {},
-	TypeAction: {}, TypeSetTarget: {}, TypeSetSavePoint: {}, TypeUseWorldSkill: {},
+	TypeAction: {}, TypeSetTarget: {}, TypeSetSavePoint: {}, 	TypeUseWorldSkill: {},
+	TypeEnterHouse: {}, TypeLeaveHouse: {}, TypeHouseInteract: {},
+	TypeHouseStorageDeposit: {}, TypeHouseStorageWithdraw: {},
+	TypeHousePlaceFurniture: {}, TypeHousePickFurniture: {}, TypeSetCampSkin: {},
+	TypePetSetFollow: {}, TypePetSetBattle: {}, TypePetRelease: {},
 	TypeRTMove: {}, TypeRTAttack: {},
 	TypeWelcome: {}, TypeWorldState: {}, TypePlayerJoin: {}, TypePlayerLeft: {}, TypePlayerMoved: {},
 	TypePlayerSync: {}, TypeChatMsg: {}, TypeNPCState: {}, TypeSocialState: {},
 	TypePartyInviteMsg: {}, TypeBattleInviteMsg: {}, TypeFriendRequestMsg: {}, TypeRewardNotice: {},
 	TypeBattleList: {}, TypeBattleState: {}, TypeBattleEvent: {}, TypeBattleTick: {}, TypeBattleEnd: {},
-	TypeBattleReturn: {}, TypeError: {}, TypeMapConfig: {},
+	TypeBattleReturn: {}, TypeCampState: {}, TypeHouseState: {}, TypeHouseReturn: {}, TypePetState: {},
+	TypeError: {}, TypeMapConfig: {},
 	TypeRTBattleState: {}, TypeRTBattleTick: {}, TypeRTBattleEvent: {}, TypeRTBattleEnd: {},
 }
 

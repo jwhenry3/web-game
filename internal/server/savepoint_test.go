@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 func TestSetSavePointRequiresProximity(t *testing.T) {
@@ -62,7 +62,7 @@ func TestJoinWorldSpawnsAtSavePoint(t *testing.T) {
 		t.Fatal("expected save points")
 	}
 	sp := game.SavePoints[0]
-	profile := h.store.GetOrCreate("Bartz", game.JobWAR)
+	profile := h.store.GetOrCreate("Bartz", game.JobVAN)
 	h.store.SetSavePoint(profile.Name, sp.ID)
 
 	c := &Client{ID: "client-1", Name: "Bartz", Joined: false, Send: make(chan []byte, 8), Hub: h}
@@ -80,7 +80,7 @@ func TestJoinWorldSpawnsAtSavePoint(t *testing.T) {
 func TestJoinWorldRestoresLastPosition(t *testing.T) {
 	h := mustTestHub()
 	h.SetMap("greenwood", "Greenwood", game.Loaded())
-	profile := h.store.GetOrCreate("Bartz", game.JobWAR)
+	profile := h.store.GetOrCreate("Bartz", game.JobVAN)
 	h.store.SetSavePoint(profile.Name, game.SavePoints[0].ID)
 	h.store.SetWorldLocation(profile.Name, "greenwood", 500, 500, game.FacingLeft, true)
 
@@ -128,7 +128,7 @@ func TestJoinWorldUnwalkableLastPosUsesSavePoint(t *testing.T) {
 		t.Fatal("expected save points")
 	}
 	sp := game.SavePoints[0]
-	profile := h.store.GetOrCreate("Bartz", game.JobWAR)
+	profile := h.store.GetOrCreate("Bartz", game.JobVAN)
 	h.store.SetSavePoint(profile.Name, sp.ID)
 	h.store.SetWorldLocation(profile.Name, "greenwood", 10, 10, game.FacingRight, true)
 
@@ -167,6 +167,16 @@ func TestReturnWarpsToSavePoint(t *testing.T) {
 	wp.X, wp.Y = 500, 500
 	raw, _ = json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDReturn})
 	h.handleUseWorldSkill(c, raw)
+	if dist(wp.X, wp.Y, 500, 500) > 1 {
+		t.Fatalf("return should wait for cast, got %f,%f", wp.X, wp.Y)
+	}
+	if wp.CastingSkillID != game.SkillIDReturn {
+		t.Fatalf("expected return cast, got %q", wp.CastingSkillID)
+	}
+	if wp.CastTimeMs != game.TeleportCastTimeMs {
+		t.Fatalf("return cast time %d, want %d", wp.CastTimeMs, game.TeleportCastTimeMs)
+	}
+	h.finishDueWorldCasts(time.Now().Add(3 * time.Second))
 	if dist(wp.X, wp.Y, center.X, center.Y) > 1 {
 		t.Fatalf("return landed at %f,%f want %f,%f", wp.X, wp.Y, center.X, center.Y)
 	}
@@ -176,7 +186,7 @@ func TestTeleportRequiresVisit(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 500, 500)
 	sp := game.SavePoints[0]
 	fromX, fromY := wp.X, wp.Y
-	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDTeleport, SavePointID: sp.ID})
+	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDPort, SavePointID: sp.ID})
 	h.handleUseWorldSkill(c, raw)
 	if dist(wp.X, wp.Y, fromX, fromY) > 1 {
 		t.Fatalf("teleport without visit should not move, got %f,%f", wp.X, wp.Y)
@@ -198,12 +208,12 @@ func attuneAndStand(t *testing.T, h *Hub, c *Client, wp *protocol.WorldPlayer) (
 func TestTeleportToVisitedSavePoint(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 400, 400)
 	sp, center := attuneAndStand(t, h, c, wp)
-	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDTeleport, SavePointID: sp.ID})
+	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDPort, SavePointID: sp.ID})
 	h.handleUseWorldSkill(c, raw)
 	if dist(wp.X, wp.Y, 500, 500) > 1 {
 		t.Fatalf("teleport should wait for cast, got %f,%f", wp.X, wp.Y)
 	}
-	if wp.CastingSkillID != game.SkillIDTeleport {
+	if wp.CastingSkillID != game.SkillIDPort {
 		t.Fatalf("expected teleport cast, got %q", wp.CastingSkillID)
 	}
 	h.finishDueWorldCasts(time.Now())
@@ -222,7 +232,7 @@ func TestTeleportToVisitedSavePoint(t *testing.T) {
 func TestTeleportCancelledByMove(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 400, 400)
 	sp, center := attuneAndStand(t, h, c, wp)
-	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDTeleport, SavePointID: sp.ID})
+	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDPort, SavePointID: sp.ID})
 	h.handleUseWorldSkill(c, raw)
 	move, _ := json.Marshal(protocol.MovePayload{X: 540, Y: 500})
 	h.handleMove(c, move)

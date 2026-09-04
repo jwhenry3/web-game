@@ -191,14 +191,14 @@ function JobSkillTreeRoot({
             emptyLabel="— none (root) —"
           />
           <div className="map-editor-skill-tree-node-actions">
-            <button type="button" className="xiv-btn" onClick={() => onChange(removeSkillTreeNode(draft, index))}>
+            <button type="button" className="cm-btn" onClick={() => onChange(removeSkillTreeNode(draft, index))}>
               Remove
             </button>
           </div>
         </div>
       ))}
 
-      <button type="button" className="xiv-btn wide" onClick={addNode} disabled={unusedSkills.length === 0}>
+      <button type="button" className="cm-btn wide" onClick={addNode} disabled={unusedSkills.length === 0}>
         Add skill node
       </button>
 

@@ -49,23 +49,23 @@ export function AuthScreen() {
 
   return (
     <div className="login-screen">
-      <div className="xiv-window login-panel">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">FF5 Multiplayer</span>
+      <div className="cm-window login-panel">
+        <div className="cm-titlebar">
+          <span className="cm-title">Clara Mundi</span>
         </div>
-        <div className="xiv-body">
+        <div className="cm-body">
           <p className="subtitle">Sign in to enter the world</p>
-          <div className="xiv-tabs">
+          <div className="cm-tabs">
             <button
               type="button"
-              className={`xiv-tab ${mode === "login" ? "on" : ""}`}
+              className={`cm-tab ${mode === "login" ? "on" : ""}`}
               onClick={() => setMode("login")}
             >
               Log In
             </button>
             <button
               type="button"
-              className={`xiv-tab ${mode === "register" ? "on" : ""}`}
+              className={`cm-tab ${mode === "register" ? "on" : ""}`}
               onClick={() => setMode("register")}
             >
               Register
@@ -76,7 +76,7 @@ export function AuthScreen() {
           </label>
           <input
             id="auth-username"
-            className="xiv-input"
+            className="cm-input"
             value={username}
             maxLength={20}
             autoComplete="username"
@@ -88,7 +88,7 @@ export function AuthScreen() {
           </label>
           <input
             id="auth-password"
-            className="xiv-input"
+            className="cm-input"
             type="password"
             value={password}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -107,7 +107,7 @@ export function AuthScreen() {
           {error && <div className="error-text">{error}</div>}
           <button
             type="button"
-            className="xiv-btn gold wide"
+            className="cm-btn gold wide"
             disabled={busy || username.trim().length < 3 || password.length < 6}
             onClick={submit}
           >

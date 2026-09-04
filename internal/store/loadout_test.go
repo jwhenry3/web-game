@@ -3,19 +3,19 @@ package store
 import (
 	"testing"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 func TestDefaultHotbarMainOnly(t *testing.T) {
-	hb := defaultHotbar(game.JobWAR, "")
+	hb := defaultHotbar(game.JobVAN, "")
 	if hb["1"].ID != game.BasicAttack.ID {
 		t.Fatalf("slot 1 = %q, want attack", hb["1"].ID)
 	}
-	if hb["2"].ID != "potion" {
+	if hb["2"].ID != "potio" {
 		t.Fatalf("slot 2 = %q, want potion", hb["2"].ID)
 	}
-	if hb["3"].ID != game.RootSkillID(game.JobWAR) {
-		t.Fatalf("slot 3 = %q, want %q", hb["3"].ID, game.RootSkillID(game.JobWAR))
+	if hb["3"].ID != game.RootSkillID(game.JobVAN) {
+		t.Fatalf("slot 3 = %q, want %q", hb["3"].ID, game.RootSkillID(game.JobVAN))
 	}
 	if _, ok := hb["4"]; ok {
 		t.Fatal("slot 4 should be empty without sub job")
@@ -23,15 +23,21 @@ func TestDefaultHotbarMainOnly(t *testing.T) {
 	if hb["8"].ID != game.SkillIDReturn {
 		t.Fatalf("slot 8 = %q, want return", hb["8"].ID)
 	}
+	if hb["7"].ID != game.ActionIDCapture {
+		t.Fatalf("slot 7 = %q, want capture", hb["7"].ID)
+	}
 }
 
 func TestDefaultHotbarWithSub(t *testing.T) {
-	hb := defaultHotbar(game.JobBLM, game.JobBRD)
-	if hb["3"].ID != game.RootSkillID(game.JobBLM) {
-		t.Fatalf("slot 3 = %q, want %q", hb["3"].ID, game.RootSkillID(game.JobBLM))
+	hb := defaultHotbar(game.JobHEX, game.JobCAN)
+	if hb["3"].ID != game.RootSkillID(game.JobHEX) {
+		t.Fatalf("slot 3 = %q, want %q", hb["3"].ID, game.RootSkillID(game.JobHEX))
 	}
-	if hb["4"].ID != game.RootSkillID(game.JobBRD) {
-		t.Fatalf("slot 4 = %q, want %q", hb["4"].ID, game.RootSkillID(game.JobBRD))
+	if hb["4"].ID != game.RootSkillID(game.JobCAN) {
+		t.Fatalf("slot 4 = %q, want %q", hb["4"].ID, game.RootSkillID(game.JobCAN))
+	}
+	if hb["7"].ID != game.ActionIDCapture {
+		t.Fatalf("slot 7 = %q, want capture", hb["7"].ID)
 	}
 	if hb["8"].ID != game.SkillIDReturn {
 		t.Fatalf("slot 8 = %q, want return", hb["8"].ID)
@@ -40,14 +46,14 @@ func TestDefaultHotbarWithSub(t *testing.T) {
 
 func TestEnsureLoadoutReusesCombo(t *testing.T) {
 	p := &Profile{
-		MainJob: string(game.JobWAR),
-		SubJob:  string(game.JobBLM),
+		MainJob: string(game.JobVAN),
+		SubJob:  string(game.JobHEX),
 		Jobs: map[string]game.JobProgress{
-			string(game.JobWAR): {Level: 1},
-			string(game.JobBLM): {Level: 1},
+			string(game.JobVAN): {Level: 1},
+			string(game.JobHEX): {Level: 1},
 		},
 		Loadouts: map[string]JobLoadout{
-			game.JobComboKey(game.JobWAR, game.JobBLM): {
+			game.JobComboKey(game.JobVAN, game.JobHEX): {
 				Hotbar: map[string]HotbarBinding{
 					"1": {Kind: "skill", ID: "custom_skill"},
 				},
@@ -59,7 +65,7 @@ func TestEnsureLoadoutReusesCombo(t *testing.T) {
 		Inventory: []game.Item{},
 	}
 	p.ensureLoadout()
-	l := p.Loadouts[game.JobComboKey(game.JobWAR, game.JobBLM)]
+	l := p.Loadouts[game.JobComboKey(game.JobVAN, game.JobHEX)]
 	if l.Hotbar["1"].ID != "custom_skill" {
 		t.Fatalf("expected saved hotbar, got %+v", l.Hotbar)
 	}
@@ -67,19 +73,19 @@ func TestEnsureLoadoutReusesCombo(t *testing.T) {
 
 func TestEnsureLoadoutCreatesNewCombo(t *testing.T) {
 	p := &Profile{
-		MainJob:   string(game.JobWHM),
+		MainJob:   string(game.JobSAN),
 		SubJob:    "",
-		Jobs:      map[string]game.JobProgress{string(game.JobWHM): {Level: 1}},
+		Jobs:      map[string]game.JobProgress{string(game.JobSAN): {Level: 1}},
 		Loadouts:  map[string]JobLoadout{},
 		Inventory: []game.Item{},
 	}
 	p.ensureLoadout()
-	key := game.JobComboKey(game.JobWHM, "")
+	key := game.JobComboKey(game.JobSAN, "")
 	l, ok := p.Loadouts[key]
 	if !ok {
 		t.Fatal("expected new loadout")
 	}
-	if l.Hotbar["3"].ID != game.RootSkillID(game.JobWHM) {
-		t.Fatalf("slot 3 = %q, want %q", l.Hotbar["3"].ID, game.RootSkillID(game.JobWHM))
+	if l.Hotbar["3"].ID != game.RootSkillID(game.JobSAN) {
+		t.Fatalf("slot 3 = %q, want %q", l.Hotbar["3"].ID, game.RootSkillID(game.JobSAN))
 	}
 }

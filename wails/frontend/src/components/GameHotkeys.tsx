@@ -10,9 +10,16 @@ import {
   resolveWindowToggle,
 } from "../input/keybinds";
 import { tryWorldInteract } from "../world/interact";
+import { tryHouseInteract } from "../phaser/HouseScene";
+import { clearHousePlace, getHousePlaceState, setHousePickMode } from "../world/housePlaceBridge";
+import {
+  getHouseSkinPickerOpen,
+  setHouseSkinPickerOpen,
+  toggleHouseSkinPicker,
+} from "../world/houseSkinBridge";
 
 function inGameScreen(screen: string): boolean {
-  return screen === "world" || screen === "battle";
+  return screen === "world" || screen === "battle" || screen === "house";
 }
 
 function dialogIsOpen(state: ReturnType<typeof useGame.getState>): boolean {
@@ -24,6 +31,58 @@ function dialogIsOpen(state: ReturnType<typeof useGame.getState>): boolean {
     state.teleportConfirm ||
     state.openWindow
   );
+}
+
+/** House tool strip uses 1–5 so WASD movement stays free. */
+function tryHouseToolKey(e: KeyboardEvent, state: ReturnType<typeof useGame.getState>): boolean {
+  if (state.screen !== "house" || !state.house) return false;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return false;
+  const key =
+    e.code === "Digit1" || e.key === "1"
+      ? "1"
+      : e.code === "Digit2" || e.key === "2"
+        ? "2"
+        : e.code === "Digit3" || e.key === "3"
+          ? "3"
+          : e.code === "Digit4" || e.key === "4"
+            ? "4"
+            : e.code === "Digit5" || e.key === "5"
+              ? "5"
+              : null;
+  if (!key) return false;
+
+  const isOwner = !!state.house.is_owner;
+  if (key === "1") {
+    if (!isOwner) return true;
+    clearHousePlace();
+    setHouseSkinPickerOpen(false);
+    state.toggleWindow("house_storage");
+    return true;
+  }
+  if (key === "2") {
+    if (!isOwner) return true;
+    setHouseSkinPickerOpen(false);
+    setHousePickMode(!getHousePlaceState().pickMode);
+    return true;
+  }
+  if (key === "3") {
+    if (!getHousePlaceState().pickMode) return true;
+    clearHousePlace();
+    return true;
+  }
+  if (key === "4") {
+    if (!isOwner) return true;
+    clearHousePlace();
+    toggleHouseSkinPicker();
+    return true;
+  }
+  if (key === "5") {
+    clearHousePlace();
+    setHouseSkinPickerOpen(false);
+    net.leaveHouse();
+    return true;
+  }
+  return false;
 }
 
 export function GameHotkeys() {
@@ -91,6 +150,14 @@ export function GameHotkeys() {
           state.setBindSlot(null);
           return;
         }
+        if (state.screen === "house" && getHousePlaceState().pickMode) {
+          clearHousePlace();
+          return;
+        }
+        if (state.screen === "house" && getHouseSkinPickerOpen()) {
+          setHouseSkinPickerOpen(false);
+          return;
+        }
         state.openMainMenu();
         return;
       }
@@ -100,7 +167,7 @@ export function GameHotkeys() {
         if (dialogIsOpen(state)) return;
         if (!inGame) return;
         if (state.teleportConfirm) {
-          net.useWorldSkill("teleport", state.teleportConfirm.id);
+          net.useWorldSkill("port", state.teleportConfirm.id);
           state.closeTeleportConfirm();
           state.closeWorldSkillDialog();
           return;
@@ -110,7 +177,8 @@ export function GameHotkeys() {
           return;
         }
         if (!state.mainMenuOpen && !state.openWindow) {
-          tryWorldInteract();
+          if (state.screen === "house") tryHouseInteract();
+          else tryWorldInteract();
         }
         return;
       }
@@ -128,9 +196,24 @@ export function GameHotkeys() {
         return;
       }
 
+      if (
+        !chatFocused &&
+        !state.mainMenuOpen &&
+        !state.worldSkillDialog &&
+        !state.npcDialog &&
+        !state.jobChangeDialog &&
+        !state.teleportConfirm &&
+        !(state.openWindow && state.openWindow !== "house_storage") &&
+        tryHouseToolKey(e, state)
+      ) {
+        e.preventDefault();
+        return;
+      }
+
       const hotbarSlot = resolveHotbarSlot(e, keybinds);
       if (hotbarSlot) {
         const { screen, battle, rtBattle } = state;
+        if (screen === "house") return;
         if (screen === "battle" && (battle || rtBattle)) {
           e.preventDefault();
           net.activateHotbar(hotbarSlot);

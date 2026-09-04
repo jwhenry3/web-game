@@ -65,8 +65,8 @@ func TestRollDropPoolIndependent(t *testing.T) {
 		"pool_test": {
 			ID: "pool_test",
 			Entries: []DropPoolEntry{
-				{ItemID: "potion", Chance: 100},
-				{ItemID: "ether", Chance: 0},
+				{ItemID: "potio", Chance: 100},
+				{ItemID: "aether", Chance: 0},
 			},
 		},
 	}
@@ -75,7 +75,7 @@ func TestRollDropPoolIndependent(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(7))
 	loot := RollDropPool(rng, "pool_test", 1, 0)
-	if len(loot) != 1 || loot[0].Consumable != "potion" {
+	if len(loot) != 1 || loot[0].Consumable != "potio" {
 		t.Fatalf("loot = %+v", loot)
 	}
 }

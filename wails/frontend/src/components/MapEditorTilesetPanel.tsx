@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import {
   importTilesetFromFile,
+  loadDefaultPipoyaTileset,
   TILE_ROLE_OPTIONS,
   type ImportedTileset,
   type TileRole,
@@ -46,15 +47,29 @@ export function MapEditorTilesetToolbar({
         }}
       />
       {!tileset ? (
-        <button type="button" className="xiv-btn gold wide" onClick={() => fileRef.current?.click()}>
-          Import tileset…
-        </button>
+        <>
+          <button type="button" className="cm-btn gold wide" onClick={() => fileRef.current?.click()}>
+            Import tileset…
+          </button>
+          <button
+            type="button"
+            className="cm-btn wide"
+            onClick={() => {
+              void loadDefaultPipoyaTileset().then((ts) => {
+                onChange(ts);
+                onSelectTile(0);
+              });
+            }}
+          >
+            Use Pipoya BaseChip
+          </button>
+        </>
       ) : (
         <>
-          <button type="button" className="xiv-btn wide" onClick={() => fileRef.current?.click()}>
+          <button type="button" className="cm-btn wide" onClick={() => fileRef.current?.click()}>
             Replace image…
           </button>
-          <button type="button" className="xiv-btn danger wide" onClick={() => onChange(null)}>
+          <button type="button" className="cm-btn danger wide" onClick={() => onChange(null)}>
             Remove tileset
           </button>
         </>
@@ -69,7 +84,7 @@ export function MapEditorTilesetPanel({ tileset, onChange, selectedTileIndex, on
       <div className="map-editor-tileset-panel">
         <div className="map-editor-group-label">Tileset</div>
         <p className="dim map-editor-tileset-hint">
-          Editor uses colored blocks by default. Import a PNG tileset from the toolbar above to map tiles to terrain types.
+          Bundled Pipoya BaseChip loads automatically when catalogs sync. Use the toolbar to import another PNG or restore Pipoya.
         </p>
       </div>
     );
@@ -82,7 +97,7 @@ export function MapEditorTilesetPanel({ tileset, onChange, selectedTileIndex, on
       <div className="map-editor-group-label">Tileset: {tileset.name}</div>
       <label className="field-label">First GID</label>
       <input
-        className="xiv-input"
+        className="cm-input"
         type="number"
         value={tileset.firstGid}
         onChange={(e) => onChange({ ...tileset, firstGid: parseInt(e.target.value, 10) || 577 })}
@@ -117,7 +132,7 @@ export function MapEditorTilesetPanel({ tileset, onChange, selectedTileIndex, on
         <>
           <label className="field-label">Tile {selectedTileIndex} role</label>
           <select
-            className="xiv-input"
+            className="cm-input"
             value={role}
             onChange={(e) => onChange(setTileRole(tileset, selectedTileIndex, e.target.value as TileRole))}
           >

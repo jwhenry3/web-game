@@ -4,12 +4,12 @@ import (
 	"log"
 	"sync"
 
-	"ffv-web-game/internal/cluster"
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/server"
-	"ffv-web-game/internal/servercfg"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/cluster"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/server"
+	"clara-mundi/internal/servercfg"
+	"clara-mundi/internal/store"
 )
 
 // Node is one map server: overworld, plugins, hub, battles.

@@ -391,7 +391,7 @@ export function PrefabEditorView({
         width,
         height,
         properties: [
-          { name: "destMap", type: "string", value: "north" },
+          { name: "destMap", type: "string", value: "timberroad" },
           { name: "destX", type: "float", value: 100 },
           { name: "destY", type: "float", value: 100 },
         ],

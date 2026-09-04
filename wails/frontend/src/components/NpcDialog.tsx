@@ -29,16 +29,16 @@ export function NpcDialog() {
   };
 
   return createPortal(
-    <div className="xiv-skill-dialog-layer" onPointerDown={close}>
-      <div className="xiv-panel xiv-skill-dialog xiv-npc-dialog" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="xiv-panel-head">{dialog.name}</div>
-        <p className="xiv-npc-dialog-text">{content.greeting}</p>
-        <div className="xiv-npc-dialog-actions">
+    <div className="cm-skill-dialog-layer" onPointerDown={close}>
+      <div className="cm-panel cm-skill-dialog cm-npc-dialog" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="cm-panel-head">{dialog.name}</div>
+        <p className="cm-npc-dialog-text">{content.greeting}</p>
+        <div className="cm-npc-dialog-actions">
           {content.actions.map((action) => (
-            <div key={action.id} className="xiv-npc-dialog-action">
+            <div key={action.id} className="cm-npc-dialog-action">
               <button
                 type="button"
-                className={`xiv-btn ${action.id === "goodbye" ? "" : "gold"}`}
+                className={`cm-btn ${action.id === "goodbye" ? "" : "gold"}`}
                 disabled={action.disabled}
                 onClick={() => onAction(action.id)}
               >

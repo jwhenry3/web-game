@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { WorldScene } from "./WorldScene";
+import { HouseScene } from "./HouseScene";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -16,7 +17,7 @@ export class BootScene extends Phaser.Scene {
 }
 
 export function buildGameScenes(): (typeof Phaser.Scene)[] {
-  const scenes: (typeof Phaser.Scene)[] = [BootScene, WorldScene];
+  const scenes: (typeof Phaser.Scene)[] = [BootScene, WorldScene, HouseScene];
   const battleCtor = (window as unknown as { __battleSceneCtor?: new () => Phaser.Scene }).__battleSceneCtor;
   if (battleCtor) {
     scenes.push(battleCtor);

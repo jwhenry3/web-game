@@ -1,10 +1,10 @@
 import type { DropPoolDef, ItemDef, JobDef, QuestDef, SkillDef } from "./gameContentTypes";
 
-const ITEMS_KEY = "ffv_content_items";
-const QUESTS_KEY = "ffv_content_quests";
-const JOBS_KEY = "ffv_content_jobs";
-const SKILLS_KEY = "ffv_content_skills";
-const DROPS_KEY = "ffv_content_drops";
+const ITEMS_KEY = "cm_content_items";
+const QUESTS_KEY = "cm_content_quests";
+const JOBS_KEY = "cm_content_jobs";
+const SKILLS_KEY = "cm_content_skills";
+const DROPS_KEY = "cm_content_drops";
 
 export type { DropPoolDef, ItemDef, JobDef, QuestDef, SkillDef } from "./gameContentTypes";
 

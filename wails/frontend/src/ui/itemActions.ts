@@ -2,6 +2,7 @@ import { net } from "../net/socket";
 import {
   HOTBAR_SLOTS,
   formatWeaponList,
+  itemQty,
   jobAllowedWeapons,
   jobAllowsWeapon,
   jobLabel,
@@ -9,6 +10,7 @@ import {
   type ProfileInfo,
 } from "../types";
 import { hotbarSlotLabel } from "../input/keybinds";
+import type { ItemBagId } from "./itemTransfer";
 
 export type ItemAction = {
   id: string;
@@ -16,6 +18,13 @@ export type ItemAction = {
   disabled?: boolean;
   title?: string;
   run: () => void;
+};
+
+export type ItemActionContext = {
+  bag?: ItemBagId;
+  /** True while the house storage dual-window UI is open. */
+  houseStorageOpen?: boolean;
+  onPlaceFurniture?: (item: Item) => void;
 };
 
 function weaponSlotLabel(slot: "weapon" | "sub_weapon", profile: ProfileInfo): string {
@@ -37,12 +46,42 @@ export function itemActions(
   equippedSlot?: string,
   locked?: boolean,
   bindSlot?: string | null,
+  ctx: ItemActionContext = {},
 ): ItemAction[] {
+  const bag = ctx.bag ?? "inventory";
+  const qty = itemQty(item);
+
+  if (bag === "house_storage") {
+    return [
+      {
+        id: "withdraw",
+        label: qty > 1 ? `Withdraw ×${qty}` : "Withdraw",
+        run: () => net.houseStorageWithdraw(item.id, qty),
+      },
+    ];
+  }
+
+  const actions: ItemAction[] = [];
+
+  if (ctx.houseStorageOpen && !equippedSlot) {
+    actions.push({
+      id: "deposit",
+      label: qty > 1 ? `Deposit ×${qty}` : "Deposit",
+      run: () => net.houseStorageDeposit(item.id, qty),
+    });
+    if (ctx.onPlaceFurniture) {
+      actions.push({
+        id: "place_furniture",
+        label: "Place at feet",
+        run: () => ctx.onPlaceFurniture!(item),
+      });
+    }
+  }
+
   const consumable = item.kind === "consumable";
   const isWeapon = item.slot === "weapon";
   const hasSub = !!profile.sub_job;
   const gearLocked = !!locked && !consumable;
-  const actions: ItemAction[] = [];
 
   if (consumable) {
     actions.push({
@@ -65,6 +104,10 @@ export function itemActions(
         });
       }
     }
+    return actions;
+  }
+
+  if (item.kind === "decoration" || item.kind === "crafting" || item.kind === "material") {
     return actions;
   }
 
@@ -115,13 +158,27 @@ function primaryWeaponEquipSlot(item: Item, profile: ProfileInfo): "weapon" | "s
   return null;
 }
 
-/** Double-click: use consumables; toggle equip state for gear. */
+/** Double-click: deposit/withdraw in house storage; otherwise use/equip. */
 export function runPrimaryItemAction(
   item: Item,
   profile: ProfileInfo,
   equippedSlot?: string,
   locked?: boolean,
+  ctx: ItemActionContext = {},
 ): boolean {
+  const bag = ctx.bag ?? "inventory";
+  const qty = itemQty(item);
+
+  if (bag === "house_storage") {
+    net.houseStorageWithdraw(item.id, qty);
+    return true;
+  }
+
+  if (ctx.houseStorageOpen && !equippedSlot) {
+    net.houseStorageDeposit(item.id, qty);
+    return true;
+  }
+
   const consumable = item.kind === "consumable";
   const gearLocked = !!locked && !consumable;
   if (gearLocked) return false;
@@ -129,6 +186,10 @@ export function runPrimaryItemAction(
   if (consumable) {
     net.useItemFromBag(item.id);
     return true;
+  }
+
+  if (item.kind === "decoration" || item.kind === "crafting" || item.kind === "material") {
+    return false;
   }
 
   if (equippedSlot) {

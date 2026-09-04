@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ffv-web-game/data"
+	"clara-mundi/data"
 )
 
 func TestMaterializeWritesMissingFiles(t *testing.T) {

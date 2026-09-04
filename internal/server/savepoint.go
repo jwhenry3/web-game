@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 const savePointInteractRange = 80.0
@@ -107,7 +107,7 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp, ok := h.world[c.ID]
-	if !ok || wp.InBattle {
+	if !ok || wp.InBattle || wp.InHouse {
 		h.sendError(c, "You cannot use that right now.")
 		return
 	}
@@ -134,7 +134,7 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 			h.sendError(c, "Set a save crystal first.")
 			return
 		}
-	case game.SkillIDTeleport:
+	case game.SkillIDPort:
 		if destID == "" {
 			h.sendError(c, "Choose a destination crystal.")
 			return
@@ -143,6 +143,8 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 			h.sendError(c, "You have not attuned to that crystal.")
 			return
 		}
+	case game.SkillIDCamp:
+		destID = ""
 	default:
 		h.sendError(c, "Unknown field skill.")
 		return
@@ -153,6 +155,11 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.cancelWorldCast(c, wp, "")
+	if skill.ID == game.SkillIDCamp {
+		h.placeCamp(c, wp)
+		c.lastWorldSkill = time.Now()
+		return
+	}
 	if !h.warpToSavePoint(c, wp, destID, skill.Name+": "+savePointName(destID)+".") {
 		return
 	}
@@ -204,7 +211,7 @@ func (h *Hub) interruptWorldCastOnMove(c *Client, wp *protocol.WorldPlayer) {
 	if dist(c.worldCastX, c.worldCastY, wp.X, wp.Y) <= worldCastMoveCancel {
 		return
 	}
-	h.cancelWorldCast(c, wp, "Teleport cancelled.")
+	h.cancelWorldCast(c, wp, "Cast cancelled.")
 }
 
 func (h *Hub) finishDueWorldCasts(now time.Time) {
@@ -230,7 +237,7 @@ func (h *Hub) completeWorldCast(c *Client) {
 	}
 	wp := h.world[c.ID]
 	h.clearWorldCast(c, wp)
-	if wp == nil || wp.InBattle {
+	if wp == nil || wp.InBattle || wp.InHouse {
 		if wp != nil {
 			h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 		}
@@ -238,6 +245,12 @@ func (h *Hub) completeWorldCast(c *Client) {
 	}
 	skill, ok := game.FindSkill(skillID)
 	if !ok {
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+		return
+	}
+	if skill.ID == game.SkillIDCamp {
+		h.placeCamp(c, wp)
+		c.lastWorldSkill = time.Now()
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 		return
 	}

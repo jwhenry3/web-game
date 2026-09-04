@@ -81,7 +81,7 @@ export function JobsEditorPage({ items, skills, onItemsChange, onSkillsChange, s
 
   return (
     <CatalogEditorShell
-      listTitle="Jobs"
+      listTitle="Classes"
       items={items}
       columns={columns}
       filters={filters}
@@ -104,7 +104,7 @@ export function JobsEditorPage({ items, skills, onItemsChange, onSkillsChange, s
       detailSections={(job, onChange) => [
         {
           id: "core",
-          label: "Job",
+          label: "Class",
           minWidth: 280,
           grow: 0.9,
           content: <JobCoreForm draft={job} onChange={onChange} />,

@@ -7,9 +7,9 @@ import (
 	"os"
 	"sync"
 
-	"ffv-web-game/internal/clientnet"
-	"ffv-web-game/internal/host"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/clientnet"
+	"clara-mundi/internal/host"
+	"clara-mundi/internal/protocol"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )

@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 
 	"github.com/gorilla/websocket"
 )

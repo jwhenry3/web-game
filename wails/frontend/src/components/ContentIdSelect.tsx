@@ -27,7 +27,7 @@ export function ContentIdSelect({
   onChange,
   options,
   emptyLabel = "— none —",
-  className = "xiv-input",
+  className = "cm-input",
   inspectFrame,
   inspectLabel = "Inspect",
 }: Props) {
@@ -58,7 +58,7 @@ export function ContentIdSelect({
       {select}
       <button
         type="button"
-        className={`xiv-btn content-id-inspect-btn ${active ? "on" : ""}`}
+        className={`cm-btn content-id-inspect-btn ${active ? "on" : ""}`}
         disabled={disabled}
         title={disabled ? "Select an entry to inspect" : undefined}
         aria-label={typeof inspectLabel === "string" ? inspectLabel : "Inspect"}

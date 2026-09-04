@@ -5,8 +5,8 @@ import (
 	"math"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 func (r *Room) SetTarget(clientID, targetID string) {
@@ -25,6 +25,16 @@ func (r *Room) HandleAction(clientID string, action protocol.ActionPayload) {
 	defer r.mu.Unlock()
 	if r.ended {
 		return
+	}
+	if action.ActorID != "" && action.ActorID != clientID {
+		pet := r.find(action.ActorID)
+		if pet != nil && pet.isAlly && pet.ownerClientID == clientID && pet.alive {
+			act := action
+			act.ActorID = ""
+			pet.queuedAction = &act
+			r.broadcastState()
+			return
+		}
 	}
 	ev := r.resolveAction(clientID, action)
 	if ev != nil {
@@ -63,6 +73,11 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 		return r.eventFromResult(actor, res)
 	}
 
+	if action.ActionID == game.ActionIDCapture {
+		res := r.resolveCapture(actor, action)
+		return r.eventFromResult(actor, res)
+	}
+
 	skill, ok := game.FindSkill(action.ActionID)
 	if !ok {
 		return r.eventFromResult(actor, protocol.ActionResult{
@@ -72,9 +87,17 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 	res := protocol.ActionResult{
 		ActorID: actor.id, ActionID: skill.ID, ActionName: skill.Name, TargetID: action.TargetID,
 	}
-	if skill.ID != game.BasicAttack.ID && actor.skillLevels[skill.ID] < 1 {
-		res.Message = "Skill not learned."
-		return r.eventFromResult(actor, res)
+	if !game.SkillAlwaysUnlocked(skill.ID) {
+		levels := actor.skillLevels
+		if actor.isAlly {
+			if owner := r.find(actor.ownerClientID); owner != nil {
+				levels = owner.skillLevels
+			}
+		}
+		if levels[skill.ID] < 1 {
+			res.Message = "Skill not learned."
+			return r.eventFromResult(actor, res)
+		}
 	}
 	if skill.WorldOnly {
 		res.Message = "Cannot use that in battle."
@@ -92,7 +115,7 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 	var target *entity
 	if game.SkillTargetsAlly(skill) {
 		target = r.find(action.TargetID)
-		if target == nil || !target.alive || !target.isPlayer {
+		if target == nil || !target.alive || !target.isFriendly() {
 			res.Message = "Invalid target."
 			return r.eventFromResult(actor, res)
 		}
@@ -101,7 +124,7 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 			return r.eventFromResult(actor, res)
 		}
 	} else {
-		if t := r.find(action.TargetID); t != nil && t.alive && !t.isPlayer {
+		if t := r.find(action.TargetID); t != nil && t.alive && t.isEnemy() {
 			target = t
 			actor.targetID = t.id
 		} else {
@@ -139,7 +162,7 @@ func (r *Room) resolveItemUse(actor *entity, action protocol.ActionPayload) prot
 		return res
 	}
 	target := r.find(action.TargetID)
-	if target == nil || !target.alive || !target.isPlayer {
+	if target == nil || !target.alive || !target.isFriendly() {
 		res.Message = "Invalid target."
 		return res
 	}
@@ -228,7 +251,7 @@ func (r *Room) applySkillEffect(actor, target *entity, skill game.Skill, res pro
 	}
 
 	r.applySkillStatuses(actor, target, skill, amount, &res)
-	if actor.isPlayer && skill.ID != game.BasicAttack.ID && actor.pendingSkillUses != nil {
+	if actor.isPlayer && !game.SkillAlwaysUnlocked(skill.ID) && actor.pendingSkillUses != nil {
 		actor.pendingSkillUses[skill.ID]++
 	}
 	return res
@@ -287,14 +310,51 @@ func inMeleeArc(actor, target *entity, halfArc float64) bool {
 	return dot >= math.Cos(halfArc)
 }
 
+func (r *Room) resolveCapture(actor *entity, action protocol.ActionPayload) protocol.ActionResult {
+	res := protocol.ActionResult{ActorID: actor.id, ActionID: game.ActionIDCapture, ActionName: "Capture", TargetID: action.TargetID}
+	if !actor.isPlayer {
+		res.Message = "Only you can capture."
+		return res
+	}
+	target := r.find(action.TargetID)
+	if target == nil || !target.alive || !target.isEnemy() {
+		res.Message = "Invalid target."
+		return res
+	}
+	if !game.EligibleForCapture(target.capturable, target.alive, target.hp, target.maxHP) {
+		res.Message = "Target is not weak enough to capture."
+		return res
+	}
+	actor.startGCD(time.Now())
+	chance := game.CaptureChance(actor.level, target.level)
+	if r.rng.Float64() >= chance {
+		res.Success = false
+		res.Message = fmt.Sprintf("Capture failed (%.0f%%).", chance*100)
+		return res
+	}
+	profile, _, errMsg := r.host.Profiles().AddPet(actor.profileName, target.kind, target.name, target.level)
+	if errMsg != "" {
+		res.Message = errMsg
+		return res
+	}
+	target.alive = false
+	target.hp = 0
+	target.dropPoolID = ""
+	target.casting = nil
+	res.Success = true
+	res.Message = fmt.Sprintf("Captured %s!", target.name)
+	r.host.SendProfileUpdate(actor.id, profile)
+	return res
+}
+
 func (r *Room) autoTarget(actor *entity) *entity {
-	if t := r.find(actor.targetID); t != nil && t.alive && !t.isPlayer {
+	if t := r.find(actor.targetID); t != nil && t.alive && t.isEnemy() {
 		return t
 	}
 	var best *entity
 	bestD := math.MaxFloat64
 	for _, e := range r.entities {
-		if e.isPlayer || !e.alive {
+		if !e.isEnemy() || !e.alive {
 			continue
 		}
 		d := dist(actor.x, actor.y, e.x, e.y)
@@ -335,7 +395,7 @@ func (r *Room) eventFromResult(actor *entity, res protocol.ActionResult) *protoc
 		Damage:      res.Damage,
 		Heal:        res.Heal,
 		MPRestored:  res.MPRestored,
-		Hit:         res.Success && (res.Damage > 0 || res.Heal > 0 || res.CastStarted),
+		Hit:         res.Success && (res.Damage > 0 || res.Heal > 0 || res.MPRestored > 0 || res.CastStarted || res.ActionID == game.ActionIDCapture || res.Message != ""),
 		Message:     msg,
 		ActionID:    res.ActionID,
 		ActionName:  res.ActionName,

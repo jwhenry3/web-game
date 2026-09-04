@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
-import { ALL_JOBS } from "../types";
+import { ALL_JOBS, comboDisplayName } from "../types";
 import { JobSelectionSteps } from "./JobSelectionSteps";
 
 const MODE_LABELS = {
-  main: "Choose Main Job",
-  sub: "Choose Sub Job",
+  main: "Choose Main Class",
+  sub: "Choose Subclass",
 } as const;
 
 export function JobChangeDialog() {
@@ -87,18 +87,17 @@ export function JobChangeDialog() {
   };
 
   const mainName = ALL_JOBS.find((j) => j.id === (mode === "main" ? mainJob : profile.main_job))?.name ?? mainJob;
-  const subName = subJob ? (ALL_JOBS.find((j) => j.id === subJob)?.name ?? subJob) : "None";
 
   return createPortal(
-    <div className="xiv-skill-dialog-layer" onPointerDown={close}>
-      <div className="xiv-window login-panel job-change-dialog" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="xiv-titlebar">
-          <span className="xiv-title">{dialog.name}</span>
+    <div className="cm-skill-dialog-layer" onPointerDown={close}>
+      <div className="cm-window login-panel job-change-dialog" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="cm-titlebar">
+          <span className="cm-title">{dialog.name}</span>
         </div>
-        <div className="xiv-body">
-          <div className="xiv-section-label">{MODE_LABELS[mode]}</div>
+        <div className="cm-body">
+          <div className="cm-section-label">{MODE_LABELS[mode]}</div>
           {mode === "sub" && (
-            <p className="hint xiv-job-change-current">
+            <p className="hint cm-job-change-current">
               Main: <strong>{mainName}</strong>
             </p>
           )}
@@ -114,16 +113,21 @@ export function JobChangeDialog() {
             <p className="hint">Sub job unlocks at main job level {profile.subjob_unlock_level}.</p>
           )}
           {mode === "sub" && (
-            <p className="hint xiv-job-change-summary">
-              Combo preview: {mainName} / {subName}
+            <p className="hint cm-job-change-summary">
+              Combo preview: {comboDisplayName(profile.main_job, subJob || undefined)}
+            </p>
+          )}
+          {mode === "main" && (
+            <p className="hint cm-job-change-summary">
+              Combo preview: {comboDisplayName(mainJob, subJob || undefined)}
             </p>
           )}
           {error && <div className="error-text">{error}</div>}
-          <div className="xiv-wizard-nav">
-            <button type="button" className="xiv-btn" onClick={close}>
+          <div className="cm-wizard-nav">
+            <button type="button" className="cm-btn" onClick={close}>
               Cancel
             </button>
-            <button type="button" className="xiv-btn gold" onClick={confirm}>
+            <button type="button" className="cm-btn gold" onClick={confirm}>
               Confirm
             </button>
           </div>

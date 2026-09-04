@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 type hubParty struct {
@@ -472,7 +472,7 @@ func (h *Hub) battleParticipantCount(battleID string) int {
 // engagePartyMemberAt joins an in-progress battle when a party mate walks
 // into a combat-locked member on the overworld.
 func (h *Hub) engagePartyMemberAt(c *Client, wp *protocol.WorldPlayer, x, y float64) bool {
-	if wp.InBattle {
+	if wp.InBattle || wp.InHouse {
 		return false
 	}
 	partyID, ok := h.clientParty[c.ID]
@@ -531,7 +531,7 @@ func (h *Hub) promptPartyForBattle(triggerID string, battleID string, x, y float
 			continue
 		}
 		wp := h.world[memberID]
-		if wp == nil || wp.InBattle || battleImmune(wp) {
+		if wp == nil || wp.InBattle || wp.InHouse || battleImmune(wp) {
 			continue
 		}
 		if dist(wp.X, wp.Y, x, y) > partyBattleRange {

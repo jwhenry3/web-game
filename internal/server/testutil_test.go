@@ -1,8 +1,8 @@
 package server
 
 import (
-	"ffv-web-game/internal/plugins"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/plugins"
+	"clara-mundi/internal/store"
 )
 
 // testModulesConfig returns a minimal ATB combat config for unit tests.

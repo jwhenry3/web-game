@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
@@ -17,8 +17,8 @@ func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
 	b := &Client{ID: "b", Name: "Bravo", Joined: true, Send: make(chan []byte, 64), Hub: h}
 	h.clients[a.ID] = a
 	h.clients[b.ID] = b
-	h.store.GetOrCreate("Alpha", game.JobWAR)
-	h.store.GetOrCreate("Bravo", game.JobBLM)
+	h.store.GetOrCreate("Alpha", game.JobVAN)
+	h.store.GetOrCreate("Bravo", game.JobHEX)
 	h.world[a.ID] = &protocol.WorldPlayer{ID: a.ID, Name: "Alpha", Level: 1, Weapon: "sword"}
 	h.world[b.ID] = &protocol.WorldPlayer{ID: b.ID, Name: "Bravo", Level: 1, Weapon: "staff"}
 	return h, a, b

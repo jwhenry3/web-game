@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Item, ProfileInfo } from "../types";
-import { itemActions, type ItemAction } from "../ui/itemActions";
+import { itemActions, type ItemAction, type ItemActionContext } from "../ui/itemActions";
 import { useGame } from "../state/store";
 
 type ItemMenuState = {
@@ -9,6 +9,8 @@ type ItemMenuState = {
   profile: ProfileInfo;
   equippedSlot?: string;
   locked?: boolean;
+  bag?: "inventory" | "house_storage";
+  actionCtx?: ItemActionContext;
   x: number;
   y: number;
 };
@@ -28,7 +30,14 @@ function ItemContextMenuPanel({
   onClose: () => void;
 }) {
   const bindSlot = useGame((s) => s.bindSlot);
-  const actions = itemActions(menu.item, menu.profile, menu.equippedSlot, menu.locked, bindSlot);
+  const actions = itemActions(
+    menu.item,
+    menu.profile,
+    menu.equippedSlot,
+    menu.locked,
+    bindSlot,
+    menu.actionCtx ?? { bag: menu.bag },
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,7 +49,7 @@ function ItemContextMenuPanel({
     };
     const onPointer = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest(".xiv-item-context-menu")) return;
+      if (target.closest(".cm-item-context-menu")) return;
       onClose();
     };
     window.addEventListener("keydown", onKey, true);
@@ -58,18 +67,18 @@ function ItemContextMenuPanel({
 
   return createPortal(
     <div
-      className="xiv-item-context-menu xiv-panel"
+      className="cm-item-context-menu cm-panel"
       style={{ left, top }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {actions.length === 0 ? (
-        <p className="hint xiv-item-context-empty">No actions available.</p>
+        <p className="hint cm-item-context-empty">No actions available.</p>
       ) : (
         actions.map((action: ItemAction) => (
           <button
             key={action.id}
             type="button"
-            className="xiv-item-context-item"
+            className="cm-item-context-item"
             disabled={action.disabled}
             title={action.title}
             onClick={() => {

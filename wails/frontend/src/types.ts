@@ -25,16 +25,31 @@ export type MessageType =
   | "set_target"
   | "set_save_point"
   | "use_world_skill"
+  | "enter_house"
+  | "leave_house"
+  | "house_interact"
+  | "house_storage_deposit"
+  | "house_storage_withdraw"
+  | "house_place_furniture"
+  | "house_pick_furniture"
+  | "set_camp_skin"
+  | "pet_set_follow"
+  | "pet_set_battle"
+  | "pet_release"
   | "rt_move"
   | "rt_attack"
   | "welcome"
   | "map_config"
   | "world_state"
+  | "pet_state"
   | "player_joined"
   | "player_left"
   | "player_moved"
   | "player_sync"
   | "npc_state"
+  | "camp_state"
+  | "house_state"
+  | "house_return"
   | "social_state"
   | "party_invite_received"
   | "battle_invite_received"
@@ -61,7 +76,7 @@ export interface Envelope {
 export interface Item {
   id: string;
   name: string;
-  kind: "equipment" | "consumable" | string;
+  kind: "equipment" | "consumable" | "decoration" | "crafting" | string;
   slot?: string;
   type?: string;
   consumable?: string;
@@ -140,6 +155,9 @@ export interface ProfileInfo {
   jobs: JobProgressInfo[];
   stats: StatBlock;
   inventory: Item[];
+  house_storage?: Item[];
+  house_storage_capacity?: number;
+  camp_skin?: string;
   equipped: Record<string, string>;
   hotbar: Record<string, HotbarBinding>;
   keybinds?: Record<string, string>;
@@ -148,6 +166,17 @@ export interface ProfileInfo {
   save_point_id?: string;
   save_point_name?: string;
   visited_save_points?: VisitedSavePoint[];
+  pets?: PetRecord[];
+  follow_pet_id?: string;
+  battle_pet_id?: string;
+}
+
+export interface PetRecord {
+  id: string;
+  kind: string;
+  name: string;
+  level: number;
+  caught_at?: number;
 }
 
 export interface VisitedSavePoint {
@@ -277,6 +306,8 @@ export interface WorldPlayer {
   facing?: "left" | "right";
   in_battle: boolean;
   battle_id?: string;
+  in_house?: boolean;
+  house_owner?: string;
   immune_until?: number;
   casting_skill_id?: string;
   cast_time_ms?: number;
@@ -343,16 +374,93 @@ export interface AtlasPayload {
   maps: AtlasMap[];
 }
 
+export interface WorldCamp {
+  owner_name: string;
+  owner_id: string;
+  x: number;
+  y: number;
+  skin: string;
+}
+
+export interface HouseFurniture {
+  id: string;
+  col: number;
+  row: number;
+  owner?: string;
+  item: Item;
+}
+
+export interface HousePlayer {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  facing?: string;
+  owner?: boolean;
+}
+
+export interface HousePOI {
+  id: string;
+  kind: "door" | "storage" | string;
+  name: string;
+  x: number;
+  y: number;
+}
+
+export interface HouseStatePayload {
+  owner_name: string;
+  skin: string;
+  map_cols: number;
+  map_rows: number;
+  walk_cols: number;
+  walk_rows: number;
+  walk_origin_col: number;
+  walk_origin_row: number;
+  tile_size: number;
+  players: HousePlayer[];
+  furniture: HouseFurniture[];
+  pois: HousePOI[];
+  storage?: Item[];
+  storage_capacity?: number;
+  is_owner: boolean;
+}
+
 export interface WorldStatePayload {
   players: WorldPlayer[];
   npcs?: WorldNPC[];
+  camps?: WorldCamp[];
+  pets?: WorldPet[];
   battles: BattleInfo[];
   save_points?: SavePoint[];
   job_changers?: JobChanger[];
   map?: OverworldMap;
 }
 
+export interface WorldPet {
+  id: string;
+  owner_id: string;
+  kind: string;
+  name: string;
+  level: number;
+  x: number;
+  y: number;
+  facing?: string;
+}
+
 export type ChatChannel = "general" | "social" | "system" | "battle";
+
+/** Visual tone for chat lines (especially battle combat/skill results). */
+export type ChatTone =
+  | "plain"
+  | "damage"
+  | "heal"
+  | "fail"
+  | "cast"
+  | "buff"
+  | "capture"
+  | "skill"
+  | "victory"
+  | "defeat";
 
 export const CHAT_TABS: { id: ChatChannel; label: string }[] = [
   { id: "general", label: "General" },
@@ -373,6 +481,7 @@ export interface ChatLine {
   from_id: string;
   from_name: string;
   message: string;
+  tone?: ChatTone;
 }
 
 export interface StatusSnapshot {
@@ -387,6 +496,8 @@ export interface BattleEntity {
   name: string;
   kind?: string;
   is_player: boolean;
+  is_ally?: boolean;
+  owner_id?: string;
   weapon?: string;
   level: number;
   hp: number;
@@ -398,6 +509,8 @@ export interface BattleEntity {
   atb: number;
   target_id?: string;
   alive: boolean;
+  capturable?: boolean;
+  has_queued_action?: boolean;
   statuses?: StatusSnapshot[];
   casting_skill_id?: string;
   cast_target_id?: string;
@@ -481,6 +594,8 @@ export interface RTBattleEntity {
   name: string;
   kind?: string;
   is_player: boolean;
+  is_ally?: boolean;
+  owner_id?: string;
   x: number;
   y: number;
   hp: number;
@@ -490,6 +605,8 @@ export interface RTBattleEntity {
   skill_atb?: number;
   target_id?: string;
   alive: boolean;
+  capturable?: boolean;
+  has_queued_action?: boolean;
   statuses?: StatusSnapshot[];
   casting_skill_id?: string;
   cast_target_id?: string;
@@ -543,54 +660,64 @@ export interface SelectedAction {
 }
 
 export const RACES = [
-  { id: "hume", name: "Hume", color: "#c9a86c", desc: "Balanced and adaptable." },
-  { id: "elvaan", name: "Elvaan", color: "#8eb4d4", desc: "Proud and resilient." },
-  { id: "tarutaru", name: "Tarutaru", color: "#9ad4a0", desc: "Small, clever, and magical." },
-  { id: "mithra", name: "Mithra", color: "#d4a0c8", desc: "Agile hunters of the wild." },
-  { id: "galka", name: "Galka", color: "#a0a8b8", desc: "Stalwart giants of the north." },
+  { id: "humanus", name: "Humanus", color: "#c9a86c", desc: "Balanced and adaptable." },
+  { id: "altus", name: "Altus", color: "#8eb4d4", desc: "Proud and resilient." },
+  { id: "parvus", name: "Parvus", color: "#9ad4a0", desc: "Small, clever, and magical." },
+  { id: "felis", name: "Felis", color: "#d4a0c8", desc: "Agile hunters of the wild." },
+  { id: "saxum", name: "Saxum", color: "#a0a8b8", desc: "Stalwart giants of the north." },
 ] as const;
 
 export const ALL_JOBS = [
-  { id: "WAR", name: "Warrior", abbr: "WAR", category: "swordplay", color: "#d9704a" },
-  { id: "MNK", name: "Monk", abbr: "MNK", category: "swordplay", color: "#d9704a" },
-  { id: "PLD", name: "Paladin", abbr: "PLD", category: "swordplay", color: "#d9704a" },
-  { id: "DRK", name: "Dark Knight", abbr: "DRK", category: "swordplay", color: "#d9704a" },
-  { id: "SAM", name: "Samurai", abbr: "SAM", category: "swordplay", color: "#d9704a" },
-  { id: "DRG", name: "Dragoon", abbr: "DRG", category: "swordplay", color: "#d9704a" },
-  { id: "BLU", name: "Blue Mage", abbr: "BLU", category: "swordplay", color: "#d9704a" },
-  { id: "RUN", name: "Rune Fencer", abbr: "RUN", category: "swordplay", color: "#d9704a" },
-  { id: "THF", name: "Thief", abbr: "THF", category: "stealth", color: "#54c47a" },
-  { id: "NIN", name: "Ninja", abbr: "NIN", category: "stealth", color: "#54c47a" },
-  { id: "DNC", name: "Dancer", abbr: "DNC", category: "stealth", color: "#54c47a" },
-  { id: "BST", name: "Beastmaster", abbr: "BST", category: "stealth", color: "#54c47a" },
-  { id: "RNG", name: "Ranger", abbr: "RNG", category: "stealth", color: "#54c47a" },
-  { id: "COR", name: "Corsair", abbr: "COR", category: "stealth", color: "#54c47a" },
-  { id: "BLM", name: "Black Mage", abbr: "BLM", category: "sorcery", color: "#7a6ff0" },
-  { id: "SMN", name: "Summoner", abbr: "SMN", category: "sorcery", color: "#7a6ff0" },
-  { id: "BRD", name: "Bard", abbr: "BRD", category: "sorcery", color: "#7a6ff0" },
-  { id: "GEO", name: "Geomancer", abbr: "GEO", category: "sorcery", color: "#7a6ff0" },
-  { id: "WHM", name: "White Mage", abbr: "WHM", category: "devotion", color: "#e8c95a" },
-  { id: "RDM", name: "Red Mage", abbr: "RDM", category: "devotion", color: "#e8c95a" },
-  { id: "SCH", name: "Scholar", abbr: "SCH", category: "devotion", color: "#e8c95a" },
-  { id: "PUP", name: "Puppetmaster", abbr: "PUP", category: "devotion", color: "#e8c95a" },
+  { id: "VAN", name: "Vanguard", abbr: "VAN", role: "tank", style: "melee", category: "swordplay", weapon: "sword", color: "#d9704a" },
+  { id: "AEG", name: "Aegis", abbr: "AEG", role: "tank", style: "melee", category: "swordplay", weapon: "hammer", color: "#d9704a" },
+  { id: "BRW", name: "Brawler", abbr: "BRW", role: "dps", style: "melee", category: "swordplay", weapon: "knuckles", color: "#d9704a" },
+  { id: "RVR", name: "Reaver", abbr: "RVR", role: "dps", style: "melee", category: "swordplay", weapon: "axe", color: "#d9704a" },
+  { id: "LNC", name: "Lancer", abbr: "LNC", role: "dps", style: "ranged", category: "swordplay", weapon: "spear", color: "#d9704a" },
+  { id: "RON", name: "Ronin", abbr: "RON", role: "dps", style: "melee", category: "swordplay", weapon: "katana", color: "#d9704a" },
+  { id: "HEX", name: "Hexwright", abbr: "HEX", role: "dps", style: "magic", category: "sorcery", weapon: "staff", color: "#7a6ff0" },
+  { id: "SAN", name: "Sanctifier", abbr: "SAN", role: "healer", style: "magic", category: "devotion", weapon: "wand", color: "#e8c95a" },
+  { id: "CAN", name: "Cantor", abbr: "CAN", role: "support", style: "magic", category: "sorcery", weapon: "wand", color: "#7a6ff0" },
+  { id: "CUT", name: "Cutpurse", abbr: "CUT", role: "dps", style: "melee", category: "stealth", weapon: "dagger", color: "#54c47a" },
 ] as const;
 
 export const STARTING_JOBS = [
-  { id: "WAR", name: "Warrior", abbr: "WAR", category: "swordplay", color: "#d9704a", desc: "Heavy melee fighter." },
-  { id: "MNK", name: "Monk", abbr: "MNK", category: "swordplay", color: "#d9704a", desc: "Unarmed martial artist." },
-  { id: "WHM", name: "White Mage", abbr: "WHM", category: "devotion", color: "#e8c95a", desc: "Healer and holy magic." },
-  { id: "BLM", name: "Black Mage", abbr: "BLM", category: "sorcery", color: "#7a6ff0", desc: "Offensive elemental magic." },
-  { id: "RDM", name: "Red Mage", abbr: "RDM", category: "devotion", color: "#e8c95a", desc: "Hybrid sword and spell." },
-  { id: "THF", name: "Thief", abbr: "THF", category: "stealth", color: "#54c47a", desc: "Fast strikes and pilfering." },
+  { id: "VAN", name: "Vanguard", abbr: "VAN", role: "tank", style: "melee", category: "swordplay", color: "#d9704a", desc: "Sword tank — hold the line." },
+  { id: "SAN", name: "Sanctifier", abbr: "SAN", role: "healer", style: "magic", category: "devotion", color: "#e8c95a", desc: "Wand healer — mend and cleanse." },
+  { id: "BRW", name: "Brawler", abbr: "BRW", role: "dps", style: "melee", category: "swordplay", color: "#d9704a", desc: "Knuckles — close-range melee DPS." },
+  { id: "HEX", name: "Hexwright", abbr: "HEX", role: "dps", style: "magic", category: "sorcery", color: "#7a6ff0", desc: "Staff — offensive magic DPS." },
+  { id: "CUT", name: "Cutpurse", abbr: "CUT", role: "dps", style: "melee", category: "stealth", color: "#54c47a", desc: "Daggers — scout melee DPS." },
+  { id: "CAN", name: "Cantor", abbr: "CAN", role: "support", style: "magic", category: "sorcery", color: "#7a6ff0", desc: "Wand — party buffs and tempo." },
 ] as const;
 
-/** @deprecated use STARTING_JOBS */
+export const COMBO_ALIASES = [
+  { id: "spellblade", name: "Spellblade", main: "VAN", sub: "HEX", blurb: "Sword and hexfire." },
+  { id: "shadeblade", name: "Shadeblade", main: "CUT", sub: "HEX", blurb: "Dagger and dark hexes." },
+  { id: "nightveil", name: "Nightveil", main: "CUT", sub: "CAN", blurb: "Scout cuts under song." },
+  { id: "sigilblade", name: "Sigilblade", main: "VAN", sub: "CAN", blurb: "Shield wall paced by hymns." },
+  { id: "leybinder", name: "Leybinder", main: "HEX", sub: "CAN", blurb: "Hexes woven with tempo." },
+  { id: "lorekeeper", name: "Lorekeeper", main: "SAN", sub: "CAN", blurb: "Healing craft and support arts." },
+  { id: "conjurer", name: "Conjurer", main: "HEX", sub: "SAN", blurb: "Arcane fury with restoration." },
+  { id: "reveler", name: "Reveler", main: "CAN", sub: "CUT", blurb: "Songs into sudden cuts." },
+  { id: "privateer", name: "Privateer", main: "CUT", sub: "BRW", blurb: "Harbor scrap and knuckles." },
+  { id: "beastward", name: "Beastward", main: "BRW", sub: "CAN", blurb: "Fists paced by rhythm." },
+  { id: "echoist", name: "Echoist", main: "CAN", sub: "HEX", blurb: "Hymns answered by hexfire." },
+  { id: "artificer", name: "Artificer", main: "BRW", sub: "SAN", blurb: "Muscle with emergency mending." },
+  { id: "marksman", name: "Marksman", main: "CUT", sub: "LNC", blurb: "Scout precision and reach." },
+  { id: "paladin", name: "Wardkeeper", main: "AEG", sub: "SAN", blurb: "Hammer and sacred wards." },
+  { id: "berserker", name: "Berserker", main: "RVR", sub: "BRW", blurb: "Axe and raw fists." },
+  { id: "duelist", name: "Duelist", main: "RON", sub: "CUT", blurb: "Katana guided by scout cunning." },
+] as const;
+
 export const WEAPONS = [
-  { id: "sword", name: "Sword", color: 0xd9704a, category: "swordplay", desc: "Heavy blows. Trains Swordplay." },
-  { id: "spear", name: "Spear", color: 0xd9704a, category: "swordplay", desc: "Reach and thrust. Trains Swordplay." },
-  { id: "dagger", name: "Dagger", color: 0x54c47a, category: "stealth", desc: "Fast strikes. Trains Stealth." },
-  { id: "staff", name: "Staff", color: 0x7a6ff0, category: "sorcery", desc: "Boosts Sorcery magic." },
-  { id: "mace", name: "Mace", color: 0xe8c95a, category: "devotion", desc: "Boosts Devotion magic." },
+  { id: "sword", name: "Sword", color: 0xd9704a, category: "swordplay", style: "melee", desc: "Vanguard steel." },
+  { id: "hammer", name: "Hammer", color: 0xd9704a, category: "swordplay", style: "melee", desc: "Aegis crushing blows." },
+  { id: "axe", name: "Axe", color: 0xd9704a, category: "swordplay", style: "melee", desc: "Reaver cleaves." },
+  { id: "spear", name: "Spear", color: 0xd9704a, category: "swordplay", style: "ranged", desc: "Lancer reach and leaps." },
+  { id: "katana", name: "Katana", color: 0xd9704a, category: "swordplay", style: "melee", desc: "Ronin drawn cuts." },
+  { id: "knuckles", name: "Knuckles", color: 0xd9704a, category: "swordplay", style: "melee", desc: "Brawler fists." },
+  { id: "staff", name: "Staff", color: 0x7a6ff0, category: "sorcery", style: "magic", desc: "Hexwright focus." },
+  { id: "wand", name: "Wand", color: 0xe8c95a, category: "devotion", style: "magic", desc: "Sanctifier and Cantor implement." },
+  { id: "dagger", name: "Dagger", color: 0x54c47a, category: "stealth", style: "melee", desc: "Cutpurse blades." },
 ] as const;
 
 export function jobColor(jobId: string): string {
@@ -598,42 +725,42 @@ export function jobColor(jobId: string): string {
 }
 
 export function jobLabel(jobId: string): string {
-  return ALL_JOBS.find((j) => j.id === jobId)?.abbr ?? jobId;
+  return ALL_JOBS.find((j) => j.id === jobId)?.name ?? jobId;
+}
+
+export function comboDisplayName(main: string, sub?: string): string {
+  if (sub) {
+    const alias = COMBO_ALIASES.find((a) => a.main === main && a.sub === sub);
+    if (alias) return alias.name;
+    return `${jobLabel(main)} / ${jobLabel(sub)}`;
+  }
+  return jobLabel(main);
 }
 
 export const CATEGORIES = [
   { id: "swordplay", name: "Swordplay", color: "#d9704a", weapon: "sword" },
   { id: "stealth", name: "Stealth", color: "#54c47a", weapon: "dagger" },
   { id: "sorcery", name: "Sorcery", color: "#7a6ff0", weapon: "staff" },
-  { id: "devotion", name: "Devotion", color: "#e8c95a", weapon: "mace" },
+  { id: "devotion", name: "Devotion", color: "#e8c95a", weapon: "wand" },
 ] as const;
 
-const CATEGORY_WEAPONS: Record<string, readonly string[]> = {
-  swordplay: ["sword"],
-  stealth: ["dagger"],
-  sorcery: ["staff"],
-  devotion: ["mace"],
-};
-
-/** Per-job weapon allowlists (hybrid jobs). Others use their category default. */
-const JOB_WEAPON_OVERRIDES: Record<string, readonly string[]> = {
-  PLD: ["sword", "mace"],
-  DRK: ["sword", "mace"],
-  DRG: ["spear", "sword"],
-  BLU: ["sword", "dagger", "staff"],
-  RUN: ["sword", "mace"],
-  COR: ["dagger", "sword"],
-  GEO: ["staff", "mace"],
-  RDM: ["mace", "sword", "staff"],
-  SCH: ["mace", "staff"],
-  PUP: ["mace", "sword"],
+/** Per-class primary (and optional extra) weapons. */
+const JOB_WEAPONS: Record<string, readonly string[]> = {
+  VAN: ["sword"],
+  AEG: ["hammer"],
+  BRW: ["knuckles"],
+  RVR: ["axe"],
+  LNC: ["spear"],
+  RON: ["katana"],
+  HEX: ["staff"],
+  SAN: ["wand"],
+  CAN: ["wand", "staff"],
+  CUT: ["dagger"],
 };
 
 export function jobAllowedWeapons(jobId: string | undefined): readonly string[] {
   if (!jobId) return [];
-  if (JOB_WEAPON_OVERRIDES[jobId]) return JOB_WEAPON_OVERRIDES[jobId];
-  const cat = ALL_JOBS.find((j) => j.id === jobId)?.category;
-  return cat ? (CATEGORY_WEAPONS[cat] ?? []) : [];
+  return JOB_WEAPONS[jobId] ?? [];
 }
 
 export function jobAllowsWeapon(jobId: string | undefined, weaponType: string | undefined): boolean {
@@ -703,10 +830,31 @@ export function skillWeaponMatches(sk: SkillInfo, profile: ProfileInfo): boolean
   return weaponTypeForSkill(sk, profile) === sk.weapon_req;
 }
 
+export function isFriendlyEntity(e: { is_player?: boolean; is_ally?: boolean }): boolean {
+  return !!e.is_player || !!e.is_ally;
+}
+
+export function isEnemyEntity(e: { is_player?: boolean; is_ally?: boolean }): boolean {
+  return !e.is_player && !e.is_ally;
+}
+
+export function captureEligible(e: { alive?: boolean; capturable?: boolean; hp: number; max_hp: number }): boolean {
+  if (!e.alive || !e.capturable || e.max_hp < 1 || e.hp < 1) return false;
+  return e.hp / e.max_hp < 0.2;
+}
+
 export type { HotbarSlotId } from "./input/keybinds";
 export { HOTBAR_SLOTS, HOTBAR_ROWS } from "./input/keybinds";
 
-export type WindowId = "character" | "equipment" | "inventory" | "skills" | "social" | "map";
+export type WindowId =
+  | "character"
+  | "equipment"
+  | "inventory"
+  | "skills"
+  | "social"
+  | "map"
+  | "house_storage"
+  | "pets";
 
 export function weaponColor(weapon: string | undefined): number {
   return WEAPONS.find((w) => w.id === weapon)?.color ?? 0xcccccc;

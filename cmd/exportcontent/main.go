@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 type jobSkillTreeExport struct {
@@ -20,6 +20,8 @@ type jobExport struct {
 	ID             string               `json:"id"`
 	Name           string               `json:"name"`
 	Abbr           string               `json:"abbr"`
+	Role           string               `json:"role"`
+	Style          string               `json:"style"`
 	Category       string               `json:"category"`
 	Weapon         string               `json:"weapon"`
 	AllowedWeapons []string             `json:"allowed_weapons,omitempty"`
@@ -158,6 +160,8 @@ func exportJobs() []jobExport {
 			ID:             string(def.ID),
 			Name:           def.Name,
 			Abbr:           def.Abbr,
+			Role:           string(def.Role),
+			Style:          string(def.Style),
 			Category:       string(def.Category),
 			Weapon:         string(def.Weapon),
 			AllowedWeapons: allowed,

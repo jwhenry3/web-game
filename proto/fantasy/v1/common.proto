@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package fantasy.v1;
 
-option go_package = "ffv-web-game/internal/protocol/pb";
+option go_package = "clara-mundi/internal/protocol/pb";
 
 import "google/protobuf/struct.proto";
 
@@ -91,6 +91,13 @@ message VisitedSavePoint {
   bool home = 4;
 }
 
+message PetRecord {
+  string id = 1;
+  string kind = 2;
+  string name = 3;
+  int32 level = 4;
+}
+
 message ProfileInfo {
   string name = 1;
   int32 level = 2;
@@ -113,6 +120,12 @@ message ProfileInfo {
   string save_point_name = 19;
   repeated VisitedSavePoint visited_save_points = 20;
   map<string, string> keybinds = 21;
+  string camp_skin = 22;
+  repeated Item house_storage = 23;
+  int32 house_storage_capacity = 24;
+  repeated PetRecord pets = 25;
+  string follow_pet_id = 26;
+  string battle_pet_id = 27;
 }
 
 message OverworldMap {
@@ -184,6 +197,41 @@ message WorldPlayer {
   string casting_skill_id = 15;
   int32 cast_time_ms = 16;
   int64 cast_ends_at = 17;
+  bool in_house = 18;
+  string house_owner = 19;
+}
+
+message WorldCamp {
+  string owner_name = 1;
+  string owner_id = 2;
+  double x = 3;
+  double y = 4;
+  string skin = 5;
+}
+
+message HouseFurniture {
+  string id = 1;
+  int32 col = 2;
+  int32 row = 3;
+  string owner = 4;
+  Item item = 5;
+}
+
+message HousePlayer {
+  string id = 1;
+  string name = 2;
+  double x = 3;
+  double y = 4;
+  string facing = 5;
+  bool owner = 6;
+}
+
+message HousePOI {
+  string id = 1;
+  string kind = 2;
+  string name = 3;
+  double x = 4;
+  double y = 5;
 }
 
 message WorldNPC {
@@ -240,6 +288,9 @@ message BattleEntity {
   string cast_target_id = 18;
   double cast_progress = 19;
   int32 cast_time_ms = 20;
+  bool is_ally = 21;
+  string owner_id = 22;
+  bool capturable = 23;
 }
 
 message ActionResult {
@@ -331,4 +382,8 @@ message RTBattleEntity {
   string cast_target_id = 16;
   double cast_progress = 17;
   int32 cast_time_ms = 18;
+  bool is_ally = 19;
+  string owner_id = 20;
+  bool capturable = 21;
+  int32 level = 22;
 }

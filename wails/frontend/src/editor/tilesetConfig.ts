@@ -12,7 +12,7 @@ export interface ImportedTileset {
   roles: Record<string, TileRole>;
 }
 
-const STORAGE_KEY = "ffv_editor_tileset";
+const STORAGE_KEY = "cm_editor_tileset";
 
 export function loadTileset(): ImportedTileset | null {
   try {
@@ -27,6 +27,33 @@ export function loadTileset(): ImportedTileset | null {
 export function saveTileset(config: ImportedTileset | null) {
   if (!config) localStorage.removeItem(STORAGE_KEY);
   else localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+}
+
+/** Bundled Pipoya BaseChip (firstgid 577) for Game Designer when nothing is imported yet. */
+export async function loadDefaultPipoyaTileset(): Promise<ImportedTileset> {
+  const url = "/assets/tilesets/pipoya/BaseChip_pipo.png";
+  const img = await loadImage(url);
+  const tileWidth = 32;
+  const tileHeight = 32;
+  const columns = Math.max(1, Math.floor(img.width / tileWidth));
+  const rows = Math.max(1, Math.floor(img.height / tileHeight));
+  return {
+    id: "pipoya-basechip",
+    name: "BaseChip_pipo",
+    imageDataUrl: url,
+    tileWidth,
+    tileHeight,
+    columns,
+    tileCount: columns * rows,
+    firstGid: 577,
+    roles: {
+      "0": "grass",
+      "5": "dirt",
+      "256": "cliff",
+      "116": "cobble",
+      "176": "water",
+    },
+  };
 }
 
 export async function importTilesetFromFile(file: File): Promise<ImportedTileset> {
@@ -46,7 +73,13 @@ export async function importTilesetFromFile(file: File): Promise<ImportedTileset
     columns,
     tileCount,
     firstGid: 577,
-    roles: {},
+    roles: {
+      "0": "grass",
+      "5": "dirt",
+      "256": "cliff",
+      "116": "cobble",
+      "176": "water",
+    },
   };
 }
 

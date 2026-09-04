@@ -609,7 +609,7 @@ export function MapEditorScreen() {
         width,
         height,
         properties: [
-          { name: "destMap", type: "string", value: "north" },
+          { name: "destMap", type: "string", value: "timberroad" },
           { name: "destX", type: "float", value: 100 },
           { name: "destY", type: "float", value: 100 },
         ],
@@ -1472,7 +1472,7 @@ function EditorWorkspaceNav({
     { id: "entities", label: "Entities" },
     { id: "items", label: "Items" },
     { id: "quests", label: "Quests" },
-    { id: "jobs", label: "Jobs" },
+    { id: "jobs", label: "Classes" },
     { id: "skills", label: "Skills" },
     { id: "drops", label: "Drops" },
   ];
@@ -1490,7 +1490,7 @@ function EditorWorkspaceNav({
           </button>
         ))}
       </div>
-      <button type="button" className="xiv-btn map-editor-workspace-exit" onClick={onExit}>
+      <button type="button" className="cm-btn map-editor-workspace-exit" onClick={onExit}>
         Exit
       </button>
     </div>

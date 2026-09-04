@@ -3,7 +3,8 @@ package combatrealtime
 import (
 	"time"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 type activeCast struct {
@@ -15,6 +16,8 @@ type activeCast struct {
 type entity struct {
 	id, name, kind string
 	isPlayer       bool
+	isAlly         bool
+	ownerClientID  string
 	x, y           float64
 	facingX        float64
 	facingY        float64
@@ -27,6 +30,8 @@ type entity struct {
 	level          int
 	alive          bool
 	targetID       string
+	capturable     bool
+	queuedAction   *protocol.ActionPayload
 
 	skillLevels      map[string]int
 	mainJob          game.JobID
@@ -40,6 +45,14 @@ type entity struct {
 	attackCD   time.Time
 	avoidSide  float64 // -1 or +1, stable detour around other NPCs
 	dropPoolID string
+}
+
+func (e *entity) isFriendly() bool {
+	return e.isPlayer || e.isAlly
+}
+
+func (e *entity) isEnemy() bool {
+	return !e.isPlayer && !e.isAlly
 }
 
 func (e *entity) gcdProgress(now time.Time) float64 {

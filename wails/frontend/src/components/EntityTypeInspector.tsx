@@ -60,7 +60,7 @@ function ReadonlyId({ label = "Unique ID", value }: { label?: string; value: str
   return (
     <>
       <label className="field-label">{label}</label>
-      <input className="xiv-input" value={value} readOnly disabled title="Assigned automatically" />
+      <input className="cm-input" value={value} readOnly disabled title="Assigned automatically" />
     </>
   );
 }
@@ -185,7 +185,7 @@ export function EntityTypeInspector({
         <ReadonlyId value={uniqueId} />
         <label className="field-label">Display name</label>
         <input
-          className="xiv-input"
+          className="cm-input"
           value={propString(npc.properties, "name")}
           onChange={(e) => patchProp("name", "string", e.target.value)}
         />
@@ -197,7 +197,7 @@ export function EntityTypeInspector({
             <EnemySpritePicker value={enemyKind} onChange={selectEnemySprite} />
             <label className="field-label">Base level</label>
             <input
-              className="xiv-input"
+              className="cm-input"
               type="number"
               min={1}
               value={npcLevel}
@@ -218,7 +218,7 @@ export function EntityTypeInspector({
               <div>
                 <label className="field-label">Min enemies</label>
                 <input
-                  className="xiv-input"
+                  className="cm-input"
                   type="number"
                   min={1}
                   max={8}
@@ -234,7 +234,7 @@ export function EntityTypeInspector({
               <div>
                 <label className="field-label">Max enemies</label>
                 <input
-                  className="xiv-input"
+                  className="cm-input"
                   type="number"
                   min={1}
                   max={8}
@@ -259,7 +259,7 @@ export function EntityTypeInspector({
                   <div key={i} className="map-editor-encounter-row">
                     <label className="field-label">Enemy type</label>
                     <select
-                      className="xiv-input"
+                      className="cm-input"
                       value={kind}
                       onChange={(e) => {
                         const nextKind = e.target.value as EnemyKind;
@@ -279,7 +279,7 @@ export function EntityTypeInspector({
                       <div>
                         <label className="field-label">Lv min</label>
                         <input
-                          className="xiv-input"
+                          className="cm-input"
                           type="number"
                           min={1}
                           value={row.levelMin}
@@ -291,7 +291,7 @@ export function EntityTypeInspector({
                       <div>
                         <label className="field-label">Lv max</label>
                         <input
-                          className="xiv-input"
+                          className="cm-input"
                           type="number"
                           min={1}
                           value={row.levelMax}
@@ -312,7 +312,7 @@ export function EntityTypeInspector({
                     {encounter.enemies.length > 1 && (
                       <button
                         type="button"
-                        className="xiv-btn"
+                        className="cm-btn"
                         onClick={() =>
                           writeEncounter({
                             ...encounter,
@@ -328,7 +328,7 @@ export function EntityTypeInspector({
               })}
               <button
                 type="button"
-                className="xiv-btn"
+                className="cm-btn"
                 onClick={() =>
                   writeEncounter({
                     ...encounter,
@@ -347,7 +347,7 @@ export function EntityTypeInspector({
               <>
                 <label className="field-label">Patrol region</label>
                 <input
-                  className="xiv-input"
+                  className="cm-input"
                   value={propString(npc.properties, "region")}
                   onChange={(e) => patchProp("region", "string", e.target.value)}
                 />
@@ -377,14 +377,14 @@ export function EntityTypeInspector({
             <div className="map-editor-group-label">Dialogue</div>
             <label className="field-label">Greeting</label>
             <input
-              className="xiv-input"
+              className="cm-input"
               value={propString(npc.properties, "greeting")}
               onChange={(e) => patchProp("greeting", "string", e.target.value)}
               placeholder="First line when talking to this NPC"
             />
             <label className="field-label">Dialogue script</label>
             <textarea
-              className="xiv-input map-editor-textarea"
+              className="cm-input map-editor-textarea"
               rows={4}
               value={propString(npc.properties, "dialogue")}
               onChange={(e) => patchProp("dialogue", "string", e.target.value)}
@@ -396,7 +396,7 @@ export function EntityTypeInspector({
                 <div className="map-editor-group-label">Shop</div>
                 <label className="field-label">Shop inventory key</label>
                 <input
-                  className="xiv-input"
+                  className="cm-input"
                   value={propString(npc.properties, "shopId")}
                   onChange={(e) => patchProp("shopId", "string", e.target.value)}
                   placeholder="e.g. greenwood_general"
@@ -416,7 +416,7 @@ export function EntityTypeInspector({
                 <div className="map-editor-group-label">Quests</div>
                 <label className="field-label">Quest set ID</label>
                 <input
-                  className="xiv-input"
+                  className="cm-input"
                   value={propString(npc.properties, "questSetId")}
                   onChange={(e) => patchProp("questSetId", "string", e.target.value)}
                   placeholder="storyline / pool id"
@@ -437,7 +437,7 @@ export function EntityTypeInspector({
                 <ReadonlyId label="Storage ID" value={propString(npc.properties, "storageId") || uniqueId} />
                 <label className="field-label">Storage type</label>
                 <select
-                  className="xiv-input"
+                  className="cm-input"
                   value={propString(npc.properties, "storageType", "personal")}
                   onChange={(e) => patchProp("storageType", "string", e.target.value)}
                 >
@@ -458,7 +458,7 @@ export function EntityTypeInspector({
             )}
 
             {serviceRoles.includes("job_master") && (
-              <p className="dim map-editor-role-hint">Job Master opens the job change dialog on interact.</p>
+              <p className="dim map-editor-role-hint">Class Master opens the class change dialog on interact.</p>
             )}
           </>
         )}
@@ -473,7 +473,7 @@ export function EntityTypeInspector({
         <ReadonlyId value={propString(obj.properties, "id", obj.name)} />
         <label className="field-label">Display name</label>
         <input
-          className="xiv-input"
+          className="cm-input"
           value={propString(obj.properties, "name")}
           onChange={(e) => patchProp("name", "string", e.target.value)}
         />
@@ -486,7 +486,7 @@ export function EntityTypeInspector({
         />
         <label className="field-label">Trigger mode</label>
         <select
-          className="xiv-input"
+          className="cm-input"
           value={propString(obj.properties, "triggerMode", "interact")}
           onChange={(e) => patchProp("triggerMode", "string", e.target.value)}
         >
@@ -506,7 +506,7 @@ export function EntityTypeInspector({
         </label>
         <label className="field-label">Prompt / greeting</label>
         <textarea
-          className="xiv-input map-editor-textarea"
+          className="cm-input map-editor-textarea"
           rows={3}
           value={propString(obj.properties, "greeting")}
           onChange={(e) => patchProp("greeting", "string", e.target.value)}
@@ -523,7 +523,7 @@ export function EntityTypeInspector({
         <ReadonlyId value={propString(obj.properties, "id", obj.name)} />
         <label className="field-label">Display name</label>
         <input
-          className="xiv-input"
+          className="cm-input"
           value={propString(obj.properties, "name")}
           onChange={(e) => patchProp("name", "string", e.target.value)}
         />
@@ -536,7 +536,7 @@ export function EntityTypeInspector({
         />
         <label className="field-label">Quantity</label>
         <input
-          className="xiv-input"
+          className="cm-input"
           type="number"
           min={1}
           value={propNumber(obj.properties, "quantity", 1)}
@@ -544,7 +544,7 @@ export function EntityTypeInspector({
         />
         <label className="field-label">Pickup mode</label>
         <select
-          className="xiv-input"
+          className="cm-input"
           value={propString(obj.properties, "pickupMode", "interact")}
           onChange={(e) => patchProp("pickupMode", "string", e.target.value)}
         >
@@ -556,7 +556,7 @@ export function EntityTypeInspector({
         </select>
         <label className="field-label">Respawn (seconds)</label>
         <input
-          className="xiv-input"
+          className="cm-input"
           type="number"
           min={0}
           value={propNumber(obj.properties, "respawnSec", 0)}

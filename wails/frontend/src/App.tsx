@@ -4,7 +4,9 @@ import { AuthScreen } from "./components/AuthScreen";
 import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
 import { PhaserGame } from "./phaser/PhaserGame";
+import { EntityOverlays } from "./components/EntityOverlays";
 import { WorldHUD } from "./components/WorldHUD";
+import { HouseHUD } from "./components/HouseHUD";
 import { InviteToasts } from "./components/InviteToasts";
 import { pluginHost } from "./core/plugins/pluginHost";
 import { SidePanel } from "./components/SidePanel";
@@ -13,6 +15,8 @@ import { WorldSkillDialogs } from "./components/WorldSkillDialogs";
 import { NpcDialog } from "./components/NpcDialog";
 import { JobChangeDialog } from "./components/JobChangeDialog";
 import { Hotbar } from "./components/Hotbar";
+import { HouseToolbar } from "./components/HouseToolbar";
+import { HousePlaceLayer } from "./components/HousePlaceLayer";
 import { GameHotkeys } from "./components/GameHotkeys";
 import { MainMenu } from "./components/MainMenu";
 import { ExpBar } from "./components/ExpBar";
@@ -59,8 +63,8 @@ function AppBody() {
   if (booting) {
     return (
       <div className="login-screen">
-        <div className="xiv-window login-panel">
-          <div className="xiv-body">
+        <div className="cm-window login-panel">
+          <div className="cm-body">
             <p className="subtitle">Loading…</p>
           </div>
         </div>
@@ -100,9 +104,17 @@ function AppBody() {
       <div className="game-layout">
         <div className="game-stage">
           <PhaserGame />
-          {screen === combat.battleScreen ? <CombatHUD /> : <WorldHUD />}
+          <EntityOverlays />
+          {screen === combat.battleScreen ? (
+            <CombatHUD />
+          ) : screen === "house" ? (
+            <HouseHUD />
+          ) : (
+            <WorldHUD />
+          )}
           <SidePanel />
-          <Hotbar />
+          {screen === "house" ? <HouseToolbar /> : <Hotbar />}
+          {screen === "house" && <HousePlaceLayer />}
           <ExpBar />
           <WindowBar />
           <GameWindows />

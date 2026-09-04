@@ -16,11 +16,11 @@ Proxy  (:8080)     internal/proxy
    ├──────────────┬──────────────┐
    ▼              ▼              ▼
 Map node       Map node       Map node     internal/mapnode
-(greenwood)    (north)        (cave, …)
+(greenwood)    (frostkeep)    (tidecourt, …)
    │              │              │
    Hub            Hub            Hub         internal/server
    Overworld      Overworld      Overworld   internal/game
-   Combat plugin  Combat plugin  …
+   Combat plugin  Combat plugin  …           (18 stock maps; see GDD)
 ```
 
 Today all map nodes run **in-process** inside `cmd/server`. The same APIs can later host remote map processes; transfer validation stays on the proxy.

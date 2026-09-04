@@ -16,30 +16,30 @@ function PlayerRow({
 }) {
   const isSelf = p.id === selfId;
   return (
-    <div className={`xiv-social-row ${isSelf ? "self" : ""}`}>
-      <div className="xiv-social-row-main">
-        <span className="xiv-party-name">{p.name}</span>
+    <div className={`cm-social-row ${isSelf ? "self" : ""}`}>
+      <div className="cm-social-row-main">
+        <span className="cm-party-name">{p.name}</span>
         <span className="dim">
           Lv{p.level} {p.weapon || "—"}
         </span>
-        {p.in_battle && <span className="xiv-tag">In Combat</span>}
+        {p.in_battle && <span className="cm-tag">In Combat</span>}
       </div>
-      {actions && <div className="xiv-social-row-actions">{actions}</div>}
+      {actions && <div className="cm-social-row-actions">{actions}</div>}
     </div>
   );
 }
 
 function FriendRow({ f, actions }: { f: FriendInfo; actions?: React.ReactNode }) {
   return (
-    <div className="xiv-social-row">
-      <div className="xiv-social-row-main">
-        <span className="xiv-party-name">{f.name}</span>
+    <div className="cm-social-row">
+      <div className="cm-social-row-main">
+        <span className="cm-party-name">{f.name}</span>
         <span className="dim">
           {f.online ? `Lv${f.level} ${f.weapon || "—"}` : "Offline"}
         </span>
-        {f.online && f.in_battle && <span className="xiv-tag">In Combat</span>}
+        {f.online && f.in_battle && <span className="cm-tag">In Combat</span>}
       </div>
-      {actions && <div className="xiv-social-row-actions">{actions}</div>}
+      {actions && <div className="cm-social-row-actions">{actions}</div>}
     </div>
   );
 }
@@ -75,8 +75,8 @@ export function SocialPane() {
   const inviteDisabled = (targetId: string) => inParty.has(targetId) || targetId === selfId;
 
   return (
-    <div className="xiv-social">
-      <div className="xiv-social-tabs">
+    <div className="cm-social">
+      <div className="cm-social-tabs">
         {(
           [
             ["search", "Search"],
@@ -84,27 +84,27 @@ export function SocialPane() {
             ["party", "Party"],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} className={`xiv-tab ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>
+          <button key={id} className={`cm-tab ${tab === id ? "on" : ""}`} onClick={() => setTab(id)}>
             {label}
           </button>
         ))}
       </div>
 
       {tab === "search" && (
-        <div className="xiv-social-pane">
+        <div className="cm-social-pane">
           <input
-            className="xiv-input"
+            className="cm-input"
             value={query}
             maxLength={40}
             placeholder="Search online heroes…"
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div className="xiv-search-meta dim">
+          <div className="cm-search-meta dim">
             {query.trim()
               ? `${matches.length} match${matches.length === 1 ? "" : "es"}`
               : `${matches.length} online`}
           </div>
-          <div className="xiv-social-list">
+          <div className="cm-social-list">
             {matches.length === 0 && <div className="dim">No heroes found.</div>}
             {matches.map((p) => (
               <PlayerRow
@@ -116,16 +116,16 @@ export function SocialPane() {
                     <>
                       {!friendNames.has(p.name.toLowerCase()) &&
                         (pendingOutgoing.has(p.name.toLowerCase()) ? (
-                          <button className="xiv-btn" disabled>
+                          <button className="cm-btn" disabled>
                             Pending
                           </button>
                         ) : (
-                          <button className="xiv-btn" onClick={() => net.addFriend(p.name)}>
+                          <button className="cm-btn" onClick={() => net.addFriend(p.name)}>
                             Friend
                           </button>
                         ))}
                       <button
-                        className="xiv-btn"
+                        className="cm-btn"
                         disabled={inviteDisabled(p.id) || (!!party && !isLeader)}
                         onClick={() => net.partyInvite(p.name)}
                       >
@@ -141,9 +141,9 @@ export function SocialPane() {
       )}
 
       {tab === "friends" && (
-        <div className="xiv-social-pane">
-          <div className="xiv-search-meta dim">{friends.length} friend{friends.length === 1 ? "" : "s"}</div>
-          <div className="xiv-social-list">
+        <div className="cm-social-pane">
+          <div className="cm-search-meta dim">{friends.length} friend{friends.length === 1 ? "" : "s"}</div>
+          <div className="cm-social-list">
             {friends.length === 0 && <div className="dim">Use Search to add friends.</div>}
             {friends.map((f) => {
               const wp = online.find((p) => p.name.toLowerCase() === f.name.toLowerCase());
@@ -155,14 +155,14 @@ export function SocialPane() {
                     <>
                       {wp && (
                         <button
-                          className="xiv-btn"
+                          className="cm-btn"
                           disabled={inviteDisabled(wp.id) || (!!party && !isLeader)}
                           onClick={() => net.partyInvite(wp.name)}
                         >
                           Invite
                         </button>
                       )}
-                      <button className="xiv-btn" onClick={() => net.removeFriend(f.name)}>
+                      <button className="cm-btn" onClick={() => net.removeFriend(f.name)}>
                         Remove
                       </button>
                     </>
@@ -175,36 +175,36 @@ export function SocialPane() {
       )}
 
       {tab === "party" && (
-        <div className="xiv-social-pane">
+        <div className="cm-social-pane">
           {!party ? (
             <div className="dim">No party. Invite a friend from Search or Friends.</div>
           ) : (
             <>
-              <div className="xiv-search-meta dim">
+              <div className="cm-search-meta dim">
                 {party.members.length}/{4} members · {isLeader ? "You lead" : "Party"}
               </div>
-              <div className="xiv-social-list">
+              <div className="cm-social-list">
                 {party.members.map((m: PartyMember) => (
-                  <div key={m.id} className={`xiv-social-row ${m.id === selfId ? "self" : ""}`}>
-                    <div className="xiv-social-row-main">
-                      <span className="xiv-party-name">
+                  <div key={m.id} className={`cm-social-row ${m.id === selfId ? "self" : ""}`}>
+                    <div className="cm-social-row-main">
+                      <span className="cm-party-name">
                         {m.name}
                         {m.leader ? " ★" : ""}
                       </span>
                       <span className="dim">
                         Lv{m.level} {m.weapon || "—"}
                       </span>
-                      {m.in_battle && <span className="xiv-tag">In Combat</span>}
+                      {m.in_battle && <span className="cm-tag">In Combat</span>}
                     </div>
                     {isLeader && m.id !== selfId && (
-                      <button className="xiv-btn" onClick={() => net.partyKick(m.id)}>
+                      <button className="cm-btn" onClick={() => net.partyKick(m.id)}>
                         Remove
                       </button>
                     )}
                   </div>
                 ))}
               </div>
-              <button className="xiv-btn wide" onClick={() => net.partyLeave()}>
+              <button className="cm-btn wide" onClick={() => net.partyLeave()}>
                 Leave Party
               </button>
               <p className="hint">Any party member can start fights. Nearby allies are prompted to join.</p>

@@ -61,7 +61,7 @@ func LoadBaseChipConfig(path string) (*BaseChipConfig, error) {
 		ImageHeight:   raw.Image.Height,
 		WaterTiles:    map[int]bool{},
 		CollidesTiles: map[int]bool{},
-		TreeTiles:     []int{8, 9, 10, 17, 33, 34},
+		TreeTiles:     []int{8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 32, 33, 34, 35},
 	}
 	for _, t := range raw.TerrainTypes.Terrains {
 		cfg.TerrainCenters = append(cfg.TerrainCenters, t.Tile)
@@ -79,6 +79,19 @@ func LoadBaseChipConfig(path string) (*BaseChipConfig, error) {
 					cfg.CollidesTiles[id] = true
 				}
 			}
+		}
+	}
+	if len(cfg.TerrainCenters) == 0 {
+		cfg.TerrainCenters = []int{BaseChipLocalGrassFill, BaseChipLocalDirtFill, BaseChipLocalStoneFill, BaseChipLocalCobbleFill}
+	}
+	if len(cfg.CollidesTiles) == 0 {
+		cfg.CollidesTiles[BaseChipLocalStoneFill] = true
+		// Trunks + bushes block; canopy tops are walk-under.
+		for local := 16; local <= 23; local++ {
+			cfg.CollidesTiles[local] = true
+		}
+		for _, b := range PipoyaBushLocals {
+			cfg.CollidesTiles[b] = true
 		}
 	}
 	if len(cfg.TerrainCenters) == 0 {
@@ -165,11 +178,14 @@ func (c *BaseChipConfig) AutotileLocal(terrain int, sameN, sameE, sameS, sameW b
 func baseChipAutotileTiles(terrain int, cfg *BaseChipConfig) []int {
 	switch terrain {
 	case BaseChipTerrainGrass:
-		return []int{48, 49, 50, 51, 56, 57, 58, 59}
+		// Prefer solid fill; wang overlays (48+) are transparent transitions.
+		return []int{BaseChipLocalGrassFill, 1, 2, BaseChipLocalGrassWang}
 	case BaseChipTerrainDirt:
-		return []int{112, 113, 114, 115, 120, 121, 122, 123}
+		return []int{BaseChipLocalDirtFill, 115, BaseChipLocalDirtWang, 113, 114, 120, 122, 123}
 	case BaseChipTerrainCobble:
-		return []int{116, 117, 118, 119, 124, 125, 126, 127}
+		return []int{BaseChipLocalCobbleFill, 117, 118, 119, 124, 125, 126, 127}
+	case BaseChipTerrainCliff:
+		return []int{BaseChipLocalStoneFill}
 	default:
 		if terrain >= 0 && terrain < len(cfg.TerrainCenters) {
 			return []int{cfg.TerrainCenters[terrain]}
@@ -183,8 +199,20 @@ func (c *BaseChipConfig) CharFromLocalTile(local int) (byte, bool) {
 	if c.WaterTiles[local] {
 		return TileWater, true
 	}
-	if c.CollidesTiles[local] {
+	if IsPipoyaTreeLocal(local) {
+		return TileTree, true
+	}
+	if c.CollidesTiles[local] || local == BaseChipLocalStoneFill || local == BaseChipLocalCliffWang {
 		return TileRock, true
+	}
+	// Solid fills used by samplemap / genworld.
+	switch local {
+	case BaseChipLocalGrassFill, 1, 2:
+		return TileGrass, true
+	case BaseChipLocalDirtFill, BaseChipLocalDirtWang, 115:
+		return TilePath, true
+	case BaseChipLocalCobbleFill: // same local id as CobbleWang (116)
+		return TileHaven, true
 	}
 	if containsInt(baseChipAutotileTiles(BaseChipTerrainGrass, c), local) {
 		return TileGrass, true
@@ -194,9 +222,6 @@ func (c *BaseChipConfig) CharFromLocalTile(local int) (byte, bool) {
 	}
 	if containsInt(baseChipAutotileTiles(BaseChipTerrainCobble, c), local) {
 		return TileHaven, true
-	}
-	if local == c.CenterTile(BaseChipTerrainCliff) {
-		return TileRock, true
 	}
 	return TileGrass, true
 }
@@ -212,10 +237,13 @@ func containsInt(list []int, v int) bool {
 
 // CharFromGroundGID resolves a ground-layer GID using BaseChip firstgid.
 func (c *BaseChipConfig) CharFromGroundGID(firstGID, gid int) (byte, bool) {
+	if gid >= PipoyaFirstWaterAnim && gid < PipoyaFirstWaterAnim+3072 {
+		return TileWater, true
+	}
+	if gid >= PipoyaFirstGrassAnim && gid < PipoyaFirstGrassAnim+528 {
+		return TileGrass, true
+	}
 	if gid < firstGID || gid >= firstGID+c.TileCount {
-		if gid >= PipoyaFirstGrassAnim && gid < PipoyaFirstGrassAnim+528 {
-			return TileGrass, true
-		}
 		return 0, false
 	}
 	ch, ok := c.CharFromLocalTile(gid - firstGID)

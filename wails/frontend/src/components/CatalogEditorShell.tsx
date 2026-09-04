@@ -52,7 +52,7 @@ function ToolbarIconButton({
     <HoverTooltip content={label} disabled={disabled}>
       <button
         type="button"
-        className={`xiv-btn map-editor-chrome-icon-btn ${tone === "gold" ? "gold" : ""} ${tone === "danger" ? "danger" : ""}`}
+        className={`cm-btn map-editor-chrome-icon-btn ${tone === "gold" ? "gold" : ""} ${tone === "danger" ? "danger" : ""}`}
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
@@ -93,7 +93,7 @@ export function CatalogEditorToolbar({
   onDelete,
 }: CatalogEditorToolbarProps) {
   return (
-    <div className="map-editor-chrome map-editor-chrome--toolbar xiv-window">
+    <div className="map-editor-chrome map-editor-chrome--toolbar cm-window">
       <div className="map-editor-chrome-toolbar map-editor-entity-toolbar">
         {(status || error) && (
           <div className="map-editor-chrome-messages">
@@ -234,7 +234,7 @@ export function TextField({
     <>
       <FieldLabel>{label}</FieldLabel>
       <input
-        className="xiv-input"
+        className="cm-input"
         value={value}
         readOnly={readOnly}
         disabled={readOnly}
@@ -262,7 +262,7 @@ export function NumberField({
     <>
       <FieldLabel>{label}</FieldLabel>
       <input
-        className="xiv-input"
+        className="cm-input"
         type="number"
         min={min}
         step={step}
@@ -304,7 +304,7 @@ export function SelectField<T extends string>({
   return (
     <>
       <FieldLabel>{label}</FieldLabel>
-      <select className="xiv-input" value={value} onChange={(e) => onChange(e.target.value as T)}>
+      <select className="cm-input" value={value} onChange={(e) => onChange(e.target.value as T)}>
         {options.map((opt) => (
           <option key={opt.id} value={opt.id}>
             {opt.label}
@@ -329,7 +329,7 @@ export function TextAreaField({
   return (
     <>
       <FieldLabel>{label}</FieldLabel>
-      <textarea className="xiv-input map-editor-textarea" rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
+      <textarea className="cm-input map-editor-textarea" rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
     </>
   );
 }

@@ -1,8 +1,8 @@
 {
-  "name": "ffv-web-game",
+  "name": "clara-mundi",
   "private": true,
   "version": "0.1.0",
-  "description": "FF5-inspired multiplayer RPG — root scripts for Go server and Wails client",
+  "description": "Clara Mundi multiplayer RPG — root scripts for Go server and Wails client",
   "scripts": {
     "server": "go run ./cmd/server",
     "server:dev": "go run github.com/air-verse/air@latest",
@@ -19,6 +19,7 @@
     "wails:dev:standalone": "node scripts/wails-standalone.mjs",
     "build": "npm run wails:build:frontend",
     "seed:content": "node scripts/seed-content-catalogs.mjs",
+    "world:gen": "go run ./cmd/genworld",
     "test": "npm run server:test"
   }
 }

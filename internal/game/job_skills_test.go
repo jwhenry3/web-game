@@ -7,22 +7,29 @@ func TestGeneralFieldSkillsInCatalog(t *testing.T) {
 	if !ok || !ret.WorldOnly {
 		t.Fatal("return should be a world-only skill")
 	}
-	tp, ok := FindSkill(SkillIDTeleport)
+	tp, ok := FindSkill(SkillIDPort)
 	if !ok || !tp.WorldOnly {
-		t.Fatal("teleport should be a world-only skill")
+		t.Fatal("port should be a world-only skill")
 	}
-	if SkillCastTime(tp) != TeleportCastTimeMs {
-		t.Fatalf("teleport cast %d, want %d", SkillCastTime(tp), TeleportCastTimeMs)
+	camp, ok := FindSkill(SkillIDCamp)
+	if !ok || !camp.WorldOnly {
+		t.Fatal("camp should be a world-only skill")
+	}
+	if SkillCastTime(tp) != FieldCastTimeMs {
+		t.Fatalf("port cast %d, want %d", SkillCastTime(tp), FieldCastTimeMs)
+	}
+	if SkillCastTime(ret) != FieldCastTimeMs {
+		t.Fatalf("return cast %d, want %d", SkillCastTime(ret), FieldCastTimeMs)
 	}
 }
 
 func TestRootSkillID(t *testing.T) {
 	cases := map[JobID]string{
-		JobWAR: "war_heavy_swing",
-		JobBLM: "blm_fire",
-		JobBRD: "brd_minne",
-		JobWHM: "whm_cure",
-		JobTHF: "thf_steal",
+		JobVAN: "van_cuneus",
+		JobHEX: "hex_ignis_hex",
+		JobCAN: "can_carmen_tutus",
+		JobSAN: "san_sanare",
+		JobCUT: "cut_surripere",
 	}
 	for job, want := range cases {
 		if got := RootSkillID(job); got != want {

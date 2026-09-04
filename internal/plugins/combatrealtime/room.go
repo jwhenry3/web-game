@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 const (
@@ -143,6 +143,7 @@ func (r *Room) spawnEnemies(encounter game.EncounterConfig) {
 			x: 520 + float64(i*40), y: 120 + float64(i*80),
 			hp: maxHP, maxHP: maxHP, alive: true, level: enemyLevel,
 			facingX: -1, avoidSide: side, dropPoolID: entry.DropPoolID,
+			capturable: entry.Capturable,
 		})
 	}
 }
@@ -195,7 +196,7 @@ func (r *Room) Join(clientID string, profile store.Profile) {
 	slot := len(r.playerIDs(false))
 	targetID := ""
 	for _, e := range r.entities {
-		if !e.isPlayer && e.alive {
+		if !e.isPlayer && !e.isAlly && e.alive {
 			targetID = e.id
 			break
 		}
@@ -213,20 +214,66 @@ func (r *Room) Join(clientID string, profile store.Profile) {
 		skillLevels: skillLevels, unlocked: unlocked,
 		pendingSkillUses: map[string]int{},
 	})
+	r.spawnBattlePet(clientID, profile)
 	r.broadcastState()
+}
+
+func (r *Room) spawnBattlePet(ownerClientID string, profile store.Profile) {
+	if profile.BattlePetID == "" {
+		return
+	}
+	pet, ok := profile.FindPet(profile.BattlePetID)
+	if !ok {
+		return
+	}
+	petID := fmt.Sprintf("%s-pet-%s", ownerClientID, pet.ID)
+	for _, e := range r.entities {
+		if e.id == petID {
+			return
+		}
+	}
+	templates := map[string]struct{ hp, str, agi int }{
+		"goblin": {70, 9, 11}, "dire_wolf": {55, 8, 17}, "stone_imp": {95, 11, 8},
+	}
+	tpl, ok := templates[pet.Kind]
+	if !ok {
+		tpl = templates["goblin"]
+	}
+	hp, str, agi := game.PetCombatStats(tpl.hp, tpl.str, tpl.agi, pet.Level)
+	targetID := ""
+	for _, e := range r.entities {
+		if e.isEnemy() && e.alive {
+			targetID = e.id
+			break
+		}
+	}
+	slot := len(r.playerIDs(false))
+	r.entities = append(r.entities, &entity{
+		id: petID, name: pet.Name, kind: pet.Kind,
+		isAlly: true, ownerClientID: ownerClientID,
+		level: pet.Level,
+		x: 100 + float64(slot*40), y: arenaH/2 + 40,
+		hp: hp, maxHP: hp, mp: 20, maxMP: 20,
+		str: str, mag: str / 2, agi: agi,
+		alive: true, targetID: targetID, facingX: 1,
+		skillLevels: map[string]int{game.BasicAttack.ID: 1},
+		unlocked:    map[string]bool{game.BasicAttack.ID: true},
+	})
 }
 
 func (r *Room) Leave(clientID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for i, e := range r.entities {
-		if e.id == clientID {
+	for i := 0; i < len(r.entities); {
+		e := r.entities[i]
+		if e.id == clientID || (e.isAlly && e.ownerClientID == clientID) {
 			if e.isPlayer {
 				r.persistSkillUsage(e)
 			}
 			r.entities = append(r.entities[:i], r.entities[i+1:]...)
-			break
+			continue
 		}
+		i++
 	}
 	if r.ended {
 		r.dismissIfEmptyAfterLeave()
@@ -318,7 +365,49 @@ func (r *Room) tick() {
 		if !e.alive || e.isPlayer {
 			continue
 		}
-		target := r.nearestPlayer(e)
+		if e.isAlly {
+			if e.queuedAction != nil && e.gcdReady(now) {
+				act := *e.queuedAction
+				e.queuedAction = nil
+				if ev := r.resolveAction(e.id, act); ev != nil {
+					r.host.SendToClients(r.playerIDs(false), protocol.Encode(protocol.TypeRTBattleEvent, *ev))
+				}
+			}
+			target := r.nearestEnemy(e)
+			if target == nil {
+				continue
+			}
+			dx := target.x - e.x
+			dy := target.y - e.y
+			d := math.Hypot(dx, dy)
+			if d < 0.01 {
+				continue
+			}
+			e.facingX = dx / d
+			e.facingY = dy / d
+			if d <= meleeStopDist && now.After(e.attackCD) {
+				target.hp -= contactDamage
+				if target.hp <= 0 {
+					target.hp = 0
+					target.alive = false
+				}
+				e.attackCD = now.Add(enemyAttackCD)
+				ev := protocol.RTBattleEventPayload{
+					AttackerID: e.id, TargetID: target.id,
+					Damage: contactDamage, Hit: true, Success: true,
+					ActionID: game.BasicAttack.ID, ActionName: game.BasicAttack.Name,
+					Message:  fmt.Sprintf("%s struck %s", e.name, target.name),
+					Entities: r.snapshots(),
+				}
+				r.host.SendToClients(r.playerIDs(false), protocol.Encode(protocol.TypeRTBattleEvent, ev))
+			} else if d > meleeStopDist {
+				step := enemySpeed * tickInterval.Seconds()
+				e.x = clamp(e.x+dx/d*step, enemyRadius, arenaW-enemyRadius)
+				e.y = clamp(e.y+dy/d*step, enemyRadius, arenaH-enemyRadius)
+			}
+			continue
+		}
+		target := r.nearestHostile(e)
 		if target == nil {
 			continue
 		}
@@ -417,7 +506,7 @@ func (r *Room) checkEnd() {
 		}
 		if e.isPlayer {
 			playersAlive++
-		} else {
+		} else if e.isEnemy() {
 			enemiesAlive++
 		}
 	}
@@ -447,7 +536,7 @@ func (r *Room) finish(victory bool) {
 	totalXP := 40 + r.level*25
 	var pools []string
 	for _, e := range r.entities {
-		if !e.isPlayer && e.dropPoolID != "" {
+		if e.isEnemy() && e.dropPoolID != "" {
 			pools = append(pools, e.dropPoolID)
 		}
 	}
@@ -474,14 +563,16 @@ func (r *Room) snapshots() []protocol.RTBattleEntity {
 	for _, e := range r.entities {
 		ent := protocol.RTBattleEntity{
 			ID: e.id, Name: e.name, Kind: e.kind, IsPlayer: e.isPlayer,
+			IsAlly: e.isAlly, OwnerID: e.ownerClientID,
 			X: e.x, Y: e.y, HP: e.hp, MaxHP: e.maxHP, Alive: e.alive,
+			Capturable: e.capturable, HasQueuedAction: e.queuedAction != nil,
 		}
 		castSkill, castTarget, castProg, castMs := castFields(e)
 		ent.CastingSkillID = castSkill
 		ent.CastTargetID = castTarget
 		ent.CastProgress = castProg
 		ent.CastTimeMs = castMs
-		if e.isPlayer {
+		if e.isPlayer || e.isAlly {
 			ent.MP = e.mp
 			ent.MaxMP = e.maxMP
 			ent.SkillATB = e.gcdProgress(now)
@@ -524,7 +615,7 @@ func (r *Room) npcHardOverlapVec(e *entity) (float64, float64, bool) {
 	var sx, sy float64
 	deep := false
 	for _, other := range r.entities {
-		if other.id == e.id || other.isPlayer || !other.alive {
+		if other.id == e.id || other.isFriendly() || !other.alive {
 			continue
 		}
 		d := dist(e.x, e.y, other.x, other.y)
@@ -541,7 +632,7 @@ func (r *Room) npcHardOverlapVec(e *entity) (float64, float64, bool) {
 
 func (r *Room) npcBlocksPath(e *entity, fx, fy float64) bool {
 	for _, other := range r.entities {
-		if other.id == e.id || other.isPlayer || !other.alive {
+		if other.id == e.id || other.isFriendly() || !other.alive {
 			continue
 		}
 		ox := other.x - e.x
@@ -558,10 +649,30 @@ func (r *Room) npcBlocksPath(e *entity, fx, fy float64) bool {
 }
 
 func (r *Room) nearestPlayer(e *entity) *entity {
+	return r.nearestHostile(e)
+}
+
+func (r *Room) nearestHostile(e *entity) *entity {
 	var best *entity
 	bestD := math.MaxFloat64
 	for _, p := range r.entities {
-		if !p.alive || !p.isPlayer {
+		if !p.alive || !p.isFriendly() {
+			continue
+		}
+		d := dist(e.x, e.y, p.x, p.y)
+		if d < bestD {
+			bestD = d
+			best = p
+		}
+	}
+	return best
+}
+
+func (r *Room) nearestEnemy(e *entity) *entity {
+	var best *entity
+	bestD := math.MaxFloat64
+	for _, p := range r.entities {
+		if !p.alive || !p.isEnemy() {
 			continue
 		}
 		d := dist(e.x, e.y, p.x, p.y)

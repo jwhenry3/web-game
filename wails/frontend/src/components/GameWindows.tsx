@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { net } from "../net/socket";
@@ -21,10 +21,20 @@ import { ICONS } from "../ui/icons";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { SkillTooltipContent } from "../ui/tooltipContent";
 import { writeHotbarDrag } from "../ui/hotbarDrag";
+import {
+  hasItemTransfer,
+  readItemTransfer,
+  type ItemBagId,
+} from "../ui/itemTransfer";
+import type { ItemActionContext } from "../ui/itemActions";
+import { ITEM_BAG_TABS, filterItemsByBagTab, type ItemBagTab } from "../ui/itemBagTabs";
 import { ItemListRow, ItemSlot } from "./ItemBits";
 import { SocialPane } from "./SocialPane";
 import { MainMenuTrigger } from "./MainMenu";
 import { MapWindow } from "./WorldMap";
+import { PetsPane } from "./PetsPane";
+import { DraggableWindowShell } from "./DraggableWindow";
+import { useBackdropDismiss } from "../ui/backdropDismiss";
 
 const TITLES: Record<WindowId, string> = {
   character: "Character",
@@ -33,31 +43,243 @@ const TITLES: Record<WindowId, string> = {
   skills: "Actions & Traits",
   social: "Social",
   map: "Map",
+  house_storage: "House Storage",
+  pets: "Pets",
 };
 
 export function GameWindows() {
   const open = useGame((s) => s.openWindow);
   const close = useGame((s) => s.closeWindow);
   const profile = useGame((s) => s.profile);
+  const screen = useGame((s) => s.screen);
+  const onBackdrop = useBackdropDismiss(close);
 
   if (!open || !profile) return null;
 
+  if (open === "house_storage") {
+    return <HouseStorageWindows profile={profile} onClose={close} />;
+  }
+
   return (
-    <div className="xiv-window-layer" onMouseDown={close}>
-      <div className={`xiv-window ${open === "map" ? "xiv-window--map" : ""}`} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="xiv-titlebar">
-          <span className="xiv-title">{TITLES[open]}</span>
-          <button className="xiv-close" onClick={close} aria-label="Close">
-            ×
-          </button>
+    <div className="cm-window-layer" onMouseDown={onBackdrop}>
+      <DraggableWindowShell
+        resetKey={open}
+        className={`cm-window ${open === "map" ? "cm-window--map" : ""}`}
+        title={TITLES[open]}
+        onClose={close}
+        bodyClassName={`cm-body ${open === "map" ? "cm-body--map" : ""}`}
+      >
+        {open === "character" && <CharacterPane profile={profile} />}
+        {open === "equipment" && <EquipmentPane profile={profile} />}
+        {open === "inventory" && (
+          <BagPane
+            profile={profile}
+            bag="inventory"
+            items={profile.inventory}
+            transferEnabled={screen === "house"}
+          />
+        )}
+        {open === "skills" && <SkillsPane profile={profile} />}
+        {open === "social" && <SocialPane />}
+        {open === "map" && <MapWindow />}
+        {open === "pets" && <PetsPane profile={profile} />}
+      </DraggableWindowShell>
+    </div>
+  );
+}
+
+function HouseStorageWindows({ profile, onClose }: { profile: ProfileInfo; onClose: () => void }) {
+  const house = useGame((s) => s.house);
+  const storage = house?.storage ?? [];
+  const cap = house?.storage_capacity ?? 40;
+  const self = house?.players.find((p) => p.name === profile.name);
+  const tileSize = house?.tile_size ?? 32;
+  const onBackdrop = useBackdropDismiss(onClose);
+
+  if (!house?.is_owner) {
+    return (
+      <div className="cm-window-layer" onMouseDown={onBackdrop}>
+        <DraggableWindowShell resetKey="house_storage_denied" title="House Storage" onClose={onClose}>
+          <p className="hint">House storage is only available to the owner while inside the house.</p>
+        </DraggableWindowShell>
+      </div>
+    );
+  }
+
+  function placeFurniture(item: Item) {
+    if (!self) return;
+    if (equippedSlotForItem(profile.equipped, item.id)) return;
+    const col = Math.floor(self.x / tileSize);
+    const row = Math.floor(self.y / tileSize);
+    net.housePlaceFurniture(item.id, col, row);
+  }
+
+  const invCtx: ItemActionContext = {
+    bag: "inventory",
+    houseStorageOpen: true,
+    onPlaceFurniture: placeFurniture,
+  };
+  const storageCtx: ItemActionContext = { bag: "house_storage", houseStorageOpen: true };
+
+  return (
+    <div className="cm-window-layer" onMouseDown={onBackdrop}>
+      <DraggableWindowShell
+        resetKey="house_storage"
+        className="cm-window cm-window--house-storage"
+        title={`House Storage (${storage.length}/${cap})`}
+        onClose={onClose}
+        bodyClassName="cm-body cm-body--house-storage"
+      >
+        <div className="cm-house-storage-stack">
+          <section className="cm-house-storage-section">
+            <div className="cm-house-storage-section-head">Storage</div>
+            <BagPane
+              profile={profile}
+              bag="house_storage"
+              items={storage}
+              actionCtx={storageCtx}
+              transferEnabled
+              acceptFrom="inventory"
+              compact
+            />
+          </section>
+          <section className="cm-house-storage-section">
+            <div className="cm-house-storage-section-head">Inventory</div>
+            <BagPane
+              profile={profile}
+              bag="inventory"
+              items={profile.inventory}
+              actionCtx={invCtx}
+              transferEnabled
+              acceptFrom="house_storage"
+              compact
+            />
+          </section>
+          {house.furniture.length > 0 ? (
+            <div className="cm-bag-furniture">
+              <span className="dim">Placed</span>
+              {house.furniture.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className="cm-btn"
+                  title="Pick up"
+                  onClick={() => net.housePickFurniture(f.id)}
+                >
+                  {f.item.name} ✕
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="hint cm-bag-hint">Drag items between storage and inventory · double-click to transfer</p>
+          )}
         </div>
-        <div className={`xiv-body ${open === "map" ? "xiv-body--map" : ""}`}>
-          {open === "character" && <CharacterPane profile={profile} />}
-          {open === "equipment" && <EquipmentPane profile={profile} />}
-          {open === "inventory" && <InventoryPane profile={profile} />}
-          {open === "skills" && <SkillsPane profile={profile} />}
-          {open === "social" && <SocialPane />}
-          {open === "map" && <MapWindow />}
+      </DraggableWindowShell>
+    </div>
+  );
+}
+
+function applyItemTransfer(target: ItemBagId, e: DragEvent) {
+  const drag = readItemTransfer(e);
+  if (!drag || drag.source === target) return;
+  if (drag.source === "inventory" && target === "house_storage") {
+    const profile = useGame.getState().profile;
+    if (profile && equippedSlotForItem(profile.equipped, drag.itemId)) return;
+    net.houseStorageDeposit(drag.itemId, drag.qty);
+  } else if (drag.source === "house_storage" && target === "inventory") {
+    net.houseStorageWithdraw(drag.itemId, drag.qty);
+  }
+}
+
+function BagPane({
+  profile,
+  bag,
+  items,
+  actionCtx,
+  transferEnabled = false,
+  acceptFrom,
+  compact = false,
+}: {
+  profile: ProfileInfo;
+  bag: ItemBagId;
+  items: Item[];
+  actionCtx?: ItemActionContext;
+  transferEnabled?: boolean;
+  acceptFrom?: ItemBagId;
+  compact?: boolean;
+}) {
+  const locked = useGame((s) => {
+    const self = s.selfId ? s.players[s.selfId] : undefined;
+    return self?.in_battle ?? s.screen === "battle";
+  });
+  const [tab, setTab] = useState<ItemBagTab>("all");
+  const [focus, setFocus] = useState<Item | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const filtered = filterItemsByBagTab(items, tab);
+
+  const ctx: ItemActionContext = { bag, ...actionCtx };
+  const bagSlots = compact ? 24 : 32;
+  const emptySlots = Math.max(0, bagSlots - filtered.length);
+
+  function onDragOver(e: DragEvent) {
+    if (!acceptFrom || !hasItemTransfer(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(true);
+  }
+
+  function onDragLeave(e: DragEvent) {
+    const related = e.relatedTarget as Node | null;
+    if (related && e.currentTarget.contains(related)) return;
+    setDragOver(false);
+  }
+
+  function onDrop(e: DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    if (!acceptFrom) return;
+    const drag = readItemTransfer(e);
+    if (!drag || drag.source !== acceptFrom) return;
+    applyItemTransfer(bag, e);
+  }
+
+  return (
+    <div className={`cm-inv ${compact ? "cm-inv--compact" : ""}`}>
+      <div className="cm-tabs cm-tabs--bag">
+        {ITEM_BAG_TABS.map((t) => (
+          <button key={t.id} type="button" className={`cm-tab ${tab === t.id ? "on" : ""}`} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div
+        className={`cm-inv-list ${dragOver ? "cm-inv-list--drop" : ""}`}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
+        <div className="cm-item-list cm-item-list--grid-3">
+          {filtered.map((item) => (
+            <ItemListRow
+              key={item.id}
+              item={item}
+              profile={profile}
+              bag={bag}
+              locked={bag === "inventory" ? locked : false}
+              showLevel={false}
+              transferEnabled={transferEnabled}
+              actionCtx={ctx}
+              equipped={bag === "inventory" ? !!equippedSlotForItem(profile.equipped, item.id) : false}
+              equippedSlot={bag === "inventory" ? equippedSlotForItem(profile.equipped, item.id) : undefined}
+              selected={focus?.id === item.id}
+              onClick={() => setFocus(item)}
+            />
+          ))}
+          {Array.from({ length: emptySlots }, (_, i) => (
+            <div key={`empty-${i}`} className="cm-item-slot-empty" aria-hidden="true" />
+          ))}
         </div>
       </div>
     </div>
@@ -73,16 +295,16 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
   const subJobProgress = profile.jobs?.find((j) => j.id === profile.sub_job);
 
   return (
-    <div className="xiv-char">
-      <div className="xiv-char-head">
+    <div className="cm-char">
+      <div className="cm-char-head">
         <div>
-          <div className="xiv-char-name">{profile.name}</div>
+          <div className="cm-char-name">{profile.name}</div>
           <div className="dim">
             {profile.race ? `${profile.race} · ` : ""}
             Lv {profile.level}
           </div>
         </div>
-        <div className="xiv-xp">
+        <div className="cm-xp">
           <div className="ff-gauge-track">
             <div className="ff-gauge-fill xp" style={{ width: `${xpPct}%` }} />
             <span className="ff-gauge-text">
@@ -92,25 +314,25 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
         </div>
       </div>
 
-      <div className="xiv-tabs">
-        <button type="button" className={`xiv-tab ${tab === "overview" ? "on" : ""}`} onClick={() => setTab("overview")}>
+      <div className="cm-tabs">
+        <button type="button" className={`cm-tab ${tab === "overview" ? "on" : ""}`} onClick={() => setTab("overview")}>
           Overview
         </button>
-        <button type="button" className={`xiv-tab ${tab === "jobs" ? "on" : ""}`} onClick={() => setTab("jobs")}>
+        <button type="button" className={`cm-tab ${tab === "jobs" ? "on" : ""}`} onClick={() => setTab("jobs")}>
           Job Levels
         </button>
       </div>
 
       {tab === "overview" && (
         <>
-          <div className="xiv-char-jobs">
-            <div className="xiv-char-job">
+          <div className="cm-char-jobs">
+            <div className="cm-char-job">
               <span className="field-label">Main</span>
-              <span className="xiv-job-readout">{jobLabel(profile.main_job)} Lv{profile.level}</span>
+              <span className="cm-job-readout">{jobLabel(profile.main_job)} Lv{profile.level}</span>
             </div>
-            <div className="xiv-char-job">
+            <div className="cm-char-job">
               <span className="field-label">Sub</span>
-              <span className="xiv-job-readout">
+              <span className="cm-job-readout">
                 {profile.sub_job
                   ? `${jobLabel(profile.sub_job)} Lv${subJobProgress?.level ?? 1}`
                   : "None"}
@@ -118,9 +340,9 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
             </div>
           </div>
           {!canSub && <p className="hint">Sub job unlocks at main job level {profile.subjob_unlock_level}.</p>}
-          <p className="hint">Visit a Job Master in the world to change jobs.</p>
+          <p className="hint">Visit a Class Master in the world to change classes.</p>
 
-          <div className="xiv-params">
+          <div className="cm-params">
             <Param label="HP" value={stats.hp} />
             <Param label="MP" value={stats.mp} />
             <Param label="STR" value={stats.str} />
@@ -131,7 +353,7 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
       )}
 
       {tab === "jobs" && (
-        <div className="job-grid job-grid-compact xiv-char-job-grid">
+        <div className="job-grid job-grid-compact cm-char-job-grid">
           {sortedJobs.map((j) => {
             const isMain = j.id === profile.main_job;
             const isSub = j.id === profile.sub_job;
@@ -163,7 +385,7 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
 
 function Param({ label, value }: { label: string; value: number }) {
   return (
-    <div className="xiv-param">
+    <div className="cm-param">
       <span className="dim">{label}</span>
       <strong>{value}</strong>
     </div>
@@ -212,8 +434,8 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
     const enabled = slots.some((s) => s.id === slotId);
     const item = profile.equipped[slotId] ? byId.get(profile.equipped[slotId]) : undefined;
     return (
-      <div key={slotId} className={`xiv-doll-cell doll-${slotId}`}>
-        <span className="xiv-doll-label">{label}</span>
+      <div key={slotId} className={`cm-doll-cell doll-${slotId}`}>
+        <span className="cm-doll-label">{label}</span>
         <ItemSlot
           item={item}
           empty={slotId}
@@ -227,12 +449,12 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   };
 
   return (
-    <div className="xiv-equip">
+    <div className="cm-equip">
       {locked && <p className="hint">Gear cannot be changed while engaged.</p>}
-      <div className="xiv-doll">
-        <div className="xiv-equip-preview">
+      <div className="cm-doll">
+        <div className="cm-equip-preview">
           <CharacterPreviewAnimated appearance={previewAppearance} scale={1.25} />
-          {previewingWeapon && <span className="xiv-equip-preview-label">Preview</span>}
+          {previewingWeapon && <span className="cm-equip-preview-label">Preview</span>}
         </div>
         {dollSlot("weapon", "Main")}
         {dollSlot("sub_weapon", "Sub")}
@@ -243,14 +465,14 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
         {dollSlot("hands", "Hands")}
         {dollSlot("feet", "Feet")}
       </div>
-      <div className="xiv-equip-side">
-        <div className="xiv-section-label">Armoury Chest</div>
-        <div className="xiv-tabs xiv-equip-tabs">
+      <div className="cm-equip-side">
+        <div className="cm-section-label">Armoury Chest</div>
+        <div className="cm-tabs cm-equip-tabs">
           {ARMOURY_TABS.map((t) => (
             <button
               key={t.id}
               type="button"
-              className={`xiv-tab ${armouryTab === t.id ? "on" : ""}`}
+              className={`cm-tab ${armouryTab === t.id ? "on" : ""}`}
               onClick={() => {
                 setArmouryTab(t.id);
                 if (focus && focus.slot !== t.id) setFocus(null);
@@ -260,7 +482,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
             </button>
           ))}
         </div>
-        <div className="xiv-item-list">
+        <div className="cm-item-list">
           {armouryItems.map((item) => (
             <ItemListRow
               key={item.id}
@@ -274,52 +496,8 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
             />
           ))}
           {armouryItems.length === 0 && (
-            <p className="hint xiv-item-list-empty">No {armouryTabLabel.toLowerCase()} gear in the armoury chest.</p>
+            <p className="hint cm-item-list-empty">No {armouryTabLabel.toLowerCase()} gear in the armoury chest.</p>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function InventoryPane({ profile }: { profile: ProfileInfo }) {
-  const locked = useGame((s) => {
-    const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_battle ?? s.screen === "battle";
-  });
-  const [tab, setTab] = useState<"all" | "gear" | "items">("all");
-  const [focus, setFocus] = useState<Item | null>(profile.inventory[0] ?? null);
-  const items = profile.inventory.filter((i) => {
-    if (tab === "gear") return i.kind !== "consumable";
-    if (tab === "items") return i.kind === "consumable";
-    return true;
-  });
-
-  return (
-    <div className="xiv-inv">
-      <div className="xiv-tabs">
-        {(["all", "gear", "items"] as const).map((t) => (
-          <button key={t} className={`xiv-tab ${tab === t ? "on" : ""}`} onClick={() => setTab(t)}>
-            {t === "all" ? "All" : t === "gear" ? "Gear" : "Items"}
-          </button>
-        ))}
-      </div>
-      <div className="xiv-inv-list">
-        <div className="xiv-item-list xiv-item-list--grid-3">
-          {items.map((item) => (
-            <ItemListRow
-              key={item.id}
-              item={item}
-              profile={profile}
-              locked={locked}
-              showLevel={false}
-              equipped={!!equippedSlotForItem(profile.equipped, item.id)}
-              equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
-              selected={focus?.id === item.id}
-              onClick={() => setFocus(item)}
-            />
-          ))}
-          {items.length === 0 && <p className="hint xiv-item-list-empty">No items in this tab.</p>}
         </div>
       </div>
     </div>
@@ -387,7 +565,7 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
   const activeJob = tab === "general" ? null : tab;
   const tree = activeJob
     ? profile.skills.filter((s) => s.job === activeJob)
-    : profile.skills.filter((s) => s.id === "attack" || s.world_only);
+    : profile.skills.filter((s) => s.id === "attack" || s.id === "capture" || s.world_only);
   const layout = useMemo(() => layoutSkillTree(tree), [tree]);
   const focus = (focusId && byId.get(focusId)) || tree[0];
 
@@ -397,15 +575,15 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
   const height = (maxY + 1) * TREE_ROW;
 
   return (
-    <div className="xiv-actions">
-      <div className="xiv-tabs">
-        <button className={`xiv-tab ${tab === "general" ? "on" : ""}`} onClick={() => setTab("general")}>
+    <div className="cm-actions">
+      <div className="cm-tabs">
+        <button className={`cm-tab ${tab === "general" ? "on" : ""}`} onClick={() => setTab("general")}>
           General
         </button>
         {tabs.map((j) => (
           <button
             key={j.id}
-            className={`xiv-tab ${tab === j.id ? "on" : ""}`}
+            className={`cm-tab ${tab === j.id ? "on" : ""}`}
             style={tab === j.id ? { color: j.color, borderColor: j.color } : undefined}
             onClick={() => {
               setTab(j.id);
@@ -418,11 +596,11 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <p className="hint">
         {tab === "general"
-          ? "Attack, Return, and Teleport are always available. Drag them onto the hotbar; Return and Teleport are used in the field."
+          ? "Attack and Capture are always available in battle. Return, Teleport, and Camp are used in the field. Drag skills onto the hotbar."
           : "Skills unlock as your jobs level up. Use them in battle to raise skill level."}
       </p>
-      <div className="xiv-tree" style={{ width, height }}>
-        <svg className="xiv-tree-links" width={width} height={height}>
+      <div className="cm-tree" style={{ width, height }}>
+        <svg className="cm-tree-links" width={width} height={height}>
           {tree.map((sk) => {
             if (!sk.prereq) return null;
             const a = layout.find((n) => n.id === sk.prereq);
@@ -478,7 +656,7 @@ function SkillNode({
   const node = (
     <button
       type="button"
-      className={`xiv-tree-node ${sk.unlocked ? "learned" : ""} ${selected ? "selected" : ""} ${!prereqMet ? "locked" : ""}`}
+      className={`cm-tree-node ${sk.unlocked ? "learned" : ""} ${selected ? "selected" : ""} ${!prereqMet ? "locked" : ""}`}
       style={style}
       draggable={sk.unlocked}
       onDragStart={(e) => {
@@ -487,13 +665,13 @@ function SkillNode({
       }}
       onClick={onSelect}
     >
-      <span className={`xiv-slot ${sk.unlocked ? "equipped" : "empty"}`}>
-        <span className="xiv-slot-glyph">
+      <span className={`cm-slot ${sk.unlocked ? "equipped" : "empty"}`}>
+        <span className="cm-slot-glyph">
           <GameIcon
               src={
               sk.id === "attack"
                 ? ICONS.attack
-                : sk.id === "return" || sk.id === "teleport"
+                : sk.id === "return" || sk.id === "port" || sk.id === "camp"
                   ? ICONS.skillUnlocked
                   : sk.unlocked
                     ? ICONS.skillUnlocked
@@ -504,7 +682,7 @@ function SkillNode({
           />
         </span>
       </span>
-      <span className="xiv-tree-name">
+      <span className="cm-tree-name">
         {sk.name}
         {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
       </span>
@@ -531,9 +709,9 @@ function SkillDetail({
   const usage = sk.usage ?? 0;
   const toNext = sk.usage_to_next ?? 0;
   return (
-    <div className="xiv-detail xiv-tree-detail">
-      <div className="xiv-detail-name">{sk.name}</div>
-      <div className="xiv-detail-meta">
+    <div className="cm-detail cm-tree-detail">
+      <div className="cm-detail-name">{sk.name}</div>
+      <div className="cm-detail-meta">
         {sk.world_only
           ? "Field skill · 0 MP"
           : sk.id === "attack"
@@ -551,17 +729,17 @@ function SkillDetail({
         {sk.unlocked && !sk.world_only && usage > 0 && atMax ? ` · ${usage} uses` : ""}
       </div>
       <div className="dim">{sk.description}</div>
-      <div className="xiv-detail-actions">
+      <div className="cm-detail-actions">
         {sk.world_only && sk.unlocked ? (
           <>
             <span className="dim">Drag onto the hotbar or use now in the field.</span>
             <button
               type="button"
-              className="xiv-btn gold"
+              className="cm-btn gold"
               disabled={locked}
               onPointerDown={(e) => {
                 e.stopPropagation();
-                if (sk.id === "return" || sk.id === "teleport") {
+                if (sk.id === "return" || sk.id === "port") {
                   useGame.getState().openWorldSkillDialog(sk.id);
                 }
               }}
@@ -608,20 +786,21 @@ export function WindowBar() {
     { id: "inventory", label: "Inventory", key: "I", icon: ICONS.menuInventory },
     { id: "skills", label: "Actions", key: "K", icon: ICONS.menuSkills },
     { id: "social", label: "Social", key: "O", icon: ICONS.menuSocial },
+    { id: "pets", label: "Pets", key: "P", icon: ICONS.menuInventory },
     { id: "map", label: "Map", key: "M", icon: "" },
   ];
   return (
-    <div className="xiv-mainmenu">
+    <div className="cm-mainmenu">
       {keys.map((b) => (
         <HoverTooltip key={b.id} content={`${b.label} [${b.key}]`}>
           <button
             type="button"
-            className={`xiv-menu-btn ${open === b.id ? "on" : ""}`}
+            className={`cm-menu-btn ${open === b.id || (open === "house_storage" && b.id === "inventory") ? "on" : ""}`}
             tabIndex={-1}
             onClick={() => toggle(b.id)}
             aria-label={b.label}
           >
-            <span className="xiv-menu-icon">
+            <span className="cm-menu-icon">
               {b.id === "map" ? <MapMenuGlyph /> : <GameIcon src={b.icon} alt="" size={32} />}
             </span>
           </button>

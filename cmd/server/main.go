@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"ffv-web-game/internal/host"
+	"clara-mundi/internal/host"
 )
 
 func main() {

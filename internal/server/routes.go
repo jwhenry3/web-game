@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	"ffv-web-game/internal/plugins"
+	"clara-mundi/internal/plugins"
 )
 
 // RegisterAPIRoutes mounts JSON API handlers under /api (use with StripPrefix).

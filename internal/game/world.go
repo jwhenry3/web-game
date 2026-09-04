@@ -176,7 +176,7 @@ func (o *Overworld) Cell(c, r int) byte {
 
 func (o *Overworld) WalkableTile(c, r int) bool {
 	switch o.Cell(c, r) {
-	case TileHaven, TileGrass, TilePath, TileRuins:
+	case TileHaven, TileGrass, TilePath, TileRuins, TileTree:
 		return true
 	default:
 		return false

@@ -64,25 +64,16 @@ func Snapshots(list []ActiveStatus) []StatusSnapshot {
 
 // SkillStatusEffects maps skill ids to status effects applied on success.
 var SkillStatusEffects = map[string][]StatusEffectDef{
-	"brd_minne":       {{Kind: StatusDefenseUp, Duration: 40, Potency: 0.30, OnCaster: false}},
-	"pld_sentinel":    {{Kind: StatusDefenseUp, Duration: 30, Potency: 0.35, OnCaster: true}},
-	"pld_cover":       {{Kind: StatusDefenseUp, Duration: 25, Potency: 0.40, OnCaster: false}},
-	"run_valiance":    {{Kind: StatusDefenseUp, Duration: 30, Potency: 0.25, OnCaster: true}},
-	"rdm_phalanx":     {{Kind: StatusShield, Duration: 40, Potency: 1.0, OnCaster: false}},
-	"sch_embrava":     {{Kind: StatusDefenseUp, Duration: 35, Potency: 0.30, OnCaster: false}, {Kind: StatusRegen, Duration: 35, Potency: 0.06, OnCaster: false}},
-	"geo_geo_regen":   {{Kind: StatusRegen, Duration: 40, Potency: 0.08, OnCaster: false}},
-	"geo_indi_haste":  {{Kind: StatusHaste, Duration: 35, Potency: 0.25, OnCaster: false}},
-	"dnc_haste_samba": {{Kind: StatusHaste, Duration: 35, Potency: 0.20, OnCaster: true}},
-	"war_berserk":     {{Kind: StatusAttackUp, Duration: 30, Potency: 0.30, OnCaster: true}, {Kind: StatusDefenseDown, Duration: 30, Potency: 0.25, OnCaster: true}},
-	"whm_dia":         {{Kind: StatusDefenseDown, Duration: 40, Potency: 0.20, OnCaster: false}},
-	"geo_indi_wilt":   {{Kind: StatusAttackDown, Duration: 35, Potency: 0.20, OnCaster: false}},
-	"pld_shield_bash": {{Kind: StatusStun, Duration: 8, Potency: 1, OnCaster: false}},
-	"geo_geo_poison":  {{Kind: StatusPoison, Duration: 40, Potency: 0.06, OnCaster: false}},
-	"nin_utsusemi":    {{Kind: StatusDefenseUp, Duration: 25, Potency: 0.20, OnCaster: true}},
-	"sam_hasso":       {{Kind: StatusDefenseUp, Duration: 20, Potency: 0.15, OnCaster: true}},
-	"mnk_boost":       {{Kind: StatusAttackUp, Duration: 25, Potency: 0.20, OnCaster: true}},
-	"sch_celerity":    {{Kind: StatusHaste, Duration: 30, Potency: 0.30, OnCaster: true}},
-	"drk_last_resort": {{Kind: StatusAttackUp, Duration: 25, Potency: 0.25, OnCaster: true}, {Kind: StatusDefenseDown, Duration: 25, Potency: 0.15, OnCaster: true}},
+	"can_carmen_tutus":    {{Kind: StatusDefenseUp, Duration: 40, Potency: 0.30, OnCaster: false}},
+	"can_carmen_ferox":    {{Kind: StatusAttackUp, Duration: 35, Potency: 0.25, OnCaster: false}},
+	"van_clamor_castra":   {{Kind: StatusDefenseUp, Duration: 30, Potency: 0.30, OnCaster: true}},
+	"van_furor_linea":     {{Kind: StatusDefenseUp, Duration: 25, Potency: 0.20, OnCaster: true}},
+	"aeg_custodia_ferrea": {{Kind: StatusDefenseUp, Duration: 30, Potency: 0.35, OnCaster: true}},
+	"aeg_tegimen":         {{Kind: StatusDefenseUp, Duration: 25, Potency: 0.40, OnCaster: false}},
+	"aeg_umbo":            {{Kind: StatusStun, Duration: 8, Potency: 1, OnCaster: false}},
+	"san_lux_mitis":       {{Kind: StatusDefenseDown, Duration: 40, Potency: 0.20, OnCaster: false}},
+	"brw_robur_manus":     {{Kind: StatusAttackUp, Duration: 25, Potency: 0.20, OnCaster: true}},
+	"ron_altum_custos":    {{Kind: StatusDefenseUp, Duration: 20, Potency: 0.15, OnCaster: true}},
 }
 
 // SkillTargetsAlly reports whether a skill should be aimed at a friendly player.

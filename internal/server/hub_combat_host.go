@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/rand"
 
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 func (h *Hub) SendToClient(clientID string, msg []byte) {

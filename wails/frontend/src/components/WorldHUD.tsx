@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../state/store";
+import { Minimap } from "./Minimap";
 
 function ResourceBar({
   label,
@@ -12,14 +13,16 @@ function ResourceBar({
   max: number;
   color: string;
 }) {
-  const pct = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const safeMax = Number.isFinite(max) && max > 0 ? max : 0;
+  const pct = safeMax > 0 ? Math.min(100, Math.max(0, (safeValue / safeMax) * 100)) : 0;
   return (
     <div className="ff-gauge">
       <span className="ff-gauge-label">{label}</span>
       <div className="ff-gauge-track">
         <div className="ff-gauge-fill" style={{ width: `${pct}%`, background: color }} />
         <span className="ff-gauge-text">
-          {Math.round(value)}/{max}
+          {Math.round(safeValue)}/{safeMax}
         </span>
       </div>
     </div>
@@ -56,7 +59,13 @@ export function WorldHUD() {
   const castLeft = casting ? Math.max(0, (castMs - castElapsed) / 1000) : 0;
   const castName =
     profile?.skills.find((s) => s.id === castingId)?.name ??
-    (castingId === "teleport" ? "Teleport" : "Cast");
+    (castingId === "port"
+      ? "Port"
+      : castingId === "return"
+        ? "Return"
+        : castingId === "camp"
+          ? "Camp"
+          : "Cast");
 
   useEffect(() => {
     if (immuneUntil <= Date.now() && !casting) return;
@@ -72,7 +81,7 @@ export function WorldHUD() {
 
   return (
     <div className="hud world-hud">
-      <div className="xiv-param-world">
+      <div className="cm-param-world">
         <ResourceBar label="HP" value={hp} max={hp} color="#3dcc6e" />
         <ResourceBar label="MP" value={mp} max={mp} color="#4aa3e8" />
         {recovering && (
@@ -81,14 +90,16 @@ export function WorldHUD() {
       </div>
 
       {casting && (
-        <div className="xiv-world-cast" role="status" aria-label={`${castName} casting`}>
-          <div className="xiv-world-cast-name">{castName}</div>
+        <div className="cm-world-cast" role="status" aria-label={`${castName} casting`}>
+          <div className="cm-world-cast-name">{castName}</div>
           <div className="ff-gauge-track">
             <div className="ff-gauge-fill" style={{ width: `${castPct}%`, background: "#a78bfa" }} />
             <span className="ff-gauge-text">{castLeft.toFixed(1)}s</span>
           </div>
         </div>
       )}
+
+      <Minimap />
     </div>
   );
 }

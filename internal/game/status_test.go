@@ -48,11 +48,11 @@ func TestHasteMultiplier(t *testing.T) {
 }
 
 func TestMinneTargetsAlly(t *testing.T) {
-	sk, ok := FindSkill("brd_minne")
+	sk, ok := FindSkill("can_carmen_tutus")
 	if !ok {
-		t.Fatal("brd_minne not found")
+		t.Fatal("can_carmen_tutus not found")
 	}
 	if !SkillTargetsAlly(sk) {
-		t.Fatal("minne should target allies")
+		t.Fatal("bard hymn should target allies")
 	}
 }

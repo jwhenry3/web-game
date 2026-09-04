@@ -5,10 +5,10 @@ import (
 	"math/rand"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 // BattleRoom is an isolated, ephemeral combat instance implementing the GDD's
@@ -97,6 +97,8 @@ type battleEntity struct {
 	Name        string
 	Kind        string // enemies: goblin, dire_wolf, stone_imp
 	IsPlayer    bool
+	IsAlly      bool   // friendly pet (not human)
+	OwnerClientID string
 	Weapon      game.WeaponType
 	SubWeapon   game.WeaponType
 	ProfileName string // players only: persistence key
@@ -109,6 +111,8 @@ type battleEntity struct {
 	TargetID    string
 	Alive       bool
 	DropPoolID  string
+	Capturable  bool
+	QueuedAction *protocol.ActionPayload // one-shot owner command for pets
 
 	// Skill usage earned this battle (players only).
 	pendingSkillUses map[string]int
@@ -120,6 +124,14 @@ type battleEntity struct {
 	statuses []game.ActiveStatus
 
 	casting *activeCast
+}
+
+func (e *battleEntity) isFriendly() bool {
+	return e.IsPlayer || e.IsAlly
+}
+
+func (e *battleEntity) isEnemy() bool {
+	return !e.IsPlayer && !e.IsAlly
 }
 
 type activeCast struct {
@@ -241,6 +253,7 @@ func (b *BattleRoom) spawnEnemies(encounter game.EncounterConfig) {
 			Agi:        tpl.Agi,
 			Alive:      true,
 			DropPoolID: entry.DropPoolID,
+			Capturable: entry.Capturable,
 		}
 		e.HP = e.MaxHP
 		b.entities = append(b.entities, e)
@@ -299,6 +312,16 @@ func (b *BattleRoom) Run(window time.Duration) {
 		case clientID := <-b.leaveCh:
 			b.removePlayer(clientID)
 		case qa := <-b.actionCh:
+			if qa.Action.ActorID != "" && qa.Action.ActorID != qa.ActorID {
+				pet := b.find(qa.Action.ActorID)
+				if pet != nil && pet.IsAlly && pet.OwnerClientID == qa.ActorID && pet.Alive {
+					act := qa.Action
+					act.ActorID = ""
+					pet.QueuedAction = &act
+					b.broadcast(protocol.Encode(protocol.TypeBattleState, b.statePayload()))
+					break
+				}
+			}
 			b.pending = append(b.pending, qa)
 		case cmd := <-b.targetCh:
 			if e := b.find(cmd.ClientID); e != nil {
@@ -365,17 +388,53 @@ func (b *BattleRoom) addPlayer(clientID string, p store.Profile) {
 		unlocked:         unlocked,
 	}
 	b.entities = append(b.entities, e)
+	b.spawnBattlePet(clientID, p)
 	b.broadcast(protocol.Encode(protocol.TypeBattleState, b.statePayload()))
 }
 
+func (b *BattleRoom) spawnBattlePet(ownerClientID string, p store.Profile) {
+	if p.BattlePetID == "" {
+		return
+	}
+	pet, ok := p.FindPet(p.BattlePetID)
+	if !ok {
+		return
+	}
+	petEntityID := fmt.Sprintf("%s-pet-%s", ownerClientID, pet.ID)
+	if b.find(petEntityID) != nil {
+		return
+	}
+	tpl := enemyTemplateByKind(pet.Kind)
+	hp, str, agi := game.PetCombatStats(tpl.HP, tpl.Str, tpl.Agi, pet.Level)
+	b.entities = append(b.entities, &battleEntity{
+		ID:            petEntityID,
+		Name:          pet.Name,
+		Kind:          pet.Kind,
+		IsPlayer:      false,
+		IsAlly:        true,
+		OwnerClientID: ownerClientID,
+		Level:         pet.Level,
+		MaxHP:         hp, HP: hp,
+		MaxMP: 20, MP: 20,
+		Str: str, Mag: str / 2, Agi: agi,
+		Alive:    true,
+		TargetID: b.firstLivingEnemyID(),
+		skillLevels: map[string]int{game.BasicAttack.ID: 1},
+		unlocked:    map[string]bool{game.BasicAttack.ID: true},
+	})
+}
+
 func (b *BattleRoom) removePlayer(clientID string) {
-	for i, e := range b.entities {
-		if e.ID == clientID {
-			// Skill usage still counts even when fleeing mid-battle.
-			b.persistSkillUsage(e)
+	for i := 0; i < len(b.entities); {
+		e := b.entities[i]
+		if e.ID == clientID || (e.IsAlly && e.OwnerClientID == clientID) {
+			if e.IsPlayer {
+				b.persistSkillUsage(e)
+			}
 			b.entities = append(b.entities[:i], b.entities[i+1:]...)
-			break
+			continue
 		}
+		i++
 	}
 	if b.ended {
 		b.dismissIfEmptyAfterLeave()
@@ -433,12 +492,14 @@ func (b *BattleRoom) statePayload() protocol.BattleStatePayload {
 	for _, e := range b.entities {
 		castSkill, castTarget, castProg, castMs := entityCastFields(e)
 		entities = append(entities, protocol.BattleEntity{
-			ID: e.ID, Name: e.Name, Kind: e.Kind, IsPlayer: e.IsPlayer, Weapon: string(e.Weapon),
+			ID: e.ID, Name: e.Name, Kind: e.Kind, IsPlayer: e.IsPlayer,
+			IsAlly: e.IsAlly, OwnerID: e.OwnerClientID, Weapon: string(e.Weapon),
 			Level: e.Level, HP: e.HP, MaxHP: e.MaxHP, MP: e.MP, MaxMP: e.MaxMP,
 			Agility: e.Agi, SkillATB: e.SkillATB, ATB: e.SkillATB,
-			TargetID: e.TargetID, Alive: e.Alive,
-			Statuses:       game.Snapshots(e.statuses),
-			CastingSkillID: castSkill, CastTargetID: castTarget,
+			TargetID: e.TargetID, Alive: e.Alive, Capturable: e.Capturable,
+			HasQueuedAction: e.QueuedAction != nil,
+			Statuses:        game.Snapshots(e.statuses),
+			CastingSkillID:  castSkill, CastTargetID: castTarget,
 			CastProgress: castProg, CastTimeMs: castMs,
 		})
 	}
@@ -522,10 +583,10 @@ func (b *BattleRoom) tick() {
 		if target == nil || !target.Alive {
 			continue
 		}
-		if game.SkillTargetsAlly(skill) && !target.IsPlayer {
+		if game.SkillTargetsAlly(skill) && !target.isFriendly() {
 			continue
 		}
-		if !game.SkillTargetsAlly(skill) && target.IsPlayer {
+		if !game.SkillTargetsAlly(skill) && target.isFriendly() {
 			continue
 		}
 		results = append(results, b.resolveCastComplete(e, target, skill))
@@ -538,12 +599,31 @@ func (b *BattleRoom) tick() {
 		results = append(results, b.resolveAction(qa))
 	}
 
-	// 4. Enemy attacks on the shared GCD.
+	// 4. Enemy / ally AI on the shared GCD (pets honor one queued owner command).
 	for _, e := range b.entities {
 		if !e.Alive || e.IsPlayer || e.SkillATB < atbMax || game.IsStunned(e.statuses) || e.casting != nil {
 			continue
 		}
-		target := b.randomAlivePlayer()
+		if e.IsAlly {
+			if e.QueuedAction != nil {
+				qa := queuedAction{ActorID: e.ID, Action: *e.QueuedAction}
+				e.QueuedAction = nil
+				results = append(results, b.resolveAction(qa))
+				continue
+			}
+			target := b.randomAliveEnemy()
+			if target == nil {
+				continue
+			}
+			results = append(results, b.applySkillEffect(e, target, game.BasicAttack, protocol.ActionResult{
+				ActorID:    e.ID,
+				ActionID:   game.BasicAttack.ID,
+				ActionName: game.BasicAttack.Name,
+				TargetID:   target.ID,
+			}))
+			continue
+		}
+		target := b.randomAliveHostile()
 		if target == nil {
 			continue
 		}
@@ -621,6 +701,10 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 		return b.resolveItemUse(qa, actor, res)
 	}
 
+	if qa.Action.ActionID == game.ActionIDCapture {
+		return b.resolveCapture(qa, actor, res)
+	}
+
 	skill, ok := game.FindSkill(qa.Action.ActionID)
 	if !ok {
 		res.Message = "Unknown ability."
@@ -628,9 +712,17 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 	}
 	res.ActionName = skill.Name
 
-	if skill.ID != game.BasicAttack.ID && actor.skillLevels[skill.ID] < 1 {
-		res.Message = "Skill not learned."
-		return res
+	if !game.SkillAlwaysUnlocked(skill.ID) {
+		levels := actor.skillLevels
+		if actor.IsAlly {
+			if owner := b.find(actor.OwnerClientID); owner != nil {
+				levels = owner.skillLevels
+			}
+		}
+		if levels[skill.ID] < 1 {
+			res.Message = "Skill not learned."
+			return res
+		}
 	}
 	if skill.WorldOnly {
 		res.Message = "Cannot use that in battle."
@@ -655,12 +747,12 @@ func (b *BattleRoom) resolveAction(qa queuedAction) protocol.ActionResult {
 			res.Message = "Invalid target."
 			return res
 		}
-		if !target.IsPlayer {
+		if !target.isFriendly() {
 			res.Message = "Must target an ally."
 			return res
 		}
 	} else {
-		if t := b.find(qa.Action.TargetID); t != nil && t.Alive && !t.IsPlayer {
+		if t := b.find(qa.Action.TargetID); t != nil && t.Alive && t.isEnemy() {
 			target = t
 			actor.TargetID = t.ID
 		} else {
@@ -770,7 +862,7 @@ func (b *BattleRoom) applySkillEffect(actor, target *battleEntity, skill game.Sk
 
 	b.applySkillStatuses(actor, target, skill, amount, &res)
 
-	if actor.IsPlayer && skill.ID != game.BasicAttack.ID && actor.pendingSkillUses != nil {
+	if actor.IsPlayer && !game.SkillAlwaysUnlocked(skill.ID) && actor.pendingSkillUses != nil {
 		actor.pendingSkillUses[skill.ID]++
 	}
 
@@ -825,7 +917,7 @@ func (b *BattleRoom) resolveItemUse(qa queuedAction, actor *battleEntity, res pr
 		return res
 	}
 	target := b.find(qa.Action.TargetID)
-	if target == nil || !target.Alive || !target.IsPlayer {
+	if target == nil || !target.Alive || !target.isFriendly() {
 		res.Message = "Invalid target."
 		return res
 	}
@@ -892,6 +984,74 @@ func (b *BattleRoom) rollDamage(stat int, power float64) int {
 	return dmg
 }
 
+func (b *BattleRoom) resolveCapture(qa queuedAction, actor *battleEntity, res protocol.ActionResult) protocol.ActionResult {
+	res.ActionName = "Capture"
+	if !actor.IsPlayer {
+		res.Message = "Only you can capture."
+		return res
+	}
+	if actor.SkillATB < atbMax {
+		res.Message = "Not ready."
+		return res
+	}
+	target := b.find(qa.Action.TargetID)
+	if target == nil || !target.Alive || !target.isEnemy() {
+		res.Message = "Invalid target."
+		return res
+	}
+	if !game.EligibleForCapture(target.Capturable, target.Alive, target.HP, target.MaxHP) {
+		res.Message = "Target is not weak enough to capture."
+		return res
+	}
+	actor.SkillATB = 0
+	chance := game.CaptureChance(actor.Level, target.Level)
+	if b.rng.Float64() >= chance {
+		res.Success = false
+		res.Message = fmt.Sprintf("Capture failed (%.0f%%).", chance*100)
+		return res
+	}
+	profile, _, errMsg := b.host.Profiles().AddPet(actor.ProfileName, target.Kind, target.Name, target.Level)
+	if errMsg != "" {
+		res.Message = errMsg
+		return res
+	}
+	target.Alive = false
+	target.HP = 0
+	target.DropPoolID = "" // capture replaces loot
+	target.casting = nil
+	res.Success = true
+	res.TargetID = target.ID
+	res.Message = fmt.Sprintf("Captured %s!", target.Name)
+	b.host.SendProfileUpdate(actor.ID, profile)
+	return res
+}
+
+func (b *BattleRoom) randomAliveHostile() *battleEntity {
+	var alive []*battleEntity
+	for _, e := range b.entities {
+		if e.isFriendly() && e.Alive {
+			alive = append(alive, e)
+		}
+	}
+	if len(alive) == 0 {
+		return nil
+	}
+	return alive[b.rng.Intn(len(alive))]
+}
+
+func (b *BattleRoom) randomAliveEnemy() *battleEntity {
+	var alive []*battleEntity
+	for _, e := range b.entities {
+		if e.isEnemy() && e.Alive {
+			alive = append(alive, e)
+		}
+	}
+	if len(alive) == 0 {
+		return nil
+	}
+	return alive[b.rng.Intn(len(alive))]
+}
+
 func (b *BattleRoom) randomAlivePlayer() *battleEntity {
 	var alive []*battleEntity
 	for _, e := range b.entities {
@@ -923,7 +1083,7 @@ func (b *BattleRoom) entityUpdates() []protocol.EntityUpdate {
 
 func (b *BattleRoom) firstLivingEnemyID() string {
 	for _, e := range b.entities {
-		if !e.IsPlayer && e.Alive {
+		if e.isEnemy() && e.Alive {
 			return e.ID
 		}
 	}
@@ -931,7 +1091,7 @@ func (b *BattleRoom) firstLivingEnemyID() string {
 }
 
 func (b *BattleRoom) autoTarget(actor *battleEntity) *battleEntity {
-	if t := b.find(actor.TargetID); t != nil && t.Alive && !t.IsPlayer {
+	if t := b.find(actor.TargetID); t != nil && t.Alive && t.isEnemy() {
 		return t
 	}
 	id := b.firstLivingEnemyID()
@@ -948,7 +1108,7 @@ func (b *BattleRoom) checkEnd() {
 			if e.Alive {
 				playersAlive++
 			}
-		} else if e.Alive {
+		} else if e.isEnemy() && e.Alive {
 			enemiesAlive++
 		}
 	}
@@ -981,7 +1141,7 @@ func (b *BattleRoom) finish(victory bool) {
 		totalXP := 0
 		var pools []string
 		for _, e := range b.entities {
-			if !e.IsPlayer {
+			if e.isEnemy() {
 				totalXP += e.Level*45 + 30
 				if e.DropPoolID != "" {
 					pools = append(pools, e.DropPoolID)

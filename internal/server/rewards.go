@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math/rand"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 const (

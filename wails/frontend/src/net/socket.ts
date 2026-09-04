@@ -6,6 +6,7 @@ import { applyMapSnapshotToGame, prefetchMapConfig, defaultMapId } from "./mapCo
 import { loadDraftAppearance, saveAppearance } from "../characters/appearanceStorage";
 import { appearanceFromWire } from "../characters/types";
 import type { CharacterAppearanceWire } from "../characters/heroes99";
+import { clearHousePlace } from "../world/housePlaceBridge";
 import {
   getGameTransport,
   setTransportHandlers,
@@ -30,6 +31,9 @@ import type {
   WorldNPC,
   WorldPlayer,
   WorldStatePayload,
+  WorldCamp,
+  WorldPet,
+  HouseStatePayload,
   SelectedAction,
 } from "../types";
 import {
@@ -48,9 +52,9 @@ function livingEnemyTarget(battle: { entities: BattleEntity[] }, self: BattleEnt
   const focusId = useGame.getState().battleTargetId ?? self.target_id;
   const focus =
     focusId &&
-    battle.entities.find((e) => e.id === focusId && e.alive && !e.is_player);
+    battle.entities.find((e) => e.id === focusId && e.alive && !e.is_player && !e.is_ally);
   if (focus) return focus;
-  return battle.entities.find((e) => !e.is_player && e.alive);
+  return battle.entities.find((e) => !e.is_player && !e.is_ally && e.alive);
 }
 
 function battleContext(): { self: BattleEntity; entities: BattleEntity[]; ended: boolean } | null {
@@ -334,8 +338,8 @@ export const net = {
     const focusId = useGame.getState().battleTargetId ?? self.target_id;
     const pool =
       axis === "horizontal"
-        ? entities.filter((e) => !e.is_player && e.alive)
-        : entities.filter((e) => e.is_player && e.alive);
+        ? entities.filter((e) => !e.is_player && !e.is_ally && e.alive)
+        : entities.filter((e) => (e.is_player || e.is_ally) && e.alive);
     if (pool.length === 0) return;
     let idx = pool.findIndex((e) => e.id === focusId);
     if (idx < 0) {
@@ -360,10 +364,10 @@ export const net = {
     }
     const sk = profile.skills.find((s) => s.id === skillId);
     if (!sk?.unlocked) return;
-    const fieldSkill = sk.world_only || skillId === "return" || skillId === "teleport";
+    const fieldSkill = sk.world_only || skillId === "return" || skillId === "port" || skillId === "camp";
     if (!fieldSkill) return;
-    if (skillId === "teleport") {
-      openWorldSkillDialog("teleport");
+    if (skillId === "port") {
+      openWorldSkillDialog("port");
       return;
     }
     if (skillId === "return") {
@@ -373,24 +377,77 @@ export const net = {
     useGame.setState({ openWindow: null, bindSlot: null });
     this.useWorldSkill(skillId);
   },
+  enterHouse(ownerName: string) {
+    send("enter_house", { owner_name: ownerName });
+  },
+  leaveHouse() {
+    send("leave_house");
+  },
+  houseInteract(target: "door" | "storage") {
+    send("house_interact", { target });
+    if (target === "storage") {
+      useGame.setState({ openWindow: "house_storage" });
+    }
+  },
+  houseStorageDeposit(itemId: string, qty = 1) {
+    send("house_storage_deposit", { item_id: itemId, qty });
+  },
+  houseStorageWithdraw(itemId: string, qty = 1) {
+    send("house_storage_withdraw", { item_id: itemId, qty });
+  },
+  housePlaceFurniture(itemId: string, col: number, row: number) {
+    send("house_place_furniture", { item_id: itemId, col, row });
+  },
+  housePickFurniture(furnitureId: string) {
+    send("house_pick_furniture", { furniture_id: furnitureId });
+  },
+  setCampSkin(skin: string) {
+    send("set_camp_skin", { skin });
+  },
+  petSetFollow(petId: string) {
+    send("pet_set_follow", { pet_id: petId });
+  },
+  petSetBattle(petId: string) {
+    send("pet_set_battle", { pet_id: petId });
+  },
+  petRelease(petId: string) {
+    send("pet_release", { pet_id: petId });
+  },
+  capture(targetId: string) {
+    send("action", { action_id: "capture", target_id: targetId });
+  },
+  petAction(petId: string, actionId: string, targetId: string, itemId?: string) {
+    send("action", { action_id: actionId, target_id: targetId, item_id: itemId, actor_id: petId });
+  },
 
-  clickEntity(target: { id: string; alive: boolean; is_player: boolean }) {
+  clickEntity(target: { id: string; alive: boolean; is_player: boolean; is_ally?: boolean }) {
     if (!target.alive) return;
     const { selectedAction } = useGame.getState();
     if (selectedAction) {
       this.castSelectedOn(target);
       return;
     }
-    if (!target.is_player) this.setTarget(target.id);
+    if (!target.is_player && !target.is_ally) this.setTarget(target.id);
   },
 
-  castSelectedOn(target: { id: string; alive: boolean; is_player: boolean }): boolean {
-    const { selectedAction } = useGame.getState();
+  castSelectedOn(target: { id: string; alive: boolean; is_player: boolean; is_ally?: boolean }): boolean {
+    const { selectedAction, commandPetId } = useGame.getState();
     const ctx = battleContext();
     if (!selectedAction || !target.alive || !ctx) return false;
     const { self } = ctx;
-    if (!isGcdReady(self)) return false;
-    if (selectedAction.heals ? !target.is_player : target.is_player) return false;
+    if (!commandPetId && !isGcdReady(self)) return false;
+    const friendly = !!target.is_player || !!target.is_ally;
+    if (selectedAction.heals ? !friendly : friendly) return false;
+    if (commandPetId) {
+      send("action", {
+        action_id: selectedAction.actionId,
+        target_id: target.id,
+        item_id: selectedAction.itemId,
+        actor_id: commandPetId,
+      });
+      useGame.setState({ selectedAction: null, commandPetId: null });
+      return true;
+    }
     send("action", {
       action_id: selectedAction.actionId,
       target_id: target.id,
@@ -459,6 +516,8 @@ export const net = {
       }
       if (skillTargetsAlly(sk)) {
         this.armOrSelfCast(actionFromSkill(sk), self.id);
+      } else if (sk.id === "capture" && !livingEnemyTarget({ entities }, self)) {
+        this.toggleAction(actionFromSkill(sk));
       } else {
         castEnemySkill(sk.id, entities, self);
       }
@@ -536,7 +595,7 @@ export function handleMessage(env: Envelope) {
           }
         }
         const fromServer = appearanceFromWire(p.profile.appearance);
-        const appearance = fromServer ?? loadDraftAppearance(p.profile.race ?? "hume");
+        const appearance = fromServer ?? loadDraftAppearance(p.profile.race ?? "humanus");
         saveAppearance(p.player_id, appearance);
         const summary = {
           name: p.profile.name,
@@ -553,7 +612,12 @@ export function handleMessage(env: Envelope) {
             selfWp && selfWeapon
               ? { ...s.players, [p.player_id]: { ...selfWp, weapon: selfWeapon } }
               : s.players;
-          const screen = s.screen === "battle" ? "battle" : "world";
+          // Profile refreshes (equip, house furniture, storage) also send welcome.
+          // Do not yank the player out of battle/house/world mid-session.
+          const screen =
+            s.screen === "battle" || s.screen === "house" || s.screen === "world"
+              ? s.screen
+              : "world";
           return {
             selfId: p.player_id,
             profile: p.profile,
@@ -577,6 +641,7 @@ export function handleMessage(env: Envelope) {
         battle: null,
         rtBattle: null,
         battleTargetId: null,
+        commandPetId: null,
         screen: "world",
         selectedAction: null,
         chatTab: "general",
@@ -598,14 +663,43 @@ export function handleMessage(env: Envelope) {
       for (const sp of p.save_points ?? []) savePoints[sp.id] = sp;
       const jobChangers: Record<string, JobChanger> = {};
       for (const jc of p.job_changers ?? []) jobChangers[jc.id] = jc;
+      const camps: Record<string, WorldCamp> = {};
+      for (const camp of p.camps ?? []) camps[camp.owner_name] = camp;
+      const pets: Record<string, WorldPet> = {};
+      for (const pet of p.pets ?? []) pets[pet.id] = pet;
       g.setState({
         players,
         npcs,
         savePoints,
         jobChangers,
+        camps,
+        pets,
         battles: p.battles ?? [],
         overworld: p.map ?? g.getState().overworld,
       });
+      break;
+    }
+    case "camp_state": {
+      const p = env.payload as { camps: WorldCamp[] };
+      const camps: Record<string, WorldCamp> = {};
+      for (const camp of p.camps ?? []) camps[camp.owner_name] = camp;
+      g.setState({ camps });
+      break;
+    }
+    case "house_state": {
+      const house = env.payload as HouseStatePayload;
+      g.setState((s) => ({
+        screen: "house" as const,
+        house,
+        // Don't clobber open panels on movement sync broadcasts.
+        openWindow: s.screen === "house" ? s.openWindow : null,
+        bindSlot: s.screen === "house" ? s.bindSlot : null,
+      }));
+      break;
+    }
+    case "house_return": {
+      clearHousePlace();
+      g.setState({ screen: "world", house: null, openWindow: null });
       break;
     }
     case "player_sync": {

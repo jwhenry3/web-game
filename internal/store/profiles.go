@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 // Store is the persistence layer for player profiles: per-job levels, combo
@@ -34,6 +34,18 @@ type Profile struct {
 	Jobs              map[string]game.JobProgress `json:"jobs"`
 	Loadouts          map[string]JobLoadout       `json:"loadouts"`
 	Inventory         []game.Item                 `json:"inventory"`
+	// HouseStorage is separate from inventory; only accessible inside an active camp house.
+	HouseStorage []game.Item `json:"house_storage,omitempty"`
+	// HouseFurniture persists decorations placed inside the house.
+	HouseFurniture []game.HouseFurniture `json:"house_furniture,omitempty"`
+	// CampSkin is the overworld tent graphic (see game.CampSkins).
+	CampSkin string `json:"camp_skin,omitempty"`
+	// Pets is the captured companion collection.
+	Pets []game.PetRecord `json:"pets,omitempty"`
+	// FollowPetID is the pet that follows on the overworld (empty = none).
+	FollowPetID string `json:"follow_pet_id,omitempty"`
+	// BattlePetID is the pet that joins as a battle ally (empty = none).
+	BattlePetID string `json:"battle_pet_id,omitempty"`
 	Friends                  []string `json:"friends"`
 	IncomingFriendRequests   []string `json:"incoming_friend_requests,omitempty"`
 	OutgoingFriendRequests   []string `json:"outgoing_friend_requests,omitempty"`
@@ -41,7 +53,7 @@ type Profile struct {
 	SavePointID       string                      `json:"save_point_id,omitempty"`
 	VisitedSavePoints []string                    `json:"visited_save_points,omitempty"`
 	MapID             string                      `json:"map_id,omitempty"`
-	PrevMapID         string                      `json:"prev_map_id,omitempty"`
+	PrevMapID         string                      `json:"pdnc_map_id,omitempty"`
 	WorldX            float64                     `json:"world_x,omitempty"`
 	WorldY            float64                     `json:"world_y,omitempty"`
 	Facing            string                      `json:"facing,omitempty"`
@@ -75,6 +87,14 @@ func Load(path string) *Store {
 		if p.Inventory == nil {
 			p.Inventory = []game.Item{}
 		}
+		if p.HouseStorage == nil {
+			p.HouseStorage = []game.Item{}
+		}
+		if p.HouseFurniture == nil {
+			p.HouseFurniture = []game.HouseFurniture{}
+		}
+		p.CampSkin = game.NormalizeCampSkin(p.CampSkin)
+		p.HouseStorage = game.CompactStacks(p.HouseStorage)
 		if p.Friends == nil {
 			p.Friends = []string{}
 		}
@@ -94,6 +114,7 @@ func Load(path string) *Store {
 		}
 		p.Inventory = game.CompactStacks(p.Inventory)
 		p.VisitedSavePoints = addVisited(p.VisitedSavePoints, p.SavePointID)
+		p.migrateClaraMundiIDs()
 		p.migrateJobs()
 		p.ensureUnlockedJobs()
 	}
@@ -176,6 +197,7 @@ func (s *Store) CreateCharacter(accountID, name string, race game.RaceID, mainJo
 
 	starter := game.StarterWeaponForJob(mainJob)
 	inv := append([]game.Item{starter}, game.StarterConsumables()...)
+	inv = append(inv, game.StarterHousingGoods()...)
 	jobs := map[string]game.JobProgress{}
 	for _, def := range game.AllJobs() {
 		jobs[string(def.ID)] = game.JobProgress{Level: 1, XP: 0}
@@ -209,10 +231,11 @@ func (s *Store) GetOrCreate(name string, startJob game.JobID) Profile {
 	p, ok := s.profiles[name]
 	if !ok {
 		if !game.ValidStartingJob(startJob) {
-			startJob = game.JobWAR
+			startJob = game.JobVAN
 		}
 		starter := game.StarterWeaponForJob(startJob)
 		inv := append([]game.Item{starter}, game.StarterConsumables()...)
+	inv = append(inv, game.StarterHousingGoods()...)
 		jobs := map[string]game.JobProgress{}
 		for _, def := range game.AllJobs() {
 			jobs[string(def.ID)] = game.JobProgress{Level: 1, XP: 0}

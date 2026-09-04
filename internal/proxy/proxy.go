@@ -10,14 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"ffv-web-game/internal/auth"
-	"ffv-web-game/internal/cluster"
-	"ffv-web-game/internal/mapnode"
-	"ffv-web-game/internal/plugins"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/server"
-	"ffv-web-game/internal/servercfg"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/auth"
+	"clara-mundi/internal/cluster"
+	"clara-mundi/internal/mapnode"
+	"clara-mundi/internal/plugins"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/server"
+	"clara-mundi/internal/servercfg"
+	"clara-mundi/internal/store"
 
 	"github.com/gorilla/websocket"
 )

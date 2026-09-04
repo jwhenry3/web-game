@@ -62,16 +62,16 @@ export function MapEditorInspector({
 
   if (!obj) {
     return (
-      <div className="map-editor-inspector-panel xiv-window">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">Inspector</span>
+      <div className="map-editor-inspector-panel cm-window">
+        <div className="cm-titlebar">
+          <span className="cm-title">Inspector</span>
         </div>
-        <div className="xiv-body map-editor-inspector-body">
+        <div className="cm-body map-editor-inspector-body">
           {entitySettings ? (
             <div className="map-editor-inspector">
               <div className="map-editor-group-label">Entity</div>
               <label className="field-label">Template name</label>
-              <input className="xiv-input" value={entitySettings.name} onChange={(e) => entitySettings.onName(e.target.value)} />
+              <input className="cm-input" value={entitySettings.name} onChange={(e) => entitySettings.onName(e.target.value)} />
             </div>
           ) : currentMapId && !templateMode ? (
             <MapServerInspector
@@ -98,24 +98,24 @@ export function MapEditorInspector({
   const typeLabel = OBJECT_TYPE_LABELS[obj.type] ?? obj.type;
 
   return (
-    <div className="map-editor-inspector-panel xiv-window">
-      <div className="xiv-titlebar">
-        <span className="xiv-title">Inspector</span>
+    <div className="map-editor-inspector-panel cm-window">
+      <div className="cm-titlebar">
+        <span className="cm-title">Inspector</span>
       </div>
       {!entitySettings && (
         <div className="map-editor-panel-toolbar">
-          <button type="button" className="xiv-btn danger wide" onClick={onDelete}>
+          <button type="button" className="cm-btn danger wide" onClick={onDelete}>
             Delete object
           </button>
         </div>
       )}
-      <div className="xiv-body map-editor-inspector-body">
+      <div className="cm-body map-editor-inspector-body">
         <div className="map-editor-inspector">
           {entitySettings && (
             <>
               <div className="map-editor-group-label">Entity template</div>
               <label className="field-label">Template name</label>
-              <input className="xiv-input" value={entitySettings.name} onChange={(e) => entitySettings.onName(e.target.value)} />
+              <input className="cm-input" value={entitySettings.name} onChange={(e) => entitySettings.onName(e.target.value)} />
             </>
           )}
 
@@ -132,18 +132,18 @@ export function MapEditorInspector({
             <>
               <div className="map-editor-group-label">{typeLabel}</div>
               <label className="field-label">Object name</label>
-              <input className="xiv-input" value={obj.name} onChange={(e) => patch({ name: e.target.value })} />
+              <input className="cm-input" value={obj.name} onChange={(e) => patch({ name: e.target.value })} />
 
               {obj.type === "save_point" && (
                 <>
                   <label className="field-label">Crystal name</label>
                   <input
-                    className="xiv-input"
+                    className="cm-input"
                     value={propString(obj.properties, "name")}
                     onChange={(e) => patchProp("name", "string", e.target.value)}
                   />
                   <label className="field-label">Unique ID</label>
-                  <input className="xiv-input" value={propString(obj.properties, "id", obj.name)} readOnly disabled />
+                  <input className="cm-input" value={propString(obj.properties, "id", obj.name)} readOnly disabled />
                 </>
               )}
 
@@ -151,7 +151,7 @@ export function MapEditorInspector({
                 <>
                   <label className="field-label">Destination map</label>
                   <select
-                    className="xiv-input"
+                    className="cm-input"
                     value={propString(obj.properties, "destMap")}
                     onChange={(e) => patchProp("destMap", "string", e.target.value)}
                   >
@@ -184,10 +184,10 @@ export function MapEditorInspector({
               {obj.type === "region" && (
                 <>
                   <label className="field-label">Unique ID</label>
-                  <input className="xiv-input" value={propString(obj.properties, "id", obj.name)} readOnly disabled />
+                  <input className="cm-input" value={propString(obj.properties, "id", obj.name)} readOnly disabled />
                   <label className="field-label">Kind</label>
                   <input
-                    className="xiv-input"
+                    className="cm-input"
                     value={propString(obj.properties, "kind", "wilderness")}
                     onChange={(e) => patchProp("kind", "string", e.target.value)}
                   />
@@ -197,16 +197,16 @@ export function MapEditorInspector({
               {obj.type === "sanctuary" && (
                 <>
                   <label className="field-label">Unique ID</label>
-                  <input className="xiv-input" value={propString(obj.properties, "id", obj.name)} readOnly disabled />
+                  <input className="cm-input" value={propString(obj.properties, "id", obj.name)} readOnly disabled />
                   <label className="field-label">Display name</label>
                   <input
-                    className="xiv-input"
+                    className="cm-input"
                     value={propString(obj.properties, "name")}
                     onChange={(e) => patchProp("name", "string", e.target.value)}
                   />
                   <label className="field-label">Kind</label>
                   <input
-                    className="xiv-input"
+                    className="cm-input"
                     value={propString(obj.properties, "kind", "camp")}
                     onChange={(e) => patchProp("kind", "string", e.target.value)}
                   />
@@ -247,29 +247,29 @@ function PrefabInspector({
   }, [settings.width, settings.height]);
 
   return (
-    <div className="map-editor-inspector-panel xiv-window">
-      <div className="xiv-titlebar">
-        <span className="xiv-title">Inspector</span>
+    <div className="map-editor-inspector-panel cm-window">
+      <div className="cm-titlebar">
+        <span className="cm-title">Inspector</span>
       </div>
       <div className="map-editor-panel-toolbar">
         <button
           type="button"
-          className="xiv-btn gold wide"
+          className="cm-btn gold wide"
           onClick={() => settings.onResize(parseInt(w, 10) || 1, parseInt(h, 10) || 1)}
         >
           Apply size
         </button>
       </div>
-      <div className="xiv-body map-editor-inspector-body">
+      <div className="cm-body map-editor-inspector-body">
         <div className="map-editor-inspector">
           <div className="map-editor-group-label">Prefab</div>
           <label className="field-label">Name</label>
-          <input className="xiv-input" value={settings.name} onChange={(e) => settings.onName(e.target.value)} />
+          <input className="cm-input" value={settings.name} onChange={(e) => settings.onName(e.target.value)} />
           <label className="field-label">Size (tiles)</label>
           <div className="map-editor-prefab-size">
-            <input className="xiv-input" type="number" min={1} max={128} value={w} onChange={(e) => setW(e.target.value)} />
+            <input className="cm-input" type="number" min={1} max={128} value={w} onChange={(e) => setW(e.target.value)} />
             <span>×</span>
-            <input className="xiv-input" type="number" min={1} max={128} value={h} onChange={(e) => setH(e.target.value)} />
+            <input className="cm-input" type="number" min={1} max={128} value={h} onChange={(e) => setH(e.target.value)} />
           </div>
         </div>
       </div>

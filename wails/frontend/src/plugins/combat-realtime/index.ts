@@ -4,6 +4,7 @@ import { initialBattleFocus, withBattleFocus } from "../../battle/activeBattle";
 import type { PluginContext } from "../../core/plugins/contracts";
 import type {
   BattleInvitePayload,
+  ChatTone,
   Envelope,
   RTBattleEndPayload,
   RTBattleEventPayload,
@@ -12,6 +13,16 @@ import type {
 } from "../../types";
 import { BattleHUD } from "../../components/BattleHUD";
 import { RTBattleScene } from "./RTBattleScene";
+
+function toneForRTEvent(p: RTBattleEventPayload): ChatTone {
+  if (p.success === false || p.cast_cancelled) return "fail";
+  if (p.action_id === "capture") return "capture";
+  if (p.cast_started) return "cast";
+  if (p.heal || p.mp_restored) return "heal";
+  if (p.damage) return "damage";
+  if (p.action_name || p.action_id) return "skill";
+  return "plain";
+}
 
 const plugin = {
   id: "combat.realtime",
@@ -41,7 +52,7 @@ const plugin = {
           battle: null,
         };
       });
-      pushChat("battle", "Realtime battle start!");
+      pushChat("battle", "Realtime battle start!", undefined, "skill");
     });
 
     ctx.registerHandler("rt_battle_tick", (env) => {
@@ -60,7 +71,7 @@ const plugin = {
 
     ctx.registerHandler("rt_battle_event", (env) => {
       const p = env.payload as RTBattleEventPayload;
-      if (p.message) pushChat("battle", p.message);
+      if (p.message) pushChat("battle", p.message, undefined, toneForRTEvent(p));
       battleEvents.emit("rt_event", p);
       useGame.setState((s) =>
         s.rtBattle
@@ -75,13 +86,17 @@ const plugin = {
     });
 
     ctx.registerHandler("rt_battle_end", (env) => {
-      const p = env.payload as RTBattleEndPayload;
+      const p: RTBattleEndPayload = {
+        victory: false,
+        rewards: [],
+        ...(env.payload as RTBattleEndPayload | null | undefined),
+      };
       useGame.setState((s) => ({
         selectedAction: null,
         battleTargetId: null,
         rtBattle: s.rtBattle ? { ...s.rtBattle, end: p } : s.rtBattle,
       }));
-      pushChat("battle", p.victory ? "Victory!" : "Defeat...");
+      pushChat("battle", p.victory ? "Victory!" : "Defeat...", undefined, p.victory ? "victory" : "defeat");
     });
 
     // ATB messages ignored when realtime is active

@@ -3,7 +3,7 @@ import type { MapTileOverrides, MapTerrainLayers } from "../types";
 import type { EditorObject } from "../editor/editorTypes";
 import { apiUrl, platformFetch } from "./platform";
 
-const ADMIN_TOKEN_KEY = "ffv_admin_token";
+const ADMIN_TOKEN_KEY = "cm_admin_token";
 export function getAdminToken(): string | null {
   return sessionStorage.getItem(ADMIN_TOKEN_KEY);
 }

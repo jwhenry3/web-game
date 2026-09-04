@@ -3,8 +3,8 @@ package game
 import "testing"
 
 func TestAddItemsStacksConsumables(t *testing.T) {
-	a := Item{ID: "p1", Kind: KindConsumable, Consumable: "potion", Level: 1, Qty: 3}
-	b := Item{ID: "p2", Kind: KindConsumable, Consumable: "potion", Level: 1, Qty: 2}
+	a := Item{ID: "p1", Kind: KindConsumable, Consumable: "potio", Level: 1, Qty: 3}
+	b := Item{ID: "p2", Kind: KindConsumable, Consumable: "potio", Level: 1, Qty: 2}
 	out := AddItems([]Item{a}, []Item{b})
 	if len(out) != 1 {
 		t.Fatalf("expected one pile, got %d", len(out))
@@ -24,8 +24,8 @@ func TestAddItemsDoesNotStackEquipment(t *testing.T) {
 }
 
 func TestAddItemsCapsAtMaxStack(t *testing.T) {
-	a := Item{ID: "p1", Kind: KindConsumable, Consumable: "potion", Level: 1, Qty: MaxStack}
-	b := Item{ID: "p2", Kind: KindConsumable, Consumable: "potion", Level: 1, Qty: 10}
+	a := Item{ID: "p1", Kind: KindConsumable, Consumable: "potio", Level: 1, Qty: MaxStack}
+	b := Item{ID: "p2", Kind: KindConsumable, Consumable: "potio", Level: 1, Qty: 10}
 	out := AddItems([]Item{a}, []Item{b})
 	if len(out) != 1 || ItemQty(out[0]) != MaxStack {
 		t.Fatalf("expected cap %d, got len=%d qty=%d", MaxStack, len(out), ItemQty(out[0]))
@@ -34,8 +34,8 @@ func TestAddItemsCapsAtMaxStack(t *testing.T) {
 
 func TestCompactStacksMergesLegacyPiles(t *testing.T) {
 	inv := []Item{
-		{ID: "p1", Kind: KindConsumable, Consumable: "potion", Level: 1},
-		{ID: "p2", Kind: KindConsumable, Consumable: "potion", Level: 1},
+		{ID: "p1", Kind: KindConsumable, Consumable: "potio", Level: 1},
+		{ID: "p2", Kind: KindConsumable, Consumable: "potio", Level: 1},
 		{ID: "e1", Kind: KindEquipment, Slot: SlotWeapon},
 	}
 	out := CompactStacks(inv)
@@ -44,7 +44,7 @@ func TestCompactStacksMergesLegacyPiles(t *testing.T) {
 	}
 	var qty int
 	for _, item := range out {
-		if item.Consumable == "potion" {
+		if item.Consumable == "potio" {
 			qty = ItemQty(item)
 		}
 	}

@@ -23,7 +23,7 @@ export function setHotbarDragImage(e: DragEvent, iconSrc: string, qty?: number) 
   const iconWrap = document.createElement("span");
   iconWrap.className = "hotbar-icon";
   const img = document.createElement("img");
-  img.className = "xiv-icon";
+  img.className = "cm-icon";
   img.src = iconSrc;
   img.width = 34;
   img.height = 34;

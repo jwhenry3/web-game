@@ -14,6 +14,7 @@ import {
   notifyKeybindCapture,
   type KeybindMap,
 } from "../input/keybinds";
+import { comboDisplayName } from "../types";
 
 export function MainMenuTrigger() {
   const toggle = useGame((s) => s.toggleMainMenu);
@@ -23,12 +24,12 @@ export function MainMenuTrigger() {
     <HoverTooltip content="Main Menu [Esc]">
       <button
         type="button"
-        className={`xiv-menu-btn ${open ? "on" : ""}`}
+        className={`cm-menu-btn ${open ? "on" : ""}`}
         tabIndex={-1}
         onClick={toggle}
         aria-label="Main Menu"
       >
-        <span className="xiv-menu-icon xiv-menu-icon--glyph">☰</span>
+        <span className="cm-menu-icon cm-menu-icon--glyph">☰</span>
       </button>
     </HoverTooltip>
   );
@@ -103,13 +104,13 @@ function KeybindsContent() {
       <div className="main-menu-keybinds">
         {KEYBIND_SECTIONS.map((section) => (
           <section key={section.title} className="main-menu-keybind-section">
-            <h3 className="xiv-section-label">{section.title}</h3>
+            <h3 className="cm-section-label">{section.title}</h3>
             {section.actions.map((action) => (
               <div key={action} className="main-menu-keybind-row">
                 <span className="main-menu-keybind-action">{actionLabel(action)}</span>
                 <button
                   type="button"
-                  className={`xiv-btn ${listening === action ? "gold on" : ""}`}
+                  className={`cm-btn ${listening === action ? "gold on" : ""}`}
                   onClick={() => {
                     setListening(action);
                     setStatus(`Press a key for ${actionLabel(action)}…`);
@@ -124,7 +125,7 @@ function KeybindsContent() {
       </div>
       {status && <p className="hint">{status}</p>}
       <div className="main-menu-actions">
-        <button type="button" className="xiv-btn" onClick={resetDefaults}>
+        <button type="button" className="cm-btn" onClick={resetDefaults}>
           Reset Defaults
         </button>
       </div>
@@ -247,8 +248,7 @@ function MenuPanel() {
         {username && <div className="dim">Account · {username}</div>}
         {profile && (
           <div>
-            {profile.name} · Lv {profile.level} {profile.main_job}
-            {profile.sub_job ? ` / ${profile.sub_job}` : ""}
+            {profile.name} · Lv {profile.level} {comboDisplayName(profile.main_job, profile.sub_job || undefined)}
           </div>
         )}
       </div>
@@ -261,10 +261,10 @@ function MenuPanel() {
           <>
             <p className="main-menu-confirm">Logout and return to the title screen?</p>
             <div className="main-menu-confirm-btns">
-              <button type="button" className="xiv-btn danger" onClick={doLogout}>
+              <button type="button" className="cm-btn danger" onClick={doLogout}>
                 Yes, Logout
               </button>
-              <button type="button" className="xiv-btn" onClick={() => setConfirming(false)}>
+              <button type="button" className="cm-btn" onClick={() => setConfirming(false)}>
                 Cancel
               </button>
             </div>
@@ -288,16 +288,16 @@ export function MainMenu() {
   return (
     <div className="main-menu-backdrop" onClick={closeMainMenu}>
       <div
-        className={`xiv-window main-menu-panel ${view === "options" ? "main-menu-panel--options" : ""}`}
+        className={`cm-window main-menu-panel ${view === "options" ? "main-menu-panel--options" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="xiv-titlebar">
-          <span className="xiv-title">{title}</span>
-          <button type="button" className="xiv-close" onClick={closeMainMenu} aria-label="Close">
+        <div className="cm-titlebar">
+          <span className="cm-title">{title}</span>
+          <button type="button" className="cm-close" onClick={closeMainMenu} aria-label="Close">
             ×
           </button>
         </div>
-        <div className="xiv-body">
+        <div className="cm-body">
           {view === "options" ? <OptionsPanel /> : <MenuPanel />}
         </div>
       </div>

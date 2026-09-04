@@ -129,7 +129,7 @@ function ToolbarIconButton({
     <HoverTooltip content={label} disabled={disabled}>
       <button
         type="button"
-        className={`xiv-btn map-editor-chrome-icon-btn ${tone === "gold" ? "gold" : ""} ${tone === "danger" ? "danger" : ""}`}
+        className={`cm-btn map-editor-chrome-icon-btn ${tone === "gold" ? "gold" : ""} ${tone === "danger" ? "danger" : ""}`}
         onClick={onClick}
         disabled={disabled}
         aria-label={label}
@@ -255,7 +255,7 @@ export function EntityEditorPage({
 
   return (
     <div className="map-editor-entities-shell">
-      <div className="map-editor-chrome map-editor-chrome--toolbar xiv-window">
+      <div className="map-editor-chrome map-editor-chrome--toolbar cm-window">
         <div className="map-editor-chrome-toolbar map-editor-entity-toolbar">
           {(status || error) && (
             <div className="map-editor-chrome-messages">
@@ -288,11 +288,11 @@ export function EntityEditorPage({
 
       <div className="map-editor-layout map-editor-layout--entities">
         <div className="map-editor-dock-left">
-          <div className="map-editor-toolbox xiv-window">
-            <div className="xiv-titlebar">
-              <span className="xiv-title">Templates</span>
+          <div className="map-editor-toolbox cm-window">
+            <div className="cm-titlebar">
+              <span className="cm-title">Templates</span>
             </div>
-            <div className="xiv-body map-editor-toolbox-body">
+            <div className="cm-body map-editor-toolbox-body">
               {templateEntities.length === 0 && <p className="dim">No entities yet. Create one to get started.</p>}
               {ENTITY_TEMPLATE_GROUPS.map((group) => {
                 const groupEntities = group.entries.flatMap((e) => byKind.get(e.kind) ?? []);
@@ -304,7 +304,7 @@ export function EntityEditorPage({
                       <button
                         key={ent.id}
                         type="button"
-                        className={`xiv-btn wide map-editor-prefab-item ${selectedId === ent.id ? "on" : ""}`}
+                        className={`cm-btn wide map-editor-prefab-item ${selectedId === ent.id ? "on" : ""}`}
                         onClick={() => setSelectedId(ent.id)}
                       >
                         <span className="map-editor-prefab-item-main">

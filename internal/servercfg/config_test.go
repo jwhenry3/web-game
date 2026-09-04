@@ -27,7 +27,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if cfg.Server.Overworld != filepath.ToSlash(overworld) {
 		t.Fatalf("overworld = %q", cfg.Server.Overworld)
 	}
-	if cfg.Plugins.Combat != "combat.atb" {
+	if cfg.Plugins.Combat != "combat.ordo" {
 		t.Fatalf("combat = %q", cfg.Plugins.Combat)
 	}
 }

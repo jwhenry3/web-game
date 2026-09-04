@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 func TestApplyOverworldReloadStreamsMapAndWorld(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/protocol"
 
 	"github.com/gorilla/websocket"
 )
@@ -37,6 +37,7 @@ type Client struct {
 	SpawnY         float64
 	UseSpawn       bool
 	SpawnFacing    string
+	HouseOwner     string
 	lastWorldSave  time.Time
 	lastWorldSkill time.Time
 

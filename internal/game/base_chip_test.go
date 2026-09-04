@@ -15,18 +15,25 @@ func TestLoadBaseChipConfig(t *testing.T) {
 	if len(cfg.TerrainCenters) != 4 {
 		t.Fatalf("terrain count: got %d want 4", len(cfg.TerrainCenters))
 	}
-	if cfg.TerrainCenters[BaseChipTerrainGrass] != 48 {
-		t.Fatalf("grass center: got %d want 48", cfg.TerrainCenters[BaseChipTerrainGrass])
+	if cfg.TerrainCenters[BaseChipTerrainGrass] != BaseChipLocalGrassFill {
+		t.Fatalf("grass fill: got %d want %d", cfg.TerrainCenters[BaseChipTerrainGrass], BaseChipLocalGrassFill)
 	}
-	if !cfg.WaterTiles[176] {
-		t.Fatal("expected tile 176 to be water")
+	if cfg.TerrainCenters[BaseChipTerrainDirt] != BaseChipLocalDirtFill {
+		t.Fatalf("dirt fill: got %d want %d", cfg.TerrainCenters[BaseChipTerrainDirt], BaseChipLocalDirtFill)
 	}
-	if !cfg.CollidesTiles[52] {
-		t.Fatal("expected tile 52 to collide")
+	if !cfg.WaterTiles[BaseChipLocalWaterChip] {
+		t.Fatal("expected water chip tile to be flagged")
+	}
+	if !cfg.CollidesTiles[BaseChipLocalStoneFill] {
+		t.Fatal("expected stone fill to collide")
 	}
 	gid := cfg.GID(PipoyaFirstBaseChip, cfg.AutotileLocal(BaseChipTerrainGrass, true, true, true, true))
-	if gid != PipoyaFirstBaseChip+48 {
-		t.Fatalf("grass fill gid: got %d want %d", gid, PipoyaFirstBaseChip+48)
+	if gid != PipoyaGIDGrass {
+		t.Fatalf("grass fill gid: got %d want %d", gid, PipoyaGIDGrass)
+	}
+	pathGID := cfg.GID(PipoyaFirstBaseChip, cfg.AutotileLocal(BaseChipTerrainDirt, true, true, true, true))
+	if pathGID != PipoyaGIDPath {
+		t.Fatalf("path fill gid: got %d want %d", pathGID, PipoyaGIDPath)
 	}
 }
 

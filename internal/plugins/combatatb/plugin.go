@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
 )
 
 const (
-	pluginID   = "combat.atb"
-	frontendID = "combat.atb"
+	pluginID   = "combat.ordo"
+	frontendID = "combat.ordo"
 )
 
 // Plugin implements ATB combat via action windows and stat-based resolution.

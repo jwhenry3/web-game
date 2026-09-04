@@ -73,7 +73,7 @@ export function CatalogTableView<T extends { id: string; name: string }>({
     <div className="map-editor-catalog-table-body">
       <div className="map-editor-catalog-table-filters">
         <input
-          className="xiv-input map-editor-catalog-table-search"
+          className="cm-input map-editor-catalog-table-search"
           type="search"
           value={search}
           placeholder={searchPlaceholder}
@@ -83,7 +83,7 @@ export function CatalogTableView<T extends { id: string; name: string }>({
           <label key={filter.id} className="map-editor-catalog-table-filter">
             <span className="dim">{filter.label}</span>
             <select
-              className="xiv-input"
+              className="cm-input"
               value={filterValues[filter.id] ?? ""}
               onChange={(e) => setFilter(filter.id, e.target.value)}
             >
@@ -179,11 +179,11 @@ function CatalogInspectorPanel({
   style?: CSSProperties;
 }) {
   return (
-    <div className={`map-editor-inspector-panel map-editor-catalog-inspector xiv-window ${className ?? ""}`} style={style}>
-      <div className="xiv-titlebar">
-        <span className="xiv-title">{title}</span>
+    <div className={`map-editor-inspector-panel map-editor-catalog-inspector cm-window ${className ?? ""}`} style={style}>
+      <div className="cm-titlebar">
+        <span className="cm-title">{title}</span>
       </div>
-      <div className="xiv-body map-editor-inspector-body">
+      <div className="cm-body map-editor-inspector-body">
         <div className="map-editor-inspector map-editor-catalog-detail-content">{children}</div>
       </div>
     </div>
@@ -221,11 +221,11 @@ export function CatalogSplitEditor<T extends { id: string; name: string }>({
 
   return (
     <div className={`map-editor-layout map-editor-layout--catalog ${useColumns ? "map-editor-layout--catalog-columns" : ""}`}>
-      <div className="map-editor-catalog-list-panel xiv-window">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">{listTitle}</span>
+      <div className="map-editor-catalog-list-panel cm-window">
+        <div className="cm-titlebar">
+          <span className="cm-title">{listTitle}</span>
         </div>
-        <div className="xiv-body map-editor-catalog-list-body">
+        <div className="cm-body map-editor-catalog-list-body">
           <CatalogTableView
             items={items}
             columns={columns}

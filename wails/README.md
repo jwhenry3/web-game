@@ -24,7 +24,7 @@ cmd/server/    dedicated multiplayer server entry
 |------|---------|--------|
 | Client-only | `npm run wails:dev` | External `npm run server:dev` on :8080 |
 | Standalone (env) | `npm run wails:dev:standalone` | In-process on ephemeral `127.0.0.1:port` |
-| Standalone binary | `npm run wails:build:standalone` | Writes `bin/fantasy-standalone.exe` (`-tags standalone`) |
+| Standalone binary | `npm run wails:build:standalone` | Writes `bin/clara-mundi.exe` (`-tags standalone`) |
 
 Standalone keeps **accounts** and **profiles** as external JSON on disk (never
 `go:embed`’d into the binary). Stock maps/content are embedded and written
@@ -39,7 +39,7 @@ under `data/` next to the exe when missing:
 Files are created on first save. Default **admin / admin** is created at runtime in
 that JSON file if missing — it is not baked into the executable.
 
-Run **`bin/fantasy-standalone.exe`** for offline play. `fantasy-client.exe` is
+Run **`bin/clara-mundi.exe`** for offline play. `clara-mundi-client.exe` is
 client-only and expects an external server on `:8080`.
 
 ## Prerequisites

@@ -661,6 +661,7 @@ type ActionPayload struct {
 	ActionId      string                 `protobuf:"bytes,1,opt,name=action_id,json=actionId,proto3" json:"action_id,omitempty"`
 	TargetId      string                 `protobuf:"bytes,2,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
 	ItemId        string                 `protobuf:"bytes,3,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	ActorId       string                 `protobuf:"bytes,4,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -716,6 +717,201 @@ func (x *ActionPayload) GetItemId() string {
 	return ""
 }
 
+func (x *ActionPayload) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+type PetIDPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PetId         string                 `protobuf:"bytes,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PetIDPayload) Reset() {
+	*x = PetIDPayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetIDPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetIDPayload) ProtoMessage() {}
+
+func (x *PetIDPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetIDPayload.ProtoReflect.Descriptor instead.
+func (*PetIDPayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *PetIDPayload) GetPetId() string {
+	if x != nil {
+		return x.PetId
+	}
+	return ""
+}
+
+type WorldPet struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	OwnerId       string                 `protobuf:"bytes,2,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Name          string                 `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	Level         int32                  `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
+	X             float64                `protobuf:"fixed64,6,opt,name=x,proto3" json:"x,omitempty"`
+	Y             float64                `protobuf:"fixed64,7,opt,name=y,proto3" json:"y,omitempty"`
+	Facing        string                 `protobuf:"bytes,8,opt,name=facing,proto3" json:"facing,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WorldPet) Reset() {
+	*x = WorldPet{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorldPet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorldPet) ProtoMessage() {}
+
+func (x *WorldPet) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorldPet.ProtoReflect.Descriptor instead.
+func (*WorldPet) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *WorldPet) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *WorldPet) GetOwnerId() string {
+	if x != nil {
+		return x.OwnerId
+	}
+	return ""
+}
+
+func (x *WorldPet) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *WorldPet) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *WorldPet) GetLevel() int32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *WorldPet) GetX() float64 {
+	if x != nil {
+		return x.X
+	}
+	return 0
+}
+
+func (x *WorldPet) GetY() float64 {
+	if x != nil {
+		return x.Y
+	}
+	return 0
+}
+
+func (x *WorldPet) GetFacing() string {
+	if x != nil {
+		return x.Facing
+	}
+	return ""
+}
+
+type PetStatePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Pets          []*WorldPet            `protobuf:"bytes,1,rep,name=pets,proto3" json:"pets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PetStatePayload) Reset() {
+	*x = PetStatePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PetStatePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PetStatePayload) ProtoMessage() {}
+
+func (x *PetStatePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PetStatePayload.ProtoReflect.Descriptor instead.
+func (*PetStatePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *PetStatePayload) GetPets() []*WorldPet {
+	if x != nil {
+		return x.Pets
+	}
+	return nil
+}
+
 type SetTargetPayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TargetId      string                 `protobuf:"bytes,1,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
@@ -725,7 +921,7 @@ type SetTargetPayload struct {
 
 func (x *SetTargetPayload) Reset() {
 	*x = SetTargetPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[13]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -737,7 +933,7 @@ func (x *SetTargetPayload) String() string {
 func (*SetTargetPayload) ProtoMessage() {}
 
 func (x *SetTargetPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[13]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -750,7 +946,7 @@ func (x *SetTargetPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTargetPayload.ProtoReflect.Descriptor instead.
 func (*SetTargetPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{13}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *SetTargetPayload) GetTargetId() string {
@@ -769,7 +965,7 @@ type SetSavePointPayload struct {
 
 func (x *SetSavePointPayload) Reset() {
 	*x = SetSavePointPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[14]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -781,7 +977,7 @@ func (x *SetSavePointPayload) String() string {
 func (*SetSavePointPayload) ProtoMessage() {}
 
 func (x *SetSavePointPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[14]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -794,7 +990,7 @@ func (x *SetSavePointPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetSavePointPayload.ProtoReflect.Descriptor instead.
 func (*SetSavePointPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{14}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *SetSavePointPayload) GetSavePointId() string {
@@ -814,7 +1010,7 @@ type UseWorldSkillPayload struct {
 
 func (x *UseWorldSkillPayload) Reset() {
 	*x = UseWorldSkillPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[15]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -826,7 +1022,7 @@ func (x *UseWorldSkillPayload) String() string {
 func (*UseWorldSkillPayload) ProtoMessage() {}
 
 func (x *UseWorldSkillPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[15]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -839,7 +1035,7 @@ func (x *UseWorldSkillPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UseWorldSkillPayload.ProtoReflect.Descriptor instead.
 func (*UseWorldSkillPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{15}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *UseWorldSkillPayload) GetSkillId() string {
@@ -856,6 +1052,538 @@ func (x *UseWorldSkillPayload) GetSavePointId() string {
 	return ""
 }
 
+type EnterHousePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerName     string                 `protobuf:"bytes,1,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnterHousePayload) Reset() {
+	*x = EnterHousePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnterHousePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnterHousePayload) ProtoMessage() {}
+
+func (x *EnterHousePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnterHousePayload.ProtoReflect.Descriptor instead.
+func (*EnterHousePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *EnterHousePayload) GetOwnerName() string {
+	if x != nil {
+		return x.OwnerName
+	}
+	return ""
+}
+
+type HouseInteractPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Target        string                 `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HouseInteractPayload) Reset() {
+	*x = HouseInteractPayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HouseInteractPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HouseInteractPayload) ProtoMessage() {}
+
+func (x *HouseInteractPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HouseInteractPayload.ProtoReflect.Descriptor instead.
+func (*HouseInteractPayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *HouseInteractPayload) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+type HouseStorageMovePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Qty           int32                  `protobuf:"varint,2,opt,name=qty,proto3" json:"qty,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HouseStorageMovePayload) Reset() {
+	*x = HouseStorageMovePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HouseStorageMovePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HouseStorageMovePayload) ProtoMessage() {}
+
+func (x *HouseStorageMovePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HouseStorageMovePayload.ProtoReflect.Descriptor instead.
+func (*HouseStorageMovePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *HouseStorageMovePayload) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *HouseStorageMovePayload) GetQty() int32 {
+	if x != nil {
+		return x.Qty
+	}
+	return 0
+}
+
+type HousePlaceFurniturePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ItemId        string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	Col           int32                  `protobuf:"varint,2,opt,name=col,proto3" json:"col,omitempty"`
+	Row           int32                  `protobuf:"varint,3,opt,name=row,proto3" json:"row,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HousePlaceFurniturePayload) Reset() {
+	*x = HousePlaceFurniturePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HousePlaceFurniturePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HousePlaceFurniturePayload) ProtoMessage() {}
+
+func (x *HousePlaceFurniturePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HousePlaceFurniturePayload.ProtoReflect.Descriptor instead.
+func (*HousePlaceFurniturePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *HousePlaceFurniturePayload) GetItemId() string {
+	if x != nil {
+		return x.ItemId
+	}
+	return ""
+}
+
+func (x *HousePlaceFurniturePayload) GetCol() int32 {
+	if x != nil {
+		return x.Col
+	}
+	return 0
+}
+
+func (x *HousePlaceFurniturePayload) GetRow() int32 {
+	if x != nil {
+		return x.Row
+	}
+	return 0
+}
+
+type HousePickFurniturePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	FurnitureId   string                 `protobuf:"bytes,1,opt,name=furniture_id,json=furnitureId,proto3" json:"furniture_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HousePickFurniturePayload) Reset() {
+	*x = HousePickFurniturePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HousePickFurniturePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HousePickFurniturePayload) ProtoMessage() {}
+
+func (x *HousePickFurniturePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HousePickFurniturePayload.ProtoReflect.Descriptor instead.
+func (*HousePickFurniturePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *HousePickFurniturePayload) GetFurnitureId() string {
+	if x != nil {
+		return x.FurnitureId
+	}
+	return ""
+}
+
+type SetCampSkinPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Skin          string                 `protobuf:"bytes,1,opt,name=skin,proto3" json:"skin,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetCampSkinPayload) Reset() {
+	*x = SetCampSkinPayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetCampSkinPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetCampSkinPayload) ProtoMessage() {}
+
+func (x *SetCampSkinPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetCampSkinPayload.ProtoReflect.Descriptor instead.
+func (*SetCampSkinPayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *SetCampSkinPayload) GetSkin() string {
+	if x != nil {
+		return x.Skin
+	}
+	return ""
+}
+
+type CampStatePayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Camps         []*WorldCamp           `protobuf:"bytes,1,rep,name=camps,proto3" json:"camps,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CampStatePayload) Reset() {
+	*x = CampStatePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CampStatePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CampStatePayload) ProtoMessage() {}
+
+func (x *CampStatePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CampStatePayload.ProtoReflect.Descriptor instead.
+func (*CampStatePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CampStatePayload) GetCamps() []*WorldCamp {
+	if x != nil {
+		return x.Camps
+	}
+	return nil
+}
+
+type HouseStatePayload struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	OwnerName       string                 `protobuf:"bytes,1,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
+	Skin            string                 `protobuf:"bytes,2,opt,name=skin,proto3" json:"skin,omitempty"`
+	MapCols         int32                  `protobuf:"varint,3,opt,name=map_cols,json=mapCols,proto3" json:"map_cols,omitempty"`
+	MapRows         int32                  `protobuf:"varint,4,opt,name=map_rows,json=mapRows,proto3" json:"map_rows,omitempty"`
+	WalkCols        int32                  `protobuf:"varint,5,opt,name=walk_cols,json=walkCols,proto3" json:"walk_cols,omitempty"`
+	WalkRows        int32                  `protobuf:"varint,6,opt,name=walk_rows,json=walkRows,proto3" json:"walk_rows,omitempty"`
+	WalkOriginCol   int32                  `protobuf:"varint,7,opt,name=walk_origin_col,json=walkOriginCol,proto3" json:"walk_origin_col,omitempty"`
+	WalkOriginRow   int32                  `protobuf:"varint,8,opt,name=walk_origin_row,json=walkOriginRow,proto3" json:"walk_origin_row,omitempty"`
+	TileSize        int32                  `protobuf:"varint,9,opt,name=tile_size,json=tileSize,proto3" json:"tile_size,omitempty"`
+	Players         []*HousePlayer         `protobuf:"bytes,10,rep,name=players,proto3" json:"players,omitempty"`
+	Furniture       []*HouseFurniture      `protobuf:"bytes,11,rep,name=furniture,proto3" json:"furniture,omitempty"`
+	Pois            []*HousePOI            `protobuf:"bytes,12,rep,name=pois,proto3" json:"pois,omitempty"`
+	Storage         []*Item                `protobuf:"bytes,13,rep,name=storage,proto3" json:"storage,omitempty"`
+	StorageCapacity int32                  `protobuf:"varint,14,opt,name=storage_capacity,json=storageCapacity,proto3" json:"storage_capacity,omitempty"`
+	IsOwner         bool                   `protobuf:"varint,15,opt,name=is_owner,json=isOwner,proto3" json:"is_owner,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *HouseStatePayload) Reset() {
+	*x = HouseStatePayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HouseStatePayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HouseStatePayload) ProtoMessage() {}
+
+func (x *HouseStatePayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HouseStatePayload.ProtoReflect.Descriptor instead.
+func (*HouseStatePayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *HouseStatePayload) GetOwnerName() string {
+	if x != nil {
+		return x.OwnerName
+	}
+	return ""
+}
+
+func (x *HouseStatePayload) GetSkin() string {
+	if x != nil {
+		return x.Skin
+	}
+	return ""
+}
+
+func (x *HouseStatePayload) GetMapCols() int32 {
+	if x != nil {
+		return x.MapCols
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetMapRows() int32 {
+	if x != nil {
+		return x.MapRows
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetWalkCols() int32 {
+	if x != nil {
+		return x.WalkCols
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetWalkRows() int32 {
+	if x != nil {
+		return x.WalkRows
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetWalkOriginCol() int32 {
+	if x != nil {
+		return x.WalkOriginCol
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetWalkOriginRow() int32 {
+	if x != nil {
+		return x.WalkOriginRow
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetTileSize() int32 {
+	if x != nil {
+		return x.TileSize
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetPlayers() []*HousePlayer {
+	if x != nil {
+		return x.Players
+	}
+	return nil
+}
+
+func (x *HouseStatePayload) GetFurniture() []*HouseFurniture {
+	if x != nil {
+		return x.Furniture
+	}
+	return nil
+}
+
+func (x *HouseStatePayload) GetPois() []*HousePOI {
+	if x != nil {
+		return x.Pois
+	}
+	return nil
+}
+
+func (x *HouseStatePayload) GetStorage() []*Item {
+	if x != nil {
+		return x.Storage
+	}
+	return nil
+}
+
+func (x *HouseStatePayload) GetStorageCapacity() int32 {
+	if x != nil {
+		return x.StorageCapacity
+	}
+	return 0
+}
+
+func (x *HouseStatePayload) GetIsOwner() bool {
+	if x != nil {
+		return x.IsOwner
+	}
+	return false
+}
+
+type HouseReturnPayload struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HouseReturnPayload) Reset() {
+	*x = HouseReturnPayload{}
+	mi := &file_fantasy_v1_messages_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HouseReturnPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HouseReturnPayload) ProtoMessage() {}
+
+func (x *HouseReturnPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_fantasy_v1_messages_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HouseReturnPayload.ProtoReflect.Descriptor instead.
+func (*HouseReturnPayload) Descriptor() ([]byte, []int) {
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *HouseReturnPayload) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type RTMovePayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	X             float64                `protobuf:"fixed64,1,opt,name=x,proto3" json:"x,omitempty"`
@@ -866,7 +1594,7 @@ type RTMovePayload struct {
 
 func (x *RTMovePayload) Reset() {
 	*x = RTMovePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[16]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -878,7 +1606,7 @@ func (x *RTMovePayload) String() string {
 func (*RTMovePayload) ProtoMessage() {}
 
 func (x *RTMovePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[16]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -891,7 +1619,7 @@ func (x *RTMovePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTMovePayload.ProtoReflect.Descriptor instead.
 func (*RTMovePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{16}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RTMovePayload) GetX() float64 {
@@ -918,7 +1646,7 @@ type RTAttackPayload struct {
 
 func (x *RTAttackPayload) Reset() {
 	*x = RTAttackPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[17]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -930,7 +1658,7 @@ func (x *RTAttackPayload) String() string {
 func (*RTAttackPayload) ProtoMessage() {}
 
 func (x *RTAttackPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[17]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -943,7 +1671,7 @@ func (x *RTAttackPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTAttackPayload.ProtoReflect.Descriptor instead.
 func (*RTAttackPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{17}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RTAttackPayload) GetFacingX() float64 {
@@ -971,7 +1699,7 @@ type WelcomePayload struct {
 
 func (x *WelcomePayload) Reset() {
 	*x = WelcomePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[18]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -983,7 +1711,7 @@ func (x *WelcomePayload) String() string {
 func (*WelcomePayload) ProtoMessage() {}
 
 func (x *WelcomePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[18]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -996,7 +1724,7 @@ func (x *WelcomePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WelcomePayload.ProtoReflect.Descriptor instead.
 func (*WelcomePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{18}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *WelcomePayload) GetPlayerId() string {
@@ -1029,7 +1757,7 @@ type MapConfigPayload struct {
 
 func (x *MapConfigPayload) Reset() {
 	*x = MapConfigPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[19]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1041,7 +1769,7 @@ func (x *MapConfigPayload) String() string {
 func (*MapConfigPayload) ProtoMessage() {}
 
 func (x *MapConfigPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[19]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1054,7 +1782,7 @@ func (x *MapConfigPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MapConfigPayload.ProtoReflect.Descriptor instead.
 func (*MapConfigPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{19}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *MapConfigPayload) GetMap() *MapSnapshot {
@@ -1072,13 +1800,15 @@ type WorldStatePayload struct {
 	SavePoints    []*SavePoint           `protobuf:"bytes,4,rep,name=save_points,json=savePoints,proto3" json:"save_points,omitempty"`
 	JobChangers   []*JobChanger          `protobuf:"bytes,5,rep,name=job_changers,json=jobChangers,proto3" json:"job_changers,omitempty"`
 	Map           *OverworldMap          `protobuf:"bytes,6,opt,name=map,proto3" json:"map,omitempty"`
+	Camps         []*WorldCamp           `protobuf:"bytes,7,rep,name=camps,proto3" json:"camps,omitempty"`
+	Pets          []*WorldPet            `protobuf:"bytes,8,rep,name=pets,proto3" json:"pets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorldStatePayload) Reset() {
 	*x = WorldStatePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[20]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1090,7 +1820,7 @@ func (x *WorldStatePayload) String() string {
 func (*WorldStatePayload) ProtoMessage() {}
 
 func (x *WorldStatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[20]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1103,7 +1833,7 @@ func (x *WorldStatePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorldStatePayload.ProtoReflect.Descriptor instead.
 func (*WorldStatePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{20}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *WorldStatePayload) GetPlayers() []*WorldPlayer {
@@ -1148,6 +1878,20 @@ func (x *WorldStatePayload) GetMap() *OverworldMap {
 	return nil
 }
 
+func (x *WorldStatePayload) GetCamps() []*WorldCamp {
+	if x != nil {
+		return x.Camps
+	}
+	return nil
+}
+
+func (x *WorldStatePayload) GetPets() []*WorldPet {
+	if x != nil {
+		return x.Pets
+	}
+	return nil
+}
+
 type PlayerLeftPayload struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1157,7 +1901,7 @@ type PlayerLeftPayload struct {
 
 func (x *PlayerLeftPayload) Reset() {
 	*x = PlayerLeftPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[21]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1169,7 +1913,7 @@ func (x *PlayerLeftPayload) String() string {
 func (*PlayerLeftPayload) ProtoMessage() {}
 
 func (x *PlayerLeftPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[21]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1182,7 +1926,7 @@ func (x *PlayerLeftPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerLeftPayload.ProtoReflect.Descriptor instead.
 func (*PlayerLeftPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{21}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *PlayerLeftPayload) GetId() string {
@@ -1203,7 +1947,7 @@ type PlayerMovedPayload struct {
 
 func (x *PlayerMovedPayload) Reset() {
 	*x = PlayerMovedPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[22]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1215,7 +1959,7 @@ func (x *PlayerMovedPayload) String() string {
 func (*PlayerMovedPayload) ProtoMessage() {}
 
 func (x *PlayerMovedPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[22]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1228,7 +1972,7 @@ func (x *PlayerMovedPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerMovedPayload.ProtoReflect.Descriptor instead.
 func (*PlayerMovedPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{22}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *PlayerMovedPayload) GetId() string {
@@ -1264,7 +2008,7 @@ type ChatMessagePayload struct {
 
 func (x *ChatMessagePayload) Reset() {
 	*x = ChatMessagePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[23]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1276,7 +2020,7 @@ func (x *ChatMessagePayload) String() string {
 func (*ChatMessagePayload) ProtoMessage() {}
 
 func (x *ChatMessagePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[23]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1289,7 +2033,7 @@ func (x *ChatMessagePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatMessagePayload.ProtoReflect.Descriptor instead.
 func (*ChatMessagePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{23}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *ChatMessagePayload) GetFromId() string {
@@ -1329,7 +2073,7 @@ type NPCStatePayload struct {
 
 func (x *NPCStatePayload) Reset() {
 	*x = NPCStatePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[24]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1341,7 +2085,7 @@ func (x *NPCStatePayload) String() string {
 func (*NPCStatePayload) ProtoMessage() {}
 
 func (x *NPCStatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[24]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1354,7 +2098,7 @@ func (x *NPCStatePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NPCStatePayload.ProtoReflect.Descriptor instead.
 func (*NPCStatePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{24}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *NPCStatePayload) GetNpcs() []*WorldNPC {
@@ -1373,7 +2117,7 @@ type BattleListPayload struct {
 
 func (x *BattleListPayload) Reset() {
 	*x = BattleListPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[25]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1385,7 +2129,7 @@ func (x *BattleListPayload) String() string {
 func (*BattleListPayload) ProtoMessage() {}
 
 func (x *BattleListPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[25]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1398,7 +2142,7 @@ func (x *BattleListPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleListPayload.ProtoReflect.Descriptor instead.
 func (*BattleListPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{25}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *BattleListPayload) GetBattles() []*BattleInfo {
@@ -1419,7 +2163,7 @@ type BattleStatePayload struct {
 
 func (x *BattleStatePayload) Reset() {
 	*x = BattleStatePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[26]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1431,7 +2175,7 @@ func (x *BattleStatePayload) String() string {
 func (*BattleStatePayload) ProtoMessage() {}
 
 func (x *BattleStatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[26]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1444,7 +2188,7 @@ func (x *BattleStatePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleStatePayload.ProtoReflect.Descriptor instead.
 func (*BattleStatePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{26}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *BattleStatePayload) GetBattleId() string {
@@ -1479,7 +2223,7 @@ type BattleEventPayload struct {
 
 func (x *BattleEventPayload) Reset() {
 	*x = BattleEventPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[27]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1491,7 +2235,7 @@ func (x *BattleEventPayload) String() string {
 func (*BattleEventPayload) ProtoMessage() {}
 
 func (x *BattleEventPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[27]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1504,7 +2248,7 @@ func (x *BattleEventPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleEventPayload.ProtoReflect.Descriptor instead.
 func (*BattleEventPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{27}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *BattleEventPayload) GetResults() []*ActionResult {
@@ -1546,7 +2290,7 @@ type BattleTickPayload struct {
 
 func (x *BattleTickPayload) Reset() {
 	*x = BattleTickPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[28]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1558,7 +2302,7 @@ func (x *BattleTickPayload) String() string {
 func (*BattleTickPayload) ProtoMessage() {}
 
 func (x *BattleTickPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[28]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1571,7 +2315,7 @@ func (x *BattleTickPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleTickPayload.ProtoReflect.Descriptor instead.
 func (*BattleTickPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{28}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *BattleTickPayload) GetSkillAtb() map[string]float64 {
@@ -1647,7 +2391,7 @@ type BattleEndPayload struct {
 
 func (x *BattleEndPayload) Reset() {
 	*x = BattleEndPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[29]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1659,7 +2403,7 @@ func (x *BattleEndPayload) String() string {
 func (*BattleEndPayload) ProtoMessage() {}
 
 func (x *BattleEndPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[29]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1672,7 +2416,7 @@ func (x *BattleEndPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleEndPayload.ProtoReflect.Descriptor instead.
 func (*BattleEndPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{29}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *BattleEndPayload) GetVictory() bool {
@@ -1700,7 +2444,7 @@ type PartyInvitePayload struct {
 
 func (x *PartyInvitePayload) Reset() {
 	*x = PartyInvitePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[30]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1712,7 +2456,7 @@ func (x *PartyInvitePayload) String() string {
 func (*PartyInvitePayload) ProtoMessage() {}
 
 func (x *PartyInvitePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[30]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1725,7 +2469,7 @@ func (x *PartyInvitePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PartyInvitePayload.ProtoReflect.Descriptor instead.
 func (*PartyInvitePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{30}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *PartyInvitePayload) GetFromId() string {
@@ -1760,7 +2504,7 @@ type BattleInvitePayload struct {
 
 func (x *BattleInvitePayload) Reset() {
 	*x = BattleInvitePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[31]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1772,7 +2516,7 @@ func (x *BattleInvitePayload) String() string {
 func (*BattleInvitePayload) ProtoMessage() {}
 
 func (x *BattleInvitePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[31]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1785,7 +2529,7 @@ func (x *BattleInvitePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleInvitePayload.ProtoReflect.Descriptor instead.
 func (*BattleInvitePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{31}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *BattleInvitePayload) GetBattleId() string {
@@ -1819,7 +2563,7 @@ type FriendRequestPayload struct {
 
 func (x *FriendRequestPayload) Reset() {
 	*x = FriendRequestPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[32]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1831,7 +2575,7 @@ func (x *FriendRequestPayload) String() string {
 func (*FriendRequestPayload) ProtoMessage() {}
 
 func (x *FriendRequestPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[32]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1844,7 +2588,7 @@ func (x *FriendRequestPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendRequestPayload.ProtoReflect.Descriptor instead.
 func (*FriendRequestPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{32}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *FriendRequestPayload) GetFromId() string {
@@ -1873,7 +2617,7 @@ type RewardNoticePayload struct {
 
 func (x *RewardNoticePayload) Reset() {
 	*x = RewardNoticePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[33]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1885,7 +2629,7 @@ func (x *RewardNoticePayload) String() string {
 func (*RewardNoticePayload) ProtoMessage() {}
 
 func (x *RewardNoticePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[33]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1898,7 +2642,7 @@ func (x *RewardNoticePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RewardNoticePayload.ProtoReflect.Descriptor instead.
 func (*RewardNoticePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{33}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *RewardNoticePayload) GetXp() int32 {
@@ -1942,7 +2686,7 @@ type SocialStatePayload struct {
 
 func (x *SocialStatePayload) Reset() {
 	*x = SocialStatePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[34]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1954,7 +2698,7 @@ func (x *SocialStatePayload) String() string {
 func (*SocialStatePayload) ProtoMessage() {}
 
 func (x *SocialStatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[34]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1967,7 +2711,7 @@ func (x *SocialStatePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SocialStatePayload.ProtoReflect.Descriptor instead.
 func (*SocialStatePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{34}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *SocialStatePayload) GetFriends() []*FriendInfo {
@@ -2014,7 +2758,7 @@ type ErrorPayload struct {
 
 func (x *ErrorPayload) Reset() {
 	*x = ErrorPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[35]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2026,7 +2770,7 @@ func (x *ErrorPayload) String() string {
 func (*ErrorPayload) ProtoMessage() {}
 
 func (x *ErrorPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[35]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2039,7 +2783,7 @@ func (x *ErrorPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorPayload.ProtoReflect.Descriptor instead.
 func (*ErrorPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{35}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ErrorPayload) GetMessage() string {
@@ -2060,7 +2804,7 @@ type RTBattleStatePayload struct {
 
 func (x *RTBattleStatePayload) Reset() {
 	*x = RTBattleStatePayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[36]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2072,7 +2816,7 @@ func (x *RTBattleStatePayload) String() string {
 func (*RTBattleStatePayload) ProtoMessage() {}
 
 func (x *RTBattleStatePayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[36]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2085,7 +2829,7 @@ func (x *RTBattleStatePayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTBattleStatePayload.ProtoReflect.Descriptor instead.
 func (*RTBattleStatePayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{36}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *RTBattleStatePayload) GetBattleId() string {
@@ -2118,7 +2862,7 @@ type RTBattleTickPayload struct {
 
 func (x *RTBattleTickPayload) Reset() {
 	*x = RTBattleTickPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[37]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2130,7 +2874,7 @@ func (x *RTBattleTickPayload) String() string {
 func (*RTBattleTickPayload) ProtoMessage() {}
 
 func (x *RTBattleTickPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[37]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2143,7 +2887,7 @@ func (x *RTBattleTickPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTBattleTickPayload.ProtoReflect.Descriptor instead.
 func (*RTBattleTickPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{37}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *RTBattleTickPayload) GetEntities() []*RTBattleEntity {
@@ -2174,7 +2918,7 @@ type RTBattleEventPayload struct {
 
 func (x *RTBattleEventPayload) Reset() {
 	*x = RTBattleEventPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[38]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2186,7 +2930,7 @@ func (x *RTBattleEventPayload) String() string {
 func (*RTBattleEventPayload) ProtoMessage() {}
 
 func (x *RTBattleEventPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[38]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2199,7 +2943,7 @@ func (x *RTBattleEventPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTBattleEventPayload.ProtoReflect.Descriptor instead.
 func (*RTBattleEventPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{38}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *RTBattleEventPayload) GetAttackerId() string {
@@ -2303,7 +3047,7 @@ type RTBattleEndPayload struct {
 
 func (x *RTBattleEndPayload) Reset() {
 	*x = RTBattleEndPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[39]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2315,7 +3059,7 @@ func (x *RTBattleEndPayload) String() string {
 func (*RTBattleEndPayload) ProtoMessage() {}
 
 func (x *RTBattleEndPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[39]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2328,7 +3072,7 @@ func (x *RTBattleEndPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RTBattleEndPayload.ProtoReflect.Descriptor instead.
 func (*RTBattleEndPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{39}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *RTBattleEndPayload) GetVictory() bool {
@@ -2354,7 +3098,7 @@ type EmptyPayload struct {
 
 func (x *EmptyPayload) Reset() {
 	*x = EmptyPayload{}
-	mi := &file_fantasy_v1_messages_proto_msgTypes[40]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2366,7 +3110,7 @@ func (x *EmptyPayload) String() string {
 func (*EmptyPayload) ProtoMessage() {}
 
 func (x *EmptyPayload) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_messages_proto_msgTypes[40]
+	mi := &file_fantasy_v1_messages_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2379,7 +3123,7 @@ func (x *EmptyPayload) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EmptyPayload.ProtoReflect.Descriptor instead.
 func (*EmptyPayload) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{40}
+	return file_fantasy_v1_messages_proto_rawDescGZIP(), []int{52}
 }
 
 var File_fantasy_v1_messages_proto protoreflect.FileDescriptor
@@ -2431,18 +3175,70 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x10PartyKickPayload\x12\x1b\n" +
 	"\tmember_id\x18\x01 \x01(\tR\bmemberId\"0\n" +
 	"\x11JoinBattlePayload\x12\x1b\n" +
-	"\tbattle_id\x18\x01 \x01(\tR\bbattleId\"b\n" +
+	"\tbattle_id\x18\x01 \x01(\tR\bbattleId\"}\n" +
 	"\rActionPayload\x12\x1b\n" +
 	"\taction_id\x18\x01 \x01(\tR\bactionId\x12\x1b\n" +
 	"\ttarget_id\x18\x02 \x01(\tR\btargetId\x12\x17\n" +
-	"\aitem_id\x18\x03 \x01(\tR\x06itemId\"/\n" +
+	"\aitem_id\x18\x03 \x01(\tR\x06itemId\x12\x19\n" +
+	"\bactor_id\x18\x04 \x01(\tR\aactorId\"%\n" +
+	"\fPetIDPayload\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\tR\x05petId\"\xa7\x01\n" +
+	"\bWorldPet\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\bowner_id\x18\x02 \x01(\tR\aownerId\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x14\n" +
+	"\x05level\x18\x05 \x01(\x05R\x05level\x12\f\n" +
+	"\x01x\x18\x06 \x01(\x01R\x01x\x12\f\n" +
+	"\x01y\x18\a \x01(\x01R\x01y\x12\x16\n" +
+	"\x06facing\x18\b \x01(\tR\x06facing\";\n" +
+	"\x0fPetStatePayload\x12(\n" +
+	"\x04pets\x18\x01 \x03(\v2\x14.fantasy.v1.WorldPetR\x04pets\"/\n" +
 	"\x10SetTargetPayload\x12\x1b\n" +
 	"\ttarget_id\x18\x01 \x01(\tR\btargetId\"9\n" +
 	"\x13SetSavePointPayload\x12\"\n" +
 	"\rsave_point_id\x18\x01 \x01(\tR\vsavePointId\"U\n" +
 	"\x14UseWorldSkillPayload\x12\x19\n" +
 	"\bskill_id\x18\x01 \x01(\tR\askillId\x12\"\n" +
-	"\rsave_point_id\x18\x02 \x01(\tR\vsavePointId\"+\n" +
+	"\rsave_point_id\x18\x02 \x01(\tR\vsavePointId\"2\n" +
+	"\x11EnterHousePayload\x12\x1d\n" +
+	"\n" +
+	"owner_name\x18\x01 \x01(\tR\townerName\".\n" +
+	"\x14HouseInteractPayload\x12\x16\n" +
+	"\x06target\x18\x01 \x01(\tR\x06target\"D\n" +
+	"\x17HouseStorageMovePayload\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x10\n" +
+	"\x03qty\x18\x02 \x01(\x05R\x03qty\"Y\n" +
+	"\x1aHousePlaceFurniturePayload\x12\x17\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x10\n" +
+	"\x03col\x18\x02 \x01(\x05R\x03col\x12\x10\n" +
+	"\x03row\x18\x03 \x01(\x05R\x03row\">\n" +
+	"\x19HousePickFurniturePayload\x12!\n" +
+	"\ffurniture_id\x18\x01 \x01(\tR\vfurnitureId\"(\n" +
+	"\x12SetCampSkinPayload\x12\x12\n" +
+	"\x04skin\x18\x01 \x01(\tR\x04skin\"?\n" +
+	"\x10CampStatePayload\x12+\n" +
+	"\x05camps\x18\x01 \x03(\v2\x15.fantasy.v1.WorldCampR\x05camps\"\xac\x04\n" +
+	"\x11HouseStatePayload\x12\x1d\n" +
+	"\n" +
+	"owner_name\x18\x01 \x01(\tR\townerName\x12\x12\n" +
+	"\x04skin\x18\x02 \x01(\tR\x04skin\x12\x19\n" +
+	"\bmap_cols\x18\x03 \x01(\x05R\amapCols\x12\x19\n" +
+	"\bmap_rows\x18\x04 \x01(\x05R\amapRows\x12\x1b\n" +
+	"\twalk_cols\x18\x05 \x01(\x05R\bwalkCols\x12\x1b\n" +
+	"\twalk_rows\x18\x06 \x01(\x05R\bwalkRows\x12&\n" +
+	"\x0fwalk_origin_col\x18\a \x01(\x05R\rwalkOriginCol\x12&\n" +
+	"\x0fwalk_origin_row\x18\b \x01(\x05R\rwalkOriginRow\x12\x1b\n" +
+	"\ttile_size\x18\t \x01(\x05R\btileSize\x121\n" +
+	"\aplayers\x18\n" +
+	" \x03(\v2\x17.fantasy.v1.HousePlayerR\aplayers\x128\n" +
+	"\tfurniture\x18\v \x03(\v2\x1a.fantasy.v1.HouseFurnitureR\tfurniture\x12(\n" +
+	"\x04pois\x18\f \x03(\v2\x14.fantasy.v1.HousePOIR\x04pois\x12*\n" +
+	"\astorage\x18\r \x03(\v2\x10.fantasy.v1.ItemR\astorage\x12)\n" +
+	"\x10storage_capacity\x18\x0e \x01(\x05R\x0fstorageCapacity\x12\x19\n" +
+	"\bis_owner\x18\x0f \x01(\bR\aisOwner\",\n" +
+	"\x12HouseReturnPayload\x12\x16\n" +
+	"\x06reason\x18\x01 \x01(\tR\x06reason\"+\n" +
 	"\rRTMovePayload\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\x02 \x01(\x01R\x01y\"G\n" +
@@ -2454,7 +3250,7 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\aprofile\x18\x02 \x01(\v2\x17.fantasy.v1.ProfileInfoR\aprofile\x12)\n" +
 	"\x03map\x18\x03 \x01(\v2\x17.fantasy.v1.MapSnapshotR\x03map\"=\n" +
 	"\x10MapConfigPayload\x12)\n" +
-	"\x03map\x18\x01 \x01(\v2\x17.fantasy.v1.MapSnapshotR\x03map\"\xc1\x02\n" +
+	"\x03map\x18\x01 \x01(\v2\x17.fantasy.v1.MapSnapshotR\x03map\"\x98\x03\n" +
 	"\x11WorldStatePayload\x121\n" +
 	"\aplayers\x18\x01 \x03(\v2\x17.fantasy.v1.WorldPlayerR\aplayers\x12(\n" +
 	"\x04npcs\x18\x02 \x03(\v2\x14.fantasy.v1.WorldNPCR\x04npcs\x120\n" +
@@ -2462,7 +3258,9 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\vsave_points\x18\x04 \x03(\v2\x15.fantasy.v1.SavePointR\n" +
 	"savePoints\x129\n" +
 	"\fjob_changers\x18\x05 \x03(\v2\x16.fantasy.v1.JobChangerR\vjobChangers\x12*\n" +
-	"\x03map\x18\x06 \x01(\v2\x18.fantasy.v1.OverworldMapR\x03map\"#\n" +
+	"\x03map\x18\x06 \x01(\v2\x18.fantasy.v1.OverworldMapR\x03map\x12+\n" +
+	"\x05camps\x18\a \x03(\v2\x15.fantasy.v1.WorldCampR\x05camps\x12(\n" +
+	"\x04pets\x18\b \x03(\v2\x14.fantasy.v1.WorldPetR\x04pets\"#\n" +
 	"\x11PlayerLeftPayload\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"@\n" +
 	"\x12PlayerMovedPayload\x12\x0e\n" +
@@ -2576,7 +3374,7 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x12RTBattleEndPayload\x12\x18\n" +
 	"\avictory\x18\x01 \x01(\bR\avictory\x122\n" +
 	"\arewards\x18\x02 \x03(\v2\x18.fantasy.v1.PlayerRewardR\arewards\"\x0e\n" +
-	"\fEmptyPayloadB#Z!ffv-web-game/internal/protocol/pbb\x06proto3"
+	"\fEmptyPayloadB\"Z clara-mundi/internal/protocol/pbb\x06proto3"
 
 var (
 	file_fantasy_v1_messages_proto_rawDescOnce sync.Once
@@ -2590,116 +3388,141 @@ func file_fantasy_v1_messages_proto_rawDescGZIP() []byte {
 	return file_fantasy_v1_messages_proto_rawDescData
 }
 
-var file_fantasy_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
+var file_fantasy_v1_messages_proto_msgTypes = make([]protoimpl.MessageInfo, 62)
 var file_fantasy_v1_messages_proto_goTypes = []any{
-	(*WireEnvelope)(nil),         // 0: fantasy.v1.WireEnvelope
-	(*JoinWorldPayload)(nil),     // 1: fantasy.v1.JoinWorldPayload
-	(*MovePayload)(nil),          // 2: fantasy.v1.MovePayload
-	(*ChatPayload)(nil),          // 3: fantasy.v1.ChatPayload
-	(*EquipPayload)(nil),         // 4: fantasy.v1.EquipPayload
-	(*UnequipPayload)(nil),       // 5: fantasy.v1.UnequipPayload
-	(*SetJobsPayload)(nil),       // 6: fantasy.v1.SetJobsPayload
-	(*SetHotbarPayload)(nil),     // 7: fantasy.v1.SetHotbarPayload
-	(*SetKeybindsPayload)(nil),   // 8: fantasy.v1.SetKeybindsPayload
-	(*PlayerNamePayload)(nil),    // 9: fantasy.v1.PlayerNamePayload
-	(*PartyKickPayload)(nil),     // 10: fantasy.v1.PartyKickPayload
-	(*JoinBattlePayload)(nil),    // 11: fantasy.v1.JoinBattlePayload
-	(*ActionPayload)(nil),        // 12: fantasy.v1.ActionPayload
-	(*SetTargetPayload)(nil),     // 13: fantasy.v1.SetTargetPayload
-	(*SetSavePointPayload)(nil),  // 14: fantasy.v1.SetSavePointPayload
-	(*UseWorldSkillPayload)(nil), // 15: fantasy.v1.UseWorldSkillPayload
-	(*RTMovePayload)(nil),        // 16: fantasy.v1.RTMovePayload
-	(*RTAttackPayload)(nil),      // 17: fantasy.v1.RTAttackPayload
-	(*WelcomePayload)(nil),       // 18: fantasy.v1.WelcomePayload
-	(*MapConfigPayload)(nil),     // 19: fantasy.v1.MapConfigPayload
-	(*WorldStatePayload)(nil),    // 20: fantasy.v1.WorldStatePayload
-	(*PlayerLeftPayload)(nil),    // 21: fantasy.v1.PlayerLeftPayload
-	(*PlayerMovedPayload)(nil),   // 22: fantasy.v1.PlayerMovedPayload
-	(*ChatMessagePayload)(nil),   // 23: fantasy.v1.ChatMessagePayload
-	(*NPCStatePayload)(nil),      // 24: fantasy.v1.NPCStatePayload
-	(*BattleListPayload)(nil),    // 25: fantasy.v1.BattleListPayload
-	(*BattleStatePayload)(nil),   // 26: fantasy.v1.BattleStatePayload
-	(*BattleEventPayload)(nil),   // 27: fantasy.v1.BattleEventPayload
-	(*BattleTickPayload)(nil),    // 28: fantasy.v1.BattleTickPayload
-	(*BattleEndPayload)(nil),     // 29: fantasy.v1.BattleEndPayload
-	(*PartyInvitePayload)(nil),   // 30: fantasy.v1.PartyInvitePayload
-	(*BattleInvitePayload)(nil),  // 31: fantasy.v1.BattleInvitePayload
-	(*FriendRequestPayload)(nil), // 32: fantasy.v1.FriendRequestPayload
-	(*RewardNoticePayload)(nil),  // 33: fantasy.v1.RewardNoticePayload
-	(*SocialStatePayload)(nil),   // 34: fantasy.v1.SocialStatePayload
-	(*ErrorPayload)(nil),         // 35: fantasy.v1.ErrorPayload
-	(*RTBattleStatePayload)(nil), // 36: fantasy.v1.RTBattleStatePayload
-	(*RTBattleTickPayload)(nil),  // 37: fantasy.v1.RTBattleTickPayload
-	(*RTBattleEventPayload)(nil), // 38: fantasy.v1.RTBattleEventPayload
-	(*RTBattleEndPayload)(nil),   // 39: fantasy.v1.RTBattleEndPayload
-	(*EmptyPayload)(nil),         // 40: fantasy.v1.EmptyPayload
-	nil,                          // 41: fantasy.v1.SetKeybindsPayload.KeybindsEntry
-	nil,                          // 42: fantasy.v1.BattleTickPayload.SkillAtbEntry
-	nil,                          // 43: fantasy.v1.BattleTickPayload.AtbEntry
-	nil,                          // 44: fantasy.v1.BattleTickPayload.HpEntry
-	nil,                          // 45: fantasy.v1.BattleTickPayload.AliveEntry
-	nil,                          // 46: fantasy.v1.BattleTickPayload.CastingSkillIdEntry
-	nil,                          // 47: fantasy.v1.BattleTickPayload.CastTargetIdEntry
-	nil,                          // 48: fantasy.v1.BattleTickPayload.CastProgressEntry
-	nil,                          // 49: fantasy.v1.BattleTickPayload.CastTimeMsEntry
-	(*CharacterAppearance)(nil),  // 50: fantasy.v1.CharacterAppearance
-	(*ProfileInfo)(nil),          // 51: fantasy.v1.ProfileInfo
-	(*MapSnapshot)(nil),          // 52: fantasy.v1.MapSnapshot
-	(*WorldPlayer)(nil),          // 53: fantasy.v1.WorldPlayer
-	(*WorldNPC)(nil),             // 54: fantasy.v1.WorldNPC
-	(*BattleInfo)(nil),           // 55: fantasy.v1.BattleInfo
-	(*SavePoint)(nil),            // 56: fantasy.v1.SavePoint
-	(*JobChanger)(nil),           // 57: fantasy.v1.JobChanger
-	(*OverworldMap)(nil),         // 58: fantasy.v1.OverworldMap
-	(*BattleEntity)(nil),         // 59: fantasy.v1.BattleEntity
-	(*ActionResult)(nil),         // 60: fantasy.v1.ActionResult
-	(*EntityUpdate)(nil),         // 61: fantasy.v1.EntityUpdate
-	(*structpb.Struct)(nil),      // 62: google.protobuf.Struct
-	(*PlayerReward)(nil),         // 63: fantasy.v1.PlayerReward
-	(*FriendInfo)(nil),           // 64: fantasy.v1.FriendInfo
-	(*PartyInfo)(nil),            // 65: fantasy.v1.PartyInfo
-	(*RTBattleEntity)(nil),       // 66: fantasy.v1.RTBattleEntity
+	(*WireEnvelope)(nil),               // 0: fantasy.v1.WireEnvelope
+	(*JoinWorldPayload)(nil),           // 1: fantasy.v1.JoinWorldPayload
+	(*MovePayload)(nil),                // 2: fantasy.v1.MovePayload
+	(*ChatPayload)(nil),                // 3: fantasy.v1.ChatPayload
+	(*EquipPayload)(nil),               // 4: fantasy.v1.EquipPayload
+	(*UnequipPayload)(nil),             // 5: fantasy.v1.UnequipPayload
+	(*SetJobsPayload)(nil),             // 6: fantasy.v1.SetJobsPayload
+	(*SetHotbarPayload)(nil),           // 7: fantasy.v1.SetHotbarPayload
+	(*SetKeybindsPayload)(nil),         // 8: fantasy.v1.SetKeybindsPayload
+	(*PlayerNamePayload)(nil),          // 9: fantasy.v1.PlayerNamePayload
+	(*PartyKickPayload)(nil),           // 10: fantasy.v1.PartyKickPayload
+	(*JoinBattlePayload)(nil),          // 11: fantasy.v1.JoinBattlePayload
+	(*ActionPayload)(nil),              // 12: fantasy.v1.ActionPayload
+	(*PetIDPayload)(nil),               // 13: fantasy.v1.PetIDPayload
+	(*WorldPet)(nil),                   // 14: fantasy.v1.WorldPet
+	(*PetStatePayload)(nil),            // 15: fantasy.v1.PetStatePayload
+	(*SetTargetPayload)(nil),           // 16: fantasy.v1.SetTargetPayload
+	(*SetSavePointPayload)(nil),        // 17: fantasy.v1.SetSavePointPayload
+	(*UseWorldSkillPayload)(nil),       // 18: fantasy.v1.UseWorldSkillPayload
+	(*EnterHousePayload)(nil),          // 19: fantasy.v1.EnterHousePayload
+	(*HouseInteractPayload)(nil),       // 20: fantasy.v1.HouseInteractPayload
+	(*HouseStorageMovePayload)(nil),    // 21: fantasy.v1.HouseStorageMovePayload
+	(*HousePlaceFurniturePayload)(nil), // 22: fantasy.v1.HousePlaceFurniturePayload
+	(*HousePickFurniturePayload)(nil),  // 23: fantasy.v1.HousePickFurniturePayload
+	(*SetCampSkinPayload)(nil),         // 24: fantasy.v1.SetCampSkinPayload
+	(*CampStatePayload)(nil),           // 25: fantasy.v1.CampStatePayload
+	(*HouseStatePayload)(nil),          // 26: fantasy.v1.HouseStatePayload
+	(*HouseReturnPayload)(nil),         // 27: fantasy.v1.HouseReturnPayload
+	(*RTMovePayload)(nil),              // 28: fantasy.v1.RTMovePayload
+	(*RTAttackPayload)(nil),            // 29: fantasy.v1.RTAttackPayload
+	(*WelcomePayload)(nil),             // 30: fantasy.v1.WelcomePayload
+	(*MapConfigPayload)(nil),           // 31: fantasy.v1.MapConfigPayload
+	(*WorldStatePayload)(nil),          // 32: fantasy.v1.WorldStatePayload
+	(*PlayerLeftPayload)(nil),          // 33: fantasy.v1.PlayerLeftPayload
+	(*PlayerMovedPayload)(nil),         // 34: fantasy.v1.PlayerMovedPayload
+	(*ChatMessagePayload)(nil),         // 35: fantasy.v1.ChatMessagePayload
+	(*NPCStatePayload)(nil),            // 36: fantasy.v1.NPCStatePayload
+	(*BattleListPayload)(nil),          // 37: fantasy.v1.BattleListPayload
+	(*BattleStatePayload)(nil),         // 38: fantasy.v1.BattleStatePayload
+	(*BattleEventPayload)(nil),         // 39: fantasy.v1.BattleEventPayload
+	(*BattleTickPayload)(nil),          // 40: fantasy.v1.BattleTickPayload
+	(*BattleEndPayload)(nil),           // 41: fantasy.v1.BattleEndPayload
+	(*PartyInvitePayload)(nil),         // 42: fantasy.v1.PartyInvitePayload
+	(*BattleInvitePayload)(nil),        // 43: fantasy.v1.BattleInvitePayload
+	(*FriendRequestPayload)(nil),       // 44: fantasy.v1.FriendRequestPayload
+	(*RewardNoticePayload)(nil),        // 45: fantasy.v1.RewardNoticePayload
+	(*SocialStatePayload)(nil),         // 46: fantasy.v1.SocialStatePayload
+	(*ErrorPayload)(nil),               // 47: fantasy.v1.ErrorPayload
+	(*RTBattleStatePayload)(nil),       // 48: fantasy.v1.RTBattleStatePayload
+	(*RTBattleTickPayload)(nil),        // 49: fantasy.v1.RTBattleTickPayload
+	(*RTBattleEventPayload)(nil),       // 50: fantasy.v1.RTBattleEventPayload
+	(*RTBattleEndPayload)(nil),         // 51: fantasy.v1.RTBattleEndPayload
+	(*EmptyPayload)(nil),               // 52: fantasy.v1.EmptyPayload
+	nil,                                // 53: fantasy.v1.SetKeybindsPayload.KeybindsEntry
+	nil,                                // 54: fantasy.v1.BattleTickPayload.SkillAtbEntry
+	nil,                                // 55: fantasy.v1.BattleTickPayload.AtbEntry
+	nil,                                // 56: fantasy.v1.BattleTickPayload.HpEntry
+	nil,                                // 57: fantasy.v1.BattleTickPayload.AliveEntry
+	nil,                                // 58: fantasy.v1.BattleTickPayload.CastingSkillIdEntry
+	nil,                                // 59: fantasy.v1.BattleTickPayload.CastTargetIdEntry
+	nil,                                // 60: fantasy.v1.BattleTickPayload.CastProgressEntry
+	nil,                                // 61: fantasy.v1.BattleTickPayload.CastTimeMsEntry
+	(*CharacterAppearance)(nil),        // 62: fantasy.v1.CharacterAppearance
+	(*WorldCamp)(nil),                  // 63: fantasy.v1.WorldCamp
+	(*HousePlayer)(nil),                // 64: fantasy.v1.HousePlayer
+	(*HouseFurniture)(nil),             // 65: fantasy.v1.HouseFurniture
+	(*HousePOI)(nil),                   // 66: fantasy.v1.HousePOI
+	(*Item)(nil),                       // 67: fantasy.v1.Item
+	(*ProfileInfo)(nil),                // 68: fantasy.v1.ProfileInfo
+	(*MapSnapshot)(nil),                // 69: fantasy.v1.MapSnapshot
+	(*WorldPlayer)(nil),                // 70: fantasy.v1.WorldPlayer
+	(*WorldNPC)(nil),                   // 71: fantasy.v1.WorldNPC
+	(*BattleInfo)(nil),                 // 72: fantasy.v1.BattleInfo
+	(*SavePoint)(nil),                  // 73: fantasy.v1.SavePoint
+	(*JobChanger)(nil),                 // 74: fantasy.v1.JobChanger
+	(*OverworldMap)(nil),               // 75: fantasy.v1.OverworldMap
+	(*BattleEntity)(nil),               // 76: fantasy.v1.BattleEntity
+	(*ActionResult)(nil),               // 77: fantasy.v1.ActionResult
+	(*EntityUpdate)(nil),               // 78: fantasy.v1.EntityUpdate
+	(*structpb.Struct)(nil),            // 79: google.protobuf.Struct
+	(*PlayerReward)(nil),               // 80: fantasy.v1.PlayerReward
+	(*FriendInfo)(nil),                 // 81: fantasy.v1.FriendInfo
+	(*PartyInfo)(nil),                  // 82: fantasy.v1.PartyInfo
+	(*RTBattleEntity)(nil),             // 83: fantasy.v1.RTBattleEntity
 }
 var file_fantasy_v1_messages_proto_depIdxs = []int32{
-	50, // 0: fantasy.v1.JoinWorldPayload.appearance:type_name -> fantasy.v1.CharacterAppearance
-	41, // 1: fantasy.v1.SetKeybindsPayload.keybinds:type_name -> fantasy.v1.SetKeybindsPayload.KeybindsEntry
-	51, // 2: fantasy.v1.WelcomePayload.profile:type_name -> fantasy.v1.ProfileInfo
-	52, // 3: fantasy.v1.WelcomePayload.map:type_name -> fantasy.v1.MapSnapshot
-	52, // 4: fantasy.v1.MapConfigPayload.map:type_name -> fantasy.v1.MapSnapshot
-	53, // 5: fantasy.v1.WorldStatePayload.players:type_name -> fantasy.v1.WorldPlayer
-	54, // 6: fantasy.v1.WorldStatePayload.npcs:type_name -> fantasy.v1.WorldNPC
-	55, // 7: fantasy.v1.WorldStatePayload.battles:type_name -> fantasy.v1.BattleInfo
-	56, // 8: fantasy.v1.WorldStatePayload.save_points:type_name -> fantasy.v1.SavePoint
-	57, // 9: fantasy.v1.WorldStatePayload.job_changers:type_name -> fantasy.v1.JobChanger
-	58, // 10: fantasy.v1.WorldStatePayload.map:type_name -> fantasy.v1.OverworldMap
-	54, // 11: fantasy.v1.NPCStatePayload.npcs:type_name -> fantasy.v1.WorldNPC
-	55, // 12: fantasy.v1.BattleListPayload.battles:type_name -> fantasy.v1.BattleInfo
-	59, // 13: fantasy.v1.BattleStatePayload.entities:type_name -> fantasy.v1.BattleEntity
-	60, // 14: fantasy.v1.BattleEventPayload.results:type_name -> fantasy.v1.ActionResult
-	61, // 15: fantasy.v1.BattleEventPayload.entities:type_name -> fantasy.v1.EntityUpdate
-	42, // 16: fantasy.v1.BattleTickPayload.skill_atb:type_name -> fantasy.v1.BattleTickPayload.SkillAtbEntry
-	43, // 17: fantasy.v1.BattleTickPayload.atb:type_name -> fantasy.v1.BattleTickPayload.AtbEntry
-	44, // 18: fantasy.v1.BattleTickPayload.hp:type_name -> fantasy.v1.BattleTickPayload.HpEntry
-	45, // 19: fantasy.v1.BattleTickPayload.alive:type_name -> fantasy.v1.BattleTickPayload.AliveEntry
-	62, // 20: fantasy.v1.BattleTickPayload.statuses:type_name -> google.protobuf.Struct
-	46, // 21: fantasy.v1.BattleTickPayload.casting_skill_id:type_name -> fantasy.v1.BattleTickPayload.CastingSkillIdEntry
-	47, // 22: fantasy.v1.BattleTickPayload.cast_target_id:type_name -> fantasy.v1.BattleTickPayload.CastTargetIdEntry
-	48, // 23: fantasy.v1.BattleTickPayload.cast_progress:type_name -> fantasy.v1.BattleTickPayload.CastProgressEntry
-	49, // 24: fantasy.v1.BattleTickPayload.cast_time_ms:type_name -> fantasy.v1.BattleTickPayload.CastTimeMsEntry
-	63, // 25: fantasy.v1.BattleEndPayload.rewards:type_name -> fantasy.v1.PlayerReward
-	64, // 26: fantasy.v1.SocialStatePayload.friends:type_name -> fantasy.v1.FriendInfo
-	65, // 27: fantasy.v1.SocialStatePayload.party:type_name -> fantasy.v1.PartyInfo
-	30, // 28: fantasy.v1.SocialStatePayload.pending_invite:type_name -> fantasy.v1.PartyInvitePayload
-	32, // 29: fantasy.v1.SocialStatePayload.pending_friend_requests:type_name -> fantasy.v1.FriendRequestPayload
-	66, // 30: fantasy.v1.RTBattleStatePayload.entities:type_name -> fantasy.v1.RTBattleEntity
-	66, // 31: fantasy.v1.RTBattleTickPayload.entities:type_name -> fantasy.v1.RTBattleEntity
-	66, // 32: fantasy.v1.RTBattleEventPayload.entities:type_name -> fantasy.v1.RTBattleEntity
-	63, // 33: fantasy.v1.RTBattleEndPayload.rewards:type_name -> fantasy.v1.PlayerReward
-	34, // [34:34] is the sub-list for method output_type
-	34, // [34:34] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	62, // 0: fantasy.v1.JoinWorldPayload.appearance:type_name -> fantasy.v1.CharacterAppearance
+	53, // 1: fantasy.v1.SetKeybindsPayload.keybinds:type_name -> fantasy.v1.SetKeybindsPayload.KeybindsEntry
+	14, // 2: fantasy.v1.PetStatePayload.pets:type_name -> fantasy.v1.WorldPet
+	63, // 3: fantasy.v1.CampStatePayload.camps:type_name -> fantasy.v1.WorldCamp
+	64, // 4: fantasy.v1.HouseStatePayload.players:type_name -> fantasy.v1.HousePlayer
+	65, // 5: fantasy.v1.HouseStatePayload.furniture:type_name -> fantasy.v1.HouseFurniture
+	66, // 6: fantasy.v1.HouseStatePayload.pois:type_name -> fantasy.v1.HousePOI
+	67, // 7: fantasy.v1.HouseStatePayload.storage:type_name -> fantasy.v1.Item
+	68, // 8: fantasy.v1.WelcomePayload.profile:type_name -> fantasy.v1.ProfileInfo
+	69, // 9: fantasy.v1.WelcomePayload.map:type_name -> fantasy.v1.MapSnapshot
+	69, // 10: fantasy.v1.MapConfigPayload.map:type_name -> fantasy.v1.MapSnapshot
+	70, // 11: fantasy.v1.WorldStatePayload.players:type_name -> fantasy.v1.WorldPlayer
+	71, // 12: fantasy.v1.WorldStatePayload.npcs:type_name -> fantasy.v1.WorldNPC
+	72, // 13: fantasy.v1.WorldStatePayload.battles:type_name -> fantasy.v1.BattleInfo
+	73, // 14: fantasy.v1.WorldStatePayload.save_points:type_name -> fantasy.v1.SavePoint
+	74, // 15: fantasy.v1.WorldStatePayload.job_changers:type_name -> fantasy.v1.JobChanger
+	75, // 16: fantasy.v1.WorldStatePayload.map:type_name -> fantasy.v1.OverworldMap
+	63, // 17: fantasy.v1.WorldStatePayload.camps:type_name -> fantasy.v1.WorldCamp
+	14, // 18: fantasy.v1.WorldStatePayload.pets:type_name -> fantasy.v1.WorldPet
+	71, // 19: fantasy.v1.NPCStatePayload.npcs:type_name -> fantasy.v1.WorldNPC
+	72, // 20: fantasy.v1.BattleListPayload.battles:type_name -> fantasy.v1.BattleInfo
+	76, // 21: fantasy.v1.BattleStatePayload.entities:type_name -> fantasy.v1.BattleEntity
+	77, // 22: fantasy.v1.BattleEventPayload.results:type_name -> fantasy.v1.ActionResult
+	78, // 23: fantasy.v1.BattleEventPayload.entities:type_name -> fantasy.v1.EntityUpdate
+	54, // 24: fantasy.v1.BattleTickPayload.skill_atb:type_name -> fantasy.v1.BattleTickPayload.SkillAtbEntry
+	55, // 25: fantasy.v1.BattleTickPayload.atb:type_name -> fantasy.v1.BattleTickPayload.AtbEntry
+	56, // 26: fantasy.v1.BattleTickPayload.hp:type_name -> fantasy.v1.BattleTickPayload.HpEntry
+	57, // 27: fantasy.v1.BattleTickPayload.alive:type_name -> fantasy.v1.BattleTickPayload.AliveEntry
+	79, // 28: fantasy.v1.BattleTickPayload.statuses:type_name -> google.protobuf.Struct
+	58, // 29: fantasy.v1.BattleTickPayload.casting_skill_id:type_name -> fantasy.v1.BattleTickPayload.CastingSkillIdEntry
+	59, // 30: fantasy.v1.BattleTickPayload.cast_target_id:type_name -> fantasy.v1.BattleTickPayload.CastTargetIdEntry
+	60, // 31: fantasy.v1.BattleTickPayload.cast_progress:type_name -> fantasy.v1.BattleTickPayload.CastProgressEntry
+	61, // 32: fantasy.v1.BattleTickPayload.cast_time_ms:type_name -> fantasy.v1.BattleTickPayload.CastTimeMsEntry
+	80, // 33: fantasy.v1.BattleEndPayload.rewards:type_name -> fantasy.v1.PlayerReward
+	81, // 34: fantasy.v1.SocialStatePayload.friends:type_name -> fantasy.v1.FriendInfo
+	82, // 35: fantasy.v1.SocialStatePayload.party:type_name -> fantasy.v1.PartyInfo
+	42, // 36: fantasy.v1.SocialStatePayload.pending_invite:type_name -> fantasy.v1.PartyInvitePayload
+	44, // 37: fantasy.v1.SocialStatePayload.pending_friend_requests:type_name -> fantasy.v1.FriendRequestPayload
+	83, // 38: fantasy.v1.RTBattleStatePayload.entities:type_name -> fantasy.v1.RTBattleEntity
+	83, // 39: fantasy.v1.RTBattleTickPayload.entities:type_name -> fantasy.v1.RTBattleEntity
+	83, // 40: fantasy.v1.RTBattleEventPayload.entities:type_name -> fantasy.v1.RTBattleEntity
+	80, // 41: fantasy.v1.RTBattleEndPayload.rewards:type_name -> fantasy.v1.PlayerReward
+	42, // [42:42] is the sub-list for method output_type
+	42, // [42:42] is the sub-list for method input_type
+	42, // [42:42] is the sub-list for extension type_name
+	42, // [42:42] is the sub-list for extension extendee
+	0,  // [0:42] is the sub-list for field type_name
 }
 
 func init() { file_fantasy_v1_messages_proto_init() }
@@ -2714,7 +3537,7 @@ func file_fantasy_v1_messages_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fantasy_v1_messages_proto_rawDesc), len(file_fantasy_v1_messages_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   50,
+			NumMessages:   62,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

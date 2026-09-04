@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 func TestSetJobsRequiresJobChangerProximity(t *testing.T) {
@@ -17,20 +17,20 @@ func TestSetJobsRequiresJobChangerProximity(t *testing.T) {
 	center := game.TileCenter(jc.Tile)
 
 	payload := protocol.SetJobsPayload{
-		MainJob:      string(game.JobBLM),
+		MainJob:      string(game.JobHEX),
 		SubJob:       "",
 		JobChangerID: jc.ID,
 	}
 	raw, _ := json.Marshal(payload)
 	h.handleSetJobs(c, raw)
-	if profile, ok := h.store.Get(c.Name); ok && profile.MainJob == string(game.JobBLM) {
+	if profile, ok := h.store.Get(c.Name); ok && profile.MainJob == string(game.JobHEX) {
 		t.Fatal("should not change jobs from far away")
 	}
 
 	wp.X, wp.Y = center.X, center.Y
 	h.handleSetJobs(c, raw)
 	profile, ok := h.store.Get(c.Name)
-	if !ok || profile.MainJob != string(game.JobBLM) {
+	if !ok || profile.MainJob != string(game.JobHEX) {
 		t.Fatalf("expected main job BLM near job changer, got %+v", profile)
 	}
 }
@@ -44,13 +44,13 @@ func TestSetJobsRequiresJobChangerID(t *testing.T) {
 	center := game.TileCenter(jc.Tile)
 	wp.X, wp.Y = center.X, center.Y
 
-	raw, _ := json.Marshal(protocol.SetJobsPayload{MainJob: string(game.JobMNK), SubJob: ""})
+	raw, _ := json.Marshal(protocol.SetJobsPayload{MainJob: string(game.JobBRW), SubJob: ""})
 	h.handleSetJobs(c, raw)
 	profile, ok := h.store.Get(c.Name)
 	if !ok {
 		t.Fatal("profile missing")
 	}
-	if profile.MainJob == string(game.JobMNK) {
+	if profile.MainJob == string(game.JobBRW) {
 		t.Fatal("set_jobs without job_changer_id should be rejected")
 	}
 }

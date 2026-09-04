@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/protocol"
 )
 
 // PublicMapsHandler serves read-only map configuration for game clients.

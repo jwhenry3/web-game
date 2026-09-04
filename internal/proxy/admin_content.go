@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 // AdminContentHandler serves shared Game Designer content catalogs.

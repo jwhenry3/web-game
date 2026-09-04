@@ -6,26 +6,26 @@ export function ItemTooltipContent({ item }: { item: Item }) {
   const consumable = item.kind === "consumable";
   const qty = itemQty(item);
   return (
-    <div className="xiv-tooltip-body">
-      <div className="xiv-tooltip-title" style={{ color: RARITY_COLORS[item.rarity] }}>
+    <div className="cm-tooltip-body">
+      <div className="cm-tooltip-title" style={{ color: RARITY_COLORS[item.rarity] }}>
         {item.name}
         {consumable && qty > 1 ? ` ×${qty}` : ""}
       </div>
-      <div className="xiv-tooltip-meta">
+      <div className="cm-tooltip-meta">
         {consumable ? "Medicine" : item.slot?.replace("_", " ")}
         {item.type ? ` · ${item.type}` : ""} · iLvl {item.level} · {item.rarity}
       </div>
-      {itemStats(item) && <div className="xiv-tooltip-stats">{itemStats(item)}</div>}
-      {consumable && <div className="xiv-tooltip-hint dim">Drag to hotbar or use from inventory.</div>}
+      {itemStats(item) && <div className="cm-tooltip-stats">{itemStats(item)}</div>}
+      {consumable && <div className="cm-tooltip-hint dim">Drag to hotbar or use from inventory.</div>}
     </div>
   );
 }
 
 export function EmptySlotTooltipContent({ label }: { label: string }) {
   return (
-    <div className="xiv-tooltip-body">
-      <div className="xiv-tooltip-title">{label}</div>
-      <div className="xiv-tooltip-hint dim">Empty equipment slot.</div>
+    <div className="cm-tooltip-body">
+      <div className="cm-tooltip-title">{label}</div>
+      <div className="cm-tooltip-hint dim">Empty equipment slot.</div>
     </div>
   );
 }
@@ -43,9 +43,9 @@ export function SkillTooltipContent({
   const toNext = sk.usage_to_next ?? 0;
 
   return (
-    <div className="xiv-tooltip-body">
-      <div className="xiv-tooltip-title">{sk.name}</div>
-      <div className="xiv-tooltip-meta">
+    <div className="cm-tooltip-body">
+      <div className="cm-tooltip-title">{sk.name}</div>
+      <div className="cm-tooltip-meta">
         {sk.world_only
           ? "Field skill · 0 MP"
           : sk.id === "attack"
@@ -62,13 +62,13 @@ export function SkillTooltipContent({
         {sk.unlocked && !sk.world_only && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
         {sk.unlocked && !sk.world_only && usage > 0 && atMax ? ` · ${usage} uses` : ""}
       </div>
-      {sk.description && <div className="xiv-tooltip-desc dim">{sk.description}</div>}
-      {!sk.unlocked && <div className="xiv-tooltip-hint dim">Level your job to unlock.</div>}
+      {sk.description && <div className="cm-tooltip-desc dim">{sk.description}</div>}
+      {!sk.unlocked && <div className="cm-tooltip-hint dim">Level your job to unlock.</div>}
       {sk.world_only && sk.unlocked && (
-        <div className="xiv-tooltip-hint dim">Use from the hotbar in the field.</div>
+        <div className="cm-tooltip-hint dim">Use from the hotbar in the field.</div>
       )}
-      {sk.unlocked && !sk.world_only && !atMax && <div className="xiv-tooltip-hint dim">Use in battle to level up.</div>}
-      {sk.unlocked && !sk.world_only && atMax && <div className="xiv-tooltip-hint dim">Max level.</div>}
+      {sk.unlocked && !sk.world_only && !atMax && <div className="cm-tooltip-hint dim">Use in battle to level up.</div>}
+      {sk.unlocked && !sk.world_only && atMax && <div className="cm-tooltip-hint dim">Max level.</div>}
     </div>
   );
 }
@@ -76,8 +76,8 @@ export function SkillTooltipContent({
 export function hotbarTooltipContent(bind: ProfileInfo["hotbar"][string] | undefined, profile: ProfileInfo): ReactNode {
   if (!bind) {
     return (
-      <div className="xiv-tooltip-body">
-        <div className="xiv-tooltip-hint dim">Drop a skill or item here.</div>
+      <div className="cm-tooltip-body">
+        <div className="cm-tooltip-hint dim">Drop a skill or item here.</div>
       </div>
     );
   }
@@ -85,16 +85,16 @@ export function hotbarTooltipContent(bind: ProfileInfo["hotbar"][string] | undef
     const sk = profile.skills.find((s) => s.id === bind.id);
     if (sk) return <SkillTooltipContent sk={sk} />;
     return (
-      <div className="xiv-tooltip-body">
-        <div className="xiv-tooltip-title">{bind.id}</div>
+      <div className="cm-tooltip-body">
+        <div className="cm-tooltip-title">{bind.id}</div>
       </div>
     );
   }
   const item = profile.inventory.find((i) => i.consumable === bind.id);
   if (item) return <ItemTooltipContent item={item} />;
   return (
-    <div className="xiv-tooltip-body">
-      <div className="xiv-tooltip-title">{bind.id}</div>
+    <div className="cm-tooltip-body">
+      <div className="cm-tooltip-title">{bind.id}</div>
     </div>
   );
 }

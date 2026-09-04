@@ -17,7 +17,7 @@ export function GameIcon({
     <img
       src={src}
       alt={alt}
-      className={`xiv-icon ${className}`.trim()}
+      className={`cm-icon ${className}`.trim()}
       style={{ width: size, height: size, ...style }}
       draggable={false}
     />

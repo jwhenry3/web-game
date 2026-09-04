@@ -8,7 +8,8 @@ import {
 
 const COMBAT_LABELS: Record<string, string> = {
   "combat.realtime": "Realtime",
-  "combat.atb": "ATB",
+  "combat.ordo": "Ordo",
+  "combat.atb": "Ordo",
 };
 
 interface Props {
@@ -117,15 +118,15 @@ export function MapServerInspector({ mapId, onApplied, onStatus, onError }: Prop
 
   const combatOptions = remote.combat_options?.length
     ? remote.combat_options
-    : ["combat.realtime", "combat.atb"];
+    : ["combat.realtime", "combat.ordo"];
 
   return (
     <div className="map-editor-inspector">
       <div className="map-editor-group-label">Map</div>
       <label className="field-label">Map id</label>
-      <input className="xiv-input" value={remote.id} readOnly disabled />
+      <input className="cm-input" value={remote.id} readOnly disabled />
       <label className="field-label">Display name</label>
-      <input className="xiv-input" value={name} onChange={(e) => setName(e.target.value)} disabled={busy} />
+      <input className="cm-input" value={name} onChange={(e) => setName(e.target.value)} disabled={busy} />
 
       <div className="map-editor-group-label">Server</div>
       <label className="map-editor-check">
@@ -139,14 +140,14 @@ export function MapServerInspector({ mapId, onApplied, onStatus, onError }: Prop
       </label>
       {remote.default && <p className="dim map-editor-hint">The default map cannot be disabled.</p>}
       <label className="field-label">Config file</label>
-      <input className="xiv-input" value={remote.config_path} readOnly disabled title={remote.config_path} />
+      <input className="cm-input" value={remote.config_path} readOnly disabled title={remote.config_path} />
       <p className="dim map-editor-hint">
         Status: {remote.running ? "running" : enabled ? "offline" : "disabled"}
         {remote.default ? " · default map" : ""}
       </p>
 
       <label className="field-label">Combat system</label>
-      <select className="xiv-input" value={combat} onChange={(e) => setCombat(e.target.value)} disabled={busy}>
+      <select className="cm-input" value={combat} onChange={(e) => setCombat(e.target.value)} disabled={busy}>
         {combatOptions.map((id) => (
           <option key={id} value={id}>
             {COMBAT_LABELS[id] ?? id}
@@ -156,7 +157,7 @@ export function MapServerInspector({ mapId, onApplied, onStatus, onError }: Prop
 
       <label className="field-label">Battle speed</label>
       <input
-        className="xiv-input"
+        className="cm-input"
         type="number"
         min={0.05}
         max={3}
@@ -165,16 +166,16 @@ export function MapServerInspector({ mapId, onApplied, onStatus, onError }: Prop
         onChange={(e) => setBattleSpeed(e.target.value)}
         disabled={busy}
       />
-      <p className="dim map-editor-hint">1.0 is baseline tempo; ATB uses this for tick rate.</p>
+      <p className="dim map-editor-hint">1.0 is baseline tempo; Ordo uses this for tick rate.</p>
 
       <label className="field-label">Listen addr</label>
-      <input className="xiv-input" value={addr} onChange={(e) => setAddr(e.target.value)} disabled={busy} />
+      <input className="cm-input" value={addr} onChange={(e) => setAddr(e.target.value)} disabled={busy} />
       <p className="dim map-editor-hint">Use :0 for an ephemeral in-process port (typical for designer maps).</p>
 
       <label className="field-label">Overworld</label>
-      <input className="xiv-input" value={remote.overworld} readOnly disabled />
+      <input className="cm-input" value={remote.overworld} readOnly disabled />
 
-      <button type="button" className="xiv-btn gold wide" disabled={!dirty || busy} onClick={() => void onSave()}>
+      <button type="button" className="cm-btn gold wide" disabled={!dirty || busy} onClick={() => void onSave()}>
         {busy ? "Saving…" : dirty ? "Save server options" : "No changes"}
       </button>
     </div>

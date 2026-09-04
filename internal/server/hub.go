@@ -8,13 +8,13 @@ import (
 	"sync"
 	"time"
 
-	"ffv-web-game/internal/auth"
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/plugins"
-	"ffv-web-game/internal/plugins/combatatb"
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/auth"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/plugins"
+	"clara-mundi/internal/plugins/combatatb"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 // World bounds for the open-world layer (matches the client's map size).
@@ -67,6 +67,8 @@ type Hub struct {
 	partySeq      int
 	battleInvites map[string]*battleInvite
 	battleMeta    map[string]*battleMeta
+	camps         map[string]*worldCamp // owner character name -> camp
+	houses        map[string]*houseRoom // owner character name -> instance
 
 	tickWindow  time.Duration
 	battleSpeed float64
@@ -104,6 +106,8 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		partyInvites:  make(map[string]*partyInvite),
 		battleInvites: make(map[string]*battleInvite),
 		battleMeta:    make(map[string]*battleMeta),
+		camps:         make(map[string]*worldCamp),
+		houses:        make(map[string]*houseRoom),
 		tickWindow:    combatatb.BattleTickWindow(battleSpeed),
 		battleSpeed:   battleSpeed,
 		modCfg:        modCfg,
@@ -183,6 +187,8 @@ func (h *Hub) broadcastWorldState() {
 	h.broadcastAll(protocol.Encode(protocol.TypeWorldState, protocol.WorldStatePayload{
 		Players:     h.worldPlayers(),
 		NPCs:        h.worldNPCs(),
+		Camps:       h.campList(),
+		Pets:        h.worldPets(),
 		Battles:     h.battleInfos(),
 		SavePoints:  h.worldSavePoints(),
 		JobChangers: h.worldJobChangers(),
@@ -427,6 +433,7 @@ func (h *Hub) handleDisconnect(client *Client) {
 	if client.BattleID != "" {
 		h.combat.OnDisconnect(client.ID)
 	}
+	h.onHousingDisconnect(client)
 	if _, ok := h.world[client.ID]; ok {
 		delete(h.world, client.ID)
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerLeft, protocol.PlayerLeftPayload{ID: client.ID}))
@@ -493,6 +500,28 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handleSetSavePoint(c, ev.Payload)
 	case protocol.TypeUseWorldSkill:
 		h.handleUseWorldSkill(c, ev.Payload)
+	case protocol.TypeEnterHouse:
+		h.handleEnterHouse(c, ev.Payload)
+	case protocol.TypeLeaveHouse:
+		h.handleLeaveHouse(c)
+	case protocol.TypeHouseInteract:
+		h.handleHouseInteract(c, ev.Payload)
+	case protocol.TypeHouseStorageDeposit:
+		h.handleHouseStorageDeposit(c, ev.Payload)
+	case protocol.TypeHouseStorageWithdraw:
+		h.handleHouseStorageWithdraw(c, ev.Payload)
+	case protocol.TypeHousePlaceFurniture:
+		h.handleHousePlaceFurniture(c, ev.Payload)
+	case protocol.TypeHousePickFurniture:
+		h.handleHousePickFurniture(c, ev.Payload)
+	case protocol.TypeSetCampSkin:
+		h.handleSetCampSkin(c, ev.Payload)
+	case protocol.TypePetSetFollow:
+		h.handlePetSetFollow(c, ev.Payload)
+	case protocol.TypePetSetBattle:
+		h.handlePetSetBattle(c, ev.Payload)
+	case protocol.TypePetRelease:
+		h.handlePetRelease(c, ev.Payload)
 	default:
 		h.sendError(c, fmt.Sprintf("Unknown message type %q.", ev.Type))
 	}
@@ -549,7 +578,7 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 			job = game.WeaponDefaultJob(game.WeaponType(p.Weapon))
 		}
 		if job == "" {
-			job = game.JobWAR
+			job = game.JobVAN
 		}
 		profile = h.store.GetOrCreate(name, job)
 	}
@@ -592,6 +621,8 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	h.send(c, protocol.TypeWorldState, protocol.WorldStatePayload{
 		Players:     h.worldPlayers(),
 		NPCs:        h.worldNPCs(),
+		Camps:       h.campList(),
+		Pets:        h.worldPets(),
 		Battles:     h.battleInfos(),
 		SavePoints:  h.worldSavePoints(),
 		JobChangers: h.worldJobChangers(),
@@ -643,6 +674,10 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	}
 	var p protocol.MovePayload
 	if err := json.Unmarshal(raw, &p); err != nil {
+		return
+	}
+	if wp.InHouse {
+		h.moveInHouse(c, wp, p.X, p.Y)
 		return
 	}
 	prevX := wp.X
@@ -899,7 +934,7 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 	}
 	toInfo := func(s game.Skill) protocol.SkillInfo {
 		lvl := loadout.SkillLevels[s.ID]
-		unlocked := s.ID == game.BasicAttack.ID || lvl > 0
+		unlocked := game.SkillAlwaysUnlocked(s.ID) || lvl > 0
 		return protocol.SkillInfo{
 			ID: s.ID, Name: s.Name, MPCost: s.MPCost, Heals: s.Heals, Buffs: s.Buffs,
 			Description: s.Description, Category: string(s.Category),
@@ -914,7 +949,7 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 			WorldOnly:   s.WorldOnly,
 		}
 	}
-	skills := []protocol.SkillInfo{toInfo(game.BasicAttack)}
+	skills := []protocol.SkillInfo{toInfo(game.BasicAttack), toInfo(game.SkillCapture)}
 	for _, s := range game.Catalog {
 		if s.WorldOnly || jobActive(s.Job) {
 			skills = append(skills, toInfo(s))
@@ -977,6 +1012,9 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		Jobs:              jobs,
 		Stats:             protocol.StatBlock{HP: hp, MP: mp, Str: str, Mag: mag, Agi: agi},
 		Inventory:         p.Inventory,
+		HouseStorage:      append([]game.Item(nil), p.HouseStorage...),
+		HouseStorageCap:   game.DefaultHouseStorageCapacity,
+		CampSkin:          game.NormalizeCampSkin(p.CampSkin),
 		Equipped:          equipped,
 		Hotbar:            hotbar,
 		Skills:            skills,
@@ -985,6 +1023,9 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		SavePointName:     savePointName(p.SavePointID),
 		VisitedSavePoints: visitedSavePoints(p),
 		Keybinds:          p.KeybindMap(),
+		Pets:              append([]game.PetRecord(nil), p.Pets...),
+		FollowPetID:       p.FollowPetID,
+		BattlePetID:       p.BattlePetID,
 	}
 }
 

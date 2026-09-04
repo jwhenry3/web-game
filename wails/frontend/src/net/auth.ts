@@ -1,4 +1,4 @@
-const TOKEN_KEY = "ffv_auth_token";
+const TOKEN_KEY = "cm_auth_token";
 export const MAX_CHARACTERS = 8;
 
 export interface CharacterSummary {

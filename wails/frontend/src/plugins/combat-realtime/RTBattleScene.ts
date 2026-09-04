@@ -38,6 +38,11 @@ export class RTBattleScene extends Phaser.Scene {
   private lastPos = new Map<string, { x: number; y: number }>();
   private jumping = new Set<string>();
   private onRtEvent = (p: RTBattleEventPayload) => this.animateEvent(p);
+  private onBattleShutdown = () => {
+    battleEvents.off("rt_event", this.onRtEvent);
+    this.moveKeysSig = "";
+    this.moveKeys = {};
+  };
 
   constructor() {
     super("battle");
@@ -47,6 +52,12 @@ export class RTBattleScene extends Phaser.Scene {
     this.fighters.clear();
     this.lastPos.clear();
     this.jumping.clear();
+    // Scene instances are reused across stop→start; clear stale Key refs up front.
+    this.moveKeysSig = "";
+    this.moveKeys = {};
+    this.lastMoveSent = 0;
+    this.lastSentX = 0;
+    this.lastSentY = 0;
     this.cameras.main.setBackgroundColor(0x0a1420);
     const g = this.add.graphics();
     g.fillStyle(0x1a2838, 1);
@@ -55,15 +66,18 @@ export class RTBattleScene extends Phaser.Scene {
     g.strokeRect(0, 0, ARENA_W, ARENA_H);
 
     await ensureEnemyTextures(this);
+    if (!this.sys.isActive()) return;
 
-    const kb = this.input.keyboard!;
+    // Rebind after await — previous battle's Key objects are invalid on restart.
+    this.moveKeysSig = "";
+    this.moveKeys = {};
     this.syncMoveKeys();
-    kb.disableGlobalCapture();
+    this.input.keyboard?.disableGlobalCapture();
 
+    battleEvents.off("rt_event", this.onRtEvent);
     battleEvents.on("rt_event", this.onRtEvent);
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => {
-      battleEvents.off("rt_event", this.onRtEvent);
-    });
+    this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.onBattleShutdown);
+    this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onBattleShutdown);
   }
 
   private syncMoveKeys() {
@@ -126,7 +140,12 @@ export class RTBattleScene extends Phaser.Scene {
     wrapper.setSize(48, 48);
     wrapper.setInteractive({ useHandCursor: true });
     wrapper.on("pointerdown", () => {
-      net.clickEntity({ id: ent.id, alive: ent.alive, is_player: ent.is_player });
+      net.clickEntity({
+        id: ent.id,
+        alive: ent.alive,
+        is_player: ent.is_player,
+        is_ally: ent.is_ally,
+      });
     });
     f = { wrapper, sprite, label, castBack, castBar, isPlayer: ent.is_player };
     this.fighters.set(ent.id, f);

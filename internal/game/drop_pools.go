@@ -126,10 +126,22 @@ func ItemFromCatalog(rng *rand.Rand, defID string, level int) (Item, bool) {
 	for k, v := range def.Stats {
 		stats[k] = v
 	}
-	return Item{
-		ID: id, Name: def.Name, Kind: KindEquipment, Slot: def.Slot,
-		Type: def.WeaponType, Rarity: rarity, Level: level, Qty: 1, Stats: stats,
-	}, true
+	kind := def.Kind
+	if kind == "" {
+		kind = KindEquipment
+	}
+	switch kind {
+	case KindDecoration, KindCrafting:
+		return Item{
+			ID: id, Name: def.Name, Kind: kind, Type: def.ID,
+			Rarity: rarity, Level: level, Qty: 1, Stats: stats,
+		}, true
+	default:
+		return Item{
+			ID: id, Name: def.Name, Kind: KindEquipment, Slot: def.Slot,
+			Type: def.WeaponType, Rarity: rarity, Level: level, Qty: 1, Stats: stats,
+		}, true
+	}
 }
 
 // RollDropPool independently rolls each entry; lootBonus adds 10% per stack (capped).

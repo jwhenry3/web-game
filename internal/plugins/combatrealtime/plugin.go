@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
 )
 
 // Plugin implements free-movement combat with collider-based hits.

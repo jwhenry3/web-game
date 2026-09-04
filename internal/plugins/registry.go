@@ -3,15 +3,16 @@ package plugins
 import (
 	"fmt"
 
-	"ffv-web-game/internal/plugins/combatatb"
-	"ffv-web-game/internal/plugins/combatrealtime"
-	"ffv-web-game/internal/plugins/contracts"
+	"clara-mundi/internal/plugins/combatatb"
+	"clara-mundi/internal/plugins/combatrealtime"
+	"clara-mundi/internal/plugins/contracts"
 )
 
 type factory func() contracts.CombatPlugin
 
 var combatFactories = map[string]factory{
-	"combat.atb":       func() contracts.CombatPlugin { return combatatb.New() },
+	"combat.ordo":      func() contracts.CombatPlugin { return combatatb.New() },
+	"combat.atb":       func() contracts.CombatPlugin { return combatatb.New() }, // legacy alias
 	"combat.realtime":  func() contracts.CombatPlugin { return combatrealtime.New() },
 }
 

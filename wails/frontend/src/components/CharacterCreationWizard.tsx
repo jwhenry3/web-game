@@ -15,14 +15,14 @@ import { ALL_JOBS } from "../types";
 import type { CreationDraft } from "../state/store";
 import { JobSelectionSteps } from "./JobSelectionSteps";
 
-const DEFAULT_RACE = "hume";
+const DEFAULT_RACE = "humanus";
 
 const STEPS = ["appearance", "main", "name"] as const;
 type Step = (typeof STEPS)[number];
 
 const STEP_LABELS: Record<Step, string> = {
   appearance: "Customize Appearance",
-  main: "Choose Main Job",
+  main: "Choose Main Class",
   name: "Name Your Hero",
 };
 
@@ -100,12 +100,12 @@ export function CharacterCreationWizard() {
 
   return (
     <div className="login-screen">
-      <div className="xiv-window login-panel creation-wizard">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">Character Creation</span>
+      <div className="cm-window login-panel creation-wizard">
+        <div className="cm-titlebar">
+          <span className="cm-title">Character Creation</span>
         </div>
-        <div className="xiv-body">
-          <div className="xiv-section-label">
+        <div className="cm-body">
+          <div className="cm-section-label">
             Step {stepIndex + 1} of {STEPS.length} — {STEP_LABELS[step]}
           </div>
 
@@ -161,13 +161,13 @@ export function CharacterCreationWizard() {
             <>
               <div className="appearance-editor appearance-editor--compact">
                 <CharacterPreviewAnimated appearance={draft.appearance} hideWeapon />
-                <div className="xiv-creation-summary">
+                <div className="cm-creation-summary">
                   <span>{ALL_JOBS.find((j) => j.id === draft.mainJob)?.name ?? draft.mainJob}</span>
                 </div>
               </div>
               <label className="field-label">Hero Name</label>
               <input
-                className="xiv-input"
+                className="cm-input"
                 value={draft.name}
                 maxLength={24}
                 placeholder="1–24 characters"
@@ -179,23 +179,23 @@ export function CharacterCreationWizard() {
           )}
 
           {error && <div className="error-text">{error}</div>}
-          <div className="xiv-wizard-nav">
+          <div className="cm-wizard-nav">
             {stepIndex === 0 && hasExisting ? (
-              <button type="button" className="xiv-btn" disabled={busy} onClick={() => setScreen("select")}>
+              <button type="button" className="cm-btn" disabled={busy} onClick={() => setScreen("select")}>
                 Back to Select
               </button>
             ) : (
-              <button type="button" className="xiv-btn" disabled={stepIndex === 0 || busy} onClick={back}>
+              <button type="button" className="cm-btn" disabled={stepIndex === 0 || busy} onClick={back}>
                 Back
               </button>
             )}
-            <button type="button" className="xiv-btn gold" disabled={busy} onClick={next}>
+            <button type="button" className="cm-btn gold" disabled={busy} onClick={next}>
               {step === "name" ? (busy ? "Entering…" : "Enter World") : "Next"}
             </button>
           </div>
           <button
             type="button"
-            className="xiv-btn wide logout-btn"
+            className="cm-btn wide logout-btn"
             disabled={busy}
             onClick={() => {
               net.disconnect();

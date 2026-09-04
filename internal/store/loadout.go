@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 const hotbarSlotCount = game.HotbarSlotCount
@@ -14,7 +14,7 @@ const hotbarSlotCount = game.HotbarSlotCount
 func defaultHotbar(main, sub game.JobID) map[string]HotbarBinding {
 	hb := map[string]HotbarBinding{
 		"1": {Kind: "skill", ID: game.BasicAttack.ID},
-		"2": {Kind: "item", ID: "potion"},
+		"2": {Kind: "item", ID: "potio"},
 	}
 	slot := 3
 	for _, job := range game.ActiveJobs(main, sub) {
@@ -25,6 +25,9 @@ func defaultHotbar(main, sub game.JobID) map[string]HotbarBinding {
 			hb[strconv.Itoa(slot)] = HotbarBinding{Kind: "skill", ID: id}
 			slot++
 		}
+	}
+	if _, ok := hb["7"]; !ok {
+		hb["7"] = HotbarBinding{Kind: "skill", ID: game.ActionIDCapture}
 	}
 	if _, ok := hb["8"]; !ok {
 		hb["8"] = HotbarBinding{Kind: "skill", ID: game.SkillIDReturn}
@@ -56,6 +59,19 @@ func (l *JobLoadout) normalize() {
 	}
 	if l.Proficiency == nil {
 		l.Proficiency = map[string]int{}
+	}
+	// Soft-fill Capture on slot 7 when missing so existing loadouts get the skill.
+	hasCapture := false
+	for _, b := range l.Hotbar {
+		if b.Kind == "skill" && b.ID == game.ActionIDCapture {
+			hasCapture = true
+			break
+		}
+	}
+	if !hasCapture {
+		if _, ok := l.Hotbar["7"]; !ok {
+			l.Hotbar["7"] = HotbarBinding{Kind: "skill", ID: game.ActionIDCapture}
+		}
 	}
 }
 
@@ -238,7 +254,7 @@ func (p *Profile) syncLegacyLevel() {
 func (p *Profile) migrateJobs() {
 	if p.Jobs != nil && len(p.Jobs) > 0 {
 		if p.MainJob == "" {
-			p.MainJob = string(game.JobWAR)
+			p.MainJob = string(game.JobVAN)
 		}
 		if p.Loadouts == nil {
 			p.Loadouts = map[string]JobLoadout{}
@@ -327,7 +343,7 @@ func cloneHotbar(m map[string]HotbarBinding) map[string]HotbarBinding {
 
 // SkillLevel returns the current level of a skill in the active loadout (0 = locked).
 func (p Profile) SkillLevel(id string) int {
-	if id == game.BasicAttack.ID {
+	if game.SkillAlwaysUnlocked(id) {
 		return 1
 	}
 	l := p.ActiveLoadout()

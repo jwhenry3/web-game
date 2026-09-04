@@ -1,15 +1,15 @@
 package game
 
-// FFXI-inspired playable races (cosmetic + minor stat flavor).
+// Clara Mundi playable races (cosmetic + minor stat flavor).
 
 type RaceID string
 
 const (
-	RaceHume     RaceID = "hume"
-	RaceElvaan   RaceID = "elvaan"
-	RaceTarutaru RaceID = "tarutaru"
-	RaceMithra   RaceID = "mithra"
-	RaceGalka    RaceID = "galka"
+	RaceHumanus RaceID = "humanus"
+	RaceAltus   RaceID = "altus"
+	RaceParvus  RaceID = "parvus"
+	RaceFelis   RaceID = "felis"
+	RaceSaxum   RaceID = "saxum"
 )
 
 type RaceDef struct {
@@ -19,11 +19,11 @@ type RaceDef struct {
 }
 
 var Races = []RaceDef{
-	{ID: RaceHume, Name: "Hume", Description: "Balanced and adaptable."},
-	{ID: RaceElvaan, Name: "Elvaan", Description: "Proud and resilient."},
-	{ID: RaceTarutaru, Name: "Tarutaru", Description: "Small, clever, and magical."},
-	{ID: RaceMithra, Name: "Mithra", Description: "Agile hunters of the wild."},
-	{ID: RaceGalka, Name: "Galka", Description: "Stalwart giants of the north."},
+	{ID: RaceHumanus, Name: "Humanus", Description: "Balanced and adaptable."},
+	{ID: RaceAltus, Name: "Altus", Description: "Proud and resilient."},
+	{ID: RaceParvus, Name: "Parvus", Description: "Small, clever, and magical."},
+	{ID: RaceFelis, Name: "Felis", Description: "Agile hunters of the wild."},
+	{ID: RaceSaxum, Name: "Saxum", Description: "Stalwart giants of the north."},
 }
 
 func ValidRace(id RaceID) bool {

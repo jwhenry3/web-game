@@ -3,8 +3,8 @@ package contracts
 import (
 	"math/rand"
 
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 // BattleFighter links a combat client to its persistence profile.

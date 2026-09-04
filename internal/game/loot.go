@@ -46,10 +46,12 @@ func ValidEquipSlot(slot string) bool {
 	return false
 }
 
-// Item kinds: gear that is equipped vs. consumables used in battle.
+// Item kinds: gear that is equipped vs. consumables used in battle vs. housing goods.
 const (
-	KindEquipment  = "equipment"
-	KindConsumable = "consumable"
+	KindEquipment   = "equipment"
+	KindConsumable  = "consumable"
+	KindDecoration  = "decoration"
+	KindCrafting    = "crafting"
 )
 
 type Item struct {
@@ -77,9 +79,9 @@ type ConsumableDef struct {
 }
 
 var ConsumableDefs = map[string]ConsumableDef{
-	"potion":    {ID: "potion", Name: "Potion", HealHP: 50, PerLevel: 8, Description: "Restores a moderate amount of HP."},
-	"hi_potion": {ID: "hi_potion", Name: "Hi-Potion", HealHP: 130, PerLevel: 14, Description: "Restores a large amount of HP."},
-	"ether":     {ID: "ether", Name: "Ether", RestoreMP: 35, PerLevel: 6, Description: "Restores MP."},
+	"potio":       {ID: "potio", Name: "Potio", HealHP: 50, PerLevel: 8, Description: "Restores a moderate amount of HP."},
+	"potio_maior": {ID: "potio_maior", Name: "Potio Maior", HealHP: 130, PerLevel: 14, Description: "Restores a large amount of HP."},
+	"aether":      {ID: "aether", Name: "Aether", RestoreMP: 35, PerLevel: 6, Description: "Restores MP."},
 }
 
 // ConsumableEffect returns the HP and MP an item restores when used.
@@ -112,11 +114,15 @@ func NewConsumable(rng *rand.Rand, defID string, level int) Item {
 }
 
 var weaponBases = map[WeaponType][]string{
-	WeaponSword:  {"Blade", "Saber", "Claymore"},
-	WeaponDagger: {"Twin Dirks", "Twin Kris", "Matched Stilettos"},
-	WeaponStaff:  {"Staff", "Rod", "Scepter"},
-	WeaponMace:   {"Mace", "Cudgel", "Morningstar"},
-	WeaponSpear:  {"Spear", "Lance", "Pike"},
+	WeaponSword:    {"Blade", "Saber", "Claymore"},
+	WeaponHammer:   {"Hammer", "Maul", "Warhammer"},
+	WeaponAxe:      {"Axe", "Hatchet", "Greataxe"},
+	WeaponSpear:    {"Spear", "Lance", "Pike"},
+	WeaponKatana:   {"Katana", "Uchigatana", "Tachi"},
+	WeaponStaff:    {"Staff", "Rod", "Scepter"},
+	WeaponWand:     {"Wand", "Baton", "Focus"},
+	WeaponDagger:   {"Twin Dirks", "Twin Kris", "Matched Stilettos"},
+	WeaponKnuckles: {"Knuckles", "Cesti", "Claws"},
 }
 
 var armorBases = map[string][]string{
@@ -200,7 +206,7 @@ func GenerateItem(rng *rand.Rand, level int, rarityBonus int) Item {
 		item.Type = string(wt)
 		item.Name = fmt.Sprintf("%s %s", prefix, bases[rng.Intn(len(bases))])
 		primary := "str"
-		if wt == WeaponStaff || wt == WeaponMace {
+		if isMagicWeapon(wt) {
 			primary = "mag"
 		}
 		rollStat(primary, 1.4)
@@ -269,11 +275,11 @@ func GenerateLoot(rng *rand.Rand, level int, rarityBonus int) []Item {
 	}
 	if rng.Intn(100) < 45 {
 		roll := rng.Intn(100)
-		defID := "potion"
+		defID := "potio"
 		if roll >= 80 {
-			defID = "hi_potion"
+			defID = "potio_maior"
 		} else if roll >= 55 {
-			defID = "ether"
+			defID = "aether"
 		}
 		loot = append(loot, NewConsumable(rng, defID, level))
 	}

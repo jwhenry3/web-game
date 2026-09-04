@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/servercfg"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/servercfg"
 )
 
 // Config is the cluster document: one global proxy and N map servers.
@@ -60,7 +60,7 @@ type mapsRegistry struct {
 func Default() Config {
 	return Config{
 		Proxy: ProxyConfig{
-			Name:     "FFV",
+			Name:     "Clara Mundi",
 			Addr:     ":8080",
 			Accounts: "data/accounts.json",
 			Data:     "data/profiles.json",
@@ -69,6 +69,8 @@ func Default() Config {
 		Exp: game.DefaultExpRates(),
 		Maps: []MapSpec{
 			{ID: "greenwood", Name: "Greenwood", Addr: ":8091", Config: "data/maps/greenwood.server.json", Default: true},
+			{ID: "frostkeep", Name: "Frostkeep", Addr: ":8097", Config: "data/maps/frostkeep.server.json"},
+			{ID: "tidecourt", Name: "Tide Court", Addr: ":8103", Config: "data/maps/tidecourt.server.json"},
 		},
 	}
 }

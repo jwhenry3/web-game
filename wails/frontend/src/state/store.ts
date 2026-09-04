@@ -6,6 +6,7 @@ import type {
   BattleInfo,
   ChatChannel,
   ChatLine,
+  ChatTone,
   FriendInfo,
   FriendRequestPayload,
   PartyInfo,
@@ -23,10 +24,13 @@ import type {
   JobChanger,
   MapTileOverrides,
   MapTerrainLayers,
+  WorldCamp,
+  WorldPet,
+  HouseStatePayload,
 } from "../types";
 import type { NpcDialogueTarget } from "../world/npcDialogue";
 
-export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "battle" | "map_editor";
+export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "battle" | "house" | "map_editor";
 
 import type { CharacterAppearance } from "../characters/types";
 import { appearanceFromRace } from "../characters/types";
@@ -75,6 +79,9 @@ interface GameState {
   npcs: Record<string, WorldNPC>;
   savePoints: Record<string, SavePoint>;
   jobChangers: Record<string, JobChanger>;
+  camps: Record<string, WorldCamp>;
+  pets: Record<string, WorldPet>;
+  house: HouseStatePayload | null;
   overworld: OverworldMap | null;
   mapInfo: {
     id: string;
@@ -99,13 +106,14 @@ interface GameState {
   /** Client focus target; survives tick merges until cleared or battle ends. */
   battleTargetId: string | null;
   combatMode: string | null;
+  commandPetId: string | null;
   selectedAction: SelectedAction | null;
   openWindow: WindowId | null;
   bindSlot: string | null;
   mainMenuOpen: boolean;
   mainMenuView: MainMenuView;
   options: GameOptions;
-  worldSkillDialog: "return" | "teleport" | null;
+  worldSkillDialog: "return" | "port" | null;
   npcDialog: NpcDialogueTarget | null;
   jobChangeDialog: { id: string; name: string; mode: "main" | "sub" } | null;
   teleportConfirm: { id: string; name: string } | null;
@@ -113,6 +121,7 @@ interface GameState {
 
   setScreen: (s: Screen) => void;
   setSelectedAction: (a: SelectedAction | null) => void;
+  setCommandPetId: (id: string | null) => void;
   toggleWindow: (w: WindowId) => void;
   closeWindow: () => void;
   setBindSlot: (slot: string | null) => void;
@@ -134,7 +143,7 @@ interface GameState {
   toggleMainMenu: () => void;
   setMainMenuView: (view: MainMenuView) => void;
   setOptions: (options: GameOptions) => void;
-  openWorldSkillDialog: (kind: "return" | "teleport") => void;
+  openWorldSkillDialog: (kind: "return" | "port") => void;
   closeWorldSkillDialog: () => void;
   openNpcDialog: (target: NpcDialogueTarget) => void;
   closeNpcDialog: () => void;
@@ -159,11 +168,11 @@ const initial = {
   hasCharacter: false,
   character: null as CharacterSummary | null,
   creation: {
-    race: "hume",
+    race: "humanus",
     mainJob: "",
     subJob: "",
     name: "",
-    appearance: appearanceFromRace("hume"),
+    appearance: appearanceFromRace("humanus"),
   } as CreationDraft,
   selfId: null,
   profile: null,
@@ -171,6 +180,9 @@ const initial = {
   npcs: {},
   savePoints: {},
   jobChangers: {},
+  camps: {},
+  pets: {},
+  house: null,
   overworld: null,
   mapInfo: null,
   battles: [],
@@ -186,13 +198,14 @@ const initial = {
   rtBattle: null,
   battleTargetId: null as string | null,
   combatMode: null,
+  commandPetId: null as string | null,
   selectedAction: null,
   openWindow: null,
   bindSlot: null,
   mainMenuOpen: false,
   mainMenuView: "menu" as MainMenuView,
   options: loadOptions(),
-  worldSkillDialog: null as "return" | "teleport" | null,
+  worldSkillDialog: null as "return" | "port" | null,
   npcDialog: null as NpcDialogueTarget | null,
   jobChangeDialog: null as { id: string; name: string; mode: "main" | "sub" } | null,
   teleportConfirm: null as { id: string; name: string } | null,
@@ -203,8 +216,15 @@ export const useGame = create<GameState>((set) => ({
   ...initial,
   setScreen: (s) => set({ screen: s }),
   setSelectedAction: (a) => set({ selectedAction: a }),
+  setCommandPetId: (id) => set({ commandPetId: id }),
   toggleWindow: (w) =>
-    set((s) => ({ openWindow: s.openWindow === w ? null : w, bindSlot: null })),
+    set((s) => {
+      // Dual house-storage view already shows inventory; I / Storage toggles close it.
+      if (s.openWindow === "house_storage" && (w === "inventory" || w === "house_storage")) {
+        return { openWindow: null, bindSlot: null };
+      }
+      return { openWindow: s.openWindow === w ? null : w, bindSlot: null };
+    }),
   closeWindow: () => set({ openWindow: null, bindSlot: null }),
   setBindSlot: (slot) => set({ bindSlot: slot }),
   setChatTab: (tab) => set({ chatTab: tab }),
@@ -314,7 +334,12 @@ export const useGame = create<GameState>((set) => ({
     })),
 }));
 
-export function pushChat(channel: ChatChannel, message: string, from?: { id?: string; name?: string }) {
+export function pushChat(
+  channel: ChatChannel,
+  message: string,
+  from?: { id?: string; name?: string },
+  tone?: ChatTone,
+) {
   useGame.setState((s) => ({
     chat: [
       ...s.chat,
@@ -323,13 +348,14 @@ export function pushChat(channel: ChatChannel, message: string, from?: { id?: st
         from_id: from?.id ?? "",
         from_name: from?.name ?? "",
         message,
+        ...(tone ? { tone } : {}),
       },
     ].slice(-200),
   }));
 }
 
-export function appendBattleLog(line: string) {
-  pushChat("battle", line);
+export function appendBattleLog(line: string, tone?: ChatTone) {
+  pushChat("battle", line, undefined, tone);
   useGame.setState((s) => {
     if (!s.battle) return s;
     const log = [...s.battle.log, line].slice(-60);

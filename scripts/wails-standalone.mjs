@@ -6,7 +6,7 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const wailsDir = path.join(root, "wails");
 const isBuild = process.argv.includes("--build");
-const baseName = "fantasy-standalone";
+const baseName = "clara-mundi";
 const outName = process.platform === "win32" ? `${baseName}.exe` : baseName;
 
 const env = {
@@ -41,8 +41,8 @@ function normalizeBuiltBinary() {
   return [
     withExt,
     withoutExt,
-    path.join(binDir, "fantasy-client.exe"),
-    path.join(binDir, "fantasy-client"),
+    path.join(binDir, "clara-mundi-client.exe"),
+    path.join(binDir, "clara-mundi-client"),
   ].find((p) => existsSync(p));
 }
 

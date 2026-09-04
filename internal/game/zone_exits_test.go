@@ -5,48 +5,79 @@ import (
 	"testing"
 )
 
-func TestZoneBordersBetweenGreenwoodAndNorth(t *testing.T) {
-	greenwood, err := LoadOverworldData(defaultOverworldPath())
+func TestZoneBordersVerdantFrost(t *testing.T) {
+	northwatch, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "northwatch.map.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	northPath := filepath.Join(filepath.Dir(defaultOverworldPath()), "north.map.json")
-	north, err := LoadOverworldData(northPath)
+	frostmarch, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "frostmarch.map.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if greenwood.Path == north.Path {
-		t.Fatal("maps must load from different overworld configs")
+	if len(northwatch.Exits) == 0 || len(frostmarch.Exits) == 0 {
+		t.Fatal("border maps need zone exits")
 	}
-	if len(greenwood.Exits) == 0 || len(north.Exits) == 0 {
-		t.Fatal("both maps need at least one zone exit")
-	}
-
-	toNorth, ok := exitTo(greenwood, "north")
+	toFrost, ok := exitTo(northwatch, "frostmarch")
 	if !ok {
-		t.Fatal("greenwood missing exit to north")
+		t.Fatal("northwatch missing exit to frostmarch")
 	}
-	toGreenwood, ok := exitTo(north, "greenwood")
+	toWatch, ok := exitTo(frostmarch, "northwatch")
 	if !ok {
-		t.Fatal("north missing exit to greenwood")
+		t.Fatal("frostmarch missing exit to northwatch")
 	}
+	assertInlandSpawn(t, "frostmarch spawn from northwatch", frostmarch, toFrost)
+	assertInlandSpawn(t, "northwatch spawn from frostmarch", northwatch, toWatch)
+	if toFrost.MinR > 4 {
+		t.Fatalf("northwatch→frostmarch exit should sit on north edge, minR=%d", toFrost.MinR)
+	}
+	if toWatch.MaxR < frostmarch.Rows-5 {
+		t.Fatalf("frostmarch→northwatch exit should sit on south edge, maxR=%d", toWatch.MaxR)
+	}
+}
 
-	assertInlandSpawn(t, "north spawn from greenwood", north, toNorth)
-	assertInlandSpawn(t, "greenwood spawn from north", greenwood, toGreenwood)
+func TestZoneBordersVerdantTide(t *testing.T) {
+	deep, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "deepcanopy.map.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wharf, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "westwharf.map.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	toWharf, ok := exitTo(deep, "westwharf")
+	if !ok {
+		t.Fatal("deepcanopy missing exit to westwharf")
+	}
+	toDeep, ok := exitTo(wharf, "deepcanopy")
+	if !ok {
+		t.Fatal("westwharf missing exit to deepcanopy")
+	}
+	assertInlandSpawn(t, "westwharf spawn", wharf, toWharf)
+	assertInlandSpawn(t, "deepcanopy spawn", deep, toDeep)
+}
 
-	// Zone strips sit on the connecting east/west road, not in the rock border.
-	if toNorth.MinC < greenwood.Cols-16 {
-		t.Fatalf("greenwood exit should be on the east edge, minC=%d cols=%d", toNorth.MinC, greenwood.Cols)
+func TestMandateFerryFrostTide(t *testing.T) {
+	frost, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "frostkeep.map.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if toGreenwood.MaxC > 12 {
-		t.Fatalf("north exit should be on the west edge, maxC=%d", toGreenwood.MaxC)
+	tide, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "tidecourt.map.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if FacingFromExit(toNorth, greenwood.Cols) != FacingRight {
-		t.Fatal("crossing Greenwood east should keep facing right")
+	toTide, ok := exitTo(frost, "tidecourt")
+	if !ok {
+		t.Fatal("frostkeep missing Mandate ferry to tidecourt")
 	}
-	if FacingFromExit(toGreenwood, north.Cols) != FacingLeft {
-		t.Fatal("crossing Northern Wastes west should keep facing left")
+	toFrost, ok := exitTo(tide, "frostkeep")
+	if !ok {
+		t.Fatal("tidecourt missing Mandate ferry to frostkeep")
+	}
+	assertInlandSpawn(t, "tidecourt ferry landing", tide, toTide)
+	assertInlandSpawn(t, "frostkeep ferry landing", frost, toFrost)
+	// Ferry docks are inland, not edge strips.
+	if toTide.MinC <= 2 || toTide.MaxC >= frost.Cols-3 {
+		t.Fatal("frostkeep ferry should be an inland dock, not a west/east edge")
 	}
 }
 
@@ -60,6 +91,98 @@ func TestFacingFromDeltaX(t *testing.T) {
 	if FacingFromDeltaX(0, FacingLeft) != FacingLeft {
 		t.Fatal("no dx keeps left")
 	}
+}
+
+// Expected contiguous + ferry adjacency (must stay in sync with cmd/genworld links + GDD §3.4).
+var expectedZoneLinks = [][2]string{
+	{"greenwood", "timberroad"},
+	{"greenwood", "willowford"},
+	{"greenwood", "deepcanopy"},
+	{"timberroad", "sanctuarygrove"},
+	{"timberroad", "northwatch"},
+	{"willowford", "sanctuarygrove"},
+	{"northwatch", "frostmarch"},
+	{"frostkeep", "frostmarch"},
+	{"frostkeep", "windswept"},
+	{"windswept", "cairnwatch"},
+	{"windswept", "stillstone"},
+	{"windswept", "icehollow"},
+	{"deepcanopy", "westwharf"},
+	{"westwharf", "brinecoast"},
+	{"brinecoast", "tidecourt"},
+	{"brinecoast", "cliffhaven"},
+	{"tidecourt", "dunesreach"},
+	{"tidecourt", "redsash"},
+	{"frostkeep", "tidecourt"},
+}
+
+func TestZoneExitGraph(t *testing.T) {
+	dir := filepath.Dir(defaultOverworldPath())
+	byID := map[string]*Overworld{}
+	entries, err := filepath.Glob(filepath.Join(dir, "*.map.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range entries {
+		ow, err := LoadOverworldData(path)
+		if err != nil {
+			t.Fatalf("load %s: %v", path, err)
+		}
+		id := MapIDFromPath(path)
+		byID[id] = ow
+		for _, e := range ow.Exits {
+			if e.DestMap == "" {
+				t.Fatalf("%s has exit with empty destMap", id)
+			}
+			if e.DestMap == id {
+				t.Fatalf("%s has self-transition exit (destMap=%s)", id, e.DestMap)
+			}
+			assertInlandSpawn(t, id+"→"+e.DestMap, mustLoad(t, byID, dir, e.DestMap), e)
+		}
+	}
+
+	have := map[string]bool{}
+	for id, ow := range byID {
+		for _, e := range ow.Exits {
+			a, b := id, e.DestMap
+			if a > b {
+				a, b = b, a
+			}
+			have[a+"|"+b] = true
+			if _, ok := exitTo(mustLoad(t, byID, dir, e.DestMap), id); !ok {
+				t.Fatalf("one-way link %s→%s (missing reverse)", id, e.DestMap)
+			}
+		}
+	}
+	for _, pair := range expectedZoneLinks {
+		a, b := pair[0], pair[1]
+		if a > b {
+			a, b = b, a
+		}
+		if !have[a+"|"+b] {
+			t.Fatalf("missing bidirectional link %s↔%s", pair[0], pair[1])
+		}
+	}
+	// Towns flank Windswept, not Frostkeep.
+	if _, ok := exitTo(byID["frostkeep"], "cairnwatch"); ok {
+		t.Fatal("frostkeep should not exit to cairnwatch (link via windswept)")
+	}
+	if _, ok := exitTo(byID["frostkeep"], "stillstone"); ok {
+		t.Fatal("frostkeep should not exit to stillstone (link via windswept)")
+	}
+}
+
+func mustLoad(t *testing.T, cache map[string]*Overworld, dir, id string) *Overworld {
+	t.Helper()
+	if ow, ok := cache[id]; ok {
+		return ow
+	}
+	ow, err := LoadOverworldData(filepath.Join(dir, id+".map.json"))
+	if err != nil {
+		t.Fatalf("load %s: %v", id, err)
+	}
+	cache[id] = ow
+	return ow
 }
 
 func exitTo(ow *Overworld, dest string) (MapExit, bool) {

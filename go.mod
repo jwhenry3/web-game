@@ -1,4 +1,4 @@
-module ffv-web-game
+module clara-mundi
 
 go 1.25.3
 

@@ -9,11 +9,11 @@ import (
 	"regexp"
 	"strings"
 
-	"ffv-web-game/internal/cluster"
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/mapnode"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/servercfg"
+	"clara-mundi/internal/cluster"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/mapnode"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/servercfg"
 )
 
 var mapIDPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{1,31}$`)
@@ -228,7 +228,7 @@ func (p *Proxy) mapServerInfo(spec cluster.MapSpec) (MapServerInfo, error) {
 		Addr:          cfg.Server.Addr,
 		BattleSpeed:   cfg.Server.BattleSpeed,
 		Combat:        cfg.Plugins.Combat,
-		CombatOptions: []string{"combat.realtime", "combat.atb"},
+		CombatOptions: []string{"combat.realtime", "combat.ordo"},
 	}, nil
 }
 

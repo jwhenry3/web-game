@@ -3,28 +3,32 @@ package game
 import "sync"
 
 const (
-	SkillIDReturn   = "return"
-	SkillIDTeleport = "teleport"
+	SkillIDReturn = "return"
+	SkillIDPort   = "port"
 
-	// TeleportCastTimeMs is the field-cast duration; moving interrupts it.
-	TeleportCastTimeMs = 3000
+	// FieldCastTimeMs is the field-cast duration for Return and Port; moving interrupts it.
+	FieldCastTimeMs = 3000
+
+	// TeleportCastTimeMs is kept as an alias for FieldCastTimeMs during migration.
+	TeleportCastTimeMs = FieldCastTimeMs
 )
 
-// SkillReturn warps a hero to their set save crystal. All jobs learn it.
+// SkillReturn warps a hero to their set save crystal. All classes learn it.
 var SkillReturn = Skill{
 	ID:          SkillIDReturn,
 	Name:        "Return",
-	Description: "Warp to your set save crystal. Use from the hotbar in the field.",
+	Description: "Warp to your set save crystal. Takes 3 seconds; moving cancels the cast.",
 	WorldOnly:   true,
+	CastTimeMs:  FieldCastTimeMs,
 }
 
-// SkillTeleport opens fast travel to crystals the hero has attuned.
-var SkillTeleport = Skill{
-	ID:          SkillIDTeleport,
-	Name:        "Teleport",
+// SkillPort opens fast travel to crystals the hero has attuned.
+var SkillPort = Skill{
+	ID:          SkillIDPort,
+	Name:        "Port",
 	Description: "Fast travel to a save crystal you have attuned. Takes 3 seconds; moving cancels the cast.",
 	WorldOnly:   true,
-	CastTimeMs:  TeleportCastTimeMs,
+	CastTimeMs:  FieldCastTimeMs,
 }
 
 // RegisteredSavePoint is a crystal known to the cluster, including which map owns it.
@@ -41,7 +45,7 @@ var (
 	savePointReg = map[string]RegisteredSavePoint{}
 )
 
-// RegisterSavePoints indexes one map's crystals for Return / Teleport.
+// RegisterSavePoints indexes one map's crystals for Return / Port.
 func RegisterSavePoints(mapID, mapName string, points []SavePoint) {
 	if mapID == "" {
 		return

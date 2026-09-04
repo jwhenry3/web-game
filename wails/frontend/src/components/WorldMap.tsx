@@ -260,12 +260,12 @@ export function WorldMap({
   return (
     <div className="world-map">
       {maps.length > 1 && (
-        <div className="xiv-tabs world-map-tabs">
+        <div className="cm-tabs world-map-tabs">
           {maps.map((m) => (
             <button
               key={m.id}
               type="button"
-              className={`xiv-tab ${m.id === atlas.id ? "on" : ""}`}
+              className={`cm-tab ${m.id === atlas.id ? "on" : ""}`}
               onClick={() => {
                 didDrag.current = false;
                 onResetSelection?.();
@@ -330,7 +330,7 @@ export function WorldMap({
         <div className="world-map-zoom" onPointerDown={(e) => e.stopPropagation()}>
           <button
             type="button"
-            className="xiv-btn world-map-zoom-btn"
+            className="cm-btn world-map-zoom-btn"
             onClick={() => {
               const r = viewportRef.current?.getBoundingClientRect();
               if (!r) return;
@@ -342,7 +342,7 @@ export function WorldMap({
           </button>
           <button
             type="button"
-            className="xiv-btn world-map-zoom-btn"
+            className="cm-btn world-map-zoom-btn"
             onClick={() => {
               const r = viewportRef.current?.getBoundingClientRect();
               if (!r) return;
@@ -354,7 +354,7 @@ export function WorldMap({
           </button>
           <button
             type="button"
-            className="xiv-btn world-map-zoom-btn"
+            className="cm-btn world-map-zoom-btn"
             onClick={() => {
               const r = viewportRef.current?.getBoundingClientRect();
               if (!r) return;

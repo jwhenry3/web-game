@@ -5,9 +5,9 @@ import (
 	"math"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
 )
 
 // Overworld foes are owned by the hub. Clients may predict motion, but only
@@ -267,7 +267,7 @@ func (h *Hub) tickNPCs() {
 
 func (h *Hub) checkNPCPlayerCollisions() {
 	for _, wp := range h.world {
-		if wp.InBattle {
+		if wp.InBattle || wp.InHouse {
 			continue
 		}
 		h.mu.RLock()
@@ -312,7 +312,7 @@ func battleImmune(wp *protocol.WorldPlayer) bool {
 }
 
 func (h *Hub) engageFirstNPCAt(c *Client, wp *protocol.WorldPlayer, x, y float64) bool {
-	if wp.InBattle || battleImmune(wp) {
+	if wp.InBattle || wp.InHouse || battleImmune(wp) {
 		return false
 	}
 	if h.overworld != nil && h.overworld.SanctuaryAtWorld(x, y) {

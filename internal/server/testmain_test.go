@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 func TestMain(m *testing.M) {

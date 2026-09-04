@@ -1,4 +1,4 @@
-const KEY = "ffv_saved_credentials";
+const KEY = "cm_saved_credentials";
 
 export interface SavedCredentials {
   username: string;

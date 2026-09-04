@@ -20,15 +20,16 @@ type InteractPromptState = {
   worldSkillDialog: string | null;
   npcDialog: unknown;
   jobChangeDialog: unknown;
-  players: Record<string, { in_battle?: boolean }>;
+  players: Record<string, { in_battle?: boolean; in_house?: boolean }>;
   battles: { battle_id: string; participants: number; max_players: number }[];
+  camps?: Record<string, { owner_name: string; x: number; y: number }>;
 };
 
 export function canShowWorldInteractPrompts(state: InteractPromptState): boolean {
   if (state.screen !== "world" || !state.selfId) return false;
   if (state.mainMenuOpen || state.openWindow || state.worldSkillDialog || state.npcDialog || state.jobChangeDialog) return false;
   const self = state.players[state.selfId];
-  return !!self && !self.in_battle;
+  return !!self && !self.in_battle && !self.in_house;
 }
 
 export function battleJoinable(state: Pick<InteractPromptState, "battles">, battleId?: string): boolean {
@@ -44,6 +45,18 @@ export function tryWorldInteract(): boolean {
   const self = state.players[state.selfId!];
   const x = self.x;
   const y = self.y;
+
+  let nearestCamp: { owner: string; dist: number } | null = null;
+  for (const camp of Object.values(state.camps ?? {})) {
+    const dist = Math.hypot(x - camp.x, y - camp.y);
+    if (dist <= INTERACT_RANGE && (!nearestCamp || dist < nearestCamp.dist)) {
+      nearestCamp = { owner: camp.owner_name, dist };
+    }
+  }
+  if (nearestCamp) {
+    net.enterHouse(nearestCamp.owner);
+    return true;
+  }
 
   let nearestJobChanger: { id: string; name: string; dist: number } | null = null;
   for (const jc of Object.values(state.jobChangers)) {
@@ -79,7 +92,7 @@ export function tryWorldInteract(): boolean {
   }
 
   for (const p of Object.values(state.players)) {
-    if (p.id === state.selfId || !p.in_battle || !p.battle_id) continue;
+    if (p.id === state.selfId || p.in_house || !p.in_battle || !p.battle_id) continue;
     if (Math.hypot(x - p.x, y - p.y) > INTERACT_RANGE) continue;
     if (!battleJoinable(state, p.battle_id)) continue;
     net.joinBattle(p.battle_id);

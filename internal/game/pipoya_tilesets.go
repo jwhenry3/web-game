@@ -4,14 +4,15 @@ import (
 	"sync"
 )
 
-// Pipoya tileset firstgid layout (base_chip.tsx at 577 + overlay tilesets).
+// Pipoya tileset firstgid layout (matches assets samplemap.tmx + Dirt overlay).
 const (
 	PipoyaFirstWaterFall  = 1
 	PipoyaFirstBaseChip   = 577
 	PipoyaFirstGrassAnim  = 1641
 	PipoyaFirstWaterAnim  = 2169
 	PipoyaFirstFlower     = 5241
-	PipoyaFirstLongGrass  = 5289
+	PipoyaFirstLongGrass  = 5289 // Dirt_pipo in sample grass-layer GIDs
+	PipoyaFirstDirt       = 5289
 )
 
 // Pipoya visual layer names (bottom → top). collision/objects are game-specific.
@@ -58,17 +59,23 @@ func baseChipConfig() *BaseChipConfig {
 func fallbackBaseChipConfig() *BaseChipConfig {
 	return &BaseChipConfig{
 		Name:           "BaseChip_pipo",
-		Image:          "base_chip.png",
+		Image:          "BaseChip_pipo.png",
 		TileWidth:      32,
 		TileHeight:     32,
 		TileCount:      1064,
 		Columns:        8,
 		ImageWidth:     256,
 		ImageHeight:    4256,
-		TerrainCenters: []int{48, 112, 52, 116},
-		WaterTiles:     map[int]bool{176: true},
-		CollidesTiles:  map[int]bool{52: true, 176: true},
-		TreeTiles:      []int{8, 9, 10, 17, 33, 34},
+		TerrainCenters: []int{BaseChipLocalGrassFill, BaseChipLocalDirtFill, BaseChipLocalStoneFill, BaseChipLocalCobbleFill},
+		WaterTiles:     map[int]bool{BaseChipLocalWaterChip: true},
+		CollidesTiles: map[int]bool{
+			BaseChipLocalStoneFill: true,
+			BaseChipLocalWaterChip: true,
+			// Trunks + bushes only — canopy tops (8–15) are walk-under.
+			16: true, 17: true, 18: true, 19: true, 20: true, 21: true, 22: true, 23: true,
+			32: true, 33: true, 34: true, 35: true,
+		},
+		TreeTiles: []int{8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 32, 33, 34, 35},
 	}
 }
 

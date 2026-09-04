@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"ffv-web-game/internal/plugins"
-	"ffv-web-game/internal/plugins/combatatb"
+	"clara-mundi/internal/plugins"
+	"clara-mundi/internal/plugins/combatatb"
 )
 type GlobalConfig struct {
 	Name        string  `json:"name"`
@@ -46,15 +46,15 @@ func Default() Config {
 			BattleSpeed: combatatb.DefaultBattleSpeed,
 		},
 		Plugins: plugins.Config{
-			Combat: "combat.atb",
+			Combat: "combat.ordo",
 			Modules: []plugins.ModuleConfig{
 				{
-					ID:           "combat.atb",
-					Name:         "ATB Combat",
+					ID:           "combat.ordo",
+					Name:         "Ordo Combat",
 					Version:      "1.0.0",
 					Capabilities: []string{"combat"},
 					Enabled:      true,
-					Frontend:     plugins.FrontendConfig{PluginID: "combat.atb"},
+					Frontend:     plugins.FrontendConfig{PluginID: "combat.ordo"},
 					Config:       map[string]any{"battle_speed": combatatb.DefaultBattleSpeed},
 				},
 			},
@@ -113,14 +113,15 @@ func (c *Config) SetCombat(id string) error {
 	return nil
 }
 
-// SetBattleSpeed updates server.battle_speed and ATB module config when present.
+// SetBattleSpeed updates server.battle_speed and Ordo module config when present.
 func (c *Config) SetBattleSpeed(speed float64) {
 	if speed <= 0 {
 		return
 	}
 	c.Server.BattleSpeed = speed
 	for i := range c.Plugins.Modules {
-		if c.Plugins.Modules[i].ID != "combat.atb" {
+		id := c.Plugins.Modules[i].ID
+		if id != "combat.ordo" && id != "combat.atb" {
 			continue
 		}
 		if c.Plugins.Modules[i].Config == nil {
@@ -135,14 +136,14 @@ func (c *Config) ensureCombatModules() {
 	for _, m := range c.Plugins.Modules {
 		have[m.ID] = true
 	}
-	if !have["combat.atb"] {
+	if !have["combat.ordo"] && !have["combat.atb"] {
 		c.Plugins.Modules = append(c.Plugins.Modules, plugins.ModuleConfig{
-			ID:           "combat.atb",
-			Name:         "ATB Combat",
+			ID:           "combat.ordo",
+			Name:         "Ordo Combat",
 			Version:      "1.0.0",
 			Capabilities: []string{"combat"},
 			Enabled:      true,
-			Frontend:     plugins.FrontendConfig{PluginID: "combat.atb"},
+			Frontend:     plugins.FrontendConfig{PluginID: "combat.ordo"},
 			Config:       map[string]any{"battle_speed": c.Server.BattleSpeed},
 		})
 	}
@@ -201,6 +202,24 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Server.BattleSpeed <= 0 {
 		c.Server.BattleSpeed = d.Server.BattleSpeed
+	}
+	c.normalizeOrdoIDs()
+}
+
+// normalizeOrdoIDs renames legacy combat.atb module ids to combat.ordo.
+func (c *Config) normalizeOrdoIDs() {
+	if c.Plugins.Combat == "combat.atb" {
+		c.Plugins.Combat = "combat.ordo"
+	}
+	for i := range c.Plugins.Modules {
+		m := &c.Plugins.Modules[i]
+		if m.ID == "combat.atb" {
+			m.ID = "combat.ordo"
+			m.Name = "Ordo Combat"
+			if m.Frontend.PluginID == "combat.atb" || m.Frontend.PluginID == "" {
+				m.Frontend.PluginID = "combat.ordo"
+			}
+		}
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 
 const (
 	sanctuaryWallCollisionGID = 1
-	sanctuaryWallGroundGID     = PipoyaFirstBaseChip + 52  // cliff
-	sanctuaryGateGroundGID     = PipoyaFirstBaseChip + 112 // dirt path
+	sanctuaryWallGroundGID     = PipoyaGIDRock
+	sanctuaryGateGroundGID     = PipoyaGIDPath
 	sanctuaryGateWidth         = 2
 )
 

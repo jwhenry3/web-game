@@ -169,8 +169,8 @@ export class BattleScene extends Phaser.Scene {
     const battle = useGame.getState().battle;
     if (!battle) return;
 
-    const players = battle.entities.filter((e) => e.is_player);
-    const enemies = battle.entities.filter((e) => !e.is_player);
+    const players = battle.entities.filter((e) => e.is_player || e.is_ally);
+    const enemies = battle.entities.filter((e) => !e.is_player && !e.is_ally);
 
     const present = new Set(battle.entities.map((e) => e.id));
     for (const [id, f] of this.figures) {
@@ -221,7 +221,7 @@ export class BattleScene extends Phaser.Scene {
     const sk = state.selectedAction;
     const self = state.selfId ? state.battle?.entities.find((x) => x.id === state.selfId) : undefined;
     const targeted = (state.battleTargetId ?? self?.target_id) === e.id;
-    const targetable = !!sk && e.alive && (sk.heals ? e.is_player : !e.is_player);
+    const targetable = !!sk && e.alive && (sk.heals ? !!(e.is_player || e.is_ally) : !e.is_player && !e.is_ally);
     const gcdReady =
       e.is_player && e.alive && !casting && (e.skill_atb ?? e.atb ?? 0) >= 100;
     const isSelf = e.id === state.selfId;

@@ -1,7 +1,7 @@
 import type { OverworldMap } from "../types";
 import { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../characters/heroes99";
 
-const WALKABLE = new Set(["H", ".", ",", "R"]);
+const WALKABLE = new Set(["H", ".", ",", "R", "T"]);
 
 export function walkableAt(map: OverworldMap | null, x: number, y: number): boolean {
   if (!map) return true;

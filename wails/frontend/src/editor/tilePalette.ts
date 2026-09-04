@@ -15,11 +15,11 @@ export const TERRAIN_COLORS: Record<TileRole | "empty" | "collision", string> = 
 };
 
 const DEFAULT_LOCAL: Record<Exclude<TileRole, "unset">, number> = {
-  grass: 48,
-  dirt: 112,
-  cliff: 52,
+  grass: 0, // solid fill (samplemap GID 577)
+  dirt: 5, // solid path fill (samplemap GID 582)
+  cliff: 256, // solid stone
   cobble: 116,
-  water: 176,
+  water: 176, // chip; runtime prefers Water_pipo fill for maps
 };
 
 export function defaultGidForRole(role: TileRole): number {
@@ -41,10 +41,10 @@ export function roleForGid(gid: number, tileset: ImportedTileset | null): TileRo
   for (const [role, idx] of Object.entries(DEFAULT_LOCAL)) {
     if (local === idx) return role as TileRole;
   }
-  if (local >= 48 && local < 64) return "grass";
-  if (local >= 112 && local < 128) return "dirt";
-  if (local === 52) return "cliff";
-  if (local >= 116 && local < 132) return "cobble";
+  if (local >= 0 && local <= 2) return "grass";
+  if (local === 5 || (local >= 112 && local < 116) || local === 115) return "dirt";
+  if (local === 256 || local === 52 || local === 7) return "cliff";
+  if (local >= 116 && local < 128) return "cobble";
   if (local === 176) return "water";
   return "unset";
 }

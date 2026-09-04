@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/plugins/contracts"
-	"ffv-web-game/internal/protocol"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/plugins/contracts"
+	"clara-mundi/internal/protocol"
+	"clara-mundi/internal/store"
 )
 
 func TestMain(m *testing.M) {
@@ -119,7 +119,7 @@ func (m *mockHost) messagesOfType(t protocol.MessageType) []protocol.Envelope {
 func newTestRoom(t *testing.T, host *mockHost) *BattleRoom {
 	t.Helper()
 	room := NewBattleRoom("test-battle", 1, host)
-	profile := host.store.GetOrCreate("Bartz", game.JobWAR)
+	profile := host.store.GetOrCreate("Bartz", game.JobVAN)
 	room.addPlayer("client-1", profile)
 	return room
 }
@@ -143,11 +143,11 @@ func TestActionWindowBatchesActions(t *testing.T) {
 
 	player := room.find("client-1")
 	player.SkillATB = 100
-	player.skillLevels["war_heavy_swing"] = 1
+	player.skillLevels["van_cuneus"] = 1
 
 	room.pending = append(room.pending,
-		queuedAction{ActorID: "client-1", Action: protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: enemyID}},
-		queuedAction{ActorID: "client-1", Action: protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: enemyID}},
+		queuedAction{ActorID: "client-1", Action: protocol.ActionPayload{ActionID: "van_cuneus", TargetID: enemyID}},
+		queuedAction{ActorID: "client-1", Action: protocol.ActionPayload{ActionID: "van_cuneus", TargetID: enemyID}},
 	)
 	room.tick()
 
@@ -187,14 +187,14 @@ func TestActionValidationRejectsInsufficientMP(t *testing.T) {
 	player := room.find("client-1")
 	player.SkillATB = 100
 	player.MP = 0
-	player.skillLevels["war_heavy_swing"] = 1
+	player.skillLevels["van_cuneus"] = 1
 
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "van_cuneus", TargetID: enemyID},
 	})
 	if res.Success {
-		t.Fatal("expected war_heavy_swing to fail with 0 MP")
+		t.Fatal("expected van_cuneus to fail with 0 MP")
 	}
 	if res.Message != "Not enough MP." {
 		t.Errorf("unexpected failure message: %q", res.Message)
@@ -293,6 +293,33 @@ func TestDefeatEndsBattleWithoutRewards(t *testing.T) {
 	}
 }
 
+// Alive pets must not prevent defeat when the human player falls.
+func TestDefeatIgnoresAlivePet(t *testing.T) {
+	host := newMockHost()
+	room := newTestRoom(t, host)
+	room.entities = append(room.entities, &battleEntity{
+		ID: "pet-1", Name: "Wolf", Kind: "dire_wolf",
+		IsAlly: true, OwnerClientID: "client-1",
+		Alive: true, HP: 40, MaxHP: 40, Level: 1,
+	})
+	player := room.find("client-1")
+	player.HP = 0
+	player.Alive = false
+	room.checkEnd()
+	if !room.ended {
+		t.Fatal("expected defeat while pet still alive")
+	}
+	ends := host.messagesOfType(protocol.TypeBattleEnd)
+	if len(ends) != 1 {
+		t.Fatalf("expected battle_end, got %d", len(ends))
+	}
+	var payload protocol.BattleEndPayload
+	_ = json.Unmarshal(ends[0].Payload, &payload)
+	if payload.Victory {
+		t.Fatal("expected defeat")
+	}
+}
+
 // Skills auto-unlock by job level; battle use trains skill levels.
 func TestSkillUsageAndUnlocks(t *testing.T) {
 	host := newMockHost()
@@ -300,38 +327,38 @@ func TestSkillUsageAndUnlocks(t *testing.T) {
 	player := room.find("client-1")
 	enemyID := firstEnemyID(room)
 
-	// Berserk unlocks at job level 5; WAR starts at 1.
+	// Furious Advance unlocks at job level 5; Vanguard starts at 1.
 	player.SkillATB = 100
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "war_berserk", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "van_clamor_castra", TargetID: enemyID},
 	})
 	if res.Success {
-		t.Fatal("war_berserk should be locked until job level 5")
+		t.Fatal("van_clamor_castra should be locked until job level 5")
 	}
 	if res.Message != "Skill not learned." {
 		t.Errorf("unexpected lock message: %q", res.Message)
 	}
 
-	// THF skills are not in the WAR job kit.
+	// Rogue skills are not in the Vanguard job kit.
 	res = room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "thf_steal", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "cut_surripere", TargetID: enemyID},
 	})
 	if res.Success {
-		t.Fatal("thf_steal should not be usable on WAR")
+		t.Fatal("cut_surripere should not be usable on Vanguard")
 	}
 
 	player.SkillATB = 100
 	res = room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "van_cuneus", TargetID: enemyID},
 	})
 	if !res.Success {
-		t.Fatalf("war_heavy_swing should be usable for WAR: %+v", res)
+		t.Fatalf("van_cuneus should be usable for Vanguard: %+v", res)
 	}
-	if player.pendingSkillUses["war_heavy_swing"] != 1 {
-		t.Fatalf("expected 1 pending use, got %d", player.pendingSkillUses["war_heavy_swing"])
+	if player.pendingSkillUses["van_cuneus"] != 1 {
+		t.Fatalf("expected 1 pending use, got %d", player.pendingSkillUses["van_cuneus"])
 	}
 
 	player.HP = 0
@@ -340,57 +367,57 @@ func TestSkillUsageAndUnlocks(t *testing.T) {
 
 	profile, _ := host.store.Get("Bartz")
 	loadout := profile.ActiveLoadout()
-	if loadout.SkillUsage["war_heavy_swing"] != 1 {
+	if loadout.SkillUsage["van_cuneus"] != 1 {
 		t.Errorf("skill usage not persisted: %v", loadout.SkillUsage)
 	}
 }
 
 func TestSkillLevelUpgrades(t *testing.T) {
 	s := store.Load("")
-	p := s.GetOrCreate("Bartz", game.JobWAR)
-	if !p.HasSkill("war_heavy_swing") {
-		t.Fatal("war_heavy_swing should auto-unlock for WAR at level 1")
+	p := s.GetOrCreate("Bartz", game.JobVAN)
+	if !p.HasSkill("van_cuneus") {
+		t.Fatal("van_cuneus should auto-unlock for Vanguard at level 1")
 	}
-	if p.SkillLevel("war_heavy_swing") != 1 {
-		t.Fatal("war_heavy_swing should start at level 1")
+	if p.SkillLevel("van_cuneus") != 1 {
+		t.Fatal("van_cuneus should start at level 1")
 	}
 
 	uses := game.SkillUsagePerLevel
-	s.AddBattleTraining("Bartz", map[string]int{"war_heavy_swing": uses})
+	s.AddBattleTraining("Bartz", map[string]int{"van_cuneus": uses})
 	p, _ = s.Get("Bartz")
-	if p.SkillLevel("war_heavy_swing") != 2 {
-		t.Fatalf("war_heavy_swing should reach level 2 after %d uses, got %d", uses, p.SkillLevel("war_heavy_swing"))
+	if p.SkillLevel("van_cuneus") != 2 {
+		t.Fatalf("van_cuneus should reach level 2 after %d uses, got %d", uses, p.SkillLevel("van_cuneus"))
 	}
 
-	if p.HasSkill("war_rampage") {
-		t.Fatal("war_rampage should not unlock until job level 9")
+	if p.HasSkill("van_impetus_acies") {
+		t.Fatal("van_impetus_acies should not unlock until job level 9")
 	}
 
 	s.AwardJobVictory("Bartz", 1200, 0, nil)
 	p, _ = s.Get("Bartz")
-	if !p.HasSkill("war_berserk") {
-		t.Fatal("war_berserk should auto-unlock at job level 5")
+	if !p.HasSkill("van_clamor_castra") {
+		t.Fatal("van_clamor_castra should auto-unlock at job level 5")
 	}
 
-	s.AddBattleTraining("Bartz", map[string]int{"war_berserk": game.SkillUsagePerLevel})
+	s.AddBattleTraining("Bartz", map[string]int{"van_clamor_castra": game.SkillUsagePerLevel})
 	p, _ = s.Get("Bartz")
-	if p.SkillLevel("war_berserk") != 2 {
-		t.Fatal("war_berserk should upgrade to level 2 through use")
+	if p.SkillLevel("van_clamor_castra") != 2 {
+		t.Fatal("van_clamor_castra should upgrade to level 2 through use")
 	}
 }
 
 func TestSubWeaponEnablesSubjobSkills(t *testing.T) {
 	host := newMockHost()
-	host.store.GetOrCreate("Bartz", game.JobWAR)
+	host.store.GetOrCreate("Bartz", game.JobVAN)
 	host.store.AwardJobVictory("Bartz", 2000, 0, nil)
-	_, errMsg := host.store.SetJobs("Bartz", game.JobWAR, game.JobTHF)
+	_, errMsg := host.store.SetJobs("Bartz", game.JobVAN, game.JobCUT)
 	if errMsg != "" {
 		t.Fatalf("set jobs: %s", errMsg)
 	}
 	profile, _ := host.store.Get("Bartz")
 	loadout := profile.ActiveLoadout()
 	if loadout.Equipped[game.SlotSubWeapon] == "" {
-		t.Fatal("sub weapon should be equipped for THF subjob")
+		t.Fatal("sub weapon should be equipped for Rogue subjob")
 	}
 
 	room := NewBattleRoom("sub-weapon-test", 1, host)
@@ -403,13 +430,13 @@ func TestSubWeaponEnablesSubjobSkills(t *testing.T) {
 	}
 
 	player.SkillATB = 100
-	player.skillLevels["thf_steal"] = 1
+	player.skillLevels["cut_surripere"] = 1
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "thf_steal", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "cut_surripere", TargetID: enemyID},
 	})
 	if !res.Success {
-		t.Fatalf("thf_steal should work with sub weapon equipped: %+v", res)
+		t.Fatalf("cut_surripere should work with sub weapon equipped: %+v", res)
 	}
 }
 
@@ -423,7 +450,7 @@ func TestConsumableUseHeals(t *testing.T) {
 	profile, _ := host.store.Get("Bartz")
 	var potion game.Item
 	for _, item := range profile.Inventory {
-		if item.Consumable == "potion" {
+		if item.Consumable == "potio" {
 			potion = item
 			break
 		}
@@ -445,7 +472,7 @@ func TestConsumableUseHeals(t *testing.T) {
 	after, _ := host.store.Get("Bartz")
 	qty := 0
 	for _, item := range after.Inventory {
-		if item.Consumable == "potion" {
+		if item.Consumable == "potio" {
 			qty += game.ItemQty(item)
 		}
 	}
@@ -457,7 +484,7 @@ func TestConsumableUseHeals(t *testing.T) {
 func TestConsumableRejectsKOAlly(t *testing.T) {
 	host := newMockHost()
 	room := newTestRoom(t, host)
-	allyProfile := host.store.GetOrCreate("Lenna", game.JobWHM)
+	allyProfile := host.store.GetOrCreate("Lenna", game.JobSAN)
 	room.addPlayer("client-2", allyProfile)
 	ally := room.find("client-2")
 	ally.HP = 0
@@ -469,7 +496,7 @@ func TestConsumableRejectsKOAlly(t *testing.T) {
 	profile, _ := host.store.Get("Bartz")
 	var potion game.Item
 	for _, item := range profile.Inventory {
-		if item.Consumable == "potion" {
+		if item.Consumable == "potio" {
 			potion = item
 			break
 		}
@@ -490,7 +517,7 @@ func TestConsumableRejectsKOAlly(t *testing.T) {
 func TestSpellCastTime(t *testing.T) {
 	host := newMockHost()
 	room := NewBattleRoom("cast-test", 1, host)
-	profile := host.store.GetOrCreate("Vivi", game.JobBLM)
+	profile := host.store.GetOrCreate("Vivi", game.JobHEX)
 	room.addPlayer("client-1", profile)
 	room.tickWindow = DefaultTickWindow
 
@@ -500,14 +527,14 @@ func TestSpellCastTime(t *testing.T) {
 	enemyHP := enemy.HP
 
 	player.SkillATB = 100
-	player.skillLevels["blm_fire"] = 1
+	player.skillLevels["hex_ignis_hex"] = 1
 
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "blm_fire", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "hex_ignis_hex", TargetID: enemyID},
 	})
 	if !res.Success {
-		t.Fatalf("blm_fire should begin casting: %+v", res)
+		t.Fatalf("hex_ignis_hex should begin casting: %+v", res)
 	}
 	if !res.CastStarted {
 		t.Fatal("expected CastStarted on spell begin")
@@ -542,11 +569,11 @@ func TestEnemySkillAutoTargets(t *testing.T) {
 	player := room.find("client-1")
 	player.SkillATB = 100
 	player.TargetID = ""
-	player.skillLevels["war_heavy_swing"] = 1
+	player.skillLevels["van_cuneus"] = 1
 
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: ""},
+		Action:  protocol.ActionPayload{ActionID: "van_cuneus", TargetID: ""},
 	})
 	if !res.Success {
 		t.Fatalf("enemy skill should auto-target: %+v", res)
@@ -581,11 +608,11 @@ func TestEnemySkillUsesSelectedTarget(t *testing.T) {
 
 	player.SkillATB = 100
 	player.TargetID = otherEnemyID
-	player.skillLevels["war_heavy_swing"] = 1
+	player.skillLevels["van_cuneus"] = 1
 
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: ""},
+		Action:  protocol.ActionPayload{ActionID: "van_cuneus", TargetID: ""},
 	})
 	if !res.Success {
 		t.Fatalf("enemy skill should succeed: %+v", res)
@@ -656,14 +683,14 @@ func TestPhysicalSkillInstant(t *testing.T) {
 
 	player := room.find("client-1")
 	player.SkillATB = 100
-	player.skillLevels["war_heavy_swing"] = 1
+	player.skillLevels["van_cuneus"] = 1
 
 	res := room.resolveAction(queuedAction{
 		ActorID: "client-1",
-		Action:  protocol.ActionPayload{ActionID: "war_heavy_swing", TargetID: enemyID},
+		Action:  protocol.ActionPayload{ActionID: "van_cuneus", TargetID: enemyID},
 	})
 	if !res.Success {
-		t.Fatalf("war_heavy_swing should resolve instantly: %+v", res)
+		t.Fatalf("van_cuneus should resolve instantly: %+v", res)
 	}
 	if res.CastStarted {
 		t.Fatal("physical skill should not start a cast")
@@ -703,8 +730,8 @@ func inventoryContainsLoot(inv, loot []game.Item) bool {
 // Only equipped gear contributes stats; loose inventory does not.
 func TestOnlyEquippedGearApplies(t *testing.T) {
 	host := newMockHost()
-	profile := host.store.GetOrCreate("Bartz", game.JobWAR)
-	_, _, baseStr, _, _ := game.JobBaseStats(game.JobWAR, profile.MainJobLevel())
+	profile := host.store.GetOrCreate("Bartz", game.JobVAN)
+	_, _, baseStr, _, _ := game.JobBaseStats(game.JobVAN, profile.MainJobLevel())
 
 	room := NewBattleRoom("gear-test", 1, host)
 	room.addPlayer("client-1", profile)
@@ -714,7 +741,7 @@ func TestOnlyEquippedGearApplies(t *testing.T) {
 	if e.Str != baseStr+2 {
 		t.Errorf("expected str %d (base+starter), got %d", baseStr+2, e.Str)
 	}
-	hp, _, _, _, _ := game.ComputeJobStats(game.JobWAR, profile.MainJobLevel(), "", 0, profile.EquippedItems())
+	hp, _, _, _, _ := game.ComputeJobStats(game.JobVAN, profile.MainJobLevel(), "", 0, profile.EquippedItems())
 	if e.MaxHP != hp {
 		t.Errorf("expected hp %d (job+gear), got %d", hp, e.MaxHP)
 	}

@@ -14,7 +14,7 @@ export interface MapPrefab {
   objects: EditorObject[];
 }
 
-const STORAGE_KEY = "ffv_map_prefabs";
+const STORAGE_KEY = "cm_map_prefabs";
 
 export function loadPrefabs(): MapPrefab[] {
   try {

@@ -3,7 +3,7 @@ package store
 import (
 	"strings"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 // Known keybind action ids (movement, interact, hotbar slots, game windows).

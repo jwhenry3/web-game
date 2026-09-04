@@ -5,20 +5,20 @@ import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { appearanceKey, facingFromDelta, H99_FACING_DEFAULT, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS, H99_WORLD_RING_Y, type CharacterFacing } from "../characters/types";
 import { applyPlayerSlide, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "./movementBridge";
 import { FILL, tileAt } from "../world/overworld";
-import { rasterizeTerrainToCanvas, terrainLayerKey, terrainLayersFromSnapshot } from "../world/terrainRaster";
+import { rasterizeTerrainLayers, terrainLayerKey, terrainLayersFromSnapshot } from "../world/terrainRaster";
+import { getLoadedPipoyaSheets, loadPipoyaSheets } from "../world/pipoyaTilesets";
 import {
   portalKey,
   terrainInputsChanged,
   type TerrainSyncInputs,
 } from "../world/worldTerrainSync";
-import type { MapTerrainLayers, OverworldMap, WorldNPC, CharacterAppearanceWire, SavePoint, JobChanger, WorldPlayer } from "../types";
+import type { MapTerrainLayers, OverworldMap, WorldNPC, CharacterAppearanceWire, SavePoint, JobChanger, WorldPlayer, WorldCamp, WorldPet } from "../types";
 import { bindingToPhaserKeyCode, mergeKeybinds } from "../input/keybinds";
 import { CharacterSprite } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
 import { enemyKindFromName } from "../characters/enemies";
 import { pushChat } from "../state/store";
 import { openJobMasterDialog } from "../world/npcDialogue";
-import { InteractPromptBadge } from "./interactPrompt";
 import {
   JOB_CHANGER_RANGE,
   SAVE_POINT_RANGE,
@@ -27,13 +27,28 @@ import {
   canShowWorldInteractPrompts,
   interactKeyLabel,
 } from "../world/interact";
+import { clearWorldLocalPos, setWorldLocalPos } from "../world/worldLocalPos";
+import { campSkinById, drawCampTent } from "../housing/campSkins";
+import {
+  clearEntityOverlays,
+  getStageTransform,
+  localOffsetToStage,
+  setWorldOverlays,
+  worldLocalToStage,
+  worldToStagePoint,
+  type EntityOverlayMark,
+  type InteractPromptMark,
+  type PoiLabelMark,
+  type StageTransform,
+} from "../world/entityOverlayBridge";
 
 const SPEED = 240;
 const SEND_INTERVAL = 100;
 const POI_INTERACT_PROMPT_Y = -36;
 const AVATAR_INTERACT_PROMPT_Y = H99_NAME_LABEL_Y - 16;
 const CAST_BAR_Y = 10;
-const CAST_BAR_W = 52;
+const POI_LABEL_Y = 18;
+const CAMP_LABEL_Y = 22;
 
 /** Survives Phaser remounts when crossing maps that switch combat plugins. */
 let lastWorldFacing: CharacterFacing = H99_FACING_DEFAULT;
@@ -45,38 +60,37 @@ function facingOf(wp: Pick<WorldPlayer, "facing">, fallback: CharacterFacing): C
 interface Avatar {
   wrapper: Phaser.GameObjects.Container;
   sprite: CharacterSprite;
-  label: Phaser.GameObjects.Text;
-  labelText: string;
   ring?: Phaser.GameObjects.Arc;
   appearanceKey: string;
-  castBack: Phaser.GameObjects.Rectangle;
-  castBar: Phaser.GameObjects.Rectangle;
-  interactPrompt: InteractPromptBadge;
 }
 
 interface FoeAvatar {
   wrapper: Phaser.GameObjects.Container;
   enemy: EnemySprite;
-  label: Phaser.GameObjects.Text;
-  labelText: string;
   lastX: number;
   lastY: number;
-  interactPrompt: InteractPromptBadge;
 }
 
 interface SavePointMarker {
   wrapper: Phaser.GameObjects.Container;
   hit: Phaser.GameObjects.Zone;
-  label: Phaser.GameObjects.Text;
   active: boolean;
-  interactPrompt: InteractPromptBadge;
+  name: string;
 }
 
 interface JobChangerMarker {
   wrapper: Phaser.GameObjects.Container;
   hit: Phaser.GameObjects.Zone;
-  label: Phaser.GameObjects.Text;
-  interactPrompt: InteractPromptBadge;
+  name: string;
+}
+
+interface CampMarker {
+  wrapper: Phaser.GameObjects.Container;
+  hit: Phaser.GameObjects.Zone;
+  glow: Phaser.GameObjects.Arc;
+  tent: Phaser.GameObjects.Graphics;
+  ownerName: string;
+  skin: string;
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -84,6 +98,8 @@ export class WorldScene extends Phaser.Scene {
   private foes = new Map<string, FoeAvatar>();
   private savePoints = new Map<string, SavePointMarker>();
   private jobChangers = new Map<string, JobChangerMarker>();
+  private camps = new Map<string, CampMarker>();
+  private pets = new Map<string, { wrapper: Phaser.GameObjects.Container; body: Phaser.GameObjects.Ellipse; label: Phaser.GameObjects.Text }>();
   private moveKeys: Partial<Record<"move_up" | "move_down" | "move_left" | "move_right", Phaser.Input.Keyboard.Key>> = {};
   private moveKeysSig = "";
   private lastSent = 0;
@@ -93,10 +109,12 @@ export class WorldScene extends Phaser.Scene {
   private selfSpawned = false;
   private terrain?: Phaser.GameObjects.Graphics;
   private terrainImage?: Phaser.GameObjects.Image;
+  private canopyImage?: Phaser.GameObjects.Image;
   private portalsGfx?: Phaser.GameObjects.Graphics;
   private terrainInputs: TerrainSyncInputs | null = null;
   private terrainPortalKey = "";
   private terrainTextureKey = "";
+  private canopyTextureKey = "";
   private terrainUnsub?: () => void;
   private worldW = 5120;
   private worldH = 3840;
@@ -111,6 +129,17 @@ export class WorldScene extends Phaser.Scene {
     this.applyWorldBounds(map);
     this.bindTerrainSync();
     this.syncTerrainFromStore();
+    void loadPipoyaSheets()
+      .then(() => {
+        if (!this.sys.isActive()) return;
+        // Force a redraw now that real tile sheets are available.
+        this.terrainInputs = null;
+        this.terrainTextureKey = "";
+        this.syncTerrainFromStore();
+      })
+      .catch((err) => {
+        console.warn("Pipoya tilesets failed to load; using flat terrain colors", err);
+      });
 
     const kb = this.input.keyboard!;
     this.syncMoveKeys();
@@ -119,6 +148,10 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.terrainUnsub?.();
       this.terrainUnsub = undefined;
+      clearEntityOverlays();
+    });
+    this.events.on(Phaser.Scenes.Events.SLEEP, () => {
+      clearEntityOverlays();
     });
   }
 
@@ -216,10 +249,16 @@ export class WorldScene extends Phaser.Scene {
     this.terrain = undefined;
     this.terrainImage?.destroy();
     this.terrainImage = undefined;
+    this.canopyImage?.destroy();
+    this.canopyImage = undefined;
     if (this.terrainTextureKey && this.textures.exists(this.terrainTextureKey)) {
       this.textures.remove(this.terrainTextureKey);
     }
+    if (this.canopyTextureKey && this.textures.exists(this.canopyTextureKey)) {
+      this.textures.remove(this.canopyTextureKey);
+    }
     this.terrainTextureKey = "";
+    this.canopyTextureKey = "";
     this.portalsGfx?.destroy();
     this.portalsGfx = undefined;
   }
@@ -228,18 +267,28 @@ export class WorldScene extends Phaser.Scene {
     data: { ground: number[]; collision: number[]; cols: number; rows: number; tileSize: number },
     portals?: { x: number; y: number; w: number; h: number }[],
   ) {
-    const texKey = terrainLayerKey(data);
+    const sheets = getLoadedPipoyaSheets();
+    const texKey = terrainLayerKey(data, !!sheets?.length);
+    const canopyKey = `${texKey}-canopy`;
     if (this.terrainTextureKey === texKey && this.terrainImage) {
       this.drawPortals(portals);
       return;
     }
 
     this.clearTerrain();
-    const canvas = rasterizeTerrainToCanvas(data, 1, null);
+    const { base, overhead } = rasterizeTerrainLayers(data, 1, null, sheets);
     if (this.textures.exists(texKey)) this.textures.remove(texKey);
-    this.textures.addCanvas(texKey, canvas);
+    this.textures.addCanvas(texKey, base);
     this.terrainTextureKey = texKey;
     this.terrainImage = this.add.image(0, 0, texKey).setOrigin(0, 0).setDepth(0);
+
+    if (overhead) {
+      if (this.textures.exists(canopyKey)) this.textures.remove(canopyKey);
+      this.textures.addCanvas(canopyKey, overhead);
+      this.canopyTextureKey = canopyKey;
+      // Above players (depth 10) so canopy tops read as walk-under foliage.
+      this.canopyImage = this.add.image(0, 0, canopyKey).setOrigin(0, 0).setDepth(20);
+    }
     this.drawPortals(portals);
   }
 
@@ -288,44 +337,21 @@ export class WorldScene extends Phaser.Scene {
         av.sprite.setAppearance(appearance);
         av.appearanceKey = key;
       }
-      if (!av.castBack || !av.castBar) {
-        this.attachCastBar(av);
-      }
-      if (!av.interactPrompt) {
-        av.interactPrompt = new InteractPromptBadge(this, av.wrapper, AVATAR_INTERACT_PROMPT_Y);
-      }
       return av;
     }
 
     const wrapper = this.add.container(0, 0).setDepth(10);
     const ring = this.add.circle(0, H99_WORLD_RING_Y, H99_WORLD_RING_RADIUS, 0xffe9a8, 0).setVisible(false);
     const sprite = new CharacterSprite(this, 0, 0, appearance);
-    const label = this.add
-      .text(0, H99_NAME_LABEL_Y, "", { fontSize: "11px", color: "#ffffff", fontFamily: "monospace" })
-      .setOrigin(0.5, 0.5)
-      .setShadow(1, 1, "#000000", 2);
-    wrapper.add([ring, sprite.container, label]);
+    wrapper.add([ring, sprite.container]);
 
     if (id !== useGame.getState().selfId) {
       sprite.setInteractive(() => this.tryJoinBattleOf(id));
     }
 
-    av = { wrapper, sprite, label, ring, appearanceKey: key, labelText: "" } as Avatar;
-    this.attachCastBar(av);
-    av.interactPrompt = new InteractPromptBadge(this, wrapper, AVATAR_INTERACT_PROMPT_Y);
+    av = { wrapper, sprite, ring, appearanceKey: key };
     this.avatars.set(id, av);
     return av;
-  }
-
-  private attachCastBar(av: Avatar) {
-    const castBack = this.add.rectangle(0, CAST_BAR_Y, CAST_BAR_W + 2, 7, 0x1a1028).setOrigin(0.5);
-    castBack.setStrokeStyle(1, 0x6a4a8a);
-    const castBar = this.add.rectangle(-CAST_BAR_W / 2, CAST_BAR_Y, 0, 5, 0xa78bfa).setOrigin(0, 0.5);
-    castBack.setVisible(false);
-    castBar.setVisible(false);
-    av.wrapper.add([castBack, castBar]);
-    av.castBack = castBack;
-    av.castBar = castBar;
   }
 
   private ensureSavePoint(sp: SavePoint, active: boolean): SavePointMarker {
@@ -333,12 +359,15 @@ export class WorldScene extends Phaser.Scene {
     if (marker) {
       marker.wrapper.setPosition(sp.x, sp.y);
       marker.hit.setPosition(sp.x, sp.y - 8);
+      marker.name = sp.name;
       if (marker.active !== active) {
         marker.active = active;
-        marker.label.setColor(active ? "#fff6c8" : "#a8e8ff");
-      }
-      if (!marker.interactPrompt) {
-        marker.interactPrompt = new InteractPromptBadge(this, marker.wrapper, POI_INTERACT_PROMPT_Y);
+        // Rebuild glow/crystal colors by recreating visual children is heavy;
+        // destroy and recreate the marker visuals via a quick rebuild.
+        marker.wrapper.destroy();
+        marker.hit.destroy();
+        this.savePoints.delete(sp.id);
+        return this.ensureSavePoint(sp, active);
       }
       return marker;
     }
@@ -350,10 +379,7 @@ export class WorldScene extends Phaser.Scene {
     crystal.fillTriangle(-10, 6, 10, 6, 0, -20);
     crystal.fillStyle(0xffffff, 0.7);
     crystal.fillCircle(0, -10, 5);
-    const label = this.add
-      .text(0, 18, sp.name, { fontSize: "10px", color: active ? "#fff6c8" : "#a8e8ff", fontFamily: "monospace" })
-      .setOrigin(0.5, 0);
-    wrapper.add([glow, crystal, label]);
+    wrapper.add([glow, crystal]);
 
     const hit = this.add
       .zone(sp.x, sp.y - 8, 80, 80)
@@ -362,8 +388,7 @@ export class WorldScene extends Phaser.Scene {
       .setInteractive({ cursor: "pointer" });
     hit.on("pointerdown", () => this.trySetSavePoint(sp));
 
-    const interactPrompt = new InteractPromptBadge(this, wrapper, POI_INTERACT_PROMPT_Y);
-    marker = { wrapper, hit, label, active, interactPrompt };
+    marker = { wrapper, hit, active, name: sp.name };
     this.savePoints.set(sp.id, marker);
     return marker;
   }
@@ -389,9 +414,7 @@ export class WorldScene extends Phaser.Scene {
     if (marker) {
       marker.wrapper.setPosition(jc.x, jc.y);
       marker.hit.setPosition(jc.x, jc.y - 8);
-      if (!marker.interactPrompt) {
-        marker.interactPrompt = new InteractPromptBadge(this, marker.wrapper, POI_INTERACT_PROMPT_Y);
-      }
+      marker.name = jc.name;
       return marker;
     }
 
@@ -402,10 +425,7 @@ export class WorldScene extends Phaser.Scene {
     icon.fillCircle(0, -12, 12);
     icon.fillStyle(0x4a3820, 1);
     icon.fillRect(-8, -2, 16, 14);
-    const label = this.add
-      .text(0, 18, jc.name, { fontSize: "10px", color: "#e8c96a", fontFamily: "monospace" })
-      .setOrigin(0.5, 0);
-    wrapper.add([glow, icon, label]);
+    wrapper.add([glow, icon]);
 
     const hit = this.add
       .zone(jc.x, jc.y - 8, 80, 80)
@@ -414,8 +434,7 @@ export class WorldScene extends Phaser.Scene {
       .setInteractive({ cursor: "pointer" });
     hit.on("pointerdown", () => this.tryOpenJobChanger(jc));
 
-    const interactPrompt = new InteractPromptBadge(this, wrapper, POI_INTERACT_PROMPT_Y);
-    marker = { wrapper, hit, label, interactPrompt };
+    marker = { wrapper, hit, name: jc.name };
     this.jobChangers.set(jc.id, marker);
     return marker;
   }
@@ -429,10 +448,114 @@ export class WorldScene extends Phaser.Scene {
     const x = av?.wrapper.x ?? self.x;
     const y = av?.wrapper.y ?? self.y;
     if (Math.hypot(x - jc.x, y - jc.y) > JOB_CHANGER_RANGE) {
-      pushChat("system", "Move closer to the Job Master.");
+      pushChat("system", "Move closer to the Class Master.");
       return;
     }
     openJobMasterDialog({ id: jc.id, name: jc.name });
+  }
+
+  private syncCamps(camps: Record<string, WorldCamp>) {
+    for (const [id, marker] of this.camps) {
+      if (!camps[id]) {
+        marker.wrapper.destroy();
+        marker.hit.destroy();
+        this.camps.delete(id);
+      }
+    }
+    for (const camp of Object.values(camps)) {
+      this.ensureCamp(camp);
+    }
+  }
+
+  private syncPets(pets: Record<string, WorldPet>, players: Record<string, WorldPlayer>) {
+    for (const [id, marker] of this.pets) {
+      if (!pets[id]) {
+        marker.wrapper.destroy();
+        this.pets.delete(id);
+      }
+    }
+    for (const pet of Object.values(pets)) {
+      const owner = players[pet.owner_id];
+      let x = pet.x;
+      let y = pet.y;
+      if (owner && !owner.in_house && !owner.in_battle) {
+        const av = this.avatars.get(owner.id);
+        const ox = av?.wrapper.x ?? owner.x;
+        const oy = av?.wrapper.y ?? owner.y;
+        const facing = owner.facing ?? pet.facing ?? "right";
+        const dx = facing === "left" ? 20 : -20;
+        x = ox + dx;
+        y = oy + 6;
+      }
+      let marker = this.pets.get(pet.id);
+      if (!marker) {
+        const wrapper = this.add.container(x, y).setDepth(8);
+        const body = this.add.ellipse(0, -6, 18, 14, 0xc4a06a).setStrokeStyle(1, 0xf0d090);
+        const label = this.add
+          .text(0, -22, pet.name.slice(0, 10), {
+            fontFamily: "Georgia, serif",
+            fontSize: "10px",
+            color: "#e8dcc8",
+            stroke: "#1a1410",
+            strokeThickness: 2,
+          })
+          .setOrigin(0.5, 1);
+        wrapper.add([body, label]);
+        marker = { wrapper, body, label };
+        this.pets.set(pet.id, marker);
+      } else {
+        marker.wrapper.setPosition(x, y);
+        marker.label.setText(pet.name.slice(0, 10));
+      }
+    }
+  }
+
+  private ensureCamp(camp: WorldCamp): CampMarker {
+    const skin = campSkinById(camp.skin).id;
+    let marker = this.camps.get(camp.owner_name);
+    if (marker) {
+      marker.wrapper.setPosition(camp.x, camp.y);
+      marker.hit.setPosition(camp.x, camp.y - 8);
+      marker.ownerName = camp.owner_name;
+      if (marker.skin !== skin) {
+        marker.skin = skin;
+        const pal = campSkinById(skin);
+        marker.glow.setFillStyle(pal.glow, 0.35);
+        drawCampTent(marker.tent, skin);
+      }
+      return marker;
+    }
+    const wrapper = this.add.container(camp.x, camp.y).setDepth(7);
+    const pal = campSkinById(skin);
+    const glow = this.add.circle(0, -12, 34, pal.glow, 0.35);
+    const tent = this.add.graphics();
+    drawCampTent(tent, skin);
+    wrapper.add([glow, tent]);
+    const hit = this.add
+      .zone(camp.x, camp.y - 8, 96, 96)
+      .setOrigin(0.5, 0.5)
+      .setDepth(26)
+      .setInteractive({ cursor: "pointer" });
+    hit.on("pointerdown", () => this.tryEnterCamp(camp));
+    marker = { wrapper, hit, glow, tent, ownerName: camp.owner_name, skin };
+    this.camps.set(camp.owner_name, marker);
+    return marker;
+  }
+
+  private tryEnterCamp(camp: WorldCamp) {
+    const state = useGame.getState();
+    const selfId = state.selfId;
+    const self = selfId ? state.players[selfId] : undefined;
+    if (!selfId || !self || self.in_battle || self.in_house) return;
+    const live = state.camps[camp.owner_name] ?? camp;
+    const av = this.avatars.get(selfId);
+    const x = av?.wrapper.x ?? self.x;
+    const y = av?.wrapper.y ?? self.y;
+    if (Math.hypot(x - live.x, y - live.y) > INTERACT_RANGE) {
+      pushChat("system", "Move closer to the camp.");
+      return;
+    }
+    net.enterHouse(live.owner_name);
   }
 
   private syncJobChangers(jobChangers: Record<string, JobChanger>) {
@@ -463,23 +586,13 @@ export class WorldScene extends Phaser.Scene {
 
   private ensureFoe(npc: WorldNPC): FoeAvatar {
     let av = this.foes.get(npc.id);
-    if (av) {
-      if (!av.interactPrompt) {
-        av.interactPrompt = new InteractPromptBadge(this, av.wrapper, AVATAR_INTERACT_PROMPT_Y);
-      }
-      return av;
-    }
+    if (av) return av;
     const kind = enemyKindFromName(npc.name, npc.kind);
     const wrapper = this.add.container(npc.x, npc.y).setDepth(9);
     const enemy = new EnemySprite(this, 0, 0, kind);
-    const label = this.add
-      .text(0, H99_NAME_LABEL_Y, "", { fontSize: "11px", color: "#e6d4b0", fontFamily: "Noto Sans, sans-serif" })
-      .setOrigin(0.5, 0.5)
-      .setShadow(1, 1, "#000000", 2);
-    wrapper.add([enemy.container, label]);
+    wrapper.add([enemy.container]);
     enemy.setInteractive(() => this.tryJoinBattleOfNPC(npc.id));
-    const interactPrompt = new InteractPromptBadge(this, wrapper, AVATAR_INTERACT_PROMPT_Y);
-    av = { wrapper, enemy, label, labelText: "", lastX: npc.x, lastY: npc.y, interactPrompt };
+    av = { wrapper, enemy, lastX: npc.x, lastY: npc.y };
     this.foes.set(npc.id, av);
     return av;
   }
@@ -488,7 +601,7 @@ export class WorldScene extends Phaser.Scene {
     const state = useGame.getState();
     const npc = state.npcs[id];
     const selfWp = state.selfId ? state.players[state.selfId] : undefined;
-    if (!npc?.in_battle || !npc.battle_id || selfWp?.in_battle) return;
+    if (!npc?.in_battle || !npc.battle_id || selfWp?.in_battle || selfWp?.in_house) return;
     const info = state.battles.find((b) => b.battle_id === npc.battle_id);
     if (info && info.participants >= info.max_players) return;
     net.joinBattle(npc.battle_id);
@@ -499,16 +612,10 @@ export class WorldScene extends Phaser.Scene {
     if (id === state.selfId) return;
     const target = state.players[id];
     const selfWp = state.selfId ? state.players[state.selfId] : undefined;
-    if (!target?.in_battle || !target.battle_id || selfWp?.in_battle) return;
+    if (!target?.in_battle || !target.battle_id || target.in_house || selfWp?.in_battle || selfWp?.in_house) return;
     const info = state.battles.find((b) => b.battle_id === target.battle_id);
     if (info && info.participants >= info.max_players) return;
     net.joinBattle(target.battle_id);
-  }
-
-  private setEntityLabel(target: { label: Phaser.GameObjects.Text; labelText: string }, text: string) {
-    if (target.labelText === text) return;
-    target.labelText = text;
-    target.label.setText(text);
   }
 
   private isNearCamera(x: number, y: number, pad = 256): boolean {
@@ -516,16 +623,91 @@ export class WorldScene extends Phaser.Scene {
     return x >= view.x - pad && x <= view.right + pad && y >= view.y - pad && y <= view.bottom + pad;
   }
 
+  private castProgress(wp: WorldPlayer): number | undefined {
+    const casting = !!wp.casting_skill_id && (wp.cast_time_ms ?? 0) > 0;
+    if (!casting) return undefined;
+    const ms = wp.cast_time_ms ?? 1;
+    const ends = wp.cast_ends_at ?? 0;
+    return Phaser.Math.Clamp(1 - (ends - Date.now()) / ms, 0, 1);
+  }
+
+  private publishOverlays(
+    entities: EntityOverlayMark[],
+    pois: PoiLabelMark[],
+    interacts: InteractPromptMark[],
+  ) {
+    setWorldOverlays({ entities, pois, interacts });
+  }
+
+  private poiLabel(
+    id: string,
+    label: string,
+    variant: PoiLabelMark["variant"],
+    worldX: number,
+    worldY: number,
+    localY: number,
+    transform: StageTransform,
+  ): PoiLabelMark {
+    const p = worldLocalToStage(this, worldX, worldY, 0, localY, transform);
+    return { id, label, variant, x: p.x, y: p.y };
+  }
+
+  private interactMark(
+    id: string,
+    keyLabel: string,
+    worldX: number,
+    worldY: number,
+    localY: number,
+    transform: StageTransform,
+  ): InteractPromptMark {
+    const p = worldLocalToStage(this, worldX, worldY, 0, localY, transform);
+    return { id, keyLabel, x: p.x, y: p.y };
+  }
+
+  private stageMark(
+    id: string,
+    label: string,
+    variant: EntityOverlayMark["variant"],
+    worldX: number,
+    worldY: number,
+    castPct?: number,
+    transform = getStageTransform(this),
+  ): EntityOverlayMark {
+    const feet = worldToStagePoint(this, worldX, worldY, transform);
+    const nameOff = localOffsetToStage(0, H99_NAME_LABEL_Y, transform);
+    const castOff = localOffsetToStage(0, CAST_BAR_Y, transform);
+    return {
+      id,
+      label,
+      variant,
+      screenX: feet.x,
+      screenY: feet.y,
+      nameX: feet.x + nameOff.x,
+      nameY: feet.y + nameOff.y,
+      castX: feet.x + castOff.x,
+      castY: feet.y + castOff.y,
+      castPct,
+    };
+  }
+
   update(time: number, delta: number) {
-    this.syncMoveKeys();
     const state = useGame.getState();
+    if (state.screen !== "world") {
+      clearEntityOverlays();
+      clearWorldLocalPos();
+      return;
+    }
+    this.syncMoveKeys();
     const mapId = state.mapInfo?.id ?? "";
     if (mapId !== this.lastMapId) {
       this.lastMapId = mapId;
       this.selfSpawned = false;
     }
     const selfId = state.selfId;
-    if (!selfId) return;
+    if (!selfId) {
+      clearEntityOverlays();
+      return;
+    }
 
     for (const [id, av] of this.avatars) {
       if (!state.players[id]) {
@@ -539,16 +721,28 @@ export class WorldScene extends Phaser.Scene {
     const activeSave = state.profile?.save_point_id;
     this.syncSavePoints(state.savePoints, activeSave);
     this.syncJobChangers(state.jobChangers);
+    this.syncCamps(state.camps);
+    this.syncPets(state.pets, state.players);
+
+    const overlayMarks: EntityOverlayMark[] = [];
+    const stageXf = getStageTransform(this);
+
     for (const wp of Object.values(state.players)) {
+      // Inside a house: gone from the overworld (no sprite, no join/interact).
+      if (wp.in_house) {
+        const gone = this.avatars.get(wp.id);
+        if (gone) {
+          gone.wrapper.destroy();
+          this.avatars.delete(wp.id);
+          if (wp.id === selfId) this.selfSpawned = false;
+        }
+        continue;
+      }
       const av = this.ensureAvatar(wp.id, wp.race, wp.weapon, wp.appearance);
       const locked = wp.in_battle;
       const immune = !locked && (wp.immune_until ?? 0) > Date.now();
       av.wrapper.setAlpha(locked ? 0.45 : 1);
       const joinable = locked && wp.id !== selfId && !selfLocked;
-      this.setEntityLabel(
-        av,
-        `${wp.name} Lv${wp.level}${locked ? " ⚔" : ""}${joinable ? " (join)" : ""}${immune ? " 🛡" : ""}`,
-      );
       if (av.ring) {
         av.ring.setVisible(joinable || immune);
         if (joinable) av.ring.setFillStyle(0xffe9a8, 0.25);
@@ -581,7 +775,9 @@ export class WorldScene extends Phaser.Scene {
       }
 
       if (inView || isSelf) av.sprite.update(delta);
-      this.syncWorldCastBar(av, wp);
+
+      const casting = !!wp.casting_skill_id && (wp.cast_time_ms ?? 0) > 0;
+      av.sprite.setCasting(casting);
 
       if (isSelf) {
         if (!this.selfSpawned) {
@@ -595,80 +791,117 @@ export class WorldScene extends Phaser.Scene {
           lastWorldFacing = facingOf(wp, lastWorldFacing);
           av.sprite.setFacing(lastWorldFacing);
         }
+        setWorldLocalPos(av.wrapper.x, av.wrapper.y);
+      }
+
+      if (inView || isSelf) {
+        overlayMarks.push(
+          this.stageMark(
+            wp.id,
+            `${wp.name} Lv${wp.level}${locked ? " ⚔" : ""}${joinable ? " (join)" : ""}${immune ? " 🛡" : ""}`,
+            isSelf ? "self" : "player",
+            av.wrapper.x,
+            av.wrapper.y,
+            this.castProgress(wp),
+            stageXf,
+          ),
+        );
       }
     }
 
-    this.syncFoes(state.npcs, selfLocked, delta);
+    this.syncFoes(state.npcs, selfLocked, delta, overlayMarks, stageXf);
     this.moveSelf(time, selfId, state.overworld);
-    this.syncInteractPrompts(state, selfId, selfLocked);
+
+    const pois: PoiLabelMark[] = [];
+    for (const [id, marker] of this.savePoints) {
+      if (!this.isNearCamera(marker.wrapper.x, marker.wrapper.y)) continue;
+      pois.push(
+        this.poiLabel(
+          `save:${id}`,
+          marker.name,
+          marker.active ? "save-active" : "save",
+          marker.wrapper.x,
+          marker.wrapper.y,
+          POI_LABEL_Y,
+          stageXf,
+        ),
+      );
+    }
+    for (const [id, marker] of this.jobChangers) {
+      if (!this.isNearCamera(marker.wrapper.x, marker.wrapper.y)) continue;
+      pois.push(
+        this.poiLabel(`job:${id}`, marker.name, "job", marker.wrapper.x, marker.wrapper.y, POI_LABEL_Y, stageXf),
+      );
+    }
+    for (const [id, marker] of this.camps) {
+      if (!this.isNearCamera(marker.wrapper.x, marker.wrapper.y)) continue;
+      pois.push(
+        this.poiLabel(
+          `camp:${id}`,
+          `${marker.ownerName}'s Camp`,
+          "camp",
+          marker.wrapper.x,
+          marker.wrapper.y,
+          CAMP_LABEL_Y,
+          stageXf,
+        ),
+      );
+    }
+
+    const interacts = this.collectInteractPrompts(state, selfId, selfLocked, stageXf);
+    this.publishOverlays(overlayMarks, pois, interacts);
   }
 
-  private syncInteractPrompts(state: ReturnType<typeof useGame.getState>, selfId: string, selfLocked: boolean) {
+  private collectInteractPrompts(
+    state: ReturnType<typeof useGame.getState>,
+    selfId: string,
+    selfLocked: boolean,
+    transform: StageTransform,
+  ): InteractPromptMark[] {
     const showPrompts = canShowWorldInteractPrompts(state);
+    if (!showPrompts) return [];
     const keyLabel = interactKeyLabel(state.profile?.keybinds);
     const selfAv = this.avatars.get(selfId);
     const self = state.players[selfId];
     const selfX = selfAv?.wrapper.x ?? self?.x ?? 0;
     const selfY = selfAv?.wrapper.y ?? self?.y ?? 0;
+    const out: InteractPromptMark[] = [];
 
-    const inRange = (x: number, y: number, range: number) =>
-      showPrompts && Math.hypot(selfX - x, selfY - y) <= range;
+    const maybe = (id: string, x: number, y: number, range: number, localY: number) => {
+      if (Math.hypot(selfX - x, selfY - y) > range) return;
+      out.push(this.interactMark(id, keyLabel, x, y, localY, transform));
+    };
 
-    for (const marker of this.savePoints.values()) {
-      marker.interactPrompt.sync(inRange(marker.wrapper.x, marker.wrapper.y, SAVE_POINT_RANGE), keyLabel);
+    for (const [id, marker] of this.savePoints) {
+      maybe(`ix-save:${id}`, marker.wrapper.x, marker.wrapper.y, SAVE_POINT_RANGE, POI_INTERACT_PROMPT_Y);
     }
-
-    for (const marker of this.jobChangers.values()) {
-      marker.interactPrompt.sync(inRange(marker.wrapper.x, marker.wrapper.y, JOB_CHANGER_RANGE), keyLabel);
+    for (const [id, marker] of this.jobChangers) {
+      maybe(`ix-job:${id}`, marker.wrapper.x, marker.wrapper.y, JOB_CHANGER_RANGE, POI_INTERACT_PROMPT_Y);
     }
-
+    for (const [id, marker] of this.camps) {
+      maybe(`ix-camp:${id}`, marker.wrapper.x, marker.wrapper.y, INTERACT_RANGE, POI_INTERACT_PROMPT_Y);
+    }
     for (const [id, av] of this.foes) {
       const npc = state.npcs[id];
-      const show =
-        showPrompts &&
-        !!npc?.in_battle &&
-        !!npc.battle_id &&
-        battleJoinable(state, npc.battle_id) &&
-        Math.hypot(selfX - av.wrapper.x, selfY - av.wrapper.y) <= INTERACT_RANGE;
-      av.interactPrompt.sync(show, keyLabel);
+      if (!npc?.in_battle || !npc.battle_id || !battleJoinable(state, npc.battle_id)) continue;
+      maybe(`ix-npc:${id}`, av.wrapper.x, av.wrapper.y, INTERACT_RANGE, AVATAR_INTERACT_PROMPT_Y);
     }
-
     for (const [id, av] of this.avatars) {
-      if (id === selfId) {
-        av.interactPrompt.sync(false, keyLabel);
-        continue;
-      }
+      if (id === selfId || selfLocked) continue;
       const wp = state.players[id];
-      const show =
-        showPrompts &&
-        !selfLocked &&
-        !!wp?.in_battle &&
-        !!wp.battle_id &&
-        battleJoinable(state, wp.battle_id) &&
-        Math.hypot(selfX - av.wrapper.x, selfY - av.wrapper.y) <= INTERACT_RANGE;
-      av.interactPrompt.sync(show, keyLabel);
+      if (!wp?.in_battle || !wp.battle_id || !battleJoinable(state, wp.battle_id)) continue;
+      maybe(`ix-player:${id}`, av.wrapper.x, av.wrapper.y, INTERACT_RANGE, AVATAR_INTERACT_PROMPT_Y);
     }
+    return out;
   }
 
-  private syncWorldCastBar(av: Avatar, wp: WorldPlayer) {
-    const casting = !!wp.casting_skill_id && (wp.cast_time_ms ?? 0) > 0;
-    av.sprite.setCasting(casting);
-    if (!casting) {
-      av.castBack.setVisible(false);
-      av.castBar.setVisible(false);
-      av.castBar.width = 0;
-      return;
-    }
-    const ms = wp.cast_time_ms ?? 1;
-    const ends = wp.cast_ends_at ?? 0;
-    const pct = Phaser.Math.Clamp(1 - (ends - Date.now()) / ms, 0, 1);
-    av.castBack.setVisible(true);
-    av.castBar.setVisible(true);
-    av.castBar.width = CAST_BAR_W * pct;
-    av.castBar.fillColor = pct >= 1 ? 0xc4b5fd : 0xa78bfa;
-  }
-
-  private syncFoes(npcs: Record<string, WorldNPC>, selfLocked: boolean, delta: number) {
+  private syncFoes(
+    npcs: Record<string, WorldNPC>,
+    selfLocked: boolean,
+    delta: number,
+    overlayMarks: EntityOverlayMark[],
+    stageXf = getStageTransform(this),
+  ) {
     for (const [id, av] of this.foes) {
       if (!npcs[id]) {
         av.wrapper.destroy();
@@ -681,10 +914,6 @@ export class WorldScene extends Phaser.Scene {
       av.enemy.setKind(kind);
       av.wrapper.setAlpha(npc.in_battle ? 0.45 : 1);
       const joinable = npc.in_battle && !selfLocked;
-      this.setEntityLabel(
-        av,
-        `${npc.name} Lv${npc.level}${npc.in_battle ? " ⚔" : ""}${joinable ? " (join)" : ""}`,
-      );
       const inView = this.isNearCamera(av.wrapper.x, av.wrapper.y);
       const prevX = av.lastX;
       const prevY = av.lastY;
@@ -698,7 +927,20 @@ export class WorldScene extends Phaser.Scene {
         av.wrapper.setPosition(npc.x, npc.y);
         av.enemy.setMoving(false);
       }
-      if (inView) av.enemy.update(delta);
+      if (inView) {
+        av.enemy.update(delta);
+        overlayMarks.push(
+          this.stageMark(
+            npc.id,
+            `${npc.name} Lv${npc.level}${npc.in_battle ? " ⚔" : ""}${joinable ? " (join)" : ""}`,
+            "enemy",
+            av.wrapper.x,
+            av.wrapper.y,
+            undefined,
+            stageXf,
+          ),
+        );
+      }
       av.lastX = av.wrapper.x;
       av.lastY = av.wrapper.y;
     }
@@ -758,6 +1000,7 @@ export class WorldScene extends Phaser.Scene {
       const cur = this.avatars.get(selfId)!;
       cur.wrapper.x = slid.x;
       cur.wrapper.y = slid.y;
+      setWorldLocalPos(slid.x, slid.y);
       const moved = Math.hypot(slid.x - ox, slid.y - oy) > 0.5;
       const wpNow = useGame.getState().players[selfId];
       const interruptCast = !!wpNow?.casting_skill_id && moved;

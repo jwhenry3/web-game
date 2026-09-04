@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"ffv-web-game/internal/plugins"
+	"clara-mundi/internal/plugins"
 )
 
 // ModulesHandler serves the enabled plugin manifest for the web client.

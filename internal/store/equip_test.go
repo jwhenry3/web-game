@@ -1,10 +1,10 @@
-﻿package store
+package store
 
 import (
 	"path/filepath"
 	"testing"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 func testStore(t *testing.T) *Store {
@@ -30,47 +30,43 @@ func testProfile(name string, mainJob, subJob game.JobID, inv []game.Item) *Prof
 
 func TestEquipWeaponMatchingJob(t *testing.T) {
 	s := testStore(t)
-	s.profiles["Hero"] = testProfile("Hero", game.JobBLM, game.JobBRD, []game.Item{
+	s.profiles["Hero"] = testProfile("Hero", game.JobHEX, game.JobCAN, []game.Item{
 		{ID: "staff1", Name: "Staff", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "staff", Rarity: game.RarityCommon, Level: 1},
 	})
 
 	if _, err := s.Equip("Hero", "staff1", "weapon"); err != "" {
-		t.Fatalf("equip staff to BLM main failed: %s", err)
+		t.Fatalf("equip staff to HEX main failed: %s", err)
 	}
 	if _, err := s.Equip("Hero", "staff1", "sub_weapon"); err != "" {
-		t.Fatalf("equip staff to BRD sub failed: %s", err)
+		t.Fatalf("equip staff to CAN sub failed: %s", err)
 	}
 }
 
 func TestEquipWeaponWrongTypeFails(t *testing.T) {
 	s := testStore(t)
-	s.profiles["Hero"] = testProfile("Hero", game.JobBLM, "", []game.Item{
+	s.profiles["Hero"] = testProfile("Hero", game.JobHEX, "", []game.Item{
 		{ID: "sword1", Name: "Sword", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "sword", Rarity: game.RarityCommon, Level: 1},
 	})
 
 	if _, err := s.Equip("Hero", "sword1", "weapon"); err == "" {
-		t.Fatal("equip sword to BLM main should fail")
+		t.Fatal("equip sword to HEX main should fail")
 	}
 }
 
-func TestEquipHybridJobWeaponAllowed(t *testing.T) {
+func TestEquipCutpurseDagger(t *testing.T) {
 	s := testStore(t)
-	s.profiles["Hero"] = testProfile("Hero", game.JobRDM, "", []game.Item{
-		{ID: "sword1", Name: "Sword", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "sword", Rarity: game.RarityCommon, Level: 1},
-		{ID: "staff1", Name: "Staff", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "staff", Rarity: game.RarityCommon, Level: 1},
+	s.profiles["Hero"] = testProfile("Hero", game.JobCUT, "", []game.Item{
+		{ID: "dagger1", Name: "Dagger", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "dagger", Rarity: game.RarityCommon, Level: 1},
 	})
 
-	if _, err := s.Equip("Hero", "sword1", "weapon"); err != "" {
-		t.Fatalf("equip sword to RDM main failed: %s", err)
-	}
-	if _, err := s.Equip("Hero", "staff1", "weapon"); err != "" {
-		t.Fatalf("equip staff to RDM main failed: %s", err)
+	if _, err := s.Equip("Hero", "dagger1", "weapon"); err != "" {
+		t.Fatalf("equip dagger to CUT main failed: %s", err)
 	}
 }
 
 func TestEquipSubWeaponRequiresSubJob(t *testing.T) {
 	s := testStore(t)
-	s.profiles["Hero"] = testProfile("Hero", game.JobBLM, "", []game.Item{
+	s.profiles["Hero"] = testProfile("Hero", game.JobHEX, "", []game.Item{
 		{ID: "staff1", Name: "Staff", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "staff", Rarity: game.RarityCommon, Level: 1},
 	})
 
@@ -79,20 +75,9 @@ func TestEquipSubWeaponRequiresSubJob(t *testing.T) {
 	}
 }
 
-func TestEquipDRGSpear(t *testing.T) {
-	s := testStore(t)
-	s.profiles["Hero"] = testProfile("Hero", game.JobDRG, "", []game.Item{
-		{ID: "spear1", Name: "Spear", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "spear", Rarity: game.RarityCommon, Level: 1},
-	})
-
-	if _, err := s.Equip("Hero", "spear1", "weapon"); err != "" {
-		t.Fatalf("equip spear to DRG main failed: %s", err)
-	}
-}
-
 func TestEquipArmorIgnoresSlotParam(t *testing.T) {
 	s := testStore(t)
-	s.profiles["Hero"] = testProfile("Hero", game.JobWAR, "", []game.Item{
+	s.profiles["Hero"] = testProfile("Hero", game.JobVAN, "", []game.Item{
 		{ID: "helm1", Name: "Helm", Kind: game.KindEquipment, Slot: game.SlotHead, Rarity: game.RarityCommon, Level: 1},
 	})
 

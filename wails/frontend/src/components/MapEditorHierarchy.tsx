@@ -34,12 +34,12 @@ export function MapEditorHierarchy({ objects, selected, onSelect, onDelete }: Pr
   const objectCount = objects.length;
 
   return (
-    <div className="map-editor-hierarchy xiv-window">
-      <div className="xiv-titlebar">
-        <span className="xiv-title">Hierarchy</span>
+    <div className="map-editor-hierarchy cm-window">
+      <div className="cm-titlebar">
+        <span className="cm-title">Hierarchy</span>
         <span className="map-editor-hierarchy-count dim">{objectCount}</span>
       </div>
-      <div className="xiv-body map-editor-hierarchy-body">
+      <div className="cm-body map-editor-hierarchy-body">
         {objects.length === 0 && <p className="dim map-editor-hierarchy-empty">No scene objects</p>}
         {tree.regions.map((node) => {
           const key = objectKey(node.region);
@@ -74,7 +74,7 @@ export function MapEditorHierarchy({ objects, selected, onSelect, onDelete }: Pr
                 </button>
                 <button
                   type="button"
-                  className="xiv-btn map-editor-hierarchy-delete"
+                  className="cm-btn map-editor-hierarchy-delete"
                   title="Delete"
                   onClick={() => onDelete(node.region)}
                 >
@@ -141,7 +141,7 @@ function HierarchyChildRow({
         <span className="map-editor-hierarchy-dot" style={{ background: objectColor(colorType) }} />
         <span className="map-editor-hierarchy-name">{label}</span>
       </button>
-      <button type="button" className="xiv-btn map-editor-hierarchy-delete" title="Delete" onClick={() => onDelete(child.obj)}>
+      <button type="button" className="cm-btn map-editor-hierarchy-delete" title="Delete" onClick={() => onDelete(child.obj)}>
         ×
       </button>
     </div>

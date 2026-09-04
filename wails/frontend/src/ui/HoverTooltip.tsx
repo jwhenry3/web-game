@@ -122,7 +122,7 @@ export function HoverTooltip({
         createPortal(
           <div
             ref={tipRef}
-            className={`xiv-tooltip xiv-tooltip-${placement}`}
+            className={`cm-tooltip cm-tooltip-${placement}`}
             style={{ position: "fixed", zIndex: 20000, pointerEvents: "none", ...style }}
             role="tooltip"
           >

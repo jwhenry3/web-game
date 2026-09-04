@@ -57,13 +57,13 @@ export function DropsEditorPage({ drops, items, onDropsChange, status, error, on
             <>
               <label className="field-label">Name</label>
               <input
-                className="xiv-input"
+                className="cm-input"
                 value={draft.name}
                 onChange={(e) => onChange({ ...draft, name: e.target.value })}
               />
               <label className="field-label">ID</label>
               <input
-                className="xiv-input"
+                className="cm-input"
                 value={draft.id}
                 onChange={(e) => onChange({ ...draft, id: e.target.value.trim() })}
               />
@@ -112,7 +112,7 @@ function DropEntriesEditor({
           />
           <label className="field-label">Chance %</label>
           <input
-            className="xiv-input"
+            className="cm-input"
             type="number"
             min={0}
             max={100}
@@ -121,7 +121,7 @@ function DropEntriesEditor({
           />
           <button
             type="button"
-            className="xiv-btn"
+            className="cm-btn"
             onClick={() => onChange(entries.filter((_, j) => j !== i))}
           >
             Remove
@@ -130,7 +130,7 @@ function DropEntriesEditor({
       ))}
       <button
         type="button"
-        className="xiv-btn"
+        className="cm-btn"
         onClick={() => onChange([...entries, { item_id: items[0]?.id ?? "potion", chance: 25 }])}
       >
         Add entry

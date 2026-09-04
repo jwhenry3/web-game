@@ -1,5 +1,14 @@
 export type JobCategory = "swordplay" | "stealth" | "sorcery" | "devotion";
-export type WeaponType = "sword" | "dagger" | "staff" | "mace" | "spear";
+export type WeaponType =
+  | "sword"
+  | "hammer"
+  | "axe"
+  | "spear"
+  | "katana"
+  | "staff"
+  | "wand"
+  | "dagger"
+  | "knuckles";
 export type ItemTarget = "self" | "ally";
 export type EquipSlot = "weapon" | "sub_weapon" | "head" | "chest" | "hands" | "legs" | "feet" | "back";
 export type ItemRarity = "common" | "rare" | "epic" | "legendary";
@@ -29,6 +38,8 @@ export interface JobDef {
   id: string;
   name: string;
   abbr: string;
+  role?: string;
+  style?: string;
   category: JobCategory;
   weapon: WeaponType;
   allowed_weapons?: WeaponType[];
@@ -100,10 +111,14 @@ export const JOB_CATEGORIES: { id: JobCategory; label: string }[] = [
 
 export const WEAPON_TYPES: { id: WeaponType; label: string }[] = [
   { id: "sword", label: "Sword" },
-  { id: "dagger", label: "Dagger" },
-  { id: "staff", label: "Staff" },
-  { id: "mace", label: "Mace" },
+  { id: "hammer", label: "Hammer" },
+  { id: "axe", label: "Axe" },
   { id: "spear", label: "Spear" },
+  { id: "katana", label: "Katana" },
+  { id: "staff", label: "Staff" },
+  { id: "wand", label: "Wand" },
+  { id: "dagger", label: "Dagger" },
+  { id: "knuckles", label: "Knuckles" },
 ];
 
 export const ITEM_KINDS: { id: ItemDef["kind"]; label: string }[] = [

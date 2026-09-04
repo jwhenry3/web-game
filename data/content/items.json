@@ -1,10 +1,10 @@
 {
   "kind": "items",
-  "updated_at": "2026-09-03T14:28:36.439Z",
+  "updated_at": "2026-09-04T16:15:55.327Z",
   "data": [
     {
-      "id": "ether",
-      "name": "Ether",
+      "id": "aether",
+      "name": "Aether",
       "kind": "consumable",
       "description": "Restores MP.",
       "target": "ally",
@@ -16,8 +16,21 @@
       "max_stack": 99
     },
     {
-      "id": "hi_potion",
-      "name": "Hi-Potion",
+      "id": "potio",
+      "name": "Potio",
+      "kind": "consumable",
+      "description": "Restores a moderate amount of HP.",
+      "target": "ally",
+      "effects": {
+        "heal_hp": 50,
+        "per_level": 8
+      },
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "potio_maior",
+      "name": "Potio Maior",
       "kind": "consumable",
       "description": "Restores a large amount of HP.",
       "target": "ally",
@@ -29,17 +42,21 @@
       "max_stack": 99
     },
     {
-      "id": "potion",
-      "name": "Potion",
-      "kind": "consumable",
-      "description": "Restores a moderate amount of HP.",
-      "target": "ally",
-      "effects": {
-        "heal_hp": 50,
-        "per_level": 8
-      },
-      "stackable": true,
-      "max_stack": 99
+      "id": "starter-axe",
+      "name": "Notched Axe",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "axe",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
     },
     {
       "id": "starter-back",
@@ -104,6 +121,23 @@
       }
     },
     {
+      "id": "starter-hammer",
+      "name": "Worn Hammer",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "hammer",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    },
+    {
       "id": "starter-hands",
       "name": "Worn Gauntlets",
       "kind": "equipment",
@@ -134,6 +168,40 @@
       }
     },
     {
+      "id": "starter-katana",
+      "name": "Dull Katana",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "katana",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    },
+    {
+      "id": "starter-knuckles",
+      "name": "Wrapped Knuckles",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "knuckles",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "str": 2
+      }
+    },
+    {
       "id": "starter-legs",
       "name": "Worn Greaves",
       "kind": "equipment",
@@ -146,23 +214,6 @@
       "level": 1,
       "stats": {
         "agi": 2
-      }
-    },
-    {
-      "id": "starter-mace",
-      "name": "Worn Mace",
-      "kind": "equipment",
-      "description": "Starter weapon issued to new heroes.",
-      "slot": "weapon",
-      "allowed_slots": [
-        "weapon",
-        "sub_weapon"
-      ],
-      "weapon_type": "mace",
-      "rarity": "common",
-      "level": 1,
-      "stats": {
-        "mag": 2
       }
     },
     {
@@ -215,6 +266,113 @@
       "stats": {
         "str": 2
       }
+    },
+    {
+      "id": "starter-wand",
+      "name": "Simple Wand",
+      "kind": "equipment",
+      "description": "Starter weapon issued to new heroes.",
+      "slot": "weapon",
+      "allowed_slots": [
+        "weapon",
+        "sub_weapon"
+      ],
+      "weapon_type": "wand",
+      "rarity": "common",
+      "level": 1,
+      "stats": {
+        "mag": 2
+      }
+    },
+    {
+      "id": "decor_woven_rug",
+      "name": "Woven Rug",
+      "kind": "decoration",
+      "description": "A soft floor rug for camp interiors.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 20
+    },
+    {
+      "id": "decor_oil_lamp",
+      "name": "Oil Lamp",
+      "kind": "decoration",
+      "description": "Warm light for a house corner.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 20
+    },
+    {
+      "id": "decor_storage_crate",
+      "name": "Storage Crate",
+      "kind": "decoration",
+      "description": "Decorative crate. Looks sturdy enough to sit on.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 20
+    },
+    {
+      "id": "decor_oak_chair",
+      "name": "Oak Chair",
+      "kind": "decoration",
+      "description": "Simple seating for guests.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 20
+    },
+    {
+      "id": "decor_wall_banner",
+      "name": "Wall Banner",
+      "kind": "decoration",
+      "description": "A faded campaign banner.",
+      "rarity": "rare",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 10
+    },
+    {
+      "id": "craft_lumber",
+      "name": "Lumber",
+      "kind": "crafting",
+      "description": "Cut timber for furniture and repairs.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "craft_cloth_scrap",
+      "name": "Cloth Scrap",
+      "kind": "crafting",
+      "description": "Remnants of fabric for cushions and banners.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "craft_iron_nail",
+      "name": "Iron Nail",
+      "kind": "crafting",
+      "description": "Basic fasteners for camp carpentry.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 99
+    },
+    {
+      "id": "craft_resin",
+      "name": "Pine Resin",
+      "kind": "crafting",
+      "description": "Sticky resin used in adhesives and finishes.",
+      "rarity": "common",
+      "level": 1,
+      "stackable": true,
+      "max_stack": 99
     }
   ]
 }

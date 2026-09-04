@@ -3,7 +3,7 @@ package server
 import (
 	"testing"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 func TestMapSnapshotFromHub(t *testing.T) {

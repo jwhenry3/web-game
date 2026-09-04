@@ -11,6 +11,7 @@ import type {
   BattleTickPayload,
   BattleInvitePayload,
   BattleStatePayload,
+  ChatTone,
   EntityUpdate,
 } from "../../types";
 import { BattleHUD } from "../../components/BattleHUD";
@@ -21,8 +22,31 @@ function entityName(id: string): string {
   return b?.entities.find((e) => e.id === id)?.name ?? id;
 }
 
+function toneForResult(r: ActionResult): ChatTone {
+  if (!r.success) return "fail";
+  if (r.action_id === "capture") return "capture";
+  if (r.cast_started) return "cast";
+  if (r.heal || r.mp_restored) return "heal";
+  if (r.status_applied?.length) return "buff";
+  if (r.damage) return "damage";
+  return "skill";
+}
+
 function describeResult(r: ActionResult): string {
   const actor = entityName(r.actor_id);
+  // Prefer server-authored feedback (capture success/fail, validation errors).
+  if (r.message) {
+    if (!r.success) {
+      return `${actor}'s ${r.action_name || r.action_id} — ${r.message}`;
+    }
+    if (
+      r.action_id === "capture" ||
+      r.cast_started ||
+      (!r.damage && !r.heal && !r.mp_restored && !r.status_applied?.length)
+    ) {
+      return r.message.includes(actor) ? r.message : `${actor}: ${r.message}`;
+    }
+  }
   if (!r.success) {
     return `${actor}'s ${r.action_name || r.action_id} fizzled: ${r.message ?? "failed"}`;
   }
@@ -43,12 +67,31 @@ function describeResult(r: ActionResult): string {
 }
 
 function mergeEntityCast(e: BattleEntity, u: Partial<EntityUpdate>): BattleEntity {
-  const next = { ...e, ...u } as BattleEntity;
-  if (u.casting_skill_id === "") {
-    next.casting_skill_id = undefined;
-    next.cast_target_id = undefined;
-    next.cast_progress = undefined;
-    next.cast_time_ms = undefined;
+  // Only apply fields that are actually present. Protobuf→JSON can omit zeros
+  // (hp:0 / alive:false); spreading undefined would wipe prior values → NaN HP.
+  const next: BattleEntity = { ...e };
+  if (typeof u.hp === "number" && Number.isFinite(u.hp)) next.hp = u.hp;
+  if (typeof u.mp === "number" && Number.isFinite(u.mp)) next.mp = u.mp;
+  const atb = u.skill_atb ?? u.atb;
+  if (typeof atb === "number" && Number.isFinite(atb)) {
+    next.atb = atb;
+    next.skill_atb = atb;
+  }
+  if (u.target_id) next.target_id = u.target_id;
+  if (typeof u.alive === "boolean") next.alive = u.alive;
+  if (u.statuses !== undefined) next.statuses = u.statuses;
+  if (u.casting_skill_id !== undefined) {
+    if (u.casting_skill_id === "") {
+      next.casting_skill_id = undefined;
+      next.cast_target_id = undefined;
+      next.cast_progress = undefined;
+      next.cast_time_ms = undefined;
+    } else {
+      next.casting_skill_id = u.casting_skill_id;
+      if (u.cast_target_id !== undefined) next.cast_target_id = u.cast_target_id;
+      if (typeof u.cast_progress === "number") next.cast_progress = u.cast_progress;
+      if (typeof u.cast_time_ms === "number") next.cast_time_ms = u.cast_time_ms;
+    }
   }
   return next;
 }
@@ -75,7 +118,7 @@ function applyTickCast(e: BattleEntity, p: BattleTickPayload): BattleEntity {
 }
 
 const plugin = {
-  id: "combat.atb",
+  id: "combat.ordo",
   register(ctx: PluginContext) {
     ctx.registerScreen("battle", BattleHUD);
     ctx.registerBattleScene("battle", BattleScene);
@@ -113,7 +156,7 @@ const plugin = {
     ctx.registerHandler("battle_event", (env) => {
       const p = env.payload as BattleEventPayload;
       for (const r of p.results ?? []) {
-        appendBattleLog(describeResult(r));
+        appendBattleLog(describeResult(r), toneForResult(r));
         battleEvents.emit("result", r);
       }
       useGame.setState((s) => {
@@ -121,21 +164,7 @@ const plugin = {
         const byId = new Map(p.entities.map((u) => [u.id, u]));
         let entities = s.battle.entities.map((e) => {
           const u = byId.get(e.id);
-          return u
-            ? mergeEntityCast(e, {
-                hp: u.hp,
-                mp: u.mp,
-                atb: u.skill_atb ?? u.atb,
-                skill_atb: u.skill_atb ?? u.atb,
-                target_id: u.target_id ?? e.target_id,
-                alive: u.alive,
-                statuses: u.statuses ?? e.statuses,
-                casting_skill_id: u.casting_skill_id,
-                cast_target_id: u.cast_target_id,
-                cast_progress: u.cast_progress,
-                cast_time_ms: u.cast_time_ms,
-              })
-            : e;
+          return u ? mergeEntityCast(e, u) : e;
         });
         for (const r of p.results ?? []) {
           if (r.success && !r.cast_started) {
@@ -184,8 +213,14 @@ const plugin = {
     });
 
     ctx.registerHandler("battle_end", (env) => {
-      const p = env.payload as BattleEndPayload;
-      appendBattleLog(p.victory ? "Victory!" : "The party has fallen...");
+      // Defeat is victory=false with no rewards — protobuf may omit that as an
+      // empty payload; still show the return prompt.
+      const p: BattleEndPayload = {
+        victory: false,
+        rewards: [],
+        ...(env.payload as BattleEndPayload | null | undefined),
+      };
+      appendBattleLog(p.victory ? "Victory!" : "The party has fallen...", p.victory ? "victory" : "defeat");
       useGame.setState((s) => ({
         selectedAction: null,
         battleTargetId: null,

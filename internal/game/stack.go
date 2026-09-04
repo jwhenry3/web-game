@@ -21,7 +21,21 @@ func sameStack(a, b Item) bool {
 	if !CanStack(a) || !CanStack(b) {
 		return false
 	}
-	return a.Kind == b.Kind && a.Consumable == b.Consumable && a.Level == b.Level
+	if a.Kind != b.Kind || a.Level != b.Level {
+		return false
+	}
+	switch a.Kind {
+	case KindConsumable:
+		return a.Consumable == b.Consumable
+	case KindDecoration, KindCrafting:
+		// Type stores the catalog def id for stack identity.
+		if a.Type != "" || b.Type != "" {
+			return a.Type == b.Type
+		}
+		return a.Name == b.Name
+	default:
+		return a.Consumable == b.Consumable && a.Name == b.Name
+	}
 }
 
 func clampStack(n int) int {

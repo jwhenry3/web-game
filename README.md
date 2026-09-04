@@ -1,6 +1,6 @@
-# FF5 Multiplayer
+# Clara Mundi
 
-A 2D, room-based multiplayer RPG inspired by Final Fantasy V and XI. Go
+A 2D, room-based multiplayer RPG set in Clara Mundi. Go
 authoritative cluster over WebSockets; Wails desktop client (Phaser + React).
 
 ## Documentation

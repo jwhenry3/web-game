@@ -34,7 +34,7 @@ export function Hotbar() {
   const battle = useMemo(() => activeBattleView(battleRaw, rtBattle), [battleRaw, rtBattle]);
   const selfId = useGame((s) => s.selfId);
   const keybinds = useMemo(() => mergeKeybinds(profile?.keybinds), [profile?.keybinds]);
-  if (!profile) return null;
+  if (!profile || screen === "house") return null;
 
   const self = battle?.entities.find((e) => e.id === selfId);
   const gcd = self?.skill_atb ?? self?.atb ?? 0;

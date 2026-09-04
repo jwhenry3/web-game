@@ -1,31 +1,55 @@
 {
   "kind": "drops",
-  "updated_at": "2026-09-04T03:00:00.000Z",
+  "updated_at": "2026-09-04T15:19:14.587Z",
   "data": [
     {
       "id": "pool_goblin",
       "name": "Goblin Drops",
       "entries": [
-        { "item_id": "potion", "chance": 55 },
-        { "item_id": "ether", "chance": 20 }
+        {
+          "item_id": "potion",
+          "chance": 55
+        },
+        {
+          "item_id": "ether",
+          "chance": 20
+        }
       ]
     },
     {
       "id": "pool_dire_wolf",
       "name": "Dire Wolf Drops",
       "entries": [
-        { "item_id": "potion", "chance": 40 },
-        { "item_id": "hi_potion", "chance": 15 },
-        { "item_id": "ether", "chance": 25 }
+        {
+          "item_id": "potion",
+          "chance": 40
+        },
+        {
+          "item_id": "hi_potion",
+          "chance": 15
+        },
+        {
+          "item_id": "ether",
+          "chance": 25
+        }
       ]
     },
     {
       "id": "pool_stone_imp",
       "name": "Stone Imp Drops",
       "entries": [
-        { "item_id": "hi_potion", "chance": 35 },
-        { "item_id": "ether", "chance": 40 },
-        { "item_id": "potion", "chance": 30 }
+        {
+          "item_id": "hi_potion",
+          "chance": 35
+        },
+        {
+          "item_id": "ether",
+          "chance": 40
+        },
+        {
+          "item_id": "potion",
+          "chance": 30
+        }
       ]
     }
   ]

@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"ffv-web-game/internal/auth"
-	"ffv-web-game/internal/store"
+	"clara-mundi/internal/auth"
+	"clara-mundi/internal/store"
 )
 
 type CharacterKicker interface {

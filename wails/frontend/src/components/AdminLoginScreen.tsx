@@ -29,18 +29,18 @@ export function AdminLoginScreen() {
 
   return (
     <div className="login-screen">
-      <div className="xiv-window login-panel map-editor-panel">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">Game Designer — Admin Login</span>
+      <div className="cm-window login-panel map-editor-panel">
+        <div className="cm-titlebar">
+          <span className="cm-title">Game Designer — Admin Login</span>
         </div>
-        <div className="xiv-body">
+        <div className="cm-body">
           <p className="subtitle">Sign in with an admin account to edit world maps.</p>
           <label className="field-label" htmlFor="admin-user">
             Username
           </label>
           <input
             id="admin-user"
-            className="xiv-input"
+            className="cm-input"
             value={username}
             autoComplete="username"
             onChange={(e) => setUsername(e.target.value)}
@@ -50,7 +50,7 @@ export function AdminLoginScreen() {
           </label>
           <input
             id="admin-pass"
-            className="xiv-input"
+            className="cm-input"
             type="password"
             value={password}
             autoComplete="current-password"
@@ -59,10 +59,10 @@ export function AdminLoginScreen() {
           />
           {error && <p className="error-text">{error}</p>}
           <div className="map-editor-actions">
-            <button type="button" className="xiv-btn gold" disabled={busy} onClick={() => void submit()}>
+            <button type="button" className="cm-btn gold" disabled={busy} onClick={() => void submit()}>
               {busy ? "Signing in…" : "Enter Game Designer"}
             </button>
-            <button type="button" className="xiv-btn" onClick={() => setScreen("title")}>
+            <button type="button" className="cm-btn" onClick={() => setScreen("title")}>
               Back
             </button>
           </div>

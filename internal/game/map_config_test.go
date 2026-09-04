@@ -7,7 +7,7 @@ func TestLoadGreenwoodMapConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Cols != 160 || cfg.Rows != 120 {
+	if cfg.Cols != 128 || cfg.Rows != 96 {
 		t.Fatalf("unexpected size %dx%d", cfg.Cols, cfg.Rows)
 	}
 	if len(cfg.Terrain.Ground) != cfg.Cols*cfg.Rows {

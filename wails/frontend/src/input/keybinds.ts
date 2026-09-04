@@ -25,10 +25,11 @@ export const HOTBAR_ROW_3 = [
   "shift+8",
 ] as const;
 
+/** Visual order top → bottom: Shift row, Ctrl row, then 1–8 (primary) at the bottom. */
 export const HOTBAR_ROWS = [
-  { id: "row1", label: "1 – 8", slots: HOTBAR_ROW_1 },
-  { id: "row2", label: "Ctrl + 1 – 8", slots: HOTBAR_ROW_2 },
   { id: "row3", label: "Shift + 1 – 8", slots: HOTBAR_ROW_3 },
+  { id: "row2", label: "Ctrl + 1 – 8", slots: HOTBAR_ROW_2 },
+  { id: "row1", label: "1 – 8", slots: HOTBAR_ROW_1 },
 ] as const;
 
 export const HOTBAR_SLOTS = [...HOTBAR_ROW_1, ...HOTBAR_ROW_2, ...HOTBAR_ROW_3] as const;
@@ -50,6 +51,8 @@ const WINDOW_ACTIONS: Record<WindowId, KeybindAction> = {
   skills: "window:skills",
   social: "window:social",
   map: "window:map",
+  house_storage: "window:house_storage",
+  pets: "window:pets",
 };
 
 const KNOWN_ACTIONS = new Set<string>([
@@ -64,6 +67,7 @@ const KNOWN_ACTIONS = new Set<string>([
   "window:skills",
   "window:social",
   "window:map",
+  "window:pets",
   ...HOTBAR_SLOTS.map((s) => `hotbar:${s}`),
 ]);
 
@@ -80,6 +84,7 @@ export function defaultKeybinds(): KeybindMap {
     "window:skills": "k",
     "window:social": "o",
     "window:map": "m",
+    "window:pets": "p",
   };
   for (const slot of HOTBAR_ROW_1) out[`hotbar:${slot}`] = slot;
   for (const slot of HOTBAR_ROW_2) out[`hotbar:${slot}`] = `Control+${slot.slice(5)}`;
@@ -168,6 +173,8 @@ export function actionLabel(action: string): string {
       return "Social Window";
     case "window:map":
       return "Map Window";
+    case "window:pets":
+      return "Pets Window";
     default:
       return action;
   }

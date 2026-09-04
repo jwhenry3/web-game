@@ -53,19 +53,19 @@ export function CreateMapDialog({ open, onClose, onCreate }: Props) {
   return (
     <div className="map-editor-dialog-backdrop" role="presentation" onClick={onClose}>
       <form
-        className="map-editor-dialog xiv-window"
+        className="map-editor-dialog cm-window"
         role="dialog"
         aria-label="Create map"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => void submit(e)}
       >
-        <div className="xiv-titlebar">
-          <span className="xiv-title">New map</span>
+        <div className="cm-titlebar">
+          <span className="cm-title">New map</span>
         </div>
-        <div className="xiv-body map-editor-dialog-body">
+        <div className="cm-body map-editor-dialog-body">
           <label className="field-label">Map id</label>
           <input
-            className="xiv-input"
+            className="cm-input"
             value={id}
             onChange={(e) => setId(e.target.value)}
             placeholder="cave"
@@ -74,7 +74,7 @@ export function CreateMapDialog({ open, onClose, onCreate }: Props) {
           />
           <label className="field-label">Display name</label>
           <input
-            className="xiv-input"
+            className="cm-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Cave"
@@ -83,19 +83,19 @@ export function CreateMapDialog({ open, onClose, onCreate }: Props) {
           <div className="map-editor-dialog-row">
             <div>
               <label className="field-label">Width (tiles)</label>
-              <input className="xiv-input" value={cols} onChange={(e) => setCols(e.target.value)} disabled={busy} />
+              <input className="cm-input" value={cols} onChange={(e) => setCols(e.target.value)} disabled={busy} />
             </div>
             <div>
               <label className="field-label">Height (tiles)</label>
-              <input className="xiv-input" value={rows} onChange={(e) => setRows(e.target.value)} disabled={busy} />
+              <input className="cm-input" value={rows} onChange={(e) => setRows(e.target.value)} disabled={busy} />
             </div>
           </div>
           {error && <p className="error-text">{error}</p>}
           <div className="map-editor-dialog-actions">
-            <button type="button" className="xiv-btn" onClick={onClose} disabled={busy}>
+            <button type="button" className="cm-btn" onClick={onClose} disabled={busy}>
               Cancel
             </button>
-            <button type="submit" className="xiv-btn gold" disabled={busy}>
+            <button type="submit" className="cm-btn gold" disabled={busy}>
               {busy ? "Creating…" : "Create"}
             </button>
           </div>

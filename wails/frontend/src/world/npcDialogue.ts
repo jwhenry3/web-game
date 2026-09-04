@@ -28,10 +28,10 @@ export function npcDialogueContent(target: NpcDialogueTarget, profile?: ProfileI
       return {
         greeting: `Welcome, adventurer. I am ${target.name}. Many roads lie before you — which vocation calls to you today?`,
         actions: [
-          { id: "change_main", label: "Change Main Job" },
+          { id: "change_main", label: "Change Main Class" },
           {
             id: "change_sub",
-            label: "Change Sub Job",
+            label: "Change Subclass",
             disabled: !canSub,
             hint: canSub ? undefined : `Sub job unlocks at main job level ${profile?.subjob_unlock_level ?? 0}.`,
           },

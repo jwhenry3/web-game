@@ -149,11 +149,11 @@ export const WIZARD_HAIR = ["m1", "m2", "m3", "f1", "f2", "f3", "m5", "f5"] as c
 export const WIZARD_CLOTH = ["cloth1", "cloth3", "cloth5", "cloth10", "cloth12", "cloth15"] as const;
 
 export const RACE_APPEARANCE_PRESETS: Record<string, Partial<CharacterAppearance>> = {
-  hume: { skin: "c1", face: "c1", hair: "m1", hairColor: "c2", cloth: "cloth1", clothColor: "c1", weapon: "weapon1" },
-  elvaan: { skin: "c1", face: "c2", hair: "f2", hairColor: "c8", cloth: "cloth10", clothColor: "c2", weapon: "weapon1" },
-  tarutaru: { skin: "c3", face: "c3", hair: "m5", hairColor: "c5", cloth: "cloth5", clothColor: "c4", weapon: "weapon5" },
-  mithra: { skin: "c4", face: "c4", hair: "f3", hairColor: "c1", cloth: "cloth3", clothColor: "c6", weapon: "weapon3" },
-  galka: { skin: "c6", face: "c5", hair: "m2", hairColor: "c1", cloth: "cloth12", clothColor: "c3", weapon: "weapon2" },
+  humanus: { skin: "c1", face: "c1", hair: "m1", hairColor: "c2", cloth: "cloth1", clothColor: "c1", weapon: "weapon1" },
+  altus: { skin: "c1", face: "c2", hair: "f2", hairColor: "c8", cloth: "cloth10", clothColor: "c2", weapon: "weapon1" },
+  parvus: { skin: "c3", face: "c3", hair: "m5", hairColor: "c5", cloth: "cloth5", clothColor: "c4", weapon: "weapon5" },
+  felis: { skin: "c4", face: "c4", hair: "f3", hairColor: "c1", cloth: "cloth3", clothColor: "c6", weapon: "weapon3" },
+  saxum: { skin: "c6", face: "c5", hair: "m2", hairColor: "c1", cloth: "cloth12", clothColor: "c3", weapon: "weapon2" },
 };
 
 /**

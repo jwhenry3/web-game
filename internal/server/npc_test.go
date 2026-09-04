@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/protocol"
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
 )
 
 // wildernessXY is a walkable point outside any sanctuary on the loaded map.
@@ -37,7 +37,7 @@ func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *protocol.Wor
 		Hub:    h,
 	}
 	h.clients[c.ID] = c
-	h.store.GetOrCreate("Bartz", game.JobWAR)
+	h.store.GetOrCreate("Bartz", game.JobVAN)
 	wp := &protocol.WorldPlayer{ID: c.ID, Name: "Bartz", Level: 1, X: x, Y: y}
 	h.world[c.ID] = wp
 	return h, c, wp
@@ -203,7 +203,7 @@ func TestLeaveBattleUnlocksWhenClientBattleIDEmpty(t *testing.T) {
 func TestMapTransferGrantsImmunity(t *testing.T) {
 	h := mustTestHub()
 	h.SetMap("greenwood", "Greenwood", game.Loaded())
-	h.store.GetOrCreate("Bartz", game.JobWAR)
+	h.store.GetOrCreate("Bartz", game.JobVAN)
 	px, py := wildernessXY()
 	c := &Client{
 		ID:          "xfer-1",
@@ -238,6 +238,21 @@ func TestNPCTickSkipsImmunePlayer(t *testing.T) {
 	h.tickNPCs()
 	if wp.InBattle {
 		t.Fatal("an npc walking onto an immune player must not start a battle")
+	}
+}
+
+func TestNPCTickSkipsInHousePlayer(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, wp := testHubWithPlayer(t, px, py)
+	wp.InHouse = true
+	h.npcs["npc-1"] = &worldNPC{
+		ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1,
+		X: px + engageRangePx() - 4, Y: py,
+		path: []game.Vec2{{X: px, Y: py}},
+	}
+	h.tickNPCs()
+	if wp.InBattle {
+		t.Fatal("npcs must not engage players who are inside a house")
 	}
 }
 

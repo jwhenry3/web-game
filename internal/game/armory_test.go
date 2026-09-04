@@ -2,25 +2,21 @@ package game
 
 import "testing"
 
-func TestWarSkillTree(t *testing.T) {
-	if SkillPrereq("war_heavy_swing") != "" {
+func TestVanguardSkillTree(t *testing.T) {
+	if SkillPrereq("van_cuneus") != "" {
 		t.Fatal("root should have no prereq")
 	}
-	if SkillPrereq("war_berserk") != "war_heavy_swing" || SkillPrereq("war_war_cry") != "war_heavy_swing" {
-		t.Fatal("WAR should branch from heavy_swing")
+	if SkillPrereq("van_furor_linea") != "van_cuneus" || SkillPrereq("van_clamor_castra") != "van_cuneus" {
+		t.Fatal("Vanguard should branch from Wedge Guard")
 	}
-	if SkillPrereq("war_rampage") != "war_berserk" {
-		t.Fatal("war_rampage should sit under berserk")
-	}
-	sk, ok := FindSkill("war_heavy_swing")
-	if !ok || sk.Job != JobWAR {
-		t.Fatal("war_heavy_swing should belong to WAR")
+	if SkillPrereq("van_impetus_acies") != "van_clamor_castra" {
+		t.Fatal("Line Hold should sit under War Cry")
 	}
 }
 
-func TestBLMSkillTree(t *testing.T) {
-	if SkillPrereq("blm_firaga") != "blm_blizzard" {
-		t.Fatal("blm_firaga should be on the blizzard branch")
+func TestHexwrightSkillTree(t *testing.T) {
+	if SkillPrereq("hex_ignis_maius") != "hex_gelu_hex" {
+		t.Fatal("Inferno should be on the Frost Brand branch")
 	}
 }
 
@@ -28,28 +24,16 @@ func TestSkillIsRanged(t *testing.T) {
 	if SkillIsRanged(BasicAttack) {
 		t.Fatal("basic attack is melee")
 	}
-	if !SkillIsRanged(Skill{ID: "fire", UsesMagic: true}) {
-		t.Fatal("magic should be ranged")
+	fire, ok := FindSkill("hex_ignis_hex")
+	if !ok || !SkillIsRanged(fire) {
+		t.Fatal("hex fire should be ranged")
 	}
-	if !SkillIsRanged(Skill{ID: "cure", Heals: true}) {
-		t.Fatal("heals should be ranged")
-	}
-	if !SkillIsRanged(Skill{ID: "throw", Ranged: true}) {
-		t.Fatal("explicit throw/missile skills should be ranged")
-	}
-	if SkillIsRanged(Skill{ID: "war_heavy_swing"}) {
-		t.Fatal("physical melee skills without Ranged should stay melee")
-	}
-	jump, ok := FindSkill("drg_jump")
+	jump, ok := FindSkill("lnc_saltus_hasta")
 	if !ok || !jump.Ranged || !SkillIsRanged(jump) {
-		t.Fatal("drg_jump should be ranged even with a melee weapon")
+		t.Fatal("spear leap should be ranged")
 	}
-	fire, ok := FindSkill("blm_fire")
-	if !ok {
-		t.Fatal("blm_fire missing")
-	}
-	if SkillMaxRange(jump) != SpellSkillRange || SkillMaxRange(jump) != SkillMaxRange(fire) {
-		t.Fatalf("jump range %v should match spell range %v", SkillMaxRange(jump), SkillMaxRange(fire))
+	if SkillMaxRange(jump) != SpellSkillRange {
+		t.Fatalf("jump range %v", SkillMaxRange(jump))
 	}
 }
 

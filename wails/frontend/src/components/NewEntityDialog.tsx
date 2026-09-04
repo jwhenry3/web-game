@@ -38,11 +38,11 @@ export function NewEntityDialog({ open, onClose, onCreate }: Props) {
 
   return (
     <div className="modal-backdrop map-editor-dialog-backdrop" onPointerDown={onClose}>
-      <div className="xiv-window map-editor-new-entity-dialog" onPointerDown={(e) => e.stopPropagation()}>
-        <div className="xiv-titlebar">
-          <span className="xiv-title">New Entity</span>
+      <div className="cm-window map-editor-new-entity-dialog" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="cm-titlebar">
+          <span className="cm-title">New Entity</span>
         </div>
-        <form className="xiv-body map-editor-new-entity-body" onSubmit={submit}>
+        <form className="cm-body map-editor-new-entity-body" onSubmit={submit}>
           <p className="dim map-editor-tileset-hint">
             Create a reusable template. Save points, sanctuaries, and transitions are placed on the Map page.
           </p>
@@ -75,7 +75,7 @@ export function NewEntityDialog({ open, onClose, onCreate }: Props) {
 
           <label className="field-label">Name</label>
           <input
-            className="xiv-input"
+            className="cm-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -83,10 +83,10 @@ export function NewEntityDialog({ open, onClose, onCreate }: Props) {
           />
 
           <div className="map-editor-dialog-actions">
-            <button type="button" className="xiv-btn" onClick={onClose}>
+            <button type="button" className="cm-btn" onClick={onClose}>
               Cancel
             </button>
-            <button type="submit" className="xiv-btn gold" disabled={!name.trim()}>
+            <button type="submit" className="cm-btn gold" disabled={!name.trim()}>
               Create
             </button>
           </div>

@@ -203,6 +203,9 @@ func applyMapConfigEntities(ow *Overworld, cfg *MapConfig) error {
 		if dest == "" {
 			return fmt.Errorf("exit missing destMap")
 		}
+		if mapID := MapIDFromPath(ow.Path); mapID != "" && dest == mapID {
+			return fmt.Errorf("exit destMap %q is this map (self-transition)", dest)
+		}
 		minC, minR, maxC, maxR := e.Tiles[0], e.Tiles[1], e.Tiles[2], e.Tiles[3]
 		for c := minC; c <= maxC; c++ {
 			for r := minR; r <= maxR; r++ {

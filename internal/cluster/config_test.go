@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 func TestMapSpecIsEnabledDefault(t *testing.T) {

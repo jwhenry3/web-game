@@ -9,7 +9,7 @@ export type NpcServiceRole = "job_master" | "quest_giver" | "shop" | "storage" |
 export type NpcRole = NpcServiceRole | typeof COMBAT_NPC_ROLE;
 
 export const NPC_SERVICE_ROLES: { id: NpcServiceRole; label: string; hint: string }[] = [
-  { id: "job_master", label: "Job Master", hint: "Opens job change dialog" },
+  { id: "job_master", label: "Class Master", hint: "Opens class change dialog" },
   { id: "quest_giver", label: "Quest Giver", hint: "Offers quests (future)" },
   { id: "shop", label: "Shop", hint: "Vendor / merchant (future)" },
   { id: "storage", label: "Storage", hint: "Item storage NPC (future)" },

@@ -26,18 +26,18 @@ function ActionToast({
   onDismiss: () => void;
 }) {
   return (
-    <div className="xiv-toast xiv-panel">
-      <div className="xiv-panel-head">{title}</div>
-      <p className="xiv-toast-message">{message}</p>
+    <div className="cm-toast cm-panel">
+      <div className="cm-panel-head">{title}</div>
+      <p className="cm-toast-message">{message}</p>
       {hint && <p className="hint">{hint}</p>}
-      <div className="xiv-toast-actions">
-        <button type="button" className="xiv-btn gold" onClick={onAccept}>
+      <div className="cm-toast-actions">
+        <button type="button" className="cm-btn gold" onClick={onAccept}>
           {acceptLabel}
         </button>
-        <button type="button" className="xiv-btn" onClick={onDecline}>
+        <button type="button" className="cm-btn" onClick={onDecline}>
           Decline
         </button>
-        <button type="button" className="xiv-btn" onClick={onDismiss}>
+        <button type="button" className="cm-btn" onClick={onDismiss}>
           Dismiss
         </button>
       </div>
@@ -84,7 +84,7 @@ export function InviteToasts() {
   };
 
   return createPortal(
-    <div className="xiv-toast-stack">
+    <div className="cm-toast-stack">
       {visibleFriendRequests.map((req) => {
         const key = friendRequestKey(req);
         return (

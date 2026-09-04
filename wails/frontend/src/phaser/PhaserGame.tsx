@@ -29,11 +29,21 @@ export function PhaserGame() {
       if (s.screen === prev.screen) return;
       if (s.screen === combat.battleScreen) {
         game.scene.sleep("world");
+        if (game.scene.isActive("house")) game.scene.stop("house");
         if (!game.scene.getScene(combat.battleSceneKey)) return;
         game.scene.start(combat.battleSceneKey);
+      } else if (s.screen === "house") {
+        if (game.scene.getScene(combat.battleSceneKey)) {
+          game.scene.stop(combat.battleSceneKey);
+        }
+        game.scene.sleep("world");
+        game.scene.start("house");
       } else if (s.screen === "world") {
         if (game.scene.getScene(combat.battleSceneKey)) {
           game.scene.stop(combat.battleSceneKey);
+        }
+        if (game.scene.isActive("house") || game.scene.isSleeping("house")) {
+          game.scene.stop("house");
         }
         game.scene.wake("world");
       }
@@ -43,6 +53,9 @@ export function PhaserGame() {
     if (state.screen === combat.battleScreen && game.scene.getScene(combat.battleSceneKey)) {
       game.scene.sleep("world");
       game.scene.start(combat.battleSceneKey);
+    } else if (state.screen === "house") {
+      game.scene.sleep("world");
+      game.scene.start("house");
     }
 
     return () => {

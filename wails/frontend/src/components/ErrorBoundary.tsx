@@ -25,14 +25,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (!this.state.error) return this.props.children;
     return (
       <div className="login-screen">
-        <div className="xiv-window login-panel">
-          <div className="xiv-titlebar">
-            <span className="xiv-title">Something went wrong</span>
+        <div className="cm-window login-panel">
+          <div className="cm-titlebar">
+            <span className="cm-title">Something went wrong</span>
           </div>
-          <div className="xiv-body">
+          <div className="cm-body">
             <p className="subtitle">The interface hit an unexpected error.</p>
             <div className="error-text">{this.state.error.message}</div>
-            <button className="xiv-btn gold wide" onClick={() => location.reload()}>
+            <button className="cm-btn gold wide" onClick={() => location.reload()}>
               Reload Game
             </button>
             <p className="hint">Your hero's progress is saved on the server.</p>

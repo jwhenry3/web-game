@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 // The protocol is a structured Envelope system: every frame on the wire is a
@@ -38,6 +38,17 @@ const (
 	TypeSetTarget           MessageType = "set_target"
 	TypeSetSavePoint        MessageType = "set_save_point"
 	TypeUseWorldSkill       MessageType = "use_world_skill"
+	TypeEnterHouse          MessageType = "enter_house"
+	TypeLeaveHouse          MessageType = "leave_house"
+	TypeHouseInteract       MessageType = "house_interact"
+	TypeHouseStorageDeposit MessageType = "house_storage_deposit"
+	TypeHouseStorageWithdraw MessageType = "house_storage_withdraw"
+	TypeHousePlaceFurniture MessageType = "house_place_furniture"
+	TypeHousePickFurniture  MessageType = "house_pick_furniture"
+	TypeSetCampSkin         MessageType = "set_camp_skin"
+	TypePetSetFollow        MessageType = "pet_set_follow"
+	TypePetSetBattle        MessageType = "pet_set_battle"
+	TypePetRelease          MessageType = "pet_release"
 	// Realtime combat plugin (combat.realtime)
 	TypeRTMove   MessageType = "rt_move"
 	TypeRTAttack MessageType = "rt_attack"
@@ -64,6 +75,10 @@ const (
 	TypeBattleTick      MessageType = "battle_tick"  // lightweight ATB sync
 	TypeBattleEnd       MessageType = "battle_end"
 	TypeBattleReturn    MessageType = "battle_return" // server force/ack return to overworld
+	TypeCampState       MessageType = "camp_state"
+	TypeHouseState      MessageType = "house_state"
+	TypeHouseReturn     MessageType = "house_return"
+	TypePetState        MessageType = "pet_state"
 	TypeError           MessageType = "error"
 	TypeMapConfig       MessageType = "map_config"
 	// Realtime combat plugin (combat.realtime)
@@ -163,9 +178,14 @@ type JoinBattlePayload struct {
 }
 
 type ActionPayload struct {
-	ActionID string `json:"action_id"` // skill id, or "use_item"
+	ActionID string `json:"action_id"` // skill id, or "use_item", or "capture"
 	TargetID string `json:"target_id"`
-	ItemID   string `json:"item_id,omitempty"` // consumable instance for use_item
+	ItemID   string `json:"item_id,omitempty"`   // consumable instance for use_item
+	ActorID  string `json:"actor_id,omitempty"` // optional: owned pet id to command
+}
+
+type PetIDPayload struct {
+	PetID string `json:"pet_id"`
 }
 
 type SetTargetPayload struct {
@@ -241,6 +261,9 @@ type ProfileInfo struct {
 	Jobs              []JobProgressInfo        `json:"jobs"`
 	Stats             StatBlock                `json:"stats"`
 	Inventory         []game.Item              `json:"inventory"`
+	HouseStorage      []game.Item              `json:"house_storage,omitempty"`
+	HouseStorageCap   int                      `json:"house_storage_capacity,omitempty"`
+	CampSkin          string                   `json:"camp_skin,omitempty"`
 	Equipped          map[string]string        `json:"equipped"`
 	Hotbar            map[string]HotbarBinding `json:"hotbar"`
 	Skills            []SkillInfo              `json:"skills"`
@@ -249,6 +272,9 @@ type ProfileInfo struct {
 	SavePointName     string                   `json:"save_point_name,omitempty"`
 	VisitedSavePoints []VisitedSavePoint     `json:"visited_save_points,omitempty"`
 	Keybinds          map[string]string      `json:"keybinds,omitempty"`
+	Pets              []game.PetRecord       `json:"pets,omitempty"`
+	FollowPetID       string                 `json:"follow_pet_id,omitempty"`
+	BattlePetID       string                 `json:"battle_pet_id,omitempty"`
 }
 
 type VisitedSavePoint struct {
@@ -332,6 +358,8 @@ type WorldPlayer struct {
 	Facing      string              `json:"facing,omitempty"` // "left" or "right"
 	InBattle    bool                `json:"in_battle"`        // combat-locked state
 	BattleID    string              `json:"battle_id,omitempty"`
+	InHouse     bool                `json:"in_house,omitempty"`
+	HouseOwner  string              `json:"house_owner,omitempty"` // owner character name
 	ImmuneUntil int64               `json:"immune_until,omitempty"` // unix millis; collision/search blocked
 	// Field-cast (Teleport). Clients interpolate a bar from local receipt + CastTimeMs.
 	CastingSkillID string `json:"casting_skill_id,omitempty"`
@@ -402,10 +430,105 @@ type JobChanger struct {
 type WorldStatePayload struct {
 	Players     []WorldPlayer `json:"players"`
 	NPCs        []WorldNPC    `json:"npcs"`
+	Camps       []WorldCamp   `json:"camps,omitempty"`
+	Pets        []WorldPet    `json:"pets,omitempty"`
 	Battles     []BattleInfo  `json:"battles"`
 	SavePoints  []SavePoint   `json:"save_points"`
 	JobChangers []JobChanger  `json:"job_changers"`
 	Map         OverworldMap  `json:"map"`
+}
+
+type WorldPet struct {
+	ID      string  `json:"id"`
+	OwnerID string  `json:"owner_id"`
+	Kind    string  `json:"kind"`
+	Name    string  `json:"name"`
+	Level   int     `json:"level"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Facing  string  `json:"facing,omitempty"`
+}
+
+type PetStatePayload struct {
+	Pets []WorldPet `json:"pets"`
+}
+
+type WorldCamp struct {
+	OwnerName string  `json:"owner_name"`
+	OwnerID   string  `json:"owner_id"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	Skin      string  `json:"skin"`
+}
+
+type CampStatePayload struct {
+	Camps []WorldCamp `json:"camps"`
+}
+
+type EnterHousePayload struct {
+	OwnerName string `json:"owner_name"`
+}
+
+type HouseInteractPayload struct {
+	Target string `json:"target"` // "door" | "storage"
+}
+
+type HouseStorageMovePayload struct {
+	ItemID string `json:"item_id"`
+	Qty    int    `json:"qty,omitempty"`
+}
+
+type HousePlaceFurniturePayload struct {
+	ItemID string `json:"item_id"`
+	Col    int    `json:"col"`
+	Row    int    `json:"row"`
+}
+
+type HousePickFurniturePayload struct {
+	FurnitureID string `json:"furniture_id"`
+}
+
+type SetCampSkinPayload struct {
+	Skin string `json:"skin"`
+}
+
+type HousePlayer struct {
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Facing string  `json:"facing,omitempty"`
+	Owner  bool    `json:"owner,omitempty"`
+}
+
+type HousePOI struct {
+	ID   string  `json:"id"`
+	Kind string  `json:"kind"` // "door" | "storage"
+	Name string  `json:"name"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+}
+
+type HouseStatePayload struct {
+	OwnerName      string                `json:"owner_name"`
+	Skin           string                `json:"skin"`
+	MapCols        int                   `json:"map_cols"`
+	MapRows        int                   `json:"map_rows"`
+	WalkCols       int                   `json:"walk_cols"`
+	WalkRows       int                   `json:"walk_rows"`
+	WalkOriginCol  int                   `json:"walk_origin_col"`
+	WalkOriginRow  int                   `json:"walk_origin_row"`
+	TileSize       int                   `json:"tile_size"`
+	Players        []HousePlayer         `json:"players"`
+	Furniture      []game.HouseFurniture `json:"furniture"`
+	POIs           []HousePOI            `json:"pois"`
+	Storage        []game.Item           `json:"storage,omitempty"` // owner-only
+	StorageCapacity int                  `json:"storage_capacity,omitempty"`
+	IsOwner        bool                  `json:"is_owner"`
+}
+
+type HouseReturnPayload struct {
+	Reason string `json:"reason,omitempty"`
 }
 
 type NPCStatePayload struct {
@@ -437,6 +560,8 @@ type BattleEntity struct {
 	Name           string                `json:"name"`
 	Kind           string                `json:"kind,omitempty"` // enemies: goblin, dire_wolf, stone_imp
 	IsPlayer       bool                  `json:"is_player"`
+	IsAlly         bool                  `json:"is_ally,omitempty"`
+	OwnerID        string                `json:"owner_id,omitempty"`
 	Weapon         string                `json:"weapon,omitempty"`
 	Level          int                   `json:"level"`
 	HP             int                   `json:"hp"`
@@ -448,11 +573,13 @@ type BattleEntity struct {
 	ATB            float64               `json:"atb"`       // alias of skill_atb for older clients
 	TargetID       string                `json:"target_id,omitempty"`
 	Alive          bool                  `json:"alive"`
+	Capturable     bool                  `json:"capturable,omitempty"`
 	Statuses       []game.StatusSnapshot `json:"statuses,omitempty"`
 	CastingSkillID string                `json:"casting_skill_id,omitempty"`
 	CastTargetID   string                `json:"cast_target_id,omitempty"`
 	CastProgress   float64               `json:"cast_progress,omitempty"`
 	CastTimeMs     int                   `json:"cast_time_ms,omitempty"`
+	HasQueuedAction bool                 `json:"has_queued_action,omitempty"`
 }
 
 type BattleStatePayload struct {
@@ -607,24 +734,28 @@ type RTAttackPayload struct {
 }
 
 type RTBattleEntity struct {
-	ID             string                `json:"id"`
-	Name           string                `json:"name"`
-	Kind           string                `json:"kind,omitempty"`
-	IsPlayer       bool                  `json:"is_player"`
-	X              float64               `json:"x"`
-	Y              float64               `json:"y"`
-	HP             int                   `json:"hp"`
-	MaxHP          int                   `json:"max_hp"`
-	MP             int                   `json:"mp,omitempty"`
-	MaxMP          int                   `json:"max_mp,omitempty"`
-	SkillATB       float64               `json:"skill_atb,omitempty"`
-	TargetID       string                `json:"target_id,omitempty"`
-	Alive          bool                  `json:"alive"`
-	Statuses       []game.StatusSnapshot `json:"statuses,omitempty"`
-	CastingSkillID string                `json:"casting_skill_id,omitempty"`
-	CastTargetID   string                `json:"cast_target_id,omitempty"`
-	CastProgress   float64               `json:"cast_progress,omitempty"`
-	CastTimeMs     int                   `json:"cast_time_ms,omitempty"`
+	ID              string                `json:"id"`
+	Name            string                `json:"name"`
+	Kind            string                `json:"kind,omitempty"`
+	IsPlayer        bool                  `json:"is_player"`
+	IsAlly          bool                  `json:"is_ally,omitempty"`
+	OwnerID         string                `json:"owner_id,omitempty"`
+	X               float64               `json:"x"`
+	Y               float64               `json:"y"`
+	HP              int                   `json:"hp"`
+	MaxHP           int                   `json:"max_hp"`
+	MP              int                   `json:"mp,omitempty"`
+	MaxMP           int                   `json:"max_mp,omitempty"`
+	SkillATB        float64               `json:"skill_atb,omitempty"`
+	TargetID        string                `json:"target_id,omitempty"`
+	Alive           bool                  `json:"alive"`
+	Capturable      bool                  `json:"capturable,omitempty"`
+	Statuses        []game.StatusSnapshot `json:"statuses,omitempty"`
+	CastingSkillID  string                `json:"casting_skill_id,omitempty"`
+	CastTargetID    string                `json:"cast_target_id,omitempty"`
+	CastProgress    float64               `json:"cast_progress,omitempty"`
+	CastTimeMs      int                   `json:"cast_time_ms,omitempty"`
+	HasQueuedAction bool                  `json:"has_queued_action,omitempty"`
 }
 
 type RTBattleStatePayload struct {

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package fantasy.v1;
 
-option go_package = "ffv-web-game/internal/protocol/pb";
+option go_package = "clara-mundi/internal/protocol/pb";
 
 import "fantasy/v1/common.proto";
 import "google/protobuf/struct.proto";
@@ -76,6 +76,26 @@ message ActionPayload {
   string action_id = 1;
   string target_id = 2;
   string item_id = 3;
+  string actor_id = 4;
+}
+
+message PetIDPayload {
+  string pet_id = 1;
+}
+
+message WorldPet {
+  string id = 1;
+  string owner_id = 2;
+  string kind = 3;
+  string name = 4;
+  int32 level = 5;
+  double x = 6;
+  double y = 7;
+  string facing = 8;
+}
+
+message PetStatePayload {
+  repeated WorldPet pets = 1;
 }
 
 message SetTargetPayload {
@@ -89,6 +109,59 @@ message SetSavePointPayload {
 message UseWorldSkillPayload {
   string skill_id = 1;
   string save_point_id = 2;
+}
+
+message EnterHousePayload {
+  string owner_name = 1;
+}
+
+message HouseInteractPayload {
+  string target = 1;
+}
+
+message HouseStorageMovePayload {
+  string item_id = 1;
+  int32 qty = 2;
+}
+
+message HousePlaceFurniturePayload {
+  string item_id = 1;
+  int32 col = 2;
+  int32 row = 3;
+}
+
+message HousePickFurniturePayload {
+  string furniture_id = 1;
+}
+
+message SetCampSkinPayload {
+  string skin = 1;
+}
+
+message CampStatePayload {
+  repeated WorldCamp camps = 1;
+}
+
+message HouseStatePayload {
+  string owner_name = 1;
+  string skin = 2;
+  int32 map_cols = 3;
+  int32 map_rows = 4;
+  int32 walk_cols = 5;
+  int32 walk_rows = 6;
+  int32 walk_origin_col = 7;
+  int32 walk_origin_row = 8;
+  int32 tile_size = 9;
+  repeated HousePlayer players = 10;
+  repeated HouseFurniture furniture = 11;
+  repeated HousePOI pois = 12;
+  repeated Item storage = 13;
+  int32 storage_capacity = 14;
+  bool is_owner = 15;
+}
+
+message HouseReturnPayload {
+  string reason = 1;
 }
 
 message RTMovePayload {
@@ -120,6 +193,8 @@ message WorldStatePayload {
   repeated SavePoint save_points = 4;
   repeated JobChanger job_changers = 5;
   OverworldMap map = 6;
+  repeated WorldCamp camps = 7;
+  repeated WorldPet pets = 8;
 }
 
 message PlayerLeftPayload {

@@ -62,7 +62,7 @@ export function JobSelectionSteps({
 
   return (
     <>
-      <p className="hint">Sub job abilities contribute at half strength (FFXI-style).</p>
+      <p className="hint">Sub job abilities contribute at half strength.</p>
       <div className="job-grid job-grid-compact">
         <button
           type="button"

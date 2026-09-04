@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
-	"ffv-web-game/internal/game"
+	"clara-mundi/internal/game"
 )
 
 func TestInterruptCastRefundsMPAndResetsGCD(t *testing.T) {
-	fire, ok := game.FindSkill("blm_fire")
+	fire, ok := game.FindSkill("hex_ignis_hex")
 	if !ok {
-		t.Fatal("blm_fire missing")
+		t.Fatal("hex_ignis_hex missing")
 	}
 	e := &entity{
 		name:  "Mage",
@@ -39,14 +39,14 @@ func TestInterruptCastRefundsMPAndResetsGCD(t *testing.T) {
 	}
 }
 
-func TestJumpRangeMatchesSpell(t *testing.T) {
-	jump, ok := game.FindSkill("drg_jump")
+func TestSpellAndSpearRange(t *testing.T) {
+	jump, ok := game.FindSkill("lnc_saltus_hasta")
 	if !ok {
-		t.Fatal("drg_jump missing")
+		t.Fatal("lnc_saltus_hasta missing")
 	}
-	fire, ok := game.FindSkill("blm_fire")
+	fire, ok := game.FindSkill("hex_ignis_hex")
 	if !ok {
-		t.Fatal("blm_fire missing")
+		t.Fatal("hex_ignis_hex missing")
 	}
 	r := &Room{}
 	actor := &entity{x: 0, y: 0, facingX: 1}

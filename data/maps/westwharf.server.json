@@ -1,0 +1,44 @@
+{
+  "plugins": {
+    "combat": "combat.realtime",
+    "modules": [
+      {
+        "capabilities": [
+          "combat"
+        ],
+        "config": {
+          "battle_speed": 0.75
+        },
+        "enabled": true,
+        "frontend": {
+          "pluginId": "combat.ordo"
+        },
+        "id": "combat.ordo",
+        "name": "Ordo Combat",
+        "version": "1.0.0"
+      },
+      {
+        "capabilities": [
+          "combat"
+        ],
+        "config": {},
+        "enabled": true,
+        "frontend": {
+          "pluginId": "combat.realtime"
+        },
+        "id": "combat.realtime",
+        "name": "Realtime Combat",
+        "version": "1.0.0"
+      }
+    ]
+  },
+  "server": {
+    "accounts": "data/accounts.json",
+    "addr": ":8080",
+    "battle_speed": 0.75,
+    "data": "data/profiles.json",
+    "name": "West Wharf Road",
+    "overworld": "data/maps/westwharf.map.json",
+    "static": ""
+  }
+}

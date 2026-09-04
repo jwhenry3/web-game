@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"ffv-web-game/internal/host"
+	"clara-mundi/internal/host"
 )
 
 func TestStartAndCloseStandalone(t *testing.T) {

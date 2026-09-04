@@ -1,7 +1,7 @@
 [
   {
-    "id": "ether",
-    "name": "Ether",
+    "id": "aether",
+    "name": "Aether",
     "kind": "consumable",
     "description": "Restores MP.",
     "target": "ally",
@@ -13,8 +13,21 @@
     "max_stack": 99
   },
   {
-    "id": "hi_potion",
-    "name": "Hi-Potion",
+    "id": "potio",
+    "name": "Potio",
+    "kind": "consumable",
+    "description": "Restores a moderate amount of HP.",
+    "target": "ally",
+    "effects": {
+      "heal_hp": 50,
+      "per_level": 8
+    },
+    "stackable": true,
+    "max_stack": 99
+  },
+  {
+    "id": "potio_maior",
+    "name": "Potio Maior",
     "kind": "consumable",
     "description": "Restores a large amount of HP.",
     "target": "ally",
@@ -26,17 +39,21 @@
     "max_stack": 99
   },
   {
-    "id": "potion",
-    "name": "Potion",
-    "kind": "consumable",
-    "description": "Restores a moderate amount of HP.",
-    "target": "ally",
-    "effects": {
-      "heal_hp": 50,
-      "per_level": 8
-    },
-    "stackable": true,
-    "max_stack": 99
+    "id": "starter-axe",
+    "name": "Notched Axe",
+    "kind": "equipment",
+    "description": "Starter weapon issued to new heroes.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "axe",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 2
+    }
   },
   {
     "id": "starter-back",
@@ -101,6 +118,23 @@
     }
   },
   {
+    "id": "starter-hammer",
+    "name": "Worn Hammer",
+    "kind": "equipment",
+    "description": "Starter weapon issued to new heroes.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "hammer",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 2
+    }
+  },
+  {
     "id": "starter-hands",
     "name": "Worn Gauntlets",
     "kind": "equipment",
@@ -131,6 +165,40 @@
     }
   },
   {
+    "id": "starter-katana",
+    "name": "Dull Katana",
+    "kind": "equipment",
+    "description": "Starter weapon issued to new heroes.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "katana",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 2
+    }
+  },
+  {
+    "id": "starter-knuckles",
+    "name": "Wrapped Knuckles",
+    "kind": "equipment",
+    "description": "Starter weapon issued to new heroes.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "knuckles",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 2
+    }
+  },
+  {
     "id": "starter-legs",
     "name": "Worn Greaves",
     "kind": "equipment",
@@ -143,23 +211,6 @@
     "level": 1,
     "stats": {
       "agi": 2
-    }
-  },
-  {
-    "id": "starter-mace",
-    "name": "Worn Mace",
-    "kind": "equipment",
-    "description": "Starter weapon issued to new heroes.",
-    "slot": "weapon",
-    "allowed_slots": [
-      "weapon",
-      "sub_weapon"
-    ],
-    "weapon_type": "mace",
-    "rarity": "common",
-    "level": 1,
-    "stats": {
-      "mag": 2
     }
   },
   {
@@ -211,6 +262,23 @@
     "level": 1,
     "stats": {
       "str": 2
+    }
+  },
+  {
+    "id": "starter-wand",
+    "name": "Simple Wand",
+    "kind": "equipment",
+    "description": "Starter weapon issued to new heroes.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "wand",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "mag": 2
     }
   }
 ]

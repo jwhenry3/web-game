@@ -65,11 +65,11 @@ export function CharacterSelectScreen() {
 
   return (
     <div className="login-screen">
-      <div className="xiv-window login-panel character-select-panel">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">Select Character</span>
+      <div className="cm-window login-panel character-select-panel">
+        <div className="cm-titlebar">
+          <span className="cm-title">Select Character</span>
         </div>
-        <div className="xiv-body">
+        <div className="cm-body">
           <p className="subtitle">Signed in as {username}</p>
           <div className="character-list">
             {characters.map((c) => (
@@ -87,7 +87,7 @@ export function CharacterSelectScreen() {
                       <span className="hint">Delete {c.name}?</span>
                       <button
                         type="button"
-                        className="xiv-btn danger"
+                        className="cm-btn danger"
                         disabled={busy !== null}
                         onClick={() => doDelete(c.name)}
                       >
@@ -95,7 +95,7 @@ export function CharacterSelectScreen() {
                       </button>
                       <button
                         type="button"
-                        className="xiv-btn"
+                        className="cm-btn"
                         disabled={busy !== null}
                         onClick={() => setConfirmDelete(null)}
                       >
@@ -106,7 +106,7 @@ export function CharacterSelectScreen() {
                     <>
                       <button
                         type="button"
-                        className="xiv-btn gold"
+                        className="cm-btn gold"
                         disabled={busy !== null}
                         onClick={() => play(c.name)}
                       >
@@ -114,7 +114,7 @@ export function CharacterSelectScreen() {
                       </button>
                       <button
                         type="button"
-                        className="xiv-btn danger"
+                        className="cm-btn danger"
                         disabled={busy !== null}
                         onClick={() => setConfirmDelete(c.name)}
                       >
@@ -129,7 +129,7 @@ export function CharacterSelectScreen() {
           {(error || loginError) && <div className="error-text">{error ?? loginError}</div>}
           <button
             type="button"
-            className="xiv-btn wide"
+            className="cm-btn wide"
             disabled={atLimit || busy !== null}
             onClick={startCreate}
           >
@@ -137,7 +137,7 @@ export function CharacterSelectScreen() {
           </button>
           <button
             type="button"
-            className="xiv-btn wide logout-btn"
+            className="cm-btn wide logout-btn"
             disabled={busy !== null}
             onClick={doLogout}
           >

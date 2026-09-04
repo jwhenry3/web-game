@@ -5,16 +5,16 @@ export function TitleScreen() {
 
   return (
     <div className="login-screen title-screen">
-      <div className="xiv-window login-panel title-panel">
-        <div className="xiv-titlebar">
-          <span className="xiv-title">FF5 Multiplayer</span>
+      <div className="cm-window login-panel title-panel">
+        <div className="cm-titlebar">
+          <span className="cm-title">Clara Mundi</span>
         </div>
-        <div className="xiv-body title-body">
+        <div className="cm-body title-body">
           <p className="subtitle">Choose how to continue</p>
-          <button type="button" className="xiv-btn gold wide title-btn" onClick={() => setScreen("auth")}>
+          <button type="button" className="cm-btn gold wide title-btn" onClick={() => setScreen("auth")}>
             Play Game
           </button>
-          <button type="button" className="xiv-btn wide title-btn" onClick={() => setScreen("admin_auth")}>
+          <button type="button" className="cm-btn wide title-btn" onClick={() => setScreen("admin_auth")}>
             Game Designer
           </button>
           <p className="dim title-hint">Game Designer requires an admin account (default: admin / admin)</p>

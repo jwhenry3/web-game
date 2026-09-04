@@ -22,7 +22,7 @@ export function resolveCharacterAppearance(opts: {
     fromWire ??
     (opts.playerId === opts.selfId
       ? loadAppearance(opts.playerId, opts.race)
-      : appearanceFromRace(opts.race ?? "hume"));
+      : appearanceFromRace(opts.race ?? "humanus"));
   const equipped =
     opts.playerId === opts.selfId ? mainWeaponTypeFromProfile(opts.profile) : undefined;
   return applyGameWeapon(base, equipped ?? opts.weapon);
