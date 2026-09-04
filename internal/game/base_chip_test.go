@@ -8,7 +8,7 @@ import (
 
 func TestLoadBaseChipConfig(t *testing.T) {
 	root := findRepoRoot(t)
-	cfg, err := LoadBaseChipConfig(filepath.Join(root, "maps", "base_chip.tsx"))
+	cfg, err := LoadBaseChipConfig(filepath.Join(root, "data", "maps", "base_chip.tsx"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,12 +37,12 @@ func findRepoRoot(t *testing.T) string {
 		t.Fatal(err)
 	}
 	for {
-		if _, err := os.Stat(filepath.Join(dir, "maps", "base_chip.tsx")); err == nil {
+		if _, err := os.Stat(filepath.Join(dir, "data", "maps", "base_chip.tsx")); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			t.Fatal("could not find maps/base_chip.tsx")
+			t.Fatal("could not find data/maps/base_chip.tsx")
 		}
 		dir = parent
 	}

@@ -53,6 +53,7 @@ func (m *mockHost) BuildVictoryRewards(
 	_ string,
 	fighters []contracts.BattleFighter,
 	totalXP, level, lootBonus int,
+	dropPoolIDs []string,
 	rng *rand.Rand,
 ) []protocol.PlayerReward {
 	converted := make([]battleFighter, len(fighters))
@@ -65,7 +66,7 @@ func (m *mockHost) BuildVictoryRewards(
 	}
 	var out []protocol.PlayerReward
 	for _, f := range converted {
-		loot := game.GenerateLoot(rng, level, lootBonus)
+		loot := game.GenerateVictoryLoot(rng, level, lootBonus, dropPoolIDs)
 		hasSub := false
 		if profile, ok := m.store.Get(f.Name); ok && profile.SubJob != "" {
 			hasSub = true

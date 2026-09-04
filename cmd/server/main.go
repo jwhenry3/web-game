@@ -1,23 +1,17 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
 	"log"
-	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
-	"ffv-web-game/internal/auth"
-	"ffv-web-game/internal/cluster"
-	"ffv-web-game/internal/game"
-	"ffv-web-game/internal/mapnode"
-	"ffv-web-game/internal/proxy"
-	"ffv-web-game/internal/store"
+	"ffv-web-game/internal/host"
 )
 
 func main() {
-	clusterFile := flag.String("cluster", "config/cluster.json", "cluster configuration (proxy + maps)")
+	clusterFile := flag.String("cluster", "data/cluster.json", "cluster configuration (proxy + maps)")
 	configFile := flag.String("config", "", "legacy single-map server.json (optional)")
 	jwtSecret := flag.String("jwt-secret", "", "JWT signing secret (required in production)")
 	flag.Parse()
@@ -27,53 +21,17 @@ func main() {
 		log.Fatalf("cluster config %s not found (legacy -config is unused in cluster mode)", path)
 	}
 
-	cfg, err := cluster.Load(path)
+	rt, err := host.Start(host.Options{
+		ClusterFile: path,
+		JWTSecret:   *jwtSecret,
+	})
 	if err != nil {
-		log.Fatalf("cluster: %v", err)
+		log.Fatal(err)
 	}
-	game.ConfigureExp(cfg.Exp)
-	log.Printf("exp rates: ×%.2f  main %d%% / sub %d%%  subjob unlock Lv%d",
-		cfg.Exp.Rate, cfg.Exp.MainPercent, cfg.Exp.SubPercent, cfg.Exp.SubjobUnlockLevel)
+	defer rt.Close()
 
-	secret := *jwtSecret
-	if secret == "" {
-		secret = os.Getenv("JWT_SECRET")
-	}
-	if secret == "" {
-		b := make([]byte, 32)
-		if _, err := rand.Read(b); err != nil {
-			log.Fatal(err)
-		}
-		secret = hex.EncodeToString(b)
-		log.Printf("warning: using ephemeral JWT secret; set -jwt-secret or JWT_SECRET for production")
-	}
-
-	profiles := store.Load(cfg.Proxy.Data)
-	accounts := store.LoadAccounts(cfg.Proxy.Accounts)
-	accounts.EnsureDefaultAdmin()
-	tokens := auth.NewTokenIssuer(secret)
-	px := proxy.New(cfg, path, tokens, accounts, profiles, os.Getenv("ADMIN_SECRET"))
-
-	if cfg.Proxy.Name != "" {
-		log.Printf("proxy: %s", cfg.Proxy.Name)
-	}
-	started := 0
-	for _, spec := range cfg.Maps {
-		if !spec.IsEnabled() {
-			log.Printf("map %s (%s) disabled — not starting", spec.ID, spec.Name)
-			continue
-		}
-		n, err := mapnode.Start(spec, profiles, accounts)
-		if err != nil {
-			log.Fatalf("map %s: %v", spec.ID, err)
-		}
-		px.RegisterMap(n)
-		started++
-	}
-
-	log.Printf("cluster maps: %d running / %d registered (default %s)", started, len(cfg.Maps), cfg.DefaultMap().ID)
-	log.Printf("FF5-Multiplayer proxy listening on %s", cfg.Proxy.Addr)
-	if err := http.ListenAndServe(cfg.Proxy.Addr, px.Handler()); err != nil {
-		log.Fatal("ListenAndServe:", err)
-	}
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	<-sig
+	log.Printf("shutting down…")
 }

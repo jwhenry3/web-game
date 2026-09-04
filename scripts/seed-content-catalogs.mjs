@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Writes data/content/*.json from web/src/editor/seeds/ and built-in prefab templates.
+ * Writes data/content/*.json from wails/frontend/src/editor/seeds/ and built-in prefab templates.
  * Run: npm run seed:content
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -10,7 +10,7 @@ import { execFileSync } from "node:child_process";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contentDir = join(root, "data", "content");
-const seedsDir = join(root, "web", "src", "editor", "seeds");
+const seedsDir = join(root, "wails", "frontend", "src", "editor", "seeds");
 
 const BASE = 577;
 const G = {
@@ -149,6 +149,7 @@ const items = JSON.parse(readFileSync(join(seedsDir, "items.json"), "utf8"));
 const quests = JSON.parse(readFileSync(join(seedsDir, "quests.json"), "utf8"));
 const jobs = JSON.parse(readFileSync(join(seedsDir, "jobs.json"), "utf8"));
 const skills = JSON.parse(readFileSync(join(seedsDir, "skills.json"), "utf8"));
+const drops = JSON.parse(readFileSync(join(seedsDir, "drops.json"), "utf8"));
 
 writeFileSync(join(contentDir, "entities.json"), `${JSON.stringify(wrap("entities", entities), null, 2)}\n`);
 writeFileSync(join(contentDir, "prefabs.json"), `${JSON.stringify(wrap("prefabs", prefabs), null, 2)}\n`);
@@ -157,6 +158,7 @@ writeFileSync(join(contentDir, "items.json"), `${JSON.stringify(wrap("items", it
 writeFileSync(join(contentDir, "quests.json"), `${JSON.stringify(wrap("quests", quests), null, 2)}\n`);
 writeFileSync(join(contentDir, "jobs.json"), `${JSON.stringify(wrap("jobs", jobs), null, 2)}\n`);
 writeFileSync(join(contentDir, "skills.json"), `${JSON.stringify(wrap("skills", skills), null, 2)}\n`);
+writeFileSync(join(contentDir, "drops.json"), `${JSON.stringify(wrap("drops", drops), null, 2)}\n`);
 
 console.log(`Seeded content catalogs in ${contentDir}`);
 console.log(`  entities: ${entities.length} templates`);
@@ -165,4 +167,5 @@ console.log(`  items:    ${items.length} definitions (${items.filter((i) => i.ki
 console.log(`  quests:   ${quests.length} definitions`);
 console.log(`  jobs:     ${jobs.length} definitions`);
 console.log(`  skills:   ${skills.length} definitions`);
+console.log(`  drops:    ${drops.length} pools`);
 console.log(`  tileset:  null (built-in base_chip)`);

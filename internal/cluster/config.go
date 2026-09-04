@@ -64,11 +64,11 @@ func Default() Config {
 			Addr:     ":8080",
 			Accounts: "data/accounts.json",
 			Data:     "data/profiles.json",
-			Static:   "web/dist",
+			Static:   "",
 		},
 		Exp: game.DefaultExpRates(),
 		Maps: []MapSpec{
-			{ID: "greenwood", Name: "Greenwood", Addr: ":8091", Config: "config/server.json", Default: true},
+			{ID: "greenwood", Name: "Greenwood", Addr: ":8091", Config: "data/config/server.json", Default: true},
 		},
 	}
 }
@@ -111,7 +111,7 @@ func (c *Config) loadMapsRegistry() error {
 	return nil
 }
 
-// SaveMapsRegistry persists the live map list without touching config/cluster.json.
+// SaveMapsRegistry persists the live map list without touching data/cluster.json.
 func SaveMapsRegistry(cfg Config) error {
 	if err := cfg.Validate(); err != nil {
 		return err

@@ -89,12 +89,13 @@ func npcEntitiesFromObjects(ow *Overworld, objects []OverrideObject) error {
 				return fmt.Errorf("combat npc %s missing id or region", obj.Name)
 			}
 			patrols = append(patrols, Patrol{
-				ID:     id,
-				Kind:   tiledPropString(obj.Properties, "kind"),
-				Name:   tiledPropString(obj.Properties, "name"),
-				Level:  tiledPropInt(obj.Properties, "level"),
-				Region: region,
-				Home:   tile,
+				ID:        id,
+				Kind:      tiledPropString(obj.Properties, "kind"),
+				Name:      tiledPropString(obj.Properties, "name"),
+				Level:     tiledPropInt(obj.Properties, "level"),
+				Region:    region,
+				Home:      tile,
+				Encounter: EncounterFromProps(obj.Properties),
 			})
 		}
 

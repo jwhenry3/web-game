@@ -45,6 +45,35 @@ func scheduleBattleDismiss(host contracts.CombatHost, roomID string, participant
 	})
 }
 
+func (b *BattleRoom) scheduleDismiss(victory bool) {
+	b.cancelDismiss()
+	b.dismissVictory = victory
+	b.dismissParticipants = b.playerIDs(false)
+	grace := ResultsGracePeriod
+	if grace <= 0 {
+		b.host.FinishBattle(b.ID, b.dismissParticipants, b.dismissVictory)
+		return
+	}
+	b.dismissTimer = time.AfterFunc(grace, func() {
+		b.host.FinishBattle(b.ID, b.dismissParticipants, b.dismissVictory)
+	})
+}
+
+func (b *BattleRoom) cancelDismiss() {
+	if b.dismissTimer != nil {
+		b.dismissTimer.Stop()
+		b.dismissTimer = nil
+	}
+}
+
+func (b *BattleRoom) dismissIfEmptyAfterLeave() {
+	if !b.ended || len(b.playerIDs(false)) > 0 {
+		return
+	}
+	b.cancelDismiss()
+	b.host.FinishBattle(b.ID, b.dismissParticipants, b.dismissVictory)
+}
+
 // BattleTickWindow returns the action-window duration for a battle-speed multiplier.
 // Lower speed values lengthen each tick, slowing ATB fill and status ticks.
 func BattleTickWindow(speed float64) time.Duration {
@@ -79,6 +108,7 @@ type battleEntity struct {
 	SkillATB    float64 // GCD (skills, attack, consumables)
 	TargetID    string
 	Alive       bool
+	DropPoolID  string
 
 	// Skill usage earned this battle (players only).
 	pendingSkillUses map[string]int
@@ -146,6 +176,10 @@ type BattleRoom struct {
 	lootBonus int
 	rng       *rand.Rand
 	ended     bool
+
+	dismissTimer        *time.Timer
+	dismissVictory      bool
+	dismissParticipants []string
 }
 
 var enemyTemplates = []struct {
@@ -161,14 +195,14 @@ var enemyTemplates = []struct {
 }
 
 func NewBattleRoom(id string, level int, host roomHost) *BattleRoom {
-	return newBattleRoom(id, level, host, "")
+	return newBattleRoom(id, level, host, game.DefaultEncounter("goblin", level))
 }
 
-func NewBattleRoomFromNPC(id string, level int, host roomHost, npcKind string) *BattleRoom {
-	return newBattleRoom(id, level, host, npcKind)
+func NewBattleRoomFromNPC(id string, level int, host roomHost, encounter game.EncounterConfig) *BattleRoom {
+	return newBattleRoom(id, level, host, encounter)
 }
 
-func newBattleRoom(id string, level int, host roomHost, primaryKind string) *BattleRoom {
+func newBattleRoom(id string, level int, host roomHost, encounter game.EncounterConfig) *BattleRoom {
 	b := &BattleRoom{
 		ID:          id,
 		Level:       level,
@@ -181,38 +215,51 @@ func newBattleRoom(id string, level int, host roomHost, primaryKind string) *Bat
 		quitCh:      make(chan struct{}),
 		rng:         rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-	b.spawnEnemies(primaryKind)
+	b.spawnEnemies(encounter)
 	return b
 }
 
-func (b *BattleRoom) spawnEnemies(primaryKind string) {
-	count := 2 + b.rng.Intn(2) // 2-3 enemies per encounter
+func (b *BattleRoom) spawnEnemies(encounter game.EncounterConfig) {
+	encounter = game.NormalizeEncounter(encounter, "goblin", b.Level)
+	count := encounter.RollEnemyCount(b.rng)
 	for i := 0; i < count; i++ {
-		tplIdx := b.rng.Intn(len(enemyTemplates))
-		if i == 0 && primaryKind != "" {
-			for j, t := range enemyTemplates {
-				if t.Kind == primaryKind {
-					tplIdx = j
-					break
-				}
-			}
+		entry := encounter.PickEnemy(b.rng)
+		tpl := enemyTemplateByKind(entry.Kind)
+		enemyLevel := entry.RollLevel(b.rng)
+		if enemyLevel < 1 {
+			enemyLevel = b.Level
 		}
-		tpl := enemyTemplates[tplIdx]
-		scale := 1.0 + float64(b.Level-1)*0.18
+		scale := 1.0 + float64(enemyLevel-1)*0.18
 		e := &battleEntity{
-			ID:       fmt.Sprintf("%s-enemy-%d", b.ID, i+1),
-			Name:     tpl.Name,
-			Kind:     tpl.Kind,
-			IsPlayer: false,
-			Level:    b.Level,
-			MaxHP:    int(float64(tpl.HP) * scale),
-			Str:      int(float64(tpl.Str) * scale),
-			Agi:      tpl.Agi,
-			Alive:    true,
+			ID:         fmt.Sprintf("%s-enemy-%d", b.ID, i+1),
+			Name:       tpl.Name,
+			Kind:       tpl.Kind,
+			IsPlayer:   false,
+			Level:      enemyLevel,
+			MaxHP:      int(float64(tpl.HP) * scale),
+			Str:        int(float64(tpl.Str) * scale),
+			Agi:        tpl.Agi,
+			Alive:      true,
+			DropPoolID: entry.DropPoolID,
 		}
 		e.HP = e.MaxHP
 		b.entities = append(b.entities, e)
 	}
+}
+
+func enemyTemplateByKind(kind string) struct {
+	Kind string
+	Name string
+	HP   int
+	Str  int
+	Agi  int
+} {
+	for _, t := range enemyTemplates {
+		if t.Kind == kind {
+			return t
+		}
+	}
+	return enemyTemplates[0]
 }
 
 // Join / Leave / QueueAction are the thread-safe entry points used by the hub.
@@ -269,6 +316,7 @@ func (b *BattleRoom) Run(window time.Duration) {
 }
 
 func (b *BattleRoom) Close() {
+	b.cancelDismiss()
 	close(b.quitCh)
 }
 
@@ -330,6 +378,7 @@ func (b *BattleRoom) removePlayer(clientID string) {
 		}
 	}
 	if b.ended {
+		b.dismissIfEmptyAfterLeave()
 		return
 	}
 	if len(b.playerIDs(false)) == 0 {
@@ -930,17 +979,20 @@ func (b *BattleRoom) finish(victory bool) {
 
 	if victory {
 		totalXP := 0
+		var pools []string
 		for _, e := range b.entities {
 			if !e.IsPlayer {
 				totalXP += e.Level*45 + 30
+				if e.DropPoolID != "" {
+					pools = append(pools, e.DropPoolID)
+				}
 			}
 		}
 		fighters := b.fighters()
-		payload.Rewards = b.host.BuildVictoryRewards(b.ID, fighters, totalXP, b.Level, b.lootBonus, b.rng)
+		payload.Rewards = b.host.BuildVictoryRewards(b.ID, fighters, totalXP, b.Level, b.lootBonus, pools, b.rng)
 		b.host.NotifyPassiveRewards(payload.Rewards)
 	}
 
-	participants := b.playerIDs(false)
 	b.broadcast(protocol.Encode(protocol.TypeBattleEnd, payload))
-	scheduleBattleDismiss(b.host, b.ID, participants, victory)
+	b.scheduleDismiss(victory)
 }

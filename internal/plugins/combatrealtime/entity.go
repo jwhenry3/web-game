@@ -39,6 +39,7 @@ type entity struct {
 	gcdReadyAt time.Time
 	attackCD   time.Time
 	avoidSide  float64 // -1 or +1, stable detour around other NPCs
+	dropPoolID string
 }
 
 func (e *entity) gcdProgress(now time.Time) float64 {
@@ -65,6 +66,10 @@ func (e *entity) gcdReady(now time.Time) bool {
 
 func (e *entity) startGCD(now time.Time) {
 	e.gcdReadyAt = now.Add(gcdDuration)
+}
+
+func (e *entity) resetGCD() {
+	e.gcdReadyAt = time.Time{}
 }
 
 func (e *entity) weaponForSkill(skill game.Skill) game.WeaponType {

@@ -34,7 +34,7 @@ type CombatHost interface {
 	ClearBattleInvite(clientID string)
 
 	FinishBattle(roomID string, participantIDs []string, victory bool)
-	BuildVictoryRewards(roomID string, fighters []BattleFighter, totalXP, level, lootBonus int, rng *rand.Rand) []protocol.PlayerReward
+	BuildVictoryRewards(roomID string, fighters []BattleFighter, totalXP, level, lootBonus int, dropPoolIDs []string, rng *rand.Rand) []protocol.PlayerReward
 	NotifyPassiveRewards(rewards []protocol.PlayerReward)
 
 	ParticipantCount(battleID string) int

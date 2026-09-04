@@ -118,7 +118,7 @@ func (p *Plugin) StartFromNPC(clientID string, wp *protocol.WorldPlayer, npc con
 		level = profile.MainJobLevel()
 	}
 	id := p.host.NextBattleID()
-	room := newRoom(id, level, p.host, npc.Kind)
+	room := newRoom(id, level, p.host, npc.Encounter)
 	p.rooms[id] = room
 	go room.Run()
 

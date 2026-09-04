@@ -83,7 +83,7 @@ func LoadOverworldFromTiled(path string) (*Overworld, error) {
 func tiledPublicPath(path string) string {
 	base := filepath.Base(path)
 	// Historical client asset path when a .tmj was published; hub may send empty tiled_map.
-	return "maps/" + base
+	return "data/maps/" + base
 }
 
 func defaultWanderSettings() wanderSettings {
@@ -238,12 +238,13 @@ func parseTiledObjectLayers(raw tiledMapFile, ow *Overworld) error {
 					}
 					tile := objectTile(obj, ow.TileSize)
 					ow.NPCPatrols = append(ow.NPCPatrols, Patrol{
-						ID:     id,
-						Kind:   tiledPropString(obj.Properties, "kind"),
-						Name:   tiledPropString(obj.Properties, "name"),
-						Level:  tiledPropInt(obj.Properties, "level"),
-						Region: region,
-						Home:   tile,
+						ID:        id,
+						Kind:      tiledPropString(obj.Properties, "kind"),
+						Name:      tiledPropString(obj.Properties, "name"),
+						Level:     tiledPropInt(obj.Properties, "level"),
+						Region:    region,
+						Home:      tile,
+						Encounter: EncounterFromProps(obj.Properties),
 					})
 				}
 				if npcRolesContain(roles, "job_master") {

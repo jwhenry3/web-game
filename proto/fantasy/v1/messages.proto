@@ -1,0 +1,248 @@
+syntax = "proto3";
+
+package fantasy.v1;
+
+option go_package = "ffv-web-game/internal/protocol/pb";
+
+import "fantasy/v1/common.proto";
+import "google/protobuf/struct.proto";
+
+// WireEnvelope is the binary frame exchanged over WebSocket BinaryMessage
+// when the client negotiates codec=protobuf.
+message WireEnvelope {
+  string type = 1;
+  bytes payload = 2;
+}
+
+// ---- Client → Server ----
+
+message JoinWorldPayload {
+  string player_name = 1;
+  string race = 2;
+  string main_job = 3;
+  string sub_job = 4;
+  string job = 5;
+  string weapon = 6;
+  CharacterAppearance appearance = 7;
+}
+
+message MovePayload {
+  double x = 1;
+  double y = 2;
+}
+
+message ChatPayload {
+  string message = 1;
+}
+
+message EquipPayload {
+  string item_id = 1;
+  string slot = 2;
+}
+
+message UnequipPayload {
+  string slot = 1;
+}
+
+message SetJobsPayload {
+  string main_job = 1;
+  string sub_job = 2;
+  string job_changer_id = 3;
+}
+
+message SetHotbarPayload {
+  string slot = 1;
+  string kind = 2;
+  string id = 3;
+}
+
+message SetKeybindsPayload {
+  map<string, string> keybinds = 1;
+}
+
+message PlayerNamePayload {
+  string player_name = 1;
+}
+
+message PartyKickPayload {
+  string member_id = 1;
+}
+
+message JoinBattlePayload {
+  string battle_id = 1;
+}
+
+message ActionPayload {
+  string action_id = 1;
+  string target_id = 2;
+  string item_id = 3;
+}
+
+message SetTargetPayload {
+  string target_id = 1;
+}
+
+message SetSavePointPayload {
+  string save_point_id = 1;
+}
+
+message UseWorldSkillPayload {
+  string skill_id = 1;
+  string save_point_id = 2;
+}
+
+message RTMovePayload {
+  double x = 1;
+  double y = 2;
+}
+
+message RTAttackPayload {
+  double facing_x = 1;
+  double facing_y = 2;
+}
+
+// ---- Server → Client ----
+
+message WelcomePayload {
+  string player_id = 1;
+  ProfileInfo profile = 2;
+  MapSnapshot map = 3;
+}
+
+message MapConfigPayload {
+  MapSnapshot map = 1;
+}
+
+message WorldStatePayload {
+  repeated WorldPlayer players = 1;
+  repeated WorldNPC npcs = 2;
+  repeated BattleInfo battles = 3;
+  repeated SavePoint save_points = 4;
+  repeated JobChanger job_changers = 5;
+  OverworldMap map = 6;
+}
+
+message PlayerLeftPayload {
+  string id = 1;
+}
+
+message PlayerMovedPayload {
+  string id = 1;
+  double x = 2;
+  double y = 3;
+}
+
+message ChatMessagePayload {
+  string from_id = 1;
+  string from_name = 2;
+  string message = 3;
+  string channel = 4;
+}
+
+message NPCStatePayload {
+  repeated WorldNPC npcs = 1;
+}
+
+message BattleListPayload {
+  repeated BattleInfo battles = 1;
+}
+
+message BattleStatePayload {
+  string battle_id = 1;
+  repeated BattleEntity entities = 2;
+  double battle_speed = 3;
+}
+
+message BattleEventPayload {
+  repeated ActionResult results = 1;
+  repeated EntityUpdate entities = 2;
+  int64 timestamp = 3;
+}
+
+message BattleTickPayload {
+  map<string, double> skill_atb = 1;
+  map<string, double> atb = 2;
+  map<string, int32> hp = 3;
+  map<string, bool> alive = 4;
+  // map[string][]StatusSnapshot — encoded as Struct for JSON round-trip.
+  google.protobuf.Struct statuses = 5;
+  map<string, string> casting_skill_id = 6;
+  map<string, string> cast_target_id = 7;
+  map<string, double> cast_progress = 8;
+  map<string, int32> cast_time_ms = 9;
+}
+
+message BattleEndPayload {
+  bool victory = 1;
+  repeated PlayerReward rewards = 2;
+}
+
+message PartyInvitePayload {
+  string from_id = 1;
+  string from_name = 2;
+  string party_id = 3;
+}
+
+message BattleInvitePayload {
+  string battle_id = 1;
+  string from_id = 2;
+  string from_name = 3;
+}
+
+message FriendRequestPayload {
+  string from_id = 1;
+  string from_name = 2;
+}
+
+message RewardNoticePayload {
+  int32 xp = 1;
+  bool passive = 2;
+  bool victory = 3;
+  string message = 4;
+}
+
+message SocialStatePayload {
+  repeated FriendInfo friends = 1;
+  PartyInfo party = 2;
+  PartyInvitePayload pending_invite = 3;
+  repeated FriendRequestPayload pending_friend_requests = 4;
+  repeated string outgoing_friend_requests = 5;
+}
+
+message ErrorPayload {
+  string message = 1;
+}
+
+message RTBattleStatePayload {
+  string battle_id = 1;
+  repeated RTBattleEntity entities = 2;
+  string mode = 3;
+}
+
+message RTBattleTickPayload {
+  repeated RTBattleEntity entities = 1;
+}
+
+message RTBattleEventPayload {
+  string attacker_id = 1;
+  string target_id = 2;
+  int32 damage = 3;
+  int32 heal = 4;
+  int32 mp_restored = 5;
+  bool hit = 6;
+  string message = 7;
+  string action_id = 8;
+  string action_name = 9;
+  bool success = 10;
+  bool cast_started = 11;
+  bool cast_cancelled = 12;
+  repeated RTBattleEntity entities = 13;
+}
+
+message RTBattleEndPayload {
+  bool victory = 1;
+  repeated PlayerReward rewards = 2;
+}
+
+// EmptyPayload covers leave_battle, party_accept, etc.
+message EmptyPayload {}

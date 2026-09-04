@@ -25,12 +25,13 @@ type exitFile struct {
 }
 
 type patrolFile struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"`
-	Name   string `json:"name"`
-	Level  int    `json:"level"`
-	Region string `json:"region"`
-	Home   [2]int `json:"home"`
+	ID        string           `json:"id"`
+	Kind      string           `json:"kind"`
+	Name      string           `json:"name"`
+	Level     int              `json:"level"`
+	Region    string           `json:"region"`
+	Home      [2]int           `json:"home"`
+	Encounter *EncounterConfig `json:"encounter,omitempty"`
 }
 
 type savePointFile struct {
@@ -137,6 +138,7 @@ func parseOverworld(raw overworldFile) (*Overworld, error) {
 		ow.NPCPatrols = append(ow.NPCPatrols, Patrol{
 			ID: n.ID, Kind: n.Kind, Name: n.Name, Level: n.Level, Region: n.Region,
 			Home: Tile{C: n.Home[0], R: n.Home[1]},
+			Encounter: encounterFromPatrolFile(n),
 		})
 	}
 

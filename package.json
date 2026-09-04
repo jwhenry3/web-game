@@ -2,7 +2,7 @@
   "name": "ffv-web-game",
   "private": true,
   "version": "0.1.0",
-  "description": "FF5-inspired multiplayer RPG — root scripts for Go server and web client",
+  "description": "FF5-inspired multiplayer RPG — root scripts for Go server and Wails client",
   "scripts": {
     "server": "go run ./cmd/server",
     "server:dev": "go run github.com/air-verse/air@latest",
@@ -10,11 +10,14 @@
     "server:start": "node scripts/start-server.mjs",
     "server:stop": "node scripts/stop-server.mjs",
     "server:test": "go test ./...",
-    "web:install": "npm install --prefix web",
-    "web:dev": "npm run dev --prefix web",
-    "web:build": "npm run build --prefix web",
-    "web:preview": "npm run preview --prefix web",
-    "build": "npm run web:build",
+    "proto:gen": "node scripts/gen-proto.mjs",
+    "wails:install": "npm install --prefix wails/frontend",
+    "wails:build:frontend": "npm run build --prefix wails/frontend",
+    "wails:build": "npm run wails:build:frontend && cd wails && wails build",
+    "wails:build:standalone": "npm run wails:build:frontend && node scripts/wails-standalone.mjs --build",
+    "wails:dev": "cd wails && wails dev",
+    "wails:dev:standalone": "node scripts/wails-standalone.mjs",
+    "build": "npm run wails:build:frontend",
     "seed:content": "node scripts/seed-content-catalogs.mjs",
     "test": "npm run server:test"
   }

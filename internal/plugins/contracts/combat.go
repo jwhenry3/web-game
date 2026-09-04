@@ -3,18 +3,20 @@ package contracts
 import (
 	"encoding/json"
 
+	"ffv-web-game/internal/game"
 	"ffv-web-game/internal/protocol"
 )
 
 // NPCSnapshot is the combat-relevant NPC view used when starting fights.
 type NPCSnapshot struct {
-	ID       string
-	Name     string
-	Kind     string
-	Level    int
-	X, Y     float64
-	InBattle bool
-	BattleID string
+	ID        string
+	Name      string
+	Kind      string
+	Level     int
+	X, Y      float64
+	InBattle  bool
+	BattleID  string
+	Encounter game.EncounterConfig
 }
 
 // CombatPlugin implements one combat ruleset (ATB, realtime, etc.).

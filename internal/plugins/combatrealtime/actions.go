@@ -359,16 +359,31 @@ func maxInt(a, b int) int {
 	return b
 }
 
-func (r *Room) interruptCast(e *entity) {
+func (e *entity) abortCast() string {
 	if e.casting == nil {
-		return
+		return ""
 	}
 	skillID := e.casting.SkillID
+	if skill, ok := game.FindSkill(skillID); ok {
+		e.mp += skill.MPCost
+		if e.mp > e.maxMP {
+			e.mp = e.maxMP
+		}
+	}
+	e.casting = nil
+	e.resetGCD()
+	return skillID
+}
+
+func (r *Room) interruptCast(e *entity) {
+	skillID := e.abortCast()
+	if skillID == "" {
+		return
+	}
 	name := skillID
 	if skill, ok := game.FindSkill(skillID); ok {
 		name = skill.Name
 	}
-	e.casting = nil
 	ev := protocol.RTBattleEventPayload{
 		AttackerID:    e.id,
 		ActionID:      skillID,

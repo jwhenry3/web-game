@@ -55,6 +55,35 @@ func scheduleBattleDismiss(host contracts.CombatHost, roomID string, participant
 	})
 }
 
+func (r *Room) scheduleDismiss(victory bool) {
+	r.cancelDismiss()
+	r.dismissVictory = victory
+	r.dismissParticipants = r.playerIDs(false)
+	grace := ResultsGracePeriod
+	if grace <= 0 {
+		r.host.FinishBattle(r.id, r.dismissParticipants, r.dismissVictory)
+		return
+	}
+	r.dismissTimer = time.AfterFunc(grace, func() {
+		r.host.FinishBattle(r.id, r.dismissParticipants, r.dismissVictory)
+	})
+}
+
+func (r *Room) cancelDismiss() {
+	if r.dismissTimer != nil {
+		r.dismissTimer.Stop()
+		r.dismissTimer = nil
+	}
+}
+
+func (r *Room) dismissIfEmptyAfterLeave() {
+	if !r.ended || len(r.playerIDs(false)) > 0 {
+		return
+	}
+	r.cancelDismiss()
+	r.host.FinishBattle(r.id, r.dismissParticipants, r.dismissVictory)
+}
+
 type Room struct {
 	id    string
 	level int
@@ -65,40 +94,44 @@ type Room struct {
 	entities []*entity
 	ended    bool
 	quit     chan struct{}
+
+	dismissTimer        *time.Timer
+	dismissVictory      bool
+	dismissParticipants []string
 }
 
-func newRoom(id string, level int, host contracts.CombatHost, primaryKind string) *Room {
+func newRoom(id string, level int, host contracts.CombatHost, encounter game.EncounterConfig) *Room {
 	r := &Room{
 		id: id, level: level, host: host,
 		rng:  rand.New(rand.NewSource(time.Now().UnixNano())),
 		quit: make(chan struct{}),
 	}
-	r.spawnEnemies(primaryKind)
+	r.spawnEnemies(encounter)
 	return r
 }
 
-func (r *Room) spawnEnemies(primaryKind string) {
-	templates := []struct {
+func (r *Room) spawnEnemies(encounter game.EncounterConfig) {
+	templates := map[string]struct {
 		kind, name string
 		hp         int
 	}{
-		{"goblin", "Goblin", 70},
-		{"dire_wolf", "Dire Wolf", 55},
-		{"stone_imp", "Stone Imp", 95},
+		"goblin":    {"goblin", "Goblin", 70},
+		"dire_wolf": {"dire_wolf", "Dire Wolf", 55},
+		"stone_imp": {"stone_imp", "Stone Imp", 95},
 	}
-	count := 2 + r.rng.Intn(2)
+	encounter = game.NormalizeEncounter(encounter, "goblin", r.level)
+	count := encounter.RollEnemyCount(r.rng)
 	for i := 0; i < count; i++ {
-		idx := r.rng.Intn(len(templates))
-		if i == 0 && primaryKind != "" {
-			for j, t := range templates {
-				if t.kind == primaryKind {
-					idx = j
-					break
-				}
-			}
+		entry := encounter.PickEnemy(r.rng)
+		tpl, ok := templates[entry.Kind]
+		if !ok {
+			tpl = templates["goblin"]
 		}
-		tpl := templates[idx]
-		scale := 1.0 + float64(r.level-1)*0.15
+		enemyLevel := entry.RollLevel(r.rng)
+		if enemyLevel < 1 {
+			enemyLevel = r.level
+		}
+		scale := 1.0 + float64(enemyLevel-1)*0.15
 		maxHP := int(float64(tpl.hp) * scale)
 		side := 1.0
 		if i%2 == 1 {
@@ -108,8 +141,8 @@ func (r *Room) spawnEnemies(primaryKind string) {
 			id: fmt.Sprintf("%s-enemy-%d", r.id, i+1),
 			name: tpl.name, kind: tpl.kind, isPlayer: false,
 			x: 520 + float64(i*40), y: 120 + float64(i*80),
-			hp: maxHP, maxHP: maxHP, alive: true,
-			facingX: -1, avoidSide: side,
+			hp: maxHP, maxHP: maxHP, alive: true, level: enemyLevel,
+			facingX: -1, avoidSide: side, dropPoolID: entry.DropPoolID,
 		})
 	}
 }
@@ -127,7 +160,10 @@ func (r *Room) Run() {
 	}
 }
 
-func (r *Room) Close() { close(r.quit) }
+func (r *Room) Close() {
+	r.cancelDismiss()
+	close(r.quit)
+}
 
 func (r *Room) Join(clientID string, profile store.Profile) {
 	r.mu.Lock()
@@ -193,6 +229,7 @@ func (r *Room) Leave(clientID string) {
 		}
 	}
 	if r.ended {
+		r.dismissIfEmptyAfterLeave()
 		return
 	}
 	if len(r.playerIDs(false)) == 0 {
@@ -408,7 +445,13 @@ func (r *Room) finish(victory bool) {
 		}
 	}
 	totalXP := 40 + r.level*25
-	rewards := r.host.BuildVictoryRewards(r.id, fighters, totalXP, r.level, 0, r.rng)
+	var pools []string
+	for _, e := range r.entities {
+		if !e.isPlayer && e.dropPoolID != "" {
+			pools = append(pools, e.dropPoolID)
+		}
+	}
+	rewards := r.host.BuildVictoryRewards(r.id, fighters, totalXP, r.level, 0, pools, r.rng)
 	if victory {
 		r.host.NotifyPassiveRewards(rewards)
 	}
@@ -416,7 +459,7 @@ func (r *Room) finish(victory bool) {
 	r.host.SendToClients(participants, protocol.Encode(protocol.TypeRTBattleEnd, protocol.RTBattleEndPayload{
 		Victory: victory, Rewards: rewards,
 	}))
-	scheduleBattleDismiss(r.host, r.id, participants, victory)
+	r.scheduleDismiss(victory)
 }
 
 func (r *Room) broadcastState() {

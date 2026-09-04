@@ -1,0 +1,406 @@
+[
+  {
+    "id": "ent-goblin",
+    "name": "Goblin",
+    "kind": "npc_combat",
+    "template": {
+      "id": 1001,
+      "name": "goblin",
+      "type": "npc",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "goblin"
+        },
+        {
+          "name": "roles",
+          "type": "string",
+          "value": "combat"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "value": "goblin"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Goblin"
+        },
+        {
+          "name": "level",
+          "type": "int",
+          "value": 3
+        },
+        {
+          "name": "region",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "encounter",
+          "type": "string",
+          "value": "{\"minEnemies\":2,\"maxEnemies\":3,\"enemies\":[{\"kind\":\"goblin\",\"levelMin\":3,\"levelMax\":3,\"dropPoolId\":\"pool_goblin\"}]}"
+        }
+      ]
+    }
+  },
+  {
+    "id": "ent-dire-wolf",
+    "name": "Dire Wolf",
+    "kind": "npc_combat",
+    "template": {
+      "id": 1002,
+      "name": "dire_wolf",
+      "type": "npc",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "dire_wolf"
+        },
+        {
+          "name": "roles",
+          "type": "string",
+          "value": "combat"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "value": "dire_wolf"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Dire Wolf"
+        },
+        {
+          "name": "level",
+          "type": "int",
+          "value": 5
+        },
+        {
+          "name": "region",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "encounter",
+          "type": "string",
+          "value": "{\"minEnemies\":2,\"maxEnemies\":3,\"enemies\":[{\"kind\":\"dire_wolf\",\"levelMin\":5,\"levelMax\":5,\"dropPoolId\":\"pool_dire_wolf\"}]}"
+        }
+      ]
+    }
+  },
+  {
+    "id": "ent-stone-imp",
+    "name": "Stone Imp",
+    "kind": "npc_combat",
+    "template": {
+      "id": 1003,
+      "name": "stone_imp",
+      "type": "npc",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "stone_imp"
+        },
+        {
+          "name": "roles",
+          "type": "string",
+          "value": "combat"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "value": "stone_imp"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Stone Imp"
+        },
+        {
+          "name": "level",
+          "type": "int",
+          "value": 4
+        },
+        {
+          "name": "region",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "encounter",
+          "type": "string",
+          "value": "{\"minEnemies\":2,\"maxEnemies\":3,\"enemies\":[{\"kind\":\"stone_imp\",\"levelMin\":4,\"levelMax\":4,\"dropPoolId\":\"pool_stone_imp\"}]}"
+        }
+      ]
+    }
+  },
+  {
+    "id": "ent-job-master",
+    "name": "Job Master",
+    "kind": "npc_service",
+    "template": {
+      "id": 1004,
+      "name": "job_master",
+      "type": "npc",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "job_master"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Job Master"
+        },
+        {
+          "name": "roles",
+          "type": "string",
+          "value": "job_master"
+        },
+        {
+          "name": "greeting",
+          "type": "string",
+          "value": "Seeking a new path? I can change your job."
+        },
+        {
+          "name": "dialogue",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "shopId",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "shopItems",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "questSetId",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "questIds",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "storageId",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "storageType",
+          "type": "string",
+          "value": "personal"
+        },
+        {
+          "name": "auctionId",
+          "type": "string",
+          "value": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "ent-quest-giver",
+    "name": "Quest Giver",
+    "kind": "npc_service",
+    "template": {
+      "id": 1005,
+      "name": "quest_giver",
+      "type": "npc",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "quest_giver"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Quest Giver"
+        },
+        {
+          "name": "roles",
+          "type": "string",
+          "value": "quest_giver"
+        },
+        {
+          "name": "greeting",
+          "type": "string",
+          "value": "I may have work for you, traveler."
+        },
+        {
+          "name": "dialogue",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "shopId",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "shopItems",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "questSetId",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "questIds",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "storageId",
+          "type": "string",
+          "value": ""
+        },
+        {
+          "name": "storageType",
+          "type": "string",
+          "value": "personal"
+        },
+        {
+          "name": "auctionId",
+          "type": "string",
+          "value": ""
+        }
+      ]
+    }
+  },
+  {
+    "id": "ent-quest-trigger",
+    "name": "Quest Trigger",
+    "kind": "quest_trigger",
+    "template": {
+      "id": 1006,
+      "name": "quest_trigger",
+      "type": "quest_trigger",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "quest_trigger"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Quest Trigger"
+        },
+        {
+          "name": "questId",
+          "type": "string",
+          "value": "intro_quest"
+        },
+        {
+          "name": "triggerMode",
+          "type": "string",
+          "value": "interact"
+        },
+        {
+          "name": "greeting",
+          "type": "string",
+          "value": "Something catches your eye…"
+        },
+        {
+          "name": "autoStart",
+          "type": "bool",
+          "value": false
+        }
+      ]
+    }
+  },
+  {
+    "id": "ent-world-potion",
+    "name": "Potion Pickup",
+    "kind": "item",
+    "template": {
+      "id": 1007,
+      "name": "potion_pickup",
+      "type": "item",
+      "x": 48,
+      "y": 48,
+      "width": 0,
+      "height": 0,
+      "point": true,
+      "properties": [
+        {
+          "name": "id",
+          "type": "string",
+          "value": "potion_pickup"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "value": "Potion"
+        },
+        {
+          "name": "itemId",
+          "type": "string",
+          "value": "potion"
+        },
+        {
+          "name": "quantity",
+          "type": "int",
+          "value": 1
+        },
+        {
+          "name": "pickupMode",
+          "type": "string",
+          "value": "interact"
+        },
+        {
+          "name": "respawnSec",
+          "type": "int",
+          "value": 60
+        }
+      ]
+    }
+  }
+]

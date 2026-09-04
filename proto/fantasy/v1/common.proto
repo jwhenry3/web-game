@@ -1,0 +1,334 @@
+syntax = "proto3";
+
+package fantasy.v1;
+
+option go_package = "ffv-web-game/internal/protocol/pb";
+
+import "google/protobuf/struct.proto";
+
+// Shared gameplay types. Field names match the existing JSON wire contract
+// (snake_case) so protojson UseProtoNames round-trips with protocol.Encode.
+
+message CharacterAppearance {
+  string skin = 1;
+  string face = 2;
+  string hair = 3;
+  string hair_color = 4;
+  string cloth = 5;
+  string cloth_color = 6;
+  string weapon = 7;
+  string weapon_color = 8;
+}
+
+message Item {
+  string id = 1;
+  string name = 2;
+  string kind = 3;
+  string slot = 4;
+  string type = 5;
+  string consumable = 6;
+  string rarity = 7;
+  int32 level = 8;
+  int32 qty = 9;
+  map<string, int32> stats = 10;
+}
+
+message StatusSnapshot {
+  string kind = 1;
+  double potency = 2;
+  int32 remaining = 3;
+  int32 shield_hp = 4;
+}
+
+message SkillInfo {
+  string id = 1;
+  string name = 2;
+  int32 mp_cost = 3;
+  bool heals = 4;
+  bool buffs = 5;
+  string description = 6;
+  string job = 7;
+  string category = 8;
+  string prereq = 9;
+  string weapon_req = 10;
+  bool unlocked = 11;
+  int32 level = 12;
+  int32 max_level = 13;
+  int32 unlock_level = 14;
+  int32 usage = 15;
+  int32 usage_to_next = 16;
+  int32 cast_time_ms = 17;
+  bool world_only = 18;
+}
+
+message JobProgressInfo {
+  string id = 1;
+  string name = 2;
+  string abbr = 3;
+  string category = 4;
+  int32 level = 5;
+  int32 xp = 6;
+  int32 max_xp = 7;
+}
+
+message StatBlock {
+  int32 hp = 1;
+  int32 mp = 2;
+  int32 str = 3;
+  int32 mag = 4;
+  int32 agi = 5;
+}
+
+message HotbarBinding {
+  string kind = 1;
+  string id = 2;
+}
+
+message VisitedSavePoint {
+  string id = 1;
+  string name = 2;
+  string map_name = 3;
+  bool home = 4;
+}
+
+message ProfileInfo {
+  string name = 1;
+  int32 level = 2;
+  int32 xp = 3;
+  int32 max_xp = 4;
+  string race = 5;
+  string main_job = 6;
+  string sub_job = 7;
+  int32 subjob_unlock_level = 8;
+  repeated string unlocked_jobs = 9;
+  CharacterAppearance appearance = 10;
+  repeated JobProgressInfo jobs = 11;
+  StatBlock stats = 12;
+  repeated Item inventory = 13;
+  map<string, string> equipped = 14;
+  map<string, HotbarBinding> hotbar = 15;
+  repeated SkillInfo skills = 16;
+  repeated string friends = 17;
+  string save_point_id = 18;
+  string save_point_name = 19;
+  repeated VisitedSavePoint visited_save_points = 20;
+  map<string, string> keybinds = 21;
+}
+
+message OverworldMap {
+  int32 tile = 1;
+  int32 cols = 2;
+  int32 rows = 3;
+  string cells = 4;
+}
+
+message MapTerrainLayers {
+  repeated int32 ground = 1;
+  repeated int32 collision = 2;
+}
+
+message MapTileOverrides {
+  string map_id = 1;
+  google.protobuf.Struct layers = 2;
+  string updated_at = 3;
+}
+
+message MapPortal {
+  double x = 1;
+  double y = 2;
+  double w = 3;
+  double h = 4;
+}
+
+message MapFrontend {
+  string pluginId = 1;
+}
+
+message MapModule {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  repeated string capabilities = 4;
+  MapFrontend frontend = 5;
+  google.protobuf.Struct config = 6;
+}
+
+message MapSnapshot {
+  string id = 1;
+  string name = 2;
+  string combat = 3;
+  repeated string capabilities = 4;
+  repeated MapModule modules = 5;
+  OverworldMap overworld = 6;
+  string tiled_map = 7;
+  repeated MapPortal portals = 8;
+  MapTileOverrides tile_overrides = 9;
+  MapTerrainLayers terrain_layers = 10;
+}
+
+message WorldPlayer {
+  string id = 1;
+  string name = 2;
+  string weapon = 3;
+  string race = 4;
+  string main_job = 5;
+  string sub_job = 6;
+  int32 level = 7;
+  CharacterAppearance appearance = 8;
+  double x = 9;
+  double y = 10;
+  string facing = 11;
+  bool in_battle = 12;
+  string battle_id = 13;
+  int64 immune_until = 14;
+  string casting_skill_id = 15;
+  int32 cast_time_ms = 16;
+  int64 cast_ends_at = 17;
+}
+
+message WorldNPC {
+  string id = 1;
+  string name = 2;
+  string kind = 3;
+  int32 level = 4;
+  double x = 5;
+  double y = 6;
+  bool in_battle = 7;
+  string battle_id = 8;
+}
+
+message BattleInfo {
+  string battle_id = 1;
+  int32 participants = 2;
+  int32 max_players = 3;
+  int32 level = 4;
+  string mode = 5;
+}
+
+message SavePoint {
+  string id = 1;
+  string name = 2;
+  double x = 3;
+  double y = 4;
+}
+
+message JobChanger {
+  string id = 1;
+  string name = 2;
+  double x = 3;
+  double y = 4;
+}
+
+message BattleEntity {
+  string id = 1;
+  string name = 2;
+  string kind = 3;
+  bool is_player = 4;
+  string weapon = 5;
+  int32 level = 6;
+  int32 hp = 7;
+  int32 max_hp = 8;
+  int32 mp = 9;
+  int32 max_mp = 10;
+  int32 agility = 11;
+  double skill_atb = 12;
+  double atb = 13;
+  string target_id = 14;
+  bool alive = 15;
+  repeated StatusSnapshot statuses = 16;
+  string casting_skill_id = 17;
+  string cast_target_id = 18;
+  double cast_progress = 19;
+  int32 cast_time_ms = 20;
+}
+
+message ActionResult {
+  string actor_id = 1;
+  string action_id = 2;
+  string action_name = 3;
+  string target_id = 4;
+  string item_id = 5;
+  bool success = 6;
+  int32 damage = 7;
+  int32 heal = 8;
+  int32 mp_restored = 9;
+  string message = 10;
+  repeated StatusSnapshot status_applied = 11;
+  bool cast_started = 12;
+}
+
+message EntityUpdate {
+  string id = 1;
+  int32 hp = 2;
+  int32 mp = 3;
+  double skill_atb = 4;
+  double atb = 5;
+  string target_id = 6;
+  bool alive = 7;
+  repeated StatusSnapshot statuses = 8;
+  string casting_skill_id = 9;
+  string cast_target_id = 10;
+  double cast_progress = 11;
+  int32 cast_time_ms = 12;
+}
+
+message PlayerReward {
+  string player_id = 1;
+  int32 xp = 2;
+  int32 sub_xp = 3;
+  int32 levels_gained = 4;
+  int32 sub_levels_gained = 5;
+  int32 new_level = 6;
+  int32 new_xp = 7;
+  int32 max_xp = 8;
+  int32 sub_new_level = 9;
+  int32 sub_new_xp = 10;
+  int32 sub_max_xp = 11;
+  repeated Item loot = 12;
+  bool passive = 13;
+  bool party_bonus = 14;
+}
+
+message FriendInfo {
+  string name = 1;
+  bool online = 2;
+  int32 level = 3;
+  string weapon = 4;
+  bool in_battle = 5;
+}
+
+message PartyMember {
+  string id = 1;
+  string name = 2;
+  int32 level = 3;
+  string weapon = 4;
+  bool leader = 5;
+  bool in_battle = 6;
+}
+
+message PartyInfo {
+  string id = 1;
+  string leader_id = 2;
+  repeated PartyMember members = 3;
+}
+
+message RTBattleEntity {
+  string id = 1;
+  string name = 2;
+  string kind = 3;
+  bool is_player = 4;
+  double x = 5;
+  double y = 6;
+  int32 hp = 7;
+  int32 max_hp = 8;
+  int32 mp = 9;
+  int32 max_mp = 10;
+  double skill_atb = 11;
+  string target_id = 12;
+  bool alive = 13;
+  repeated StatusSnapshot statuses = 14;
+  string casting_skill_id = 15;
+  string cast_target_id = 16;
+  double cast_progress = 17;
+  int32 cast_time_ms = 18;
+}

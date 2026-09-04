@@ -12,19 +12,20 @@ coverage.html
 /bin/
 /dist/
 
-# ---- Node / frontend (web/) ----
-web/node_modules/
-web/dist/
-web/.vite/
-web/*.tsbuildinfo
-web/npm-debug.log*
-web/yarn-debug.log*
-web/yarn-error.log*
-web/pnpm-debug.log*
+# ---- Wails desktop client ----
+wails/frontend/node_modules/
+wails/frontend/dist/
+wails/frontend/.vite/
+wails/frontend/*.tsbuildinfo
+wails/build/
+wails/*.exe
 
 # ---- Local server persistence (player/runtime data) ----
 data/profiles.json
 data/accounts.json
+data/standalone/
+data/cluster.maps.json
+bin/data/
 
 # ---- Secrets & env ----
 .env
@@ -58,6 +59,42 @@ desktop.ini
 
 # ---- Air (Go live reload) ----
 build-errors.log
+
+# ---- Unity (unity/Fantasy) ----
+unity/Fantasy/[Ll]ibrary/
+unity/Fantasy/[Tt]emp/
+unity/Fantasy/[Oo]bj/
+unity/Fantasy/[Bb]uild/
+unity/Fantasy/[Bb]uilds/
+unity/Fantasy/[Ll]ogs/
+unity/Fantasy/[Uu]ser[Ss]ettings/
+unity/Fantasy/MemoryCaptures/
+unity/Fantasy/Recordings/
+unity/Fantasy/ExportedObj/
+unity/Fantasy/.utmp/
+unity/Fantasy/*.csproj
+unity/Fantasy/*.unityproj
+unity/Fantasy/*.sln
+unity/Fantasy/*.suo
+unity/Fantasy/*.user
+unity/Fantasy/*.userprefs
+unity/Fantasy/*.pidb
+unity/Fantasy/*.booproj
+unity/Fantasy/*.svd
+unity/Fantasy/*.pdb
+unity/Fantasy/*.mdb
+unity/Fantasy/*.opendb
+unity/Fantasy/*.VC.db
+unity/Fantasy/*.pidb.meta
+unity/Fantasy/*.pdb.meta
+unity/Fantasy/*.mdb.meta
+unity/Fantasy/sysinfo.txt
+unity/Fantasy/crashlytics-buildid.txt
+unity/Fantasy/*.apk
+unity/Fantasy/*.aab
+unity/Fantasy/*.unitypackage
+unity/Fantasy/*.app
+unity/Fantasy/InitTestScene*.unity*
 
 # ---- Misc ----
 *.log

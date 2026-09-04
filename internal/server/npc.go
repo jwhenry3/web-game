@@ -333,6 +333,7 @@ func (h *Hub) engageFirstNPCAt(c *Client, wp *protocol.WorldPlayer, x, y float64
 func (h *Hub) startBattleFromNPC(c *Client, wp *protocol.WorldPlayer, n *worldNPC) {
 	snap := contracts.NPCSnapshot{
 		ID: n.ID, Name: n.Name, Kind: n.Kind, Level: n.Level, X: n.X, Y: n.Y,
+		Encounter: game.NormalizeEncounter(n.patrol.Encounter, n.Kind, n.Level),
 	}
 	battleID, ok := h.combat.StartFromNPC(c.ID, wp, snap)
 	if !ok {

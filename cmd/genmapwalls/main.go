@@ -1,4 +1,4 @@
-// genmapwalls writes sanctuary perimeter walls into maps/overrides/{mapId}.json.
+// genmapwalls writes sanctuary perimeter walls into data/maps/overrides/{mapId}.json.
 // Run from repo root: go run ./cmd/genmapwalls
 package main
 
@@ -13,7 +13,7 @@ import (
 func main() {
 	root := findRoot()
 	for _, id := range []string{"greenwood", "north"} {
-		mapPath := filepath.Join(root, "maps", id+".map.json")
+		mapPath := filepath.Join(root, "data", "maps", id+".map.json")
 		patches, err := game.GenerateSanctuaryWallOverride(mapPath)
 		if err != nil {
 			fatal(err)
@@ -32,15 +32,15 @@ func main() {
 		}
 		ground := len(merged.Layers["ground"])
 		collision := len(merged.Layers["collision"])
-		fmt.Printf("wrote maps/overrides/%s.json (%d ground, %d collision tiles)\n", id, ground, collision)
+		fmt.Printf("wrote data/maps/overrides/%s.json (%d ground, %d collision tiles)\n", id, ground, collision)
 	}
 }
 
 func findRoot() string {
-	if _, err := os.Stat("maps/greenwood.map.json"); err == nil {
+	if _, err := os.Stat("data/maps/greenwood.map.json"); err == nil {
 		return "."
 	}
-	if _, err := os.Stat("../../maps/greenwood.map.json"); err == nil {
+	if _, err := os.Stat("../../data/maps/greenwood.map.json"); err == nil {
 		return "../.."
 	}
 	return "."

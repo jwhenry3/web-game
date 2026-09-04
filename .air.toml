@@ -8,11 +8,10 @@ tmp_dir = "tmp"
   cmd = "go build -o ./tmp/main ./cmd/server"
   entrypoint = ["./tmp/main"]
   delay = 500
-  exclude_dir = ["tmp", "bin", "web", "node_modules", "data", "scripts", "maps", "config"]
+  exclude_dir = ["tmp", "bin", "wails", "node_modules", "data", "scripts", "unity"]
   exclude_regex = ["_test\\.go$"]
   include_dir = ["cmd", "internal"]
-  # Only rebuild on Go changes. Runtime map create/disable writes JSON under
-  # data/ and maps/ — watching those aborts in-flight admin requests.
+  # Only rebuild on Go changes. Runtime writes under data/ must not restart Air.
   include_ext = ["go"]
   stop_on_error = true
 

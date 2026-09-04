@@ -40,8 +40,8 @@ func Default() Config {
 			Addr:        ":8080",
 			Data:        "data/profiles.json",
 			Accounts:    "data/accounts.json",
-			Static:      "web/dist",
-			Overworld:   "maps/greenwood.map.json",
+			Static:      "",
+			Overworld:   "data/maps/greenwood.map.json",
 			BattleSpeed: combatatb.DefaultBattleSpeed,
 		},
 		Plugins: plugins.Config{

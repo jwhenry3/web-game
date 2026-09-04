@@ -3,7 +3,7 @@ package game
 import "sync"
 
 // ExpRates is the cluster-wide experience multiplier and main/sub split.
-// Configured once from config/cluster.json and shared by every map server.
+// Configured once from data/cluster.json and shared by every map server.
 type ExpRates struct {
 	// Rate multiplies all job EXP gains (1.0 = normal). Values < 0 fall back to 1.0.
 	Rate float64 `json:"rate"`

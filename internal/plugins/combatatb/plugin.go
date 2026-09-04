@@ -103,7 +103,7 @@ func (p *Plugin) StartFromNPC(clientID string, wp *protocol.WorldPlayer, npc con
 		level = profile.MainJobLevel()
 	}
 	id := p.host.NextBattleID()
-	room := NewBattleRoomFromNPC(id, level, p.host, npc.Kind)
+	room := NewBattleRoomFromNPC(id, level, p.host, npc.Encounter)
 	p.rooms[id] = room
 	go room.Run(BattleTickWindow(p.speed))
 

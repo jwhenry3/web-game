@@ -21,6 +21,7 @@ var validContentKinds = map[string]bool{
 	"quests":   true,
 	"jobs":     true,
 	"skills":   true,
+	"drops":    true,
 }
 
 // ValidContentKind reports whether kind is a supported content catalog name.

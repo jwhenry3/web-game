@@ -53,6 +53,9 @@ func TestValidContentKind(t *testing.T) {
 	if !ValidContentKind("skills") {
 		t.Fatal("skills should be valid")
 	}
+	if !ValidContentKind("drops") {
+		t.Fatal("drops should be valid")
+	}
 	if ValidContentKind("races") {
 		t.Fatal("races not implemented yet")
 	}

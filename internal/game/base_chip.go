@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// BaseChip terrain indices (match terraintypes order in maps/base_chip.tsx).
+// BaseChip terrain indices (match terraintypes order in data/maps/base_chip.tsx).
 const (
 	BaseChipTerrainGrass   = 0
 	BaseChipTerrainDirt    = 1
@@ -17,7 +17,7 @@ const (
 	BaseChipTerrainCobble  = 3
 )
 
-// BaseChipConfig is parsed from maps/base_chip.tsx — terrain centers, tile props, dimensions.
+// BaseChipConfig is parsed from data/maps/base_chip.tsx — terrain centers, tile props, dimensions.
 type BaseChipConfig struct {
 	Name        string
 	Image       string
@@ -37,7 +37,7 @@ type BaseChipConfig struct {
 
 // DefaultBaseChipPath is the repo tileset definition used by paint tools and tests.
 func DefaultBaseChipPath() string {
-	return filepath.Join("maps", "base_chip.tsx")
+	return filepath.Join("data", "maps", "base_chip.tsx")
 }
 
 // LoadBaseChipConfig reads a Tiled .tsx tileset file.

@@ -96,7 +96,7 @@ func (p *Proxy) CreateMap(req CreateMapRequest) (cluster.MapSpec, error) {
 		return cluster.MapSpec{}, fmt.Errorf("map %q already exists", id)
 	}
 
-	cfgPath := filepath.Join("maps", id+".server.json")
+	cfgPath := filepath.Join("data", "maps", id+".server.json")
 	mapPath := game.MapConfigPath(id)
 
 	blank, err := game.NewBlankMapConfig(cols, rows, 32)
@@ -225,7 +225,7 @@ func (p *Proxy) disableOrRemove(id string, remove bool) error {
 		}
 		if spec.Config != "" {
 			slash := filepath.ToSlash(spec.Config)
-			if strings.HasPrefix(slash, "config/server.") || strings.HasSuffix(slash, ".server.json") {
+			if strings.HasPrefix(slash, "data/config/server.") || strings.HasPrefix(slash, "config/server.") || strings.HasSuffix(slash, ".server.json") {
 				_ = os.Remove(spec.Config)
 			}
 		}

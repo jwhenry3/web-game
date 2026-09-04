@@ -1,0 +1,31 @@
+{
+  "proxy": {
+    "name": "FFV",
+    "addr": ":8080",
+    "accounts": "data/accounts.json",
+    "data": "data/profiles.json",
+    "static": "",
+    "internal_secret": ""
+  },
+  "exp": {
+    "rate": 1.0,
+    "main_percent": 75,
+    "sub_percent": 25,
+    "subjob_unlock_level": 5
+  },
+  "maps": [
+    {
+      "id": "greenwood",
+      "name": "Greenwood",
+      "addr": ":8091",
+      "config": "data/config/server.json",
+      "default": true
+    },
+    {
+      "id": "north",
+      "name": "Northern Wastes",
+      "addr": ":8092",
+      "config": "data/config/server.north.json"
+    }
+  ]
+}

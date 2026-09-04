@@ -118,13 +118,14 @@ func (h *Hub) BuildVictoryRewards(
 	roomID string,
 	fighters []contracts.BattleFighter,
 	totalXP, level, lootBonus int,
+	dropPoolIDs []string,
 	rng *rand.Rand,
 ) []protocol.PlayerReward {
 	converted := make([]battleFighter, len(fighters))
 	for i, f := range fighters {
 		converted[i] = battleFighter{ClientID: f.ClientID, Name: f.Name}
 	}
-	return h.buildVictoryRewards(roomID, converted, totalXP, level, lootBonus, rng)
+	return h.buildVictoryRewards(roomID, converted, totalXP, level, lootBonus, dropPoolIDs, rng)
 }
 
 func (h *Hub) BroadcastBattleList() { h.broadcastBattleList() }

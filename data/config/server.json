@@ -1,0 +1,40 @@
+{
+  "server": {
+    "name": "Greenwood",
+    "addr": ":8080",
+    "data": "data/profiles.json",
+    "accounts": "data/accounts.json",
+    "static": "",
+    "overworld": "data/maps/greenwood.map.json",
+    "battle_speed": 0.75
+  },
+  "plugins": {
+    "combat": "combat.realtime",
+    "modules": [
+      {
+        "id": "combat.atb",
+        "name": "ATB Combat",
+        "version": "1.0.0",
+        "capabilities": ["combat"],
+        "enabled": true,
+        "frontend": {
+          "pluginId": "combat.atb"
+        },
+        "config": {
+          "battle_speed": 0.75
+        }
+      },
+      {
+        "id": "combat.realtime",
+        "name": "Realtime Combat",
+        "version": "1.0.0",
+        "capabilities": ["combat"],
+        "enabled": true,
+        "frontend": {
+          "pluginId": "combat.realtime"
+        },
+        "config": {}
+      }
+    ]
+  }
+}

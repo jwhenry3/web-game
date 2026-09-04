@@ -17,7 +17,7 @@ var (
 	OverworldCols = 40
 	OverworldRows = 30
 
-	// Heroes 99 at display scale 1.25 — keep in sync with web/src/characters/heroes99.ts.
+	// Heroes 99 at display scale 1.25 — keep in sync with wails/frontend/src/characters/heroes99.ts.
 	playerSpriteW        = 100.0 * 1.25
 	playerSpriteH        = 40.0 * 1.25
 	PlayerCollisionHalfW = playerSpriteW / 8
@@ -73,12 +73,13 @@ func (reg Region) EnsurePolygon() Region {
 }
 
 type Patrol struct {
-	ID     string
-	Kind   string
-	Name   string
-	Level  int
-	Region string
-	Home   Tile
+	ID        string
+	Kind      string
+	Name      string
+	Level     int
+	Region    string
+	Home      Tile
+	Encounter EncounterConfig
 }
 
 var Regions []Region

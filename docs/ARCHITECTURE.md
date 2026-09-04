@@ -2,17 +2,17 @@
 
 This document describes how the multiplayer stack is wired: process model, map registry, networking, and how pieces talk to each other.
 
-For gameplay rules see [SYSTEMS.md](./SYSTEMS.md). For the in-app editor see [GAME_DESIGNER.md](./GAME_DESIGNER.md). Map file formats live in [maps/README.md](../maps/README.md).
+For gameplay rules see [SYSTEMS.md](./SYSTEMS.md). For the in-app editor see [GAME_DESIGNER.md](./GAME_DESIGNER.md). Map file formats live in [data/maps/README.md](../data/maps/README.md).
 
 ## Overview
 
 ```text
-Browser (Vite :5173 or static web/dist)
+Wails desktop client (wails/frontend)
    │  HTTPS/WS  (/api, /ws)
    ▼
 Proxy  (:8080)     internal/proxy
-   │  auth, sessions, admin APIs, static files
-   │  one WebSocket per browser; no reconnect on map change
+   │  auth, sessions, admin APIs
+   │  one WebSocket per client; no reconnect on map change
    ├──────────────┬──────────────┐
    ▼              ▼              ▼
 Map node       Map node       Map node     internal/mapnode
@@ -29,30 +29,32 @@ Today all map nodes run **in-process** inside `cmd/server`. The same APIs can la
 
 | Piece | Package / entry | Role |
 |-------|-----------------|------|
-| Cluster entry | `cmd/server` | Load cluster config, shared stores, start enabled maps, listen on proxy addr |
+| Cluster entry | `cmd/server` | Thin CLI → `internal/host.Start` |
+| Host bootstrap | `internal/host` | Load cluster, start maps, serve proxy (also used by Wails standalone) |
 | Proxy | `internal/proxy` | JWT auth HTTP, WebSocket sessions, route frames to the player's current map, validate transfers, admin map lifecycle |
 | Map node | `internal/mapnode` | One map: load overworld + server config, run Hub, forward bytes to proxy, request transfers |
 | Hub | `internal/server` | Per-map gameplay loop: movement, NPCs, battles, social, exits, save points |
-| Game rules | `internal/game` | Jobs, skills, status, loot, overworld load/collision/pathfinding |
-| Protocol | `internal/protocol` | JSON `Envelope` message types (mirrored in `web/src/types.ts`) |
+| Game rules | `internal/game` | Jobs, skills, status, loot, overworld load/collision/pathfinding (**shared** with desktop client prediction) |
+| Protocol | `internal/protocol` | JSON `Envelope` message types (mirrored in `wails/frontend/src/types.ts`); protobuf schemas in `proto/fantasy/v1` (**shared** contract) |
+| Client net | `internal/clientnet` | Desktop Go client: WebSocket + local SlideMove prediction |
 | Cluster config | `internal/cluster` | `MapSpec`, registry load/save, travel checks, transfer request types |
 | Persistence | `internal/store` | Accounts + character profiles (JSON files under `data/`) |
 | Auth | `internal/auth` | HS256 JWT (default 7-day TTL) |
-| Client | `web/` | Vite + React 19 + Phaser 4 + Zustand |
+| Desktop client | `wails/` | Wails shell + `wails/frontend` (Vite + React 19 + Phaser 4 + Zustand) + `internal/clientnet`; optional embedded `internal/host` |
 
-Internal transfer types (`cluster.TransferRequest`, attach payloads) are **never** sent to the browser. Clients only see gameplay envelopes (`welcome`, `world_state`, `map_config`, …).
+Internal transfer types (`cluster.TransferRequest`, attach payloads) are **never** sent to the client. Clients only see gameplay envelopes (`welcome`, `world_state`, `map_config`, …).
 
 ## Configuration
 
-### Bootstrap: `config/cluster.json`
+### Bootstrap: `data/cluster.json`
 
 Proxy bind address, shared account/profile paths, static dir, **shared EXP rates**, and the **seed** map list (Greenwood, Northern Wastes).
 
 ```json
 {
-  "proxy": { "addr": ":8080", "accounts": "data/accounts.json", "data": "data/profiles.json", "static": "web/dist" },
+  "proxy": { "addr": ":8080", "accounts": "data/accounts.json", "data": "data/profiles.json", "static": "" },
   "exp": { "rate": 1.0, "main_percent": 75, "sub_percent": 25 },
-  "maps": [ { "id": "greenwood", "config": "config/server.json", "default": true }, … ]
+  "maps": [ { "id": "greenwood", "config": "data/config/server.json", "default": true }, … ]
 }
 ```
 
@@ -72,19 +74,22 @@ Each map has a `MapSpec`: `id`, `name`, `config` (path to a server JSON), option
 
 | Path | Typical use |
 |------|-------------|
-| `config/server.json` | Greenwood — overworld path + combat plugin |
-| `config/server.north.json` | Northern Wastes |
-| `maps/{id}.server.json` | Maps created in Game Designer |
+| `data/config/server.json` | Greenwood — overworld path + combat plugin |
+| `data/config/server.north.json` | Northern Wastes |
+| `data/maps/{id}.server.json` | Maps created in Game Designer |
 
-Important fields: `server.overworld` (usually `maps/{id}.map.json`), `server.battle_speed`, `plugins.combat` (`combat.realtime` or `combat.atb`).
+Important fields: `server.overworld` (usually `data/maps/{id}.map.json`), `server.battle_speed`, `plugins.combat` (`combat.realtime` or `combat.atb`).
 
-### Runtime data (`data/`, gitignored)
+### Portable `data/` tree
 
-| File | Contents |
-|------|----------|
-| `accounts.json` | Logins, bcrypt hashes, `is_admin` |
-| `profiles.json` | Characters: jobs, loadouts, inventory, map/position, save points |
-| `cluster.maps.json` | Live map registry |
+Stock assets (`cluster.json`, `config/`, `maps/`, `content/`) are committed and **embedded** in standalone binaries. On first run (or whenever a stock file is missing), `data.Materialize` writes them next to the executable. Existing files are never overwritten.
+
+| File | Contents | Embedded? |
+|------|----------|-----------|
+| `accounts.json` | Logins, bcrypt hashes, `is_admin` | No |
+| `profiles.json` | Characters: jobs, loadouts, inventory, map/position, save points | No |
+| `cluster.maps.json` | Live map registry | No |
+| `cluster.json`, `config/`, `maps/`, `content/` | Stock world + catalogs | Yes (seed if missing) |
 
 Default admin account is ensured on startup: **admin / admin**.
 
@@ -103,7 +108,7 @@ Admin auth: Bearer JWT for an account with `is_admin`, or legacy `ADMIN_SECRET` 
 ### WebSocket
 
 1. Client obtains JWT from login.
-2. Connects `ws://host/ws?token=…` (`web/src/net/socket.ts`).
+2. Connects `ws://host/ws?token=…` (`wails/frontend/src/net/socket.ts` via Go `clientnet`).
 3. Sends `join_world` → receives `welcome` (map snapshot, combat module, portals, terrain).
 4. Proxy attaches the session to a map node; subsequent envelopes are forwarded both ways.
 5. On map exit / cross-map warp: proxy detaches, attaches to destination, re-issues join with spawn — **same socket**.
@@ -114,7 +119,7 @@ Implemented in `internal/proxy/lifecycle.go`:
 
 | Action | Behavior |
 |--------|----------|
-| **Create** | Write blank `maps/{id}.map.json` + `maps/{id}.server.json`, append registry, start node |
+| **Create** | Write blank `data/maps/{id}.map.json` + `data/maps/{id}.server.json`, append registry, start node |
 | **Enable** | Mark enabled, start node if needed |
 | **Disable** | Evacuate players to previous/default map, stop node, mark disabled |
 | **Remove** | Evacuate, stop, drop from registry, delete map/server files + overrides |
@@ -127,7 +132,7 @@ Blank maps include a full-map sanctuary and a center **Spawn Crystal** (validati
 
 Saving Game Designer overrides:
 
-1. `PUT /api/admin/maps/{id}/overrides` writes `maps/overrides/{id}.json`.
+1. `PUT /api/admin/maps/{id}/overrides` writes `data/maps/overrides/{id}.json`.
 2. Owning map node calls `ReloadOverworld`.
 3. Hub refreshes overworld + NPC seed (players in battle stay in battle).
 4. Clients receive updated `map_config` / world state.
@@ -136,26 +141,28 @@ Saving Game Designer overrides:
 
 | Layer | Location | Notes |
 |-------|----------|-------|
-| Screens | `web/src/App.tsx`, `state/store.ts` | `title` → auth / Game Designer / play |
-| Net | `web/src/net/` | auth, socket, public maps, adminMaps |
-| Phaser | `web/src/phaser/` | `WorldScene`, `BattleScene`, combat plugins |
-| React HUD | `web/src/components/` | menus, hotbar, social, windows |
-| Editor | `web/src/components/MapEditor*.tsx`, `web/src/editor/` | Game Designer UI + logic |
-
-Dev: Vite on **:5173** proxies `/api` and `/ws` to **:8080**. Prefer the Vite URL while iterating; `:8080` alone serves last-built `web/dist`.
+| Screens | `wails/frontend/src/App.tsx`, `state/store.ts` | `title` → auth / Game Designer / play |
+| Net | `wails/frontend/src/net/` | auth, transport, public maps, adminMaps |
+| Phaser | `wails/frontend/src/phaser/` | `WorldScene`, `BattleScene`, combat plugins |
+| React HUD | `wails/frontend/src/components/` | menus, hotbar, social, windows |
+| Editor | `wails/frontend/src/components/MapEditor*.tsx`, `editor/` | Game Designer UI + logic |
+| Wails glue | `wails/frontend/src/wails*.ts`, `bootstrap.ts` | Go API / transport / movement bridges |
 
 ## Air / hot reload (Go)
 
-`.air.toml` watches **Go only** under `cmd/` and `internal/` (`include_ext = ["go"]`). Writing `config/`, `data/`, or `maps/` does not restart the server — intentional for Game Designer map CRUD.
+`.air.toml` watches **Go only** under `cmd/` and `internal/` (`include_ext = ["go"]`). Writing under `data/` does not restart the server — intentional for Game Designer map CRUD.
 
 ## Dev commands
 
 ```bash
-npm run web:install
-npm run server:dev    # Air → :8080
-npm run web:dev       # Vite → :5173
+npm run wails:install
+npm run server:dev               # Air → :8080
+npm run wails:dev                # desktop client against external server
+npm run wails:dev:standalone     # desktop + embedded server
 ```
 
-Production-style: `npm run build` then `npm run server` (serves `web/dist` from the proxy).
+Production-style: `npm run wails:build` then `npm run server`.
+
+**Standalone desktop:** `npm run wails:build:standalone` embeds `internal/host` plus stock `data/` seed files (`-tags standalone`). Player JSON lives next to the exe under `data/`; missing stock assets are written from the binary on first run.
 
 Set `JWT_SECRET` (or `-jwt-secret`) for stable tokens across restarts.

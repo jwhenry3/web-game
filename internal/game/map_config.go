@@ -29,9 +29,9 @@ type MapConfigTerrain struct {
 	Collision []int `json:"collision"`
 }
 
-// MapConfigPath returns maps/{id}.map.json for a map id.
+// MapConfigPath returns data/maps/{id}.map.json for a map id.
 func MapConfigPath(mapID string) string {
-	return filepath.Join("maps", mapID+".map.json")
+	return filepath.Join("data", "maps", mapID+".map.json")
 }
 
 // IsMapConfigPath reports whether path is a server map config file.
@@ -170,6 +170,7 @@ func applyMapConfigEntities(ow *Overworld, cfg *MapConfig) error {
 		ow.NPCPatrols = append(ow.NPCPatrols, Patrol{
 			ID: n.ID, Kind: n.Kind, Name: n.Name, Level: n.Level, Region: n.Region,
 			Home: Tile{C: n.Home[0], R: n.Home[1]},
+			Encounter: encounterFromPatrolFile(n),
 		})
 	}
 
@@ -250,10 +251,13 @@ func ExportMapConfigFromTiled(tmjPath string) (*MapConfig, error) {
 		})
 	}
 	for _, p := range ow.NPCPatrols {
-		cfg.NPCs = append(cfg.NPCs, patrolFile{
+		pf := patrolFile{
 			ID: p.ID, Kind: p.Kind, Name: p.Name, Level: p.Level, Region: p.Region,
 			Home: [2]int{p.Home.C, p.Home.R},
-		})
+		}
+		enc := NormalizeEncounter(p.Encounter, p.Kind, p.Level)
+		pf.Encounter = &enc
+		cfg.NPCs = append(cfg.NPCs, pf)
 	}
 	for _, e := range ow.Exits {
 		cfg.Exits = append(cfg.Exits, exitFile{

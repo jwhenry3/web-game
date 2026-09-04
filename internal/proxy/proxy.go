@@ -26,13 +26,14 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	maxMessageSize = 2 << 20 // 2 MiB — map snapshots / terrain layers
 )
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  4096,
 	WriteBufferSize: 4096,
 	CheckOrigin:     func(r *http.Request) bool { return true },
+	Subprotocols:    []string{protocol.SubprotocolProtobuf},
 }
 
 type session struct {
@@ -42,6 +43,7 @@ type session struct {
 	mapID  string
 	acctID string
 	user   string
+	codec  protocol.Codec
 }
 
 // Proxy is the global edge: auth, one client WebSocket, and map routing.
@@ -179,6 +181,17 @@ func (p *Proxy) handleWS(w http.ResponseWriter, r *http.Request) {
 		username = claims.Username
 	}
 
+	codec := protocol.CodecJSON
+	if protocol.ParseCodec(r.URL.Query().Get("codec")) == protocol.CodecProtobuf {
+		codec = protocol.CodecProtobuf
+	}
+	for _, sp := range websocket.Subprotocols(r) {
+		if sp == protocol.SubprotocolProtobuf {
+			codec = protocol.CodecProtobuf
+			break
+		}
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("upgrade error: %v", err)
@@ -191,11 +204,12 @@ func (p *Proxy) handleWS(w http.ResponseWriter, r *http.Request) {
 		send:   make(chan []byte, 256),
 		acctID: accountID,
 		user:   username,
+		codec:  codec,
 	}
 	p.mu.Lock()
 	p.sess[id] = s
 	p.mu.Unlock()
-	log.Printf("proxy session %s connected", id)
+	log.Printf("proxy session %s connected codec=%s", id, codec)
 	go p.writePump(s)
 	p.readPump(s)
 }
@@ -219,8 +233,9 @@ func (p *Proxy) readPump(s *session) {
 			}
 			break
 		}
-		var env protocol.Envelope
-		if err := json.Unmarshal(message, &env); err != nil {
+		env, err := protocol.DecodeFrame(s.codec, message)
+		if err != nil {
+			log.Printf("session %s bad frame: %v", s.id, err)
 			continue
 		}
 		p.route(s, env)
@@ -238,7 +253,11 @@ func (p *Proxy) writePump(s *session) {
 				s.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := s.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			msgType := websocket.TextMessage
+			if s.codec == protocol.CodecProtobuf {
+				msgType = websocket.BinaryMessage
+			}
+			if err := s.conn.WriteMessage(msgType, msg); err != nil {
 				return
 			}
 		case <-ticker.C:
@@ -360,8 +379,17 @@ func (p *Proxy) sendToClient(clientID string, msg []byte) {
 	if s == nil || msg == nil {
 		return
 	}
+	out := msg
+	if s.codec == protocol.CodecProtobuf {
+		converted, err := protocol.EncodeFrame(protocol.CodecProtobuf, msg)
+		if err != nil {
+			log.Printf("proxy: session %s protobuf encode: %v", clientID, err)
+			return
+		}
+		out = converted
+	}
 	select {
-	case s.send <- msg:
+	case s.send <- out:
 	default:
 		log.Printf("proxy: session %s send buffer full", clientID)
 	}

@@ -85,6 +85,9 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 	if battleSpeed <= 0 {
 		battleSpeed = combatatb.DefaultBattleSpeed
 	}
+	if err := game.ReloadLootCatalogs(); err != nil {
+		log.Printf("warning: loot catalogs: %v", err)
+	}
 	h := &Hub{
 		clients:       make(map[string]*Client),
 		register:      make(chan *Client, 16),

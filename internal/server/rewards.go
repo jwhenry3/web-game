@@ -32,6 +32,7 @@ func (h *Hub) buildVictoryRewards(
 	totalXP int,
 	level int,
 	lootBonus int,
+	dropPoolIDs []string,
 	rng *rand.Rand,
 ) []protocol.PlayerReward {
 	participantIDs := make([]string, len(fighters))
@@ -67,7 +68,7 @@ func (h *Hub) buildVictoryRewards(
 			hasSub = true
 		}
 		mainXP, subXP := game.DistributeJobXP(xp, hasSub)
-		loot := game.GenerateLoot(rng, level, lootBonus)
+		loot := game.GenerateVictoryLoot(rng, level, lootBonus, dropPoolIDs)
 		updated, mainLevels, subLevels := h.store.AwardJobVictory(f.Name, mainXP, subXP, loot)
 		reward := protocol.PlayerReward{
 			PlayerID:        f.ClientID,

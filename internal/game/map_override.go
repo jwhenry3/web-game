@@ -34,14 +34,14 @@ type OverrideObject struct {
 
 // OverridesDir is where per-map override JSON files are stored.
 func OverridesDir() string {
-	return filepath.Join("maps", "overrides")
+	return filepath.Join("data", "maps", "overrides")
 }
 
 func overridePath(mapID string) string {
 	return filepath.Join(OverridesDir(), mapID+".json")
 }
 
-// MapIDFromPath extracts "greenwood" from "maps/greenwood.map.json" or "maps/greenwood.tmj".
+// MapIDFromPath extracts "greenwood" from "data/maps/greenwood.map.json" or similar.
 func MapIDFromPath(path string) string {
 	base := filepath.Base(path)
 	if strings.HasSuffix(strings.ToLower(base), ".map.json") {

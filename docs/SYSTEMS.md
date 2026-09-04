@@ -8,7 +8,7 @@ Architecture and networking: [ARCHITECTURE.md](./ARCHITECTURE.md). Editor: [GAME
 
 Each map node owns one `game.Overworld`:
 
-- Tile grid from `maps/{id}.map.json` (plus optional `maps/overrides/{id}.json`)
+- Tile grid from `data/maps/{id}.map.json` (plus optional `data/maps/overrides/{id}.json`)
 - **Regions** — wilderness / town / camp; `sanctuary: true` marks safe zones
 - **Collision** — non-walkable tiles; pathfinding and engage respect sanctuaries
 - **NPCs** — patrol/wander in a region; engage starts combat (not inside sanctuaries)
@@ -38,7 +38,7 @@ Combat is a **plugin** selected per map (`plugins.combat` in the map's server JS
 | `combat.realtime` | `internal/plugins/combatrealtime` | Greenwood |
 | `combat.atb` | `internal/plugins/combatatb` | Northern Wastes |
 
-Battles are isolated **rooms** on the Hub (cap **4** players). Clients load matching frontend modules under `web/src/plugins/`. `welcome.map` tells the client which combat module the current map uses.
+Battles are isolated **rooms** on the Hub (cap **4** players). Clients load matching frontend modules under `wails/frontend/src/plugins/`. `welcome.map` tells the client which combat module the current map uses.
 
 Crossing a map exit (e.g. Wolfrun road → Northern Wastes) keeps the same WebSocket; only the owning map node changes.
 
@@ -63,7 +63,7 @@ Buffs/debuffs (`internal/game/status.go`) tick with combat timing: defense/attac
 
 ### EXP rates (cluster-wide)
 
-Configured once in `config/cluster.json` under `exp` and applied by every map server via `game.DistributeJobXP`:
+Configured once in `data/cluster.json` under `exp` and applied by every map server via `game.DistributeJobXP`:
 
 1. Scale base award by `exp.rate`.
 2. If a subjob is set, split by `exp.main_percent` / `exp.sub_percent`; otherwise all EXP goes to main.
@@ -89,7 +89,7 @@ JWT claims identify the account on HTTP and WebSocket. Character select / create
 - **BattleScene** / realtime plugin scenes — staging and VFX driven by server results.
 - React windows — Character, Equipment, Inventory, Skills, hotbar (1–5), main menu, social.
 
-Asset licenses: `web/public/assets/ATTRIBUTION.md`.
+Asset licenses: `wails/frontend/public/assets/ATTRIBUTION.md`.
 
 ## Not yet implemented
 

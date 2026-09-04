@@ -2,7 +2,7 @@
 
 **Game Designer** is the in-app world editor (admin tool). It paints terrain, places entities and regions, manages prefabs/entity catalogs, and can create or take maps online/offline without restarting the cluster for config file churn.
 
-Architecture context: [ARCHITECTURE.md](./ARCHITECTURE.md). Map formats: [maps/README.md](../maps/README.md).
+Architecture context: [ARCHITECTURE.md](./ARCHITECTURE.md). Map formats: [data/maps/README.md](../data/maps/README.md).
 
 ## Access
 
@@ -10,7 +10,7 @@ Architecture context: [ARCHITECTURE.md](./ARCHITECTURE.md). Map formats: [maps/R
 2. Admin login (default account **admin / admin**, created on server start if missing)
 3. JWT must belong to an account with `is_admin` (legacy `ADMIN_SECRET` / `X-Admin-Key` still accepted by the API)
 
-Prefer **http://localhost:5173** during development so you get the live Vite bundle. `:8080` serves `web/dist` and may lag behind.
+Use `npm run wails:dev` (or `wails:dev:standalone`) so you get the live Wails frontend bundle.
 
 ## UI layout
 
@@ -63,7 +63,7 @@ Chrome actions (world mode):
 
 | Action | API | Result |
 |--------|-----|--------|
-| **New map** | `POST /api/admin/maps` | Blank grass map + sanctuary + spawn crystal; `maps/{id}.map.json`, `maps/{id}.server.json`; registry update; node starts |
+| **New map** | `POST /api/admin/maps` | Blank grass map + sanctuary + spawn crystal; `data/maps/{id}.map.json`, `data/maps/{id}.server.json`; registry update; node starts |
 | **Enable** | `POST …/enable` | Mark enabled, start node |
 | **Disable** | `POST …/disable` | Evacuate players, stop node |
 | **Remove** | `DELETE …/{id}` | Evacuate, stop, delete registry entry + map files |
@@ -78,7 +78,7 @@ Save writes **sparse overrides** only — base `.map.json` is not rewritten:
 
 1. Diff ground/collision against the loaded base.
 2. If objects changed, include full object list in the override.
-3. `PUT /api/admin/maps/{id}/overrides` → `maps/overrides/{id}.json`.
+3. `PUT /api/admin/maps/{id}/overrides` → `data/maps/overrides/{id}.json`.
 4. Map node hot-reloads; connected players get updated `map_config`.
 
 Disabled maps cannot be saved until enabled. Clear overrides with `DELETE …/overrides`.
@@ -87,7 +87,7 @@ Disabled maps cannot be saved until enabled. Clear overrides with `DELETE …/ov
 
 `GET /api/admin/maps` returns each map’s metadata, full terrain grids, and objects. When a `.map.json` has regions/POIs but an empty `objects` array, the server **synthesizes** editor objects so sanctuaries and crystals appear in the hierarchy.
 
-Client: `web/src/net/adminMaps.ts`.
+Client: `wails/frontend/src/net/adminMaps.ts`.
 
 ## Prefabs & entities
 
