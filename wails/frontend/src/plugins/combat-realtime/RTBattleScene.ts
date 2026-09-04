@@ -37,9 +37,11 @@ export class RTBattleScene extends Phaser.Scene {
   private lastSentY = 0;
   private lastPos = new Map<string, { x: number; y: number }>();
   private jumping = new Set<string>();
+  private createGen = 0;
   private onRtEvent = (p: RTBattleEventPayload) => this.animateEvent(p);
   private onBattleShutdown = () => {
     battleEvents.off("rt_event", this.onRtEvent);
+    this.createGen++;
     this.moveKeysSig = "";
     this.moveKeys = {};
   };
@@ -49,6 +51,7 @@ export class RTBattleScene extends Phaser.Scene {
   }
 
   async create() {
+    const gen = ++this.createGen;
     this.fighters.clear();
     this.lastPos.clear();
     this.jumping.clear();
@@ -66,12 +69,12 @@ export class RTBattleScene extends Phaser.Scene {
     g.strokeRect(0, 0, ARENA_W, ARENA_H);
 
     await ensureEnemyTextures(this);
-    if (!this.sys.isActive()) return;
+    if (gen !== this.createGen || !this.sys.isActive()) return;
 
     // Rebind after await — previous battle's Key objects are invalid on restart.
     this.moveKeysSig = "";
     this.moveKeys = {};
-    this.syncMoveKeys();
+    this.syncMoveKeys(true);
     this.input.keyboard?.disableGlobalCapture();
 
     battleEvents.off("rt_event", this.onRtEvent);
@@ -80,13 +83,18 @@ export class RTBattleScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, this.onBattleShutdown);
   }
 
-  private syncMoveKeys() {
+  /** Rebind WASD. Never mark the signature until keys are actually attached. */
+  private syncMoveKeys(force = false) {
     const binds = mergeKeybinds(useGame.getState().profile?.keybinds);
     const sig = `${binds.move_up}|${binds.move_down}|${binds.move_left}|${binds.move_right}`;
-    if (sig === this.moveKeysSig) return;
-    this.moveKeysSig = sig;
+    const missing = !this.moveKeys.move_up || !this.moveKeys.move_down || !this.moveKeys.move_left || !this.moveKeys.move_right;
+    if (!force && !missing && sig === this.moveKeysSig) return;
     const kb = this.input.keyboard;
-    if (!kb) return;
+    if (!kb) {
+      // Don't latch sig — keyboard may appear on the next frame after scene restart.
+      this.moveKeysSig = "";
+      return;
+    }
     const bindKey = (action: "move_up" | "move_down" | "move_left" | "move_right") => {
       const code = bindingToPhaserKeyCode(binds[action] ?? "");
       this.moveKeys[action] = code != null ? kb.addKey(code) : undefined;
@@ -95,6 +103,7 @@ export class RTBattleScene extends Phaser.Scene {
     bindKey("move_down");
     bindKey("move_left");
     bindKey("move_right");
+    this.moveKeysSig = sig;
   }
 
   private isMoveDown(action: "move_up" | "move_down" | "move_left" | "move_right"): boolean {

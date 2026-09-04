@@ -170,10 +170,13 @@ export class WorldScene extends Phaser.Scene {
   private syncMoveKeys() {
     const binds = mergeKeybinds(useGame.getState().profile?.keybinds);
     const sig = `${binds.move_up}|${binds.move_down}|${binds.move_left}|${binds.move_right}`;
-    if (sig === this.moveKeysSig) return;
-    this.moveKeysSig = sig;
-    const kb = this.input.keyboard!;
-    if (!kb) return;
+    const missing = !this.moveKeys.move_up || !this.moveKeys.move_down || !this.moveKeys.move_left || !this.moveKeys.move_right;
+    if (!missing && sig === this.moveKeysSig) return;
+    const kb = this.input.keyboard;
+    if (!kb) {
+      this.moveKeysSig = "";
+      return;
+    }
     const bindKey = (action: "move_up" | "move_down" | "move_left" | "move_right") => {
       const code = bindingToPhaserKeyCode(binds[action] ?? "");
       this.moveKeys[action] = code != null ? kb.addKey(code) : undefined;
@@ -182,6 +185,7 @@ export class WorldScene extends Phaser.Scene {
     bindKey("move_down");
     bindKey("move_left");
     bindKey("move_right");
+    this.moveKeysSig = sig;
   }
 
   private isMoveDown(action: "move_up" | "move_down" | "move_left" | "move_right"): boolean {

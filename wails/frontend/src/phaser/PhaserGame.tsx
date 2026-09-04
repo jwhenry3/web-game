@@ -31,6 +31,8 @@ export function PhaserGame() {
         game.scene.sleep("world");
         if (game.scene.isActive("house")) game.scene.stop("house");
         if (!game.scene.getScene(combat.battleSceneKey)) return;
+        // Always restart so create() rebinds input after a prior stop.
+        game.scene.stop(combat.battleSceneKey);
         game.scene.start(combat.battleSceneKey);
       } else if (s.screen === "house") {
         if (game.scene.getScene(combat.battleSceneKey)) {
