@@ -82,14 +82,15 @@ func TestMandateFerryFrostTide(t *testing.T) {
 }
 
 func TestFacingFromDeltaX(t *testing.T) {
-	if FacingFromDeltaX(4, FacingLeft) != FacingRight {
-		t.Fatal("positive dx faces right")
+	// Kept as a smoke alias around FacingYawFromDelta for zone-exit suite.
+	if FacingYawFromDelta(4, 0, FacingYawWest) != FacingYawEast {
+		t.Fatal("positive dx faces east")
 	}
-	if FacingFromDeltaX(-4, FacingRight) != FacingLeft {
-		t.Fatal("negative dx faces left")
+	if FacingYawFromDelta(-4, 0, FacingYawEast) != FacingYawWest {
+		t.Fatal("negative dx faces west")
 	}
-	if FacingFromDeltaX(0, FacingLeft) != FacingLeft {
-		t.Fatal("no dx keeps left")
+	if FacingYawFromDelta(0, 0, FacingYawWest) != FacingYawWest {
+		t.Fatal("no dx keeps west")
 	}
 }
 

@@ -47,8 +47,16 @@ const SEND_INTERVAL = 100;
 const POI_INTERACT_PROMPT_Y = -36;
 const AVATAR_INTERACT_PROMPT_Y = H99_NAME_LABEL_Y - 16;
 const CAST_BAR_Y = 10;
-const POI_LABEL_Y = 18;
-const CAMP_LABEL_Y = 22;
+const POI_LABEL_Y = -28;
+const CAMP_LABEL_Y = -32;
+/** Follow pets use the battle foe sprite at a reduced size. */
+const PET_FOLLOW_SCALE = 0.55;
+/** Resting distance behind the owner (pixels). */
+const PET_FOLLOW_DIST = 32;
+/** Exponential follow rate — higher = snappier trail. */
+const PET_FOLLOW_SMOOTH = 7;
+/** How quickly the behind-offset slides to the other side on turn. Lower = more fluid arc. */
+const PET_SIDE_SMOOTH = 3.2;
 
 /** Survives Phaser remounts when crossing maps that switch combat plugins. */
 let lastWorldFacing: CharacterFacing = H99_FACING_DEFAULT;
@@ -67,6 +75,17 @@ interface Avatar {
 interface FoeAvatar {
   wrapper: Phaser.GameObjects.Container;
   enemy: EnemySprite;
+  lastX: number;
+  lastY: number;
+}
+
+interface PetMarker {
+  wrapper: Phaser.GameObjects.Container;
+  enemy: EnemySprite;
+  label: Phaser.GameObjects.Text;
+  kind: string;
+  /** Smoothed X offset from owner (behind); lerps on facing change. */
+  offsetX: number;
   lastX: number;
   lastY: number;
 }
@@ -99,7 +118,7 @@ export class WorldScene extends Phaser.Scene {
   private savePoints = new Map<string, SavePointMarker>();
   private jobChangers = new Map<string, JobChangerMarker>();
   private camps = new Map<string, CampMarker>();
-  private pets = new Map<string, { wrapper: Phaser.GameObjects.Container; body: Phaser.GameObjects.Ellipse; label: Phaser.GameObjects.Text }>();
+  private pets = new Map<string, PetMarker>();
   private moveKeys: Partial<Record<"move_up" | "move_down" | "move_left" | "move_right", Phaser.Input.Keyboard.Key>> = {};
   private moveKeysSig = "";
   private lastSent = 0;
@@ -471,32 +490,54 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private syncPets(pets: Record<string, WorldPet>, players: Record<string, WorldPlayer>) {
+  private syncPets(pets: Record<string, WorldPet>, players: Record<string, WorldPlayer>, delta: number) {
     for (const [id, marker] of this.pets) {
       if (!pets[id]) {
+        marker.enemy.destroy();
         marker.wrapper.destroy();
         this.pets.delete(id);
       }
     }
+    const dt = Math.max(0, delta) / 1000;
+    const followT = 1 - Math.exp(-PET_FOLLOW_SMOOTH * dt);
+    const sideT = 1 - Math.exp(-PET_SIDE_SMOOTH * dt);
+
     for (const pet of Object.values(pets)) {
       const owner = players[pet.owner_id];
-      let x = pet.x;
-      let y = pet.y;
-      if (owner && !owner.in_house && !owner.in_battle) {
+      let facing: CharacterFacing = pet.facing === "left" || pet.facing === "right" ? pet.facing : "right";
+      let targetX = pet.x;
+      let targetY = pet.y;
+      const followOwner = !!(owner && !owner.in_house && !owner.in_battle);
+      let ownerX = targetX;
+      let ownerY = targetY;
+      if (followOwner && owner) {
         const av = this.avatars.get(owner.id);
-        const ox = av?.wrapper.x ?? owner.x;
-        const oy = av?.wrapper.y ?? owner.y;
-        const facing = owner.facing ?? pet.facing ?? "right";
-        const dx = facing === "left" ? 20 : -20;
-        x = ox + dx;
-        y = oy + 6;
+        ownerX = av?.wrapper.x ?? owner.x;
+        ownerY = av?.wrapper.y ?? owner.y;
+        const selfId = useGame.getState().selfId;
+        // Prefer live local facing; store facing lags until the next move sync.
+        if (owner.id === selfId) {
+          facing = lastWorldFacing;
+        } else if (av) {
+          facing = av.sprite.getFacing();
+        } else {
+          facing = facingOf(owner, facing);
+        }
       }
+      // Behind the owner: left when facing right, right when facing left.
+      const desiredOffsetX = facing === "right" ? -PET_FOLLOW_DIST : PET_FOLLOW_DIST;
+
+      const kind = enemyKindFromName(pet.name, pet.kind);
       let marker = this.pets.get(pet.id);
       if (!marker) {
-        const wrapper = this.add.container(x, y).setDepth(8);
-        const body = this.add.ellipse(0, -6, 18, 14, 0xc4a06a).setStrokeStyle(1, 0xf0d090);
+        const spawnX = followOwner ? ownerX + desiredOffsetX : targetX;
+        const spawnY = followOwner ? ownerY + 4 : targetY;
+        const wrapper = this.add.container(spawnX, spawnY).setDepth(8);
+        const enemy = new EnemySprite(this, 0, 0, kind);
+        enemy.container.setScale(PET_FOLLOW_SCALE);
+        enemy.setFacing(facing);
         const label = this.add
-          .text(0, -22, pet.name.slice(0, 10), {
+          .text(0, Math.round(H99_NAME_LABEL_Y * PET_FOLLOW_SCALE) - 2, pet.name.slice(0, 10), {
             fontFamily: "Georgia, serif",
             fontSize: "10px",
             color: "#e8dcc8",
@@ -504,12 +545,49 @@ export class WorldScene extends Phaser.Scene {
             strokeThickness: 2,
           })
           .setOrigin(0.5, 1);
-        wrapper.add([body, label]);
-        marker = { wrapper, body, label };
+        wrapper.add([enemy.container, label]);
+        marker = {
+          wrapper,
+          enemy,
+          label,
+          kind,
+          offsetX: desiredOffsetX,
+          lastX: spawnX,
+          lastY: spawnY,
+        };
         this.pets.set(pet.id, marker);
       } else {
-        marker.wrapper.setPosition(x, y);
+        if (marker.kind !== kind) {
+          marker.enemy.setKind(kind);
+          marker.kind = kind;
+        }
+        if (followOwner) {
+          // Drift the side offset so a turn arcs the pet around instead of snapping.
+          marker.offsetX += (desiredOffsetX - marker.offsetX) * sideT;
+          targetX = ownerX + marker.offsetX;
+          targetY = ownerY + 4;
+        } else {
+          marker.offsetX = desiredOffsetX;
+        }
+        const prevX = marker.wrapper.x;
+        const prevY = marker.wrapper.y;
+        marker.wrapper.x += (targetX - marker.wrapper.x) * followT;
+        marker.wrapper.y += (targetY - marker.wrapper.y) * followT;
+        const mdx = marker.wrapper.x - prevX;
+        const mdy = marker.wrapper.y - prevY;
+        if (Math.hypot(mdx, mdy) > 0.2) {
+          // Use owner facing for the flip so a side-swap doesn't briefly face the wrong way.
+          marker.enemy.setMoving(true, facing === "right" ? 1 : -1, mdy);
+        } else {
+          marker.enemy.setMoving(false);
+          marker.enemy.setFacing(facing);
+        }
         marker.label.setText(pet.name.slice(0, 10));
+        marker.lastX = marker.wrapper.x;
+        marker.lastY = marker.wrapper.y;
+      }
+      if (this.isNearCamera(marker.wrapper.x, marker.wrapper.y)) {
+        marker.enemy.update(delta);
       }
     }
   }
@@ -726,7 +804,6 @@ export class WorldScene extends Phaser.Scene {
     this.syncSavePoints(state.savePoints, activeSave);
     this.syncJobChangers(state.jobChangers);
     this.syncCamps(state.camps);
-    this.syncPets(state.pets, state.players);
 
     const overlayMarks: EntityOverlayMark[] = [];
     const stageXf = getStageTransform(this);
@@ -815,6 +892,15 @@ export class WorldScene extends Phaser.Scene {
 
     this.syncFoes(state.npcs, selfLocked, delta, overlayMarks, stageXf);
     this.moveSelf(time, selfId, state.overworld);
+    this.syncPets(state.pets, state.players, delta);
+
+    // POIs are world-fixed; project with the camera scroll Phaser will use this frame
+    // (follow lerp runs in Camera.preRender after Scene.update).
+    const selfAv = this.avatars.get(selfId);
+    const poiXf = getStageTransform(
+      this,
+      selfAv ? { x: selfAv.wrapper.x, y: selfAv.wrapper.y } : null,
+    );
 
     const pois: PoiLabelMark[] = [];
     for (const [id, marker] of this.savePoints) {
@@ -827,14 +913,14 @@ export class WorldScene extends Phaser.Scene {
           marker.wrapper.x,
           marker.wrapper.y,
           POI_LABEL_Y,
-          stageXf,
+          poiXf,
         ),
       );
     }
     for (const [id, marker] of this.jobChangers) {
       if (!this.isNearCamera(marker.wrapper.x, marker.wrapper.y)) continue;
       pois.push(
-        this.poiLabel(`job:${id}`, marker.name, "job", marker.wrapper.x, marker.wrapper.y, POI_LABEL_Y, stageXf),
+        this.poiLabel(`job:${id}`, marker.name, "job", marker.wrapper.x, marker.wrapper.y, POI_LABEL_Y, poiXf),
       );
     }
     for (const [id, marker] of this.camps) {
@@ -847,12 +933,12 @@ export class WorldScene extends Phaser.Scene {
           marker.wrapper.x,
           marker.wrapper.y,
           CAMP_LABEL_Y,
-          stageXf,
+          poiXf,
         ),
       );
     }
 
-    const interacts = this.collectInteractPrompts(state, selfId, selfLocked, stageXf);
+    const interacts = this.collectInteractPrompts(state, selfId, selfLocked, poiXf);
     this.publishOverlays(overlayMarks, pois, interacts);
   }
 
@@ -998,6 +1084,11 @@ export class WorldScene extends Phaser.Scene {
     );
     const ox = av.wrapper.x;
     const oy = av.wrapper.y;
+    // Place optimistically this frame so camera follow + React POIs share one pose.
+    // Collision slide (possibly async via Wails) corrects afterward.
+    av.wrapper.x = nx;
+    av.wrapper.y = ny;
+    setWorldLocalPos(nx, ny);
     this.pendingSlide = this.pendingSlide.then(async () => {
       const slid = await applyPlayerSlide(overworld, ox, oy, nx, ny);
       if (!this.avatars.has(selfId)) return;

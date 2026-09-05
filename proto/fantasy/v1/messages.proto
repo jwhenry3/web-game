@@ -29,6 +29,8 @@ message JoinWorldPayload {
 message MovePayload {
   double x = 1;
   double y = 2;
+  // Y-axis yaw in radians (Three.js). Optional; server derives from motion when absent.
+  double facing = 3;
 }
 
 message ChatPayload {
@@ -91,7 +93,7 @@ message WorldPet {
   int32 level = 5;
   double x = 6;
   double y = 7;
-  string facing = 8;
+  double facing = 8; // Y-axis yaw radians
 }
 
 message PetStatePayload {
@@ -205,6 +207,7 @@ message PlayerMovedPayload {
   string id = 1;
   double x = 2;
   double y = 3;
+  double facing = 4;
 }
 
 message ChatMessagePayload {

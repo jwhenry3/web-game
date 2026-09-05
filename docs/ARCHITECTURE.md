@@ -99,6 +99,8 @@ Default admin account is ensured on startup: **admin / admin**.
 |------|----------|
 | Auth | `POST /api/register`, `POST /api/login`, `GET /api/me` |
 | Public maps | `GET /api/maps`, `GET /api/maps/{id}`, `GET /api/atlas`, `GET /api/modules` |
+| Public status | `GET /api/status` — aggregate uptime, player/battle counts, per-map running state (no identities) |
+| Content site | `proxy.static` (default `site/dist`) — SPA with news / wiki / guide; falls back to `index.html` |
 | Admin | `GET/POST /api/admin/maps`, enable/disable/remove, overrides CRUD |
 
 Admin auth: Bearer JWT for an account with `is_admin`, or legacy `ADMIN_SECRET` / `X-Admin-Key`.
@@ -111,6 +113,11 @@ Admin auth: Bearer JWT for an account with `is_admin`, or legacy `ADMIN_SECRET` 
 4. Proxy attaches the session to a map node; subsequent envelopes are forwarded both ways.
 5. On map exit / cross-map warp: proxy detaches, attaches to destination, re-issues join with spawn — **same socket**.
 
+**Status WebSocket** (separate from gameplay): `ws://host/status/ws` — anonymous JSON `{ "type": "status", "payload": … }` pushed about every 2s. Used by the public content site; never attaches to a map hub.
+
+### Content site
+
+Player-facing Vite + React app in [`site/`](../site/). Markdown under `site/content/` (news, wiki, guide). Build with `cd site && npm install && npm run build`, then run the cluster so `proxy.static` serves `site/dist`. Dev: `npm run dev` in `site/` (proxies `/api` and `/status` to `:8080`).
 ## Map lifecycle (runtime)
 
 Implemented in `internal/proxy/lifecycle.go`:

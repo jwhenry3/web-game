@@ -20,6 +20,12 @@ wails/frontend/*.tsbuildinfo
 wails/build/
 wails/*.exe
 
+# ---- Public content site ----
+site/node_modules/
+site/dist/
+site/.vite/
+site/*.tsbuildinfo
+
 # ---- Local server persistence (player/runtime data) ----
 data/profiles.json
 data/accounts.json

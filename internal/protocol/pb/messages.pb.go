@@ -169,9 +169,11 @@ func (x *JoinWorldPayload) GetAppearance() *CharacterAppearance {
 }
 
 type MovePayload struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	X             float64                `protobuf:"fixed64,1,opt,name=x,proto3" json:"x,omitempty"`
-	Y             float64                `protobuf:"fixed64,2,opt,name=y,proto3" json:"y,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	X     float64                `protobuf:"fixed64,1,opt,name=x,proto3" json:"x,omitempty"`
+	Y     float64                `protobuf:"fixed64,2,opt,name=y,proto3" json:"y,omitempty"`
+	// Y-axis yaw in radians (Three.js). Optional; server derives from motion when absent.
+	Facing        float64 `protobuf:"fixed64,3,opt,name=facing,proto3" json:"facing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -216,6 +218,13 @@ func (x *MovePayload) GetX() float64 {
 func (x *MovePayload) GetY() float64 {
 	if x != nil {
 		return x.Y
+	}
+	return 0
+}
+
+func (x *MovePayload) GetFacing() float64 {
+	if x != nil {
+		return x.Facing
 	}
 	return 0
 }
@@ -777,7 +786,7 @@ type WorldPet struct {
 	Level         int32                  `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
 	X             float64                `protobuf:"fixed64,6,opt,name=x,proto3" json:"x,omitempty"`
 	Y             float64                `protobuf:"fixed64,7,opt,name=y,proto3" json:"y,omitempty"`
-	Facing        string                 `protobuf:"bytes,8,opt,name=facing,proto3" json:"facing,omitempty"`
+	Facing        float64                `protobuf:"fixed64,8,opt,name=facing,proto3" json:"facing,omitempty"` // Y-axis yaw radians
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -861,11 +870,11 @@ func (x *WorldPet) GetY() float64 {
 	return 0
 }
 
-func (x *WorldPet) GetFacing() string {
+func (x *WorldPet) GetFacing() float64 {
 	if x != nil {
 		return x.Facing
 	}
-	return ""
+	return 0
 }
 
 type PetStatePayload struct {
@@ -1941,6 +1950,7 @@ type PlayerMovedPayload struct {
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	X             float64                `protobuf:"fixed64,2,opt,name=x,proto3" json:"x,omitempty"`
 	Y             float64                `protobuf:"fixed64,3,opt,name=y,proto3" json:"y,omitempty"`
+	Facing        float64                `protobuf:"fixed64,4,opt,name=facing,proto3" json:"facing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1992,6 +2002,13 @@ func (x *PlayerMovedPayload) GetX() float64 {
 func (x *PlayerMovedPayload) GetY() float64 {
 	if x != nil {
 		return x.Y
+	}
+	return 0
+}
+
+func (x *PlayerMovedPayload) GetFacing() float64 {
+	if x != nil {
+		return x.Facing
 	}
 	return 0
 }
@@ -3145,10 +3162,11 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x06weapon\x18\x06 \x01(\tR\x06weapon\x12?\n" +
 	"\n" +
 	"appearance\x18\a \x01(\v2\x1f.fantasy.v1.CharacterAppearanceR\n" +
-	"appearance\")\n" +
+	"appearance\"A\n" +
 	"\vMovePayload\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\x02 \x01(\x01R\x01y\"'\n" +
+	"\x01y\x18\x02 \x01(\x01R\x01y\x12\x16\n" +
+	"\x06facing\x18\x03 \x01(\x01R\x06facing\"'\n" +
 	"\vChatPayload\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\";\n" +
 	"\fEquipPayload\x12\x17\n" +
@@ -3191,7 +3209,7 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x05level\x18\x05 \x01(\x05R\x05level\x12\f\n" +
 	"\x01x\x18\x06 \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\a \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\b \x01(\tR\x06facing\";\n" +
+	"\x06facing\x18\b \x01(\x01R\x06facing\";\n" +
 	"\x0fPetStatePayload\x12(\n" +
 	"\x04pets\x18\x01 \x03(\v2\x14.fantasy.v1.WorldPetR\x04pets\"/\n" +
 	"\x10SetTargetPayload\x12\x1b\n" +
@@ -3262,11 +3280,12 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x05camps\x18\a \x03(\v2\x15.fantasy.v1.WorldCampR\x05camps\x12(\n" +
 	"\x04pets\x18\b \x03(\v2\x14.fantasy.v1.WorldPetR\x04pets\"#\n" +
 	"\x11PlayerLeftPayload\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"@\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"X\n" +
 	"\x12PlayerMovedPayload\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x01R\x01y\"~\n" +
+	"\x01y\x18\x03 \x01(\x01R\x01y\x12\x16\n" +
+	"\x06facing\x18\x04 \x01(\x01R\x06facing\"~\n" +
 	"\x12ChatMessagePayload\x12\x17\n" +
 	"\afrom_id\x18\x01 \x01(\tR\x06fromId\x12\x1b\n" +
 	"\tfrom_name\x18\x02 \x01(\tR\bfromName\x12\x18\n" +

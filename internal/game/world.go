@@ -6,42 +6,12 @@ import (
 	"time"
 )
 
-const (
-	FacingLeft  = "left"
-	FacingRight = "right"
-)
-
 // MapExit is a server-only portal between map processes. It is never sent to clients.
 type MapExit struct {
 	DestMap      string
 	MinC, MinR   int
 	MaxC, MaxR   int
 	DestX, DestY float64
-}
-
-// FacingFromDeltaX keeps the last left/right facing when there is no horizontal motion.
-func FacingFromDeltaX(dx float64, current string) string {
-	if dx > 0 {
-		return FacingRight
-	}
-	if dx < 0 {
-		return FacingLeft
-	}
-	if current == FacingLeft {
-		return FacingLeft
-	}
-	return FacingRight
-}
-
-// FacingFromExit is the direction a traveler is walking when they cross this zone line.
-func FacingFromExit(e MapExit, cols int) string {
-	if cols <= 0 {
-		cols = OverworldCols
-	}
-	if (e.MinC+e.MaxC)/2 >= cols/2 {
-		return FacingRight
-	}
-	return FacingLeft
 }
 
 // Overworld is one map's terrain, spawns, and exits. Each map server holds its own.

@@ -289,7 +289,7 @@ func (h *Hub) warpToSavePoint(c *Client, wp *protocol.WorldPlayer, destID, notic
 	h.persistWorldLocation(c, wp, true)
 	h.grantBattleImmunity(wp)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: wp.X, Y: wp.Y,
+		ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
 	}))
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 	return true
@@ -343,6 +343,6 @@ func (h *Hub) respawnAtSavePoint(clientID string) {
 		h.persistWorldLocation(c, wp, true)
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: clientID, X: wp.X, Y: wp.Y,
+		ID: clientID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
 	}))
 }

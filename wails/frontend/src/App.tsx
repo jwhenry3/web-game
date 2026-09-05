@@ -3,8 +3,9 @@ import { useGame } from "./state/store";
 import { AuthScreen } from "./components/AuthScreen";
 import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
-import { PhaserGame } from "./phaser/PhaserGame";
-import { EntityOverlays } from "./components/EntityOverlays";
+// Phaser renderer paused while Three.js placeholder renderer is active.
+// import { PhaserGame } from "./phaser/PhaserGame";
+import { ThreeGame } from "./three/ThreeGame";
 import { WorldHUD } from "./components/WorldHUD";
 import { HouseHUD } from "./components/HouseHUD";
 import { InviteToasts } from "./components/InviteToasts";
@@ -23,8 +24,9 @@ import { ExpBar } from "./components/ExpBar";
 import { ItemMenuProvider } from "./components/ItemContextMenu";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
 import { TitleScreen } from "./components/TitleScreen";
-import { AdminLoginScreen } from "./components/AdminLoginScreen";
-import { MapEditorScreen } from "./components/MapEditorScreen";
+// Game Designer (2D map editor) paused until a 3D authoring flow exists.
+// import { AdminLoginScreen } from "./components/AdminLoginScreen";
+// import { MapEditorScreen } from "./components/MapEditorScreen";
 
 function AppBody() {
   const screen = useGame((s) => s.screen);
@@ -76,12 +78,15 @@ function AppBody() {
     return <TitleScreen />;
   }
 
-  if (screen === "admin_auth") {
-    return <AdminLoginScreen />;
-  }
-
-  if (screen === "map_editor") {
-    return <MapEditorScreen />;
+  // Game Designer paused for 3D migration.
+  // if (screen === "admin_auth") {
+  //   return <AdminLoginScreen />;
+  // }
+  // if (screen === "map_editor") {
+  //   return <MapEditorScreen />;
+  // }
+  if (screen === "admin_auth" || screen === "map_editor") {
+    return <TitleScreen />;
   }
 
   if (screen === "auth") {
@@ -103,8 +108,8 @@ function AppBody() {
     <ItemMenuProvider>
       <div className="game-layout">
         <div className="game-stage">
-          <PhaserGame />
-          <EntityOverlays />
+          {/* <PhaserGame /> */}
+          <ThreeGame />
           {screen === combat.battleScreen ? (
             <CombatHUD />
           ) : screen === "house" ? (

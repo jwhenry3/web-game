@@ -1598,7 +1598,7 @@ type WorldPlayer struct {
 	Appearance     *CharacterAppearance   `protobuf:"bytes,8,opt,name=appearance,proto3" json:"appearance,omitempty"`
 	X              float64                `protobuf:"fixed64,9,opt,name=x,proto3" json:"x,omitempty"`
 	Y              float64                `protobuf:"fixed64,10,opt,name=y,proto3" json:"y,omitempty"`
-	Facing         string                 `protobuf:"bytes,11,opt,name=facing,proto3" json:"facing,omitempty"`
+	Facing         float64                `protobuf:"fixed64,11,opt,name=facing,proto3" json:"facing,omitempty"` // Y-axis yaw radians (Three.js)
 	InBattle       bool                   `protobuf:"varint,12,opt,name=in_battle,json=inBattle,proto3" json:"in_battle,omitempty"`
 	BattleId       string                 `protobuf:"bytes,13,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
 	ImmuneUntil    int64                  `protobuf:"varint,14,opt,name=immune_until,json=immuneUntil,proto3" json:"immune_until,omitempty"`
@@ -1711,11 +1711,11 @@ func (x *WorldPlayer) GetY() float64 {
 	return 0
 }
 
-func (x *WorldPlayer) GetFacing() string {
+func (x *WorldPlayer) GetFacing() float64 {
 	if x != nil {
 		return x.Facing
 	}
-	return ""
+	return 0
 }
 
 func (x *WorldPlayer) GetInBattle() bool {
@@ -1932,7 +1932,7 @@ type HousePlayer struct {
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	X             float64                `protobuf:"fixed64,3,opt,name=x,proto3" json:"x,omitempty"`
 	Y             float64                `protobuf:"fixed64,4,opt,name=y,proto3" json:"y,omitempty"`
-	Facing        string                 `protobuf:"bytes,5,opt,name=facing,proto3" json:"facing,omitempty"`
+	Facing        float64                `protobuf:"fixed64,5,opt,name=facing,proto3" json:"facing,omitempty"` // Y-axis yaw radians
 	Owner         bool                   `protobuf:"varint,6,opt,name=owner,proto3" json:"owner,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1996,11 +1996,11 @@ func (x *HousePlayer) GetY() float64 {
 	return 0
 }
 
-func (x *HousePlayer) GetFacing() string {
+func (x *HousePlayer) GetFacing() float64 {
 	if x != nil {
 		return x.Facing
 	}
-	return ""
+	return 0
 }
 
 func (x *HousePlayer) GetOwner() bool {
@@ -3646,7 +3646,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x01x\x18\t \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\n" +
 	" \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\v \x01(\tR\x06facing\x12\x1b\n" +
+	"\x06facing\x18\v \x01(\x01R\x06facing\x12\x1b\n" +
 	"\tin_battle\x18\f \x01(\bR\binBattle\x12\x1b\n" +
 	"\tbattle_id\x18\r \x01(\tR\bbattleId\x12!\n" +
 	"\fimmune_until\x18\x0e \x01(\x03R\vimmuneUntil\x12(\n" +
@@ -3676,7 +3676,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
 	"\x01x\x18\x03 \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\x04 \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\x05 \x01(\tR\x06facing\x12\x14\n" +
+	"\x06facing\x18\x05 \x01(\x01R\x06facing\x12\x14\n" +
 	"\x05owner\x18\x06 \x01(\bR\x05owner\"^\n" +
 	"\bHousePOI\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +

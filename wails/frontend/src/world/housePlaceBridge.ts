@@ -1,4 +1,4 @@
-/** Live house decoration placement preview (toolbar ↔ HouseScene). */
+/** Live house decoration placement preview (toolbar ↔ renderer). */
 
 export type HousePlaceHover = {
   col: number;
@@ -26,7 +26,7 @@ let state: HousePlaceState = {
 
 const listeners = new Set<Listener>();
 
-/** Latest house camera transform for mapping pointer → world. */
+/** Latest house floor meta for tile math. */
 let transform: {
   scaleX: number;
   scaleY: number;
@@ -41,6 +41,9 @@ let transform: {
   walkCols: number;
   walkRows: number;
 } | null = null;
+
+/** Three.js (or other) projector: browser client pixels → house world XZ. */
+let clientToWorld: ((clientX: number, clientY: number) => { x: number; y: number } | null) | null = null;
 
 export function getHousePlaceState(): HousePlaceState {
   return state;
@@ -102,11 +105,25 @@ export function getHousePlaceTransform() {
   return transform;
 }
 
-/** Convert game-stage-relative CSS pixels → world coords. */
+export function setHouseClientToWorld(
+  fn: ((clientX: number, clientY: number) => { x: number; y: number } | null) | null,
+) {
+  clientToWorld = fn;
+}
+
+/** Browser client coordinates → house world (preferred for Three.js). */
+export function clientPointToWorld(clientX: number, clientY: number): { x: number; y: number } | null {
+  if (clientToWorld) return clientToWorld(clientX, clientY);
+  return null;
+}
+
+/** Convert game-stage-relative CSS pixels → world coords (Phaser FIT path). */
 export function stagePointToWorld(stageX: number, stageY: number): { x: number; y: number } | null {
   if (!transform) return null;
-  const gx = (stageX - transform.originX) / Math.max(1e-6, transform.scaleX) / Math.max(1e-6, transform.zoom);
-  const gy = (stageY - transform.originY) / Math.max(1e-6, transform.scaleY) / Math.max(1e-6, transform.zoom);
+  const gx =
+    (stageX - transform.originX) / Math.max(1e-6, transform.scaleX) / Math.max(1e-6, transform.zoom);
+  const gy =
+    (stageY - transform.originY) / Math.max(1e-6, transform.scaleY) / Math.max(1e-6, transform.zoom);
   return { x: transform.viewX + gx, y: transform.viewY + gy };
 }
 

@@ -22,7 +22,7 @@ type houseGuest struct {
 	ClientID string
 	Name     string
 	X, Y     float64
-	Facing   string
+	Facing   float64
 }
 
 type houseRoom struct {
@@ -181,7 +181,7 @@ func (h *Hub) handleLeaveHouse(c *Client) {
 			wp.X, wp.Y = camp.X, camp.Y
 			h.persistWorldLocation(c, wp, true)
 			h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-				ID: c.ID, X: wp.X, Y: wp.Y,
+				ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
 			}))
 		}
 	}
@@ -382,7 +382,7 @@ func (h *Hub) sendHouseState(room *houseRoom) {
 	}
 }
 
-func (h *Hub) moveInHouse(c *Client, wp *protocol.WorldPlayer, x, y float64) {
+func (h *Hub) moveInHouse(c *Client, wp *protocol.WorldPlayer, x, y float64, facing *float64) {
 	room := h.houses[c.HouseOwner]
 	if room == nil {
 		return
@@ -393,7 +393,7 @@ func (h *Hub) moveInHouse(c *Client, wp *protocol.WorldPlayer, x, y float64) {
 	}
 	nx, ny := game.SlideMoveHousePlayer(guest.X, guest.Y, x, y)
 	nx, ny = game.ClampHousePos(nx, ny)
-	guest.Facing = game.FacingFromDeltaX(nx-guest.X, guest.Facing)
+	guest.Facing = game.ResolveFacingYaw(nx-guest.X, ny-guest.Y, derefFacing(facing), facing != nil, guest.Facing)
 	guest.X, guest.Y = nx, ny
 	_ = wp
 	h.sendHouseState(room)

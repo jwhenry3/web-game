@@ -14,10 +14,13 @@ export function TitleScreen() {
           <button type="button" className="cm-btn gold wide title-btn" onClick={() => setScreen("auth")}>
             Play Game
           </button>
+          {/* Game Designer paused until 3D authoring is implemented.
           <button type="button" className="cm-btn wide title-btn" onClick={() => setScreen("admin_auth")}>
             Game Designer
           </button>
           <p className="dim title-hint">Game Designer requires an admin account (default: admin / admin)</p>
+          */}
+          <p className="dim title-hint">3D renderer preview — map designer coming later</p>
         </div>
       </div>
     </div>

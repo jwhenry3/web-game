@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 
+	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
 )
 
@@ -75,11 +76,8 @@ func (h *Hub) worldPets() []protocol.WorldPet {
 	return out
 }
 
-func followOffset(x, y float64, facing string) (float64, float64) {
-	const dist = 28.0
-	dx := dist
-	if facing == "left" {
-		dx = -dist
-	}
-	return x - dx*0.7, y + 6
+func followOffset(x, y float64, facing float64) (float64, float64) {
+	const dist = 32.0
+	fx, fy := game.FacingDir(facing)
+	return x - fx*dist, y - fy*dist + 4
 }

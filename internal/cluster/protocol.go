@@ -7,7 +7,7 @@ type TransferRequest struct {
 	DestMap  string
 	DestX    float64
 	DestY    float64
-	Facing   string
+	Facing   float64
 }
 
 // AttachRequest binds a proxy WebSocket session to a map hub.
@@ -18,5 +18,5 @@ type AttachRequest struct {
 	SpawnX    float64
 	SpawnY    float64
 	UseSpawn  bool
-	Facing    string
+	Facing    float64
 }

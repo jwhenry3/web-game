@@ -122,6 +122,6 @@
     "data": "data/profiles.json",
     "internal_secret": "",
     "name": "Clara Mundi",
-    "static": ""
+    "static": "site/dist"
   }
 }

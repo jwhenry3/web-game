@@ -212,7 +212,7 @@ func TestMapTransferGrantsImmunity(t *testing.T) {
 		UseSpawn:    true,
 		SpawnX:      px,
 		SpawnY:      py,
-		SpawnFacing: "right",
+		SpawnFacing: game.FacingYawEast,
 	}
 	h.clients[c.ID] = c
 	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: "Bartz"})

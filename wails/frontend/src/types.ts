@@ -303,7 +303,7 @@ export interface WorldPlayer {
   appearance?: CharacterAppearanceWire;
   x: number;
   y: number;
-  facing?: "left" | "right";
+  facing?: number | string;
   in_battle: boolean;
   battle_id?: string;
   in_house?: boolean;
@@ -395,7 +395,7 @@ export interface HousePlayer {
   name: string;
   x: number;
   y: number;
-  facing?: string;
+  facing?: number | string;
   owner?: boolean;
 }
 
@@ -444,7 +444,7 @@ export interface WorldPet {
   level: number;
   x: number;
   y: number;
-  facing?: string;
+  facing?: number | string;
 }
 
 export type ChatChannel = "general" | "social" | "system" | "battle";

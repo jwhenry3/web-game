@@ -1,3 +1,8 @@
+/**
+ * PhaserGame — DISABLED while the Three.js placeholder renderer is active.
+ * Restore by swapping ThreeGame → PhaserGame in App.tsx and uncommenting below.
+ */
+/*
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
 import { useGame } from "../state/store";
@@ -31,7 +36,6 @@ export function PhaserGame() {
         game.scene.sleep("world");
         if (game.scene.isActive("house")) game.scene.stop("house");
         if (!game.scene.getScene(combat.battleSceneKey)) return;
-        // Always restart so create() rebinds input after a prior stop.
         game.scene.stop(combat.battleSceneKey);
         game.scene.start(combat.battleSceneKey);
       } else if (s.screen === "house") {
@@ -68,4 +72,9 @@ export function PhaserGame() {
   }, [combatMode]);
 
   return <div className="phaser-host" ref={hostRef} />;
+}
+*/
+
+export function PhaserGame() {
+  return null;
 }

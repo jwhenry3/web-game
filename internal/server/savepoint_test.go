@@ -82,7 +82,7 @@ func TestJoinWorldRestoresLastPosition(t *testing.T) {
 	h.SetMap("greenwood", "Greenwood", game.Loaded())
 	profile := h.store.GetOrCreate("Bartz", game.JobVAN)
 	h.store.SetSavePoint(profile.Name, game.SavePoints[0].ID)
-	h.store.SetWorldLocation(profile.Name, "greenwood", 500, 500, game.FacingLeft, true)
+	h.store.SetWorldLocation(profile.Name, "greenwood", 500, 500, game.FacingYawWest, true)
 
 	c := &Client{ID: "client-1", Send: make(chan []byte, 8), Hub: h}
 	h.clients[c.ID] = c
@@ -96,15 +96,15 @@ func TestJoinWorldRestoresLastPosition(t *testing.T) {
 	if dist(wp.X, wp.Y, 500, 500) > 1 {
 		t.Fatalf("resume last position, got %f,%f", wp.X, wp.Y)
 	}
-	if wp.Facing != game.FacingLeft {
-		t.Fatalf("facing %q", wp.Facing)
+	if wp.Facing != game.FacingYawWest {
+		t.Fatalf("facing %v", wp.Facing)
 	}
 }
 
 func TestDisconnectPersistsPosition(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 480, 520)
 	h.SetMap("north", "Northern Wastes", game.Loaded())
-	wp.Facing = game.FacingRight
+	wp.Facing = game.FacingYawEast
 	h.handleDisconnect(c)
 
 	profile, ok := h.store.Get("Bartz")
@@ -117,8 +117,8 @@ func TestDisconnectPersistsPosition(t *testing.T) {
 	if dist(profile.WorldX, profile.WorldY, 480, 520) > 1 {
 		t.Fatalf("pos %f,%f", profile.WorldX, profile.WorldY)
 	}
-	if profile.Facing != game.FacingRight {
-		t.Fatalf("facing %q", profile.Facing)
+	if profile.Facing.Radians() != game.FacingYawEast {
+		t.Fatalf("facing %v", profile.Facing)
 	}
 }
 
@@ -130,7 +130,7 @@ func TestJoinWorldUnwalkableLastPosUsesSavePoint(t *testing.T) {
 	sp := game.SavePoints[0]
 	profile := h.store.GetOrCreate("Bartz", game.JobVAN)
 	h.store.SetSavePoint(profile.Name, sp.ID)
-	h.store.SetWorldLocation(profile.Name, "greenwood", 10, 10, game.FacingRight, true)
+	h.store.SetWorldLocation(profile.Name, "greenwood", 10, 10, game.FacingYawEast, true)
 
 	c := &Client{ID: "client-1", Send: make(chan []byte, 8), Hub: h}
 	h.clients[c.ID] = c

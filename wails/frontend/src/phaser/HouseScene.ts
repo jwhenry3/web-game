@@ -33,7 +33,7 @@ import {
 const SPEED = 180;
 const SEND_INTERVAL = 80;
 const POI_PROMPT_Y = -28;
-const POI_LABEL_Y = 22;
+const POI_LABEL_Y = -28;
 const FURNITURE_LABEL_Y = -16;
 const CAST_BAR_Y = 10;
 
@@ -352,7 +352,6 @@ export class HouseScene extends Phaser.Scene {
 
     const selfId = state.selfId;
     const seen = new Set<string>();
-    const transform = getStageTransform(this);
     const entities: EntityOverlayMark[] = [];
     const pois: PoiLabelMark[] = [];
     const interacts: InteractPromptMark[] = [];
@@ -372,16 +371,18 @@ export class HouseScene extends Phaser.Scene {
         av.sprite.setFacing(this.facingOf(p, av.sprite.getFacing()));
       }
       av.sprite.update(delta);
-      entities.push(
-        this.stageEntity(
-          p.id,
-          p.owner ? `${p.name} (host)` : p.name,
-          isSelf ? "self" : "player",
-          av.wrapper.x,
-          av.wrapper.y,
-          transform,
-        ),
-      );
+      // Nameplates filled after camera settle so stage transform matches sprites.
+      entities.push({
+        id: p.id,
+        label: p.owner ? `${p.name} (host)` : p.name,
+        variant: isSelf ? "self" : "player",
+        screenX: 0,
+        screenY: 0,
+        nameX: 0,
+        nameY: 0,
+        castX: 0,
+        castY: 0,
+      });
     }
     for (const [id, av] of this.avatars) {
       if (!seen.has(id)) {
@@ -390,23 +391,14 @@ export class HouseScene extends Phaser.Scene {
       }
     }
 
-    for (const f of this.furniture.values()) {
-      const pt = worldLocalToStage(this, f.x, f.y, 0, FURNITURE_LABEL_Y, transform);
-      pois.push({ id: `furn:${f.id}`, label: f.name, variant: "furniture", x: pt.x, y: pt.y });
-    }
-    for (const m of this.pois.values()) {
-      const pt = worldLocalToStage(this, m.x, m.y, 0, POI_LABEL_Y, transform);
-      pois.push({ id: `hpoi:${m.id}`, label: m.name, variant: "house-poi", x: pt.x, y: pt.y });
-    }
-
     if (!selfId) {
-      setWorldOverlays({ entities, pois, interacts });
+      setWorldOverlays({ entities: [], pois: [], interacts: [] });
       return;
     }
     const selfGuest = house.players.find((p) => p.id === selfId);
     const selfAv = this.avatars.get(selfId);
     if (!selfGuest || !selfAv) {
-      setWorldOverlays({ entities, pois, interacts });
+      setWorldOverlays({ entities: [], pois: [], interacts: [] });
       return;
     }
 
@@ -448,6 +440,26 @@ export class HouseScene extends Phaser.Scene {
       }
     }
 
+    // After movement + centerOn so POI labels share the camera used to draw the house.
+    const transform = getStageTransform(this);
+    this.publishPlaceTransform(house);
+
+    for (let i = 0; i < entities.length; i++) {
+      const stub = entities[i]!;
+      const av = this.avatars.get(stub.id);
+      if (!av) continue;
+      entities[i] = this.stageEntity(stub.id, stub.label, stub.variant, av.wrapper.x, av.wrapper.y, transform);
+    }
+
+    for (const f of this.furniture.values()) {
+      const pt = worldLocalToStage(this, f.x, f.y, 0, FURNITURE_LABEL_Y, transform);
+      pois.push({ id: `furn:${f.id}`, label: f.name, variant: "furniture", x: pt.x, y: pt.y });
+    }
+    for (const m of this.pois.values()) {
+      const pt = worldLocalToStage(this, m.x, m.y, 0, POI_LABEL_Y, transform);
+      pois.push({ id: `hpoi:${m.id}`, label: m.name, variant: "house-poi", x: pt.x, y: pt.y });
+    }
+
     const keyLabel = interactKeyLabel(state.profile?.keybinds);
     const showPrompts =
       !state.mainMenuOpen && !state.openWindow && !state.worldSkillDialog && !state.npcDialog && !state.jobChangeDialog;
@@ -457,13 +469,6 @@ export class HouseScene extends Phaser.Scene {
         const pt = worldLocalToStage(this, m.x, m.y, 0, POI_PROMPT_Y, transform);
         interacts.push({ id: `ix-hpoi:${m.id}`, keyLabel, x: pt.x, y: pt.y });
       }
-    }
-
-    // Refresh self nameplate after movement this frame.
-    const selfMark = entities.find((e) => e.id === selfId);
-    if (selfMark) {
-      const refreshed = this.stageEntity(selfId, selfMark.label, "self", selfAv.wrapper.x, selfAv.wrapper.y, getStageTransform(this));
-      Object.assign(selfMark, refreshed);
     }
 
     setWorldOverlays({ entities, pois, interacts });

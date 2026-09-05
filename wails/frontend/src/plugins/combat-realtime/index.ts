@@ -28,6 +28,7 @@ const plugin = {
   id: "combat.realtime",
   register(ctx: PluginContext) {
     ctx.registerScreen("battle", BattleHUD);
+    // Phaser battle scene unused while Three.js BattleView is active.
     ctx.registerBattleScene("battle", RTBattleScene);
 
     ctx.registerHandler("battle_invite_received", (env) => {

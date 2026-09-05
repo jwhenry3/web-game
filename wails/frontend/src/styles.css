@@ -531,7 +531,34 @@ h3 {
   display: block;
 }
 
-/* ---- Entity nameplates / cast bars (above Phaser) ---- */
+.three-host {
+  position: absolute;
+  inset: 0;
+}
+
+.three-host canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Entity nameplates / cast bars (CSS2D billboards + legacy overlay) ---- */
+.cm-css2d-layer {
+  z-index: 5;
+}
+
+.cm-css2d-object {
+  pointer-events: none;
+}
+
+.cm-billboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+}
+
 .cm-entity-overlays {
   position: absolute;
   inset: 0;
@@ -541,8 +568,6 @@ h3 {
 }
 
 .cm-nameplate {
-  position: absolute;
-  transform: translate(-50%, -50%);
   font-family: "Noto Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
@@ -558,6 +583,11 @@ h3 {
   line-height: 1.2;
 }
 
+.cm-entity-overlays .cm-nameplate {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
 .cm-nameplate--enemy {
   color: #e6d4b0;
 }
@@ -571,8 +601,6 @@ h3 {
 }
 
 .cm-entity-cast {
-  position: absolute;
-  transform: translate(-50%, -50%);
   width: 52px;
   height: 7px;
   padding: 1px;
@@ -580,6 +608,16 @@ h3 {
   background: #1a1028;
   border: 1px solid #6a4a8a;
   border-radius: 1px;
+}
+
+.cm-entity-overlays .cm-entity-cast {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.cm-entity-cast--billboard {
+  position: static;
+  transform: none;
 }
 
 .cm-entity-cast-track {
@@ -600,8 +638,6 @@ h3 {
 }
 
 .cm-poi-label {
-  position: absolute;
-  transform: translate(-50%, 0);
   font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
   font-size: 10px;
   font-weight: 600;
@@ -613,6 +649,11 @@ h3 {
     1px 1px 0 #000;
   line-height: 1.2;
   pointer-events: none;
+}
+
+.cm-entity-overlays .cm-poi-label {
+  position: absolute;
+  transform: translate(-50%, -100%);
 }
 
 .cm-poi-label--save-active {
@@ -649,8 +690,6 @@ h3 {
 }
 
 .cm-interact-prompt {
-  position: absolute;
-  transform: translate(-50%, -50%);
   min-width: 28px;
   padding: 2px 6px;
   box-sizing: border-box;
@@ -666,6 +705,11 @@ h3 {
   line-height: 1.2;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.cm-entity-overlays .cm-interact-prompt {
+  position: absolute;
+  transform: translate(-50%, -50%);
 }
 
 /* ---- HUD overlays ---- */

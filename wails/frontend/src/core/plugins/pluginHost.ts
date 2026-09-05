@@ -1,4 +1,3 @@
-import Phaser from "phaser";
 import type { ComponentType } from "react";
 import type { LoadedCombatPlugin, ModulesManifest, PluginContext } from "./contracts";
 import { PLUGIN_REGISTRY } from "./registry";
@@ -7,6 +6,7 @@ import type { Envelope, MessageType } from "../../types";
 import { apiUrl, platformFetch } from "../../net/platform";
 
 type Handler = (env: Envelope) => void;
+type BattleListener = (detail: unknown) => void;
 
 export class PluginHost {
   private handlers = new Map<string, Handler>();
@@ -14,7 +14,7 @@ export class PluginHost {
   private battleSceneKey = "battle";
   private HUD: ComponentType = () => null;
   private combatModuleId = "";
-  private battleEvents = new Phaser.Events.EventEmitter();
+  private battleListeners = new Set<BattleListener>();
 
   getCombatPlugin(): LoadedCombatPlugin {
     return {
@@ -54,16 +54,17 @@ export class PluginHost {
         ws?.(type, payload);
       },
       onBattleEvent: (handler) => {
-        this.battleEvents.on("event", handler);
-        return () => this.battleEvents.off("event", handler);
+        this.battleListeners.add(handler);
+        return () => this.battleListeners.delete(handler);
       },
       registerScreen: (screen, component) => {
         this.battleScreen = screen;
         this.HUD = component;
       },
-      registerBattleScene: (key, scene) => {
+      registerBattleScene: (key, _scene) => {
+        // Phaser scenes are unused by the Three.js renderer; keep the key for HUD routing.
         this.battleSceneKey = key;
-        (window as unknown as { __battleSceneCtor?: new () => Phaser.Scene }).__battleSceneCtor = scene;
+        void _scene;
       },
       registerHandler: (type, handler) => {
         this.handlers.set(type, handler);
@@ -83,7 +84,7 @@ export class PluginHost {
   }
 
   emitBattleEvent(detail: unknown) {
-    this.battleEvents.emit("event", detail);
+    for (const l of this.battleListeners) l(detail);
   }
 }
 

@@ -11,25 +11,27 @@ authoritative cluster over WebSockets; Wails desktop client (Phaser + React).
 | [docs/SYSTEMS.md](docs/SYSTEMS.md) | Overworld, combat plugins, jobs, save points, accounts |
 | [docs/GAME_DESIGNER.md](docs/GAME_DESIGNER.md) | In-app **Game Designer** (admin world editor) |
 | [data/maps/README.md](data/maps/README.md) | `.map.json` / Tiled assets, layers, sanctuaries, tooling |
+| [site/README.md](site/README.md) | Public content site (status, news, wiki, guide) |
 | [wails/frontend/public/assets/ATTRIBUTION.md](wails/frontend/public/assets/ATTRIBUTION.md) | Third-party art licenses |
 
 ## Architecture (short)
 
 ```text
 Wails client ──WS/HTTP──► Proxy (:8080) ──in-process──► Map node(s)
-                           auth, admin APIs              Hub + overworld + combat
+Browser site ──/ + /api/status + /status/ws──┘            Hub + overworld + combat
+                           auth, admin APIs
 ```
 
-- **Proxy** (`internal/proxy`) — accounts, one client WebSocket per session, transfer validation, Game Designer admin APIs. Map changes do **not** reconnect the socket.
+- **Proxy** (`internal/proxy`) — accounts, one client WebSocket per session, transfer validation, Game Designer admin APIs, public **status** API/WS, optional static content site. Map changes do **not** reconnect the game socket.
 - **Map node** (`internal/mapnode`) — one map’s Hub, overworld, plugins, battles.
 - **Hub** (`internal/server`) — per-map orchestrator (movement, NPCs, rooms, social).
 - **Protocol** (`internal/protocol`) — wire envelopes; mirrored in `wails/frontend/src/types.ts`.
 - **Persistence** (`internal/store`) — `data/accounts.json`, `data/profiles.json`; live map list in `data/cluster.maps.json`.
+- **Content site** (`site/`) — markdown-driven status / news / wiki / guide; build to `site/dist` and set `proxy.static`.
 
 Bootstrap cluster: `data/cluster.json`. Shared **EXP rates** (`exp.rate`, `exp.main_percent`, `exp.sub_percent`) apply to every map. Stock maps/content/config ship in the binary and are written under `data/` on first standalone run if missing (accounts/profiles stay external only). Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 The client (`wails/frontend/`) uses **Phaser** for world/battle scenes and **React** + Zustand for menus/HUD. Title screen offers **Play Game** or **Game Designer**.
-
 **Shared Go libraries:** `internal/game` and `internal/protocol` are used by both the server and the desktop client. `internal/host` boots the cluster (used by `cmd/server` and optional Wails standalone). `internal/clientnet` is the Go WebSocket + prediction client. See [wails/README.md](wails/README.md).
 
 ## Progression & combat
@@ -63,7 +65,18 @@ npm run server:dev
 
 # Terminal 2 — desktop client
 npm run wails:dev
+
+# Optional — public content site (status / news / wiki / guide)
+cd site && npm install && npm run dev
 ```
+
+Build the site for the proxy (`proxy.static` → `site/dist`):
+
+```bash
+cd site && npm install && npm run build
+```
+
+Then open http://127.0.0.1:8080 for the site, `GET /api/status` for JSON, or `ws://127.0.0.1:8080/status/ws` for live updates.
 
 Or all-in-one (embedded server):
 

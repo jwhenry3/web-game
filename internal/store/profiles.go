@@ -56,7 +56,7 @@ type Profile struct {
 	PrevMapID         string                      `json:"pdnc_map_id,omitempty"`
 	WorldX            float64                     `json:"world_x,omitempty"`
 	WorldY            float64                     `json:"world_y,omitempty"`
-	Facing            string                      `json:"facing,omitempty"`
+	Facing            game.FacingYaw              `json:"facing,omitempty"`
 	HasWorldPos       bool                        `json:"has_world_pos,omitempty"`
 
 	// Legacy fields migrated into Jobs/Loadouts on load.
@@ -810,7 +810,7 @@ func (s *Store) SetMapID(name, mapID string) (Profile, bool) {
 // SetWorldLocation stores the hero's last map and overworld position.
 // Memory is always updated; the JSON file is written when flush is true.
 // When mapID changes, the previous MapID is retained in PrevMapID.
-func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing string, flush bool) (Profile, bool) {
+func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing float64, flush bool) (Profile, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.profiles[name]
@@ -825,7 +825,7 @@ func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing string
 	}
 	p.WorldX = x
 	p.WorldY = y
-	p.Facing = facing
+	p.Facing = game.FacingYaw(facing)
 	p.HasWorldPos = true
 	if flush {
 		s.save()

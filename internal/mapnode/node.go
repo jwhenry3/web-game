@@ -45,7 +45,7 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 		OW:       ow,
 		sessions: map[string]*server.Client{},
 	}
-	hub.OnTransfer = func(clientID, destMap string, destX, destY float64, facing string) {
+	hub.OnTransfer = func(clientID, destMap string, destX, destY float64, facing float64) {
 		if n.Transfer != nil {
 			n.Transfer(cluster.TransferRequest{
 				ClientID: clientID, DestMap: destMap, DestX: destX, DestY: destY, Facing: facing,
@@ -128,6 +128,11 @@ func (n *Node) SessionIDs() []string {
 		out = append(out, id)
 	}
 	return out
+}
+
+// StatusCounts returns online players, active battles, and combat plugin for this map.
+func (n *Node) StatusCounts() (players, battles int, combat string) {
+	return n.Hub.StatusCounts()
 }
 
 // Stop detaches remaining sessions and shuts down the hub loop.

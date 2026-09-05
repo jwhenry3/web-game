@@ -140,6 +140,8 @@ type SetJobsPayload struct {
 type MovePayload struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
+	// Facing is Y-axis yaw in radians (Three.js). Omitted/null → server derives from motion.
+	Facing *float64 `json:"facing,omitempty"`
 }
 
 type ChatPayload struct {
@@ -355,7 +357,7 @@ type WorldPlayer struct {
 	Appearance  CharacterAppearance `json:"appearance,omitempty"`
 	X           float64             `json:"x"`
 	Y           float64             `json:"y"`
-	Facing      string              `json:"facing,omitempty"` // "left" or "right"
+	Facing      float64             `json:"facing"` // Y-axis yaw radians (Three.js)
 	InBattle    bool                `json:"in_battle"`        // combat-locked state
 	BattleID    string              `json:"battle_id,omitempty"`
 	InHouse     bool                `json:"in_house,omitempty"`
@@ -446,7 +448,7 @@ type WorldPet struct {
 	Level   int     `json:"level"`
 	X       float64 `json:"x"`
 	Y       float64 `json:"y"`
-	Facing  string  `json:"facing,omitempty"`
+	Facing  float64 `json:"facing"`
 }
 
 type PetStatePayload struct {
@@ -497,7 +499,7 @@ type HousePlayer struct {
 	Name   string  `json:"name"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
-	Facing string  `json:"facing,omitempty"`
+	Facing float64 `json:"facing"`
 	Owner  bool    `json:"owner,omitempty"`
 }
 
@@ -540,9 +542,10 @@ type PlayerLeftPayload struct {
 }
 
 type PlayerMovedPayload struct {
-	ID string  `json:"id"`
-	X  float64 `json:"x"`
-	Y  float64 `json:"y"`
+	ID     string  `json:"id"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Facing float64 `json:"facing"`
 }
 
 type ChatMessagePayload struct {

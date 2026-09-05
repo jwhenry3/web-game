@@ -55,6 +55,7 @@ type Proxy struct {
 	profiles    *store.Store
 	auth        *server.AuthHandler
 	adminSecret string
+	startedAt   time.Time
 
 	mu   sync.Mutex
 	maps map[string]*mapnode.Node
@@ -69,6 +70,7 @@ func New(cfg cluster.Config, cfgPath string, tokens *auth.TokenIssuer, accounts 
 		accounts:    accounts,
 		profiles:    profiles,
 		adminSecret: adminSecret,
+		startedAt:   time.Now(),
 		maps:        map[string]*mapnode.Node{},
 		sess:        map[string]*session{},
 	}
@@ -110,6 +112,7 @@ func (p *Proxy) Handler() http.Handler {
 	apiMux := http.NewServeMux()
 	server.RegisterAPIRoutes(apiMux, p.auth, modCfg)
 	apiMux.HandleFunc("/atlas", p.handleAtlas)
+	apiMux.HandleFunc("/status", p.handleStatus)
 	admin := &AdminMapsHandler{
 		Secret:   p.adminSecret,
 		Accounts: p.accounts,
@@ -127,10 +130,11 @@ func (p *Proxy) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))
 	mux.HandleFunc("/ws", p.handleWS)
+	mux.HandleFunc("/status/ws", p.handleStatusWS)
 
 	if info, err := os.Stat(p.cfg.Proxy.Static); err == nil && info.IsDir() {
-		mux.Handle("/", http.FileServer(http.Dir(p.cfg.Proxy.Static)))
-		log.Printf("serving frontend from %s", p.cfg.Proxy.Static)
+		mux.Handle("/", spaFileServer(p.cfg.Proxy.Static))
+		log.Printf("serving content site from %s", p.cfg.Proxy.Static)
 	}
 	return mux
 }

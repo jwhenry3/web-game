@@ -190,7 +190,7 @@ message WorldPlayer {
   CharacterAppearance appearance = 8;
   double x = 9;
   double y = 10;
-  string facing = 11;
+  double facing = 11; // Y-axis yaw radians (Three.js)
   bool in_battle = 12;
   string battle_id = 13;
   int64 immune_until = 14;
@@ -222,7 +222,7 @@ message HousePlayer {
   string name = 2;
   double x = 3;
   double y = 4;
-  string facing = 5;
+  double facing = 5; // Y-axis yaw radians
   bool owner = 6;
 }
 

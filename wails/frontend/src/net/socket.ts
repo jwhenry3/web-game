@@ -220,8 +220,8 @@ export const net = {
     net.enterWorld({ player_name: character.name });
   },
 
-  move(x: number, y: number) {
-    send("move", { x, y });
+  move(x: number, y: number, facing?: number) {
+    send("move", facing !== undefined ? { x, y, facing } : { x, y });
   },
   chat(message: string) {
     send("chat", { message });
@@ -745,11 +745,21 @@ export function handleMessage(env: Envelope) {
       break;
     }
     case "player_moved": {
-      const p = env.payload as { id: string; x: number; y: number };
+      const p = env.payload as { id: string; x: number; y: number; facing?: number | string };
       g.setState((s) => {
         const wp = s.players[p.id];
         if (!wp) return s;
-        return { players: { ...s.players, [p.id]: { ...wp, x: p.x, y: p.y } } };
+        return {
+          players: {
+            ...s.players,
+            [p.id]: {
+              ...wp,
+              x: p.x,
+              y: p.y,
+              ...(p.facing !== undefined ? { facing: p.facing } : {}),
+            },
+          },
+        };
       });
       break;
     }

@@ -76,7 +76,7 @@ type Hub struct {
 	overworld  *game.Overworld
 	mapID      string
 	mapName    string
-	OnTransfer func(clientID, destMap string, destX, destY float64, facing string)
+	OnTransfer func(clientID, destMap string, destX, destY float64, facing float64)
 
 	quit     chan struct{}
 	done     chan struct{}
@@ -634,19 +634,19 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	log.Printf("%s joined the world as %s/%s (lv %d)", name, profile.MainJob, profile.SubJob, profile.MainJobLevel())
 }
 
-func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facing string) {
+func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facing float64) {
 	if c.UseSpawn {
 		return c.SpawnX, c.SpawnY, c.SpawnFacing
 	}
 	if profile.HasWorldPos && h.canResumeAt(profile.WorldX, profile.WorldY) {
-		return profile.WorldX, profile.WorldY, profile.Facing
+		return profile.WorldX, profile.WorldY, profile.Facing.Radians()
 	}
 	if h.overworld != nil {
 		x, y = h.overworld.SpawnPosition(profile.SavePointID)
 	} else {
 		x, y = game.SpawnPosition(profile.SavePointID)
 	}
-	return x, y, ""
+	return x, y, game.FacingYawDefault
 }
 
 func (h *Hub) canResumeAt(x, y float64) bool {
@@ -677,26 +677,22 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 		return
 	}
 	if wp.InHouse {
-		h.moveInHouse(c, wp, p.X, p.Y)
+		h.moveInHouse(c, wp, p.X, p.Y, p.Facing)
 		return
 	}
-	prevX := wp.X
+	prevX, prevY := wp.X, wp.Y
 	wp.X, wp.Y = h.clampMove(wp.X, wp.Y, p.X, p.Y)
-	wp.Facing = game.FacingFromDeltaX(wp.X-prevX, wp.Facing)
+	wp.Facing = game.ResolveFacingYaw(wp.X-prevX, wp.Y-prevY, derefFacing(p.Facing), p.Facing != nil, wp.Facing)
 	h.interruptWorldCastOnMove(c, wp)
 	h.persistWorldLocation(c, wp, false)
 	if h.OnTransfer != nil && h.overworld != nil {
 		if exit, ok := h.overworld.ExitAt(wp.X, wp.Y); ok && exit.DestMap != h.mapID {
-			facing := wp.Facing
-			if facing == "" {
-				facing = game.FacingFromExit(exit, h.overworld.Cols)
-			}
-			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, facing)
+			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, wp.Facing)
 			return
 		}
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: wp.X, Y: wp.Y,
+		ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
 	}))
 	if !h.engageFirstNPCAt(c, wp, wp.X, wp.Y) {
 		h.engagePartyMemberAt(c, wp, wp.X, wp.Y)
@@ -915,6 +911,17 @@ func (h *Hub) battleInfos() []protocol.BattleInfo {
 	return h.combat.BattleInfos(counts)
 }
 
+// StatusCounts returns online player and active battle counts plus the combat plugin id.
+// Safe to call from any goroutine; does not expose world state.
+func (h *Hub) StatusCounts() (players, battles int, combat string) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	players = len(h.clients)
+	combat = h.modCfg.Combat
+	battles = len(h.battleInfos())
+	return
+}
+
 func (h *Hub) broadcastBattleList() {
 	h.broadcastAll(protocol.Encode(protocol.TypeBattleList, protocol.BattleListPayload{
 		Battles: h.battleInfos(),
@@ -1060,4 +1067,11 @@ func clamp(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
+}
+
+func derefFacing(p *float64) float64 {
+	if p == nil {
+		return 0
+	}
+	return *p
 }

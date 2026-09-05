@@ -36,7 +36,7 @@ type Client struct {
 	SpawnX         float64
 	SpawnY         float64
 	UseSpawn       bool
-	SpawnFacing    string
+	SpawnFacing    float64
 	HouseOwner     string
 	lastWorldSave  time.Time
 	lastWorldSkill time.Time

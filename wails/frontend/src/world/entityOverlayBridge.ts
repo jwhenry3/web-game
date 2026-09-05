@@ -1,4 +1,4 @@
-/** Screen-space overlays published by Phaser for React HUD rendering. */
+/** Screen-space overlays published by the active renderer (Three.js / legacy Phaser) for React HUD. */
 
 export type EntityOverlayVariant = "self" | "player" | "enemy";
 
@@ -98,10 +98,18 @@ export function subscribeEntityOverlays(listener: Listener): () => void {
 type OverlayScene = {
   cameras: {
     main: {
-      worldView: { x: number; y: number };
+      worldView: { x: number; y: number; width: number; height: number };
       zoom: number;
       width: number;
       height: number;
+      scrollX: number;
+      scrollY: number;
+      originX: number;
+      originY: number;
+      lerp: { x: number; y: number };
+      useBounds?: boolean;
+      clampX?: (x: number) => number;
+      clampY?: (y: number) => number;
     };
   };
   game: { canvas: HTMLCanvasElement };
@@ -119,8 +127,14 @@ export type StageTransform = {
   viewY: number;
 };
 
-/** Snapshot camera + FIT letterbox so world points and local offsets share one transform. */
-export function getStageTransform(scene: OverlayScene): StageTransform {
+export type FollowTarget = { x: number; y: number };
+
+/**
+ * Snapshot camera + FIT letterbox so world points and local offsets share one transform.
+ * When `follow` is set, predict the scroll Phaser applies in Camera.preRender (lerp follow)
+ * so React POI/nameplate positions match the frame about to paint.
+ */
+export function getStageTransform(scene: OverlayScene, follow?: FollowTarget | null): StageTransform {
   const cam = scene.cameras.main;
   const canvas = scene.game.canvas;
   // Overlays mount on .game-stage; canvas lives in .phaser-host inside it.
@@ -129,14 +143,35 @@ export function getStageTransform(scene: OverlayScene): StageTransform {
   const stageRect = stage?.getBoundingClientRect();
   const originX = canvasRect.left - (stageRect?.left ?? 0);
   const originY = canvasRect.top - (stageRect?.top ?? 0);
+
+  let viewX = cam.worldView.x;
+  let viewY = cam.worldView.y;
+  if (follow) {
+    const halfW = cam.width * 0.5;
+    const halfH = cam.height * 0.5;
+    const camOriginX = cam.width * cam.originX;
+    const camOriginY = cam.height * cam.originY;
+    let sx = cam.scrollX + (follow.x - camOriginX - cam.scrollX) * cam.lerp.x;
+    let sy = cam.scrollY + (follow.y - camOriginY - cam.scrollY) * cam.lerp.y;
+    if (cam.useBounds) {
+      if (cam.clampX) sx = cam.clampX(sx);
+      if (cam.clampY) sy = cam.clampY(sy);
+    }
+    const zoom = cam.zoom;
+    const displayW = cam.width / zoom;
+    const displayH = cam.height / zoom;
+    viewX = sx + halfW - displayW / 2;
+    viewY = sy + halfH - displayH / 2;
+  }
+
   return {
     scaleX: canvas.clientWidth / Math.max(1, cam.width),
     scaleY: canvas.clientHeight / Math.max(1, cam.height),
     originX,
     originY,
     zoom: cam.zoom,
-    viewX: cam.worldView.x,
-    viewY: cam.worldView.y,
+    viewX,
+    viewY,
   };
 }
 
