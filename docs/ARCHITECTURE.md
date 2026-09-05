@@ -2,7 +2,7 @@
 
 This document describes how the multiplayer stack is wired: process model, map registry, networking, and how pieces talk to each other.
 
-For gameplay rules see [SYSTEMS.md](./SYSTEMS.md). For the in-app editor see [GAME_DESIGNER.md](./GAME_DESIGNER.md). Map file formats live in [data/maps/README.md](../data/maps/README.md).
+For gameplay rules see [SYSTEMS.md](./SYSTEMS.md). For the in-app editor see [GAME_DESIGNER.md](./GAME_DESIGNER.md). Map file formats live in [data/maps/README.md](../data/maps/README.md). Planned 3D terrain/physics migration: [MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md).
 
 ## Overview
 

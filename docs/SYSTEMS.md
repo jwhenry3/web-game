@@ -18,6 +18,8 @@ Each map node owns one `game.Overworld`:
 
 Movement is server-authoritative (slide / bounds checks). Clients send move intents; the Hub broadcasts `world_state` / `npc_state`.
 
+> **Migration (planned):** 3D terrain + shared physics/character step with client prediction — see [MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md).
+
 ### Sanctuary rules
 
 - Every sanctuary must contain **at least one save point** (validated on map load).
@@ -37,6 +39,8 @@ Combat is a **plugin** selected per map (`plugins.combat` in the map's server JS
 |-----------|---------|-------------|
 | `combat.realtime` | `internal/plugins/combatrealtime` | Greenwood |
 | `combat.atb` | `internal/plugins/combatatb` | Northern Wastes |
+
+> **Migration (planned):** open overworld combat with instanced sub-maps for bosses/dungeons — see [OPEN_WORLD_COMBAT.md](./OPEN_WORLD_COMBAT.md).
 
 ### Pets & capture
 
