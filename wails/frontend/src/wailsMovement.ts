@@ -1,4 +1,4 @@
-import type { MovementBridge } from "./phaser/movementBridge";
+import type { MovementBridge } from "./world/movementBridge";
 import { StepMove } from "../wailsjs/go/app/App";
 
 export const wailsMovementBridge: MovementBridge = {

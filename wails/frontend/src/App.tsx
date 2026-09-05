@@ -3,8 +3,6 @@ import { useGame } from "./state/store";
 import { AuthScreen } from "./components/AuthScreen";
 import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
-// Phaser renderer paused while Three.js placeholder renderer is active.
-// import { PhaserGame } from "./phaser/PhaserGame";
 import { ThreeGame } from "./three/ThreeGame";
 import { WorldHUD } from "./components/WorldHUD";
 import { HouseHUD } from "./components/HouseHUD";
@@ -108,7 +106,6 @@ function AppBody() {
     <ItemMenuProvider>
       <div className="game-layout">
         <div className="game-stage">
-          {/* <PhaserGame /> */}
           <ThreeGame />
           {screen === combat.battleScreen ? (
             <CombatHUD />

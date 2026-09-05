@@ -1,5 +1,4 @@
 import { pushChat, useGame } from "../../state/store";
-import { battleEvents } from "../../net/socket";
 import { initialBattleFocus, withBattleFocus } from "../../battle/activeBattle";
 import type { PluginContext } from "../../core/plugins/contracts";
 import type {
@@ -12,7 +11,6 @@ import type {
   RTBattleTickPayload,
 } from "../../types";
 import { BattleHUD } from "../../components/BattleHUD";
-import { RTBattleScene } from "./RTBattleScene";
 
 function toneForRTEvent(p: RTBattleEventPayload): ChatTone {
   if (p.success === false || p.cast_cancelled) return "fail";
@@ -28,8 +26,6 @@ const plugin = {
   id: "combat.realtime",
   register(ctx: PluginContext) {
     ctx.registerScreen("battle", BattleHUD);
-    // Phaser battle scene unused while Three.js BattleView is active.
-    ctx.registerBattleScene("battle", RTBattleScene);
 
     ctx.registerHandler("battle_invite_received", (env) => {
       const p = env.payload as BattleInvitePayload;
@@ -73,7 +69,6 @@ const plugin = {
     ctx.registerHandler("rt_battle_event", (env) => {
       const p = env.payload as RTBattleEventPayload;
       if (p.message) pushChat("battle", p.message, undefined, toneForRTEvent(p));
-      battleEvents.emit("rt_event", p);
       useGame.setState((s) =>
         s.rtBattle
           ? {

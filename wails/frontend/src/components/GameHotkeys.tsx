@@ -11,7 +11,6 @@ import {
 } from "../input/keybinds";
 import { tryWorldInteract } from "../world/interact";
 import { tryHouseInteract } from "../world/houseInteract";
-// import { tryHouseInteract } from "../phaser/HouseScene";
 import { clearHousePlace, getHousePlaceState, setHousePickMode } from "../world/housePlaceBridge";
 import {
   getHouseSkinPickerOpen,

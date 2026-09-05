@@ -1,6 +1,5 @@
 import { appendBattleLog, pushChat, useGame } from "../../state/store";
-import { battleEvents } from "../../net/socket";
-import { DEFAULT_BATTLE_SPEED } from "../../phaser/battleAnim";
+import { DEFAULT_BATTLE_SPEED } from "../../battle/battleTiming";
 import { initialBattleFocus, withBattleFocus } from "../../battle/activeBattle";
 import type { PluginContext } from "../../core/plugins/contracts";
 import type {
@@ -15,7 +14,6 @@ import type {
   EntityUpdate,
 } from "../../types";
 import { BattleHUD } from "../../components/BattleHUD";
-import { BattleScene } from "../../phaser/BattleScene";
 
 function entityName(id: string): string {
   const b = useGame.getState().battle;
@@ -121,8 +119,6 @@ const plugin = {
   id: "combat.ordo",
   register(ctx: PluginContext) {
     ctx.registerScreen("battle", BattleHUD);
-    // Phaser battle scene unused while Three.js BattleView is active.
-    ctx.registerBattleScene("battle", BattleScene);
 
     ctx.registerHandler("battle_invite_received", (env) => {
       const p = env.payload as BattleInvitePayload;
@@ -158,7 +154,6 @@ const plugin = {
       const p = env.payload as BattleEventPayload;
       for (const r of p.results ?? []) {
         appendBattleLog(describeResult(r), toneForResult(r));
-        battleEvents.emit("result", r);
       }
       useGame.setState((s) => {
         if (!s.battle) return s;

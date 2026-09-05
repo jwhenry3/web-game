@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
-import { applyPlayerSlide, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../phaser/movementBridge";
+import { applyPlayerSlide, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../world/movementBridge";
 import { FILL } from "../world/overworld";
 import { clearWorldLocalPos, setWorldLocalPos } from "../world/worldLocalPos";
 import {

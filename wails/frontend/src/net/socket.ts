@@ -1,4 +1,3 @@
-import Phaser from "phaser";
 import { pushChat, useGame } from "../state/store";
 import { pluginHost, applyMapSnapshot } from "../core/plugins/pluginHost";
 import { fetchAtlas } from "./atlas";
@@ -45,8 +44,6 @@ import {
   skillWeaponMatches,
 } from "../types";
 import { activeBattleView } from "../battle/activeBattle";
-
-export const battleEvents = new Phaser.Events.EventEmitter();
 
 function livingEnemyTarget(battle: { entities: BattleEntity[] }, self: BattleEntity): BattleEntity | undefined {
   const focusId = useGame.getState().battleTargetId ?? self.target_id;

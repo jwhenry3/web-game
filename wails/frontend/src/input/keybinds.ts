@@ -1,4 +1,3 @@
-import Phaser from "phaser";
 import type { WindowId } from "../types";
 
 export type KeybindMap = Record<string, string>;
@@ -219,39 +218,6 @@ export const KEYBIND_SECTIONS: { title: string; actions: string[] }[] = [
 
 export function bindingToDisplay(binding: string): string {
   return binding.replace(/Control/g, "Ctrl").replace(/\+/g, " + ");
-}
-
-/** Map binding string to Phaser Keyboard key code name. */
-export function bindingToPhaserKey(binding: string): string | null {
-  const parts = binding.split("+");
-  const key = parts[parts.length - 1]!;
-  const map: Record<string, string> = {
-    ArrowUp: "UP",
-    ArrowDown: "DOWN",
-    ArrowLeft: "LEFT",
-    ArrowRight: "RIGHT",
-    Space: "SPACE",
-    w: "W",
-    a: "A",
-    s: "S",
-    d: "D",
-    c: "C",
-    e: "E",
-    i: "I",
-    k: "K",
-    o: "O",
-    m: "M",
-  };
-  if (map[key]) return map[key]!;
-  if (/^[1-8]$/.test(key)) return key;
-  return null;
-}
-
-export function bindingToPhaserKeyCode(binding: string): number | null {
-  const name = bindingToPhaserKey(binding);
-  if (!name) return null;
-  const codes = Phaser.Input.Keyboard.KeyCodes as Record<string, number>;
-  return codes[name] ?? null;
 }
 
 let keybindCapture: ((binding: string) => void) | null = null;

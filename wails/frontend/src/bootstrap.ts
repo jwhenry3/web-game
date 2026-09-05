@@ -1,6 +1,6 @@
 import { setPlatformFetch } from "./net/platform";
 import { setGameTransport } from "./net/transport";
-import { setMovementBridge } from "./phaser/movementBridge";
+import { setMovementBridge } from "./world/movementBridge";
 import { wailsMovementBridge } from "./wailsMovement";
 import { wailsPlatformFetch } from "./wailsPlatform";
 import { wailsTransport, wireTransportEvents } from "./wailsTransport";

@@ -137,7 +137,7 @@ export type FollowTarget = { x: number; y: number };
 export function getStageTransform(scene: OverlayScene, follow?: FollowTarget | null): StageTransform {
   const cam = scene.cameras.main;
   const canvas = scene.game.canvas;
-  // Overlays mount on .game-stage; canvas lives in .phaser-host inside it.
+  // Overlays mount on .game-stage; canvas lives in .three-host inside it.
   const stage = canvas.parentElement?.parentElement ?? canvas.parentElement;
   const canvasRect = canvas.getBoundingClientRect();
   const stageRect = stage?.getBoundingClientRect();

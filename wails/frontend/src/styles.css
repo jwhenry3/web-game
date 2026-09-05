@@ -522,15 +522,6 @@ h3 {
   background: #0a0b0d;
 }
 
-.phaser-host {
-  position: absolute;
-  inset: 0;
-}
-
-.phaser-host canvas {
-  display: block;
-}
-
 .three-host {
   position: absolute;
   inset: 0;

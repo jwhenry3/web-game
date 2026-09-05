@@ -1,6 +1,6 @@
 import type { OverworldMap } from "../types";
 import { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../characters/heroes99";
-import { slideMovePlayer } from "../world/overworld";
+import { slideMovePlayer } from "./overworld";
 
 export interface MovementResult {
   x: number;
