@@ -17,7 +17,7 @@ import (
 const defaultServerURL = "http://127.0.0.1:8080"
 
 // App is the Wails-bound desktop client: Go owns WebSocket transport and
-// movement prediction; React + Phaser remain a thin presentation layer.
+// movement prediction; React + Three.js remain a thin presentation layer.
 // Optionally embeds an in-process game server (standalone / testing).
 type App struct {
 	ctx context.Context

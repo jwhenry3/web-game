@@ -40,7 +40,7 @@ Today all map nodes run **in-process** inside `cmd/server`. The same APIs can la
 | Cluster config | `internal/cluster` | `MapSpec`, registry load/save, travel checks, transfer request types |
 | Persistence | `internal/store` | Accounts + character profiles (JSON files under `data/`) |
 | Auth | `internal/auth` | HS256 JWT (default 7-day TTL) |
-| Desktop client | `wails/` | Wails shell + `wails/frontend` (Vite + React 19 + Phaser 4 + Zustand) + `internal/clientnet`; optional embedded `internal/host` |
+| Desktop client | `wails/` | Wails shell + `wails/frontend` (Vite + React 19 + Three.js + Zustand) + `internal/clientnet`; optional embedded `internal/host` |
 
 Internal transfer types (`cluster.TransferRequest`, attach payloads) are **never** sent to the client. Clients only see gameplay envelopes (`welcome`, `world_state`, `map_config`, …).
 
@@ -148,10 +148,29 @@ Saving Game Designer overrides:
 |-------|----------|-------|
 | Screens | `wails/frontend/src/App.tsx`, `state/store.ts` | `title` → auth / Game Designer / play |
 | Net | `wails/frontend/src/net/` | auth, transport, public maps, adminMaps |
-| Phaser | `wails/frontend/src/phaser/` | `WorldScene`, `BattleScene`, combat plugins |
+| Three.js 3D | `wails/frontend/src/three/` | `WorldView`, `BattleView`, `HouseView`, `GameRenderer`, camera, character animations, GLB models |
 | React HUD | `wails/frontend/src/components/` | menus, hotbar, social, windows |
 | Editor | `wails/frontend/src/components/MapEditor*.tsx`, `editor/` | Game Designer UI + logic |
 | Wails glue | `wails/frontend/src/wails*.ts`, `bootstrap.ts` | Go API / transport / movement bridges |
+
+## 3D Presentation & Coordinates
+
+The desktop client renders all game views in 3D using Three.js:
+
+- **Coordinate Mapping:** The server and wire protocol operate on 2D map coordinates `(X, Y)`. The client transforms these into Three.js space via `wails/frontend/src/three/coords.ts`:
+  - Three `x = mapX`
+  - Three `y = height` (default `0`, or sampled floor)
+  - Three `z = mapY` (horizontal South is Three `+Z`)
+  - Facing is represented as yaw radians around the vertical Y axis (Three-native, transmitted in `MovePayload.facing`).
+- **Render Views:**
+  - `GameRenderer.ts`: Orchestrates the Three.js WebGL renderer, scene graphs, lighting, and animation loop.
+  - `WorldView.ts`: 3D overworld view that generates terrain geometry from map cells/GIDs, spawns players/NPCs using GLB models (`modelLoader.ts`), manages nametags via `Css2dLabels.tsx`, and handles third-person camera lerping (`camera.ts`).
+  - `BattleView.ts`: 3D combat stage for instanced encounters.
+  - `HouseView.ts`: 3D interior for player camps/housing, featuring 3D perspective raycasting for furniture placement.
+- **3D Terrain & Physics Migration:**
+  - Complete blueprint in [MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md).
+  - Transitioning from 2D AABB tile collision (`SlideMovePlayer`) to shared heightfields, mesh colliders, and a kinematic character step synchronized between the server Hub and client prediction (`internal/clientnet`).
+  - Open-world combat migration ([OPEN_WORLD_COMBAT.md](./OPEN_WORLD_COMBAT.md)) moves combat directly into the 3D overworld without separate battle-scene swaps.
 
 ## Air / hot reload (Go)
 

@@ -17,6 +17,6 @@
     "productName": "Clara Mundi",
     "productVersion": "0.1.0",
     "copyright": "Copyright 2026",
-    "comments": "Desktop client — Go game core, React UI, Phaser renderer"
+    "comments": "Desktop client — Go game core, React UI, Three.js 3D renderer"
   }
 }

@@ -1,6 +1,6 @@
 # Fantasy Wails Desktop Client
 
-Go-native game core + React UI + Phaser renderer. Shares `internal/game`,
+Go-native game core + React UI + Three.js 3D renderer. Shares `internal/game`,
 `internal/protocol`, `internal/clientnet`, and `internal/host` with `cmd/server`.
 
 ## Layout (shared libraries)
@@ -14,7 +14,7 @@ internal/
   proxy/ …     server-only networking
 wails/
   app/         Wails bindings (thin glue over clientnet + optional host)
-  frontend/    Vite + React + Phaser UI (sole client)
+  frontend/    Vite + React + Three.js UI (sole client)
 cmd/server/    dedicated multiplayer server entry
 ```
 
@@ -83,7 +83,8 @@ Env overrides:
 
 Desktop clients negotiate **protobuf** (`?codec=protobuf`). See [docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
-## Thin Phaser movement
+## Thin Three.js movement & 3D presentation
 
-`WorldScene` calls `applyPlayerSlide()` which uses Go `StepMove` when the Wails
-movement bridge is set; otherwise it falls back to `src/world/overworld.ts`.
+The client renders the game in 3D using Three.js (`src/three/WorldView.ts`, `BattleView.ts`, `HouseView.ts`) with Y-up coordinate mapping (`src/three/coords.ts`). `WorldView.moveSelf` invokes `applyPlayerSlide()` which uses Go `StepMove` when the Wails movement bridge (`wailsMovement.ts`) is set; otherwise it falls back to `src/world/overworld.ts`.
+
+See [docs/MAPS_3D_PHYSICS.md](../docs/MAPS_3D_PHYSICS.md) for the active migration to 3D terrain heightfields and kinematic character physics.
