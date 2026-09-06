@@ -1,0 +1,11 @@
+{
+  "name": "Clara Mundi",
+  "install": "go mod download && go build -o /tmp/clara-server ./cmd/server && npm ci --prefix wails/frontend && npm ci --prefix site && npm --prefix site run build",
+  "terminals": [
+    {
+      "name": "cluster",
+      "command": "npm run server:dev"
+    }
+  ],
+  "ports": [8080]
+}
