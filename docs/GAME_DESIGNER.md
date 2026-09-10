@@ -2,7 +2,7 @@
 
 **Game Designer** is the in-app world editor (admin tool). It paints terrain, places entities and regions, manages prefabs/entity catalogs, and can create or take maps online/offline without restarting the cluster for config file churn.
 
-Architecture context: [ARCHITECTURE.md](./ARCHITECTURE.md). Map formats: [data/maps/README.md](../data/maps/README.md).
+Architecture context: [ARCHITECTURE.md](./ARCHITECTURE.md). 3D migration plan: [MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md). Map formats: [data/maps/README.md](../data/maps/README.md).
 
 ## Access
 
@@ -95,6 +95,11 @@ Client: `wails/frontend/src/net/adminMaps.ts`.
 
 - Prefabs and entity definitions are stored in **browser local storage** (designer catalogs), then stamped into map overrides when placed.
 - Prefab editor and entity editor are separate workspace pages from the main map canvas.
+
+## 3D transition & world authoring
+
+- **Current Projection:** Game Designer canvas edits 2D grid cells and object positions `(X, Y)`. In-game, the Three.js client (`WorldView.ts`) projects these 2D layers into 3D world space `(x, y=height, z=y)`, building terrain meshes from tile GIDs and positioning 3D GLB assets at their respective world coordinates.
+- **3D Terrain Roadmap ([MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md)):** The editor workflow will expand to support 3D heightfield elevation painting, slope thresholds, and mesh collider placement directly in map overrides, replacing the flat 2D collision GID mask with synchronized 3D character collision geometry.
 
 ## Related server pieces
 

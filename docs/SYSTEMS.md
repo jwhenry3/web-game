@@ -18,7 +18,9 @@ Each map node owns one `game.Overworld`:
 
 Movement is server-authoritative (slide / bounds checks). Clients send move intents; the Hub broadcasts `world_state` / `npc_state`.
 
-> **Migration (planned):** 3D terrain + shared physics/character step with client prediction — see [MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md).
+The desktop client presents the overworld in 3D using Three.js (`wails/frontend/src/three/WorldView.ts`), projecting map coordinates `(X, Y)` to 3D space `(x, y=height, z=y)` with Y-up orientation, smooth camera following, and 3D GLB character models.
+
+> **Migration (planned):** Full 3D terrain heightfields + shared physics/character step with client prediction — see [MAPS_3D_PHYSICS.md](./MAPS_3D_PHYSICS.md).
 
 ### Sanctuary rules
 
@@ -89,6 +91,7 @@ Used for battle victory shares and party passive EXP. Defaults: rate `1.0`, main
 
 - Field skill **Camp** (`camp`) pitches one tent at the hero’s feet (1.5s cast). Relocating packs the old camp.
 - Click / interact the tent to enter a **house instance** (100×100 map, **20×20** walkable starter footprint). Anyone may enter for now.
+- Rendered in 3D (`HouseView.ts`) with perspective camera raycasting for furniture picking and placement on the interior floor grid (`housePlaceBridge.ts`).
 - Owner logout despawns the camp and kicks guests to the overworld at the tent tile.
 - Owner-only **house storage** (separate from inventory, default 40 slots, searchable in UI) and **furniture** place/pick (inventory items as decorations).
 - Door returns to the overworld camp tile. Camp skin and house size are upgrade hooks for later.
@@ -108,9 +111,12 @@ JWT claims identify the account on HTTP and WebSocket. Character select / create
 
 ## Client presentation
 
-- **WorldScene** — tiled overworld, HEROES 99 layered sprites, engage, markers.
-- **BattleScene** / realtime plugin scenes — staging and VFX driven by server results.
-- React windows — Character, Equipment, Inventory, Skills, hotbar (1–5), main menu, social.
+The client presentation layer uses **Three.js** (`wails/frontend/src/three/`) and **React 19**:
+
+- **WorldView** (`three/WorldView.ts`) — 3D overworld rendering, terrain mesh generation, GLB character/prop models, animations, CSS-2D nameplates, and smooth 3D camera follow.
+- **BattleView** (`three/BattleView.ts`) — 3D arena staging, dynamic camera framing, and VFX driven by server battle state.
+- **HouseView** (`three/HouseView.ts`) — 3D housing interior with perspective raycasting for furniture placement.
+- **React HUD** — Character, Equipment, Inventory, Skills, hotbars, dialogs, main menu, and social overlays rendered above the Three.js WebGL canvas.
 
 Asset licenses: `wails/frontend/public/assets/ATTRIBUTION.md`.
 

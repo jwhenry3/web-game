@@ -1,8 +1,8 @@
 # World maps
 
-Runtime maps are **server-authoritative** `.map.json` files. The Game Designer edits sparse overrides on top of those bases. The client renders terrain from API layer data (not Tiled assets).
+Runtime maps are **server-authoritative** `.map.json` files. The Game Designer edits sparse overrides on top of those bases. The client renders 3D terrain geometry from API layer data (`wails/frontend/src/three/geometries.ts`).
 
-Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Lore & region layout: [docs/GDD.md](../docs/GDD.md). Editor: [docs/GAME_DESIGNER.md](../docs/GAME_DESIGNER.md).
+Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Lore & region layout: [docs/GDD.md](../docs/GDD.md). Editor: [docs/GAME_DESIGNER.md](../docs/GAME_DESIGNER.md). 3D migration plan: [docs/MAPS_3D_PHYSICS.md](../docs/MAPS_3D_PHYSICS.md).
 
 ## Runtime artifacts
 
@@ -14,7 +14,7 @@ Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Lore & regi
 | `base_chip.tsx` / `base_chip.png` | Base terrain tileset definition (GID centers for paint / walls) |
 | `tilesets/pipoya/` | Full Pipoya pack + catalog + sample map (client mirror under `wails/frontend/public/assets/tilesets/pipoya/`) |
 
-The client blits map GIDs through the Pipoya firstgid registry (BaseChip **577**, matching the sample map). See [tilesets/pipoya/README.md](./tilesets/pipoya/README.md).
+The Three.js client maps tile GIDs through the Pipoya firstgid registry (BaseChip **577**, matching the sample map) to construct textured 3D terrain meshes. See [tilesets/pipoya/README.md](./tilesets/pipoya/README.md) and [docs/MAPS_3D_PHYSICS.md](../docs/MAPS_3D_PHYSICS.md).
 
 Loader order (`game.LoadOverworldData`): `.map.json` → else `.tmj` → else legacy paint JSON.
 

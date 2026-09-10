@@ -1,7 +1,7 @@
 # Clara Mundi
 
-A 2D, room-based multiplayer RPG set in Clara Mundi. Go
-authoritative cluster over WebSockets; Wails desktop client (Phaser + React).
+A 3D, room-based multiplayer RPG set in Clara Mundi. Go
+authoritative cluster over WebSockets; Wails desktop client (Three.js + React).
 
 ## Documentation
 
@@ -10,6 +10,8 @@ authoritative cluster over WebSockets; Wails desktop client (Phaser + React).
 | [docs/PROTOCOL.md](docs/PROTOCOL.md) | JSON + Protobuf wire contract |
 | [docs/SYSTEMS.md](docs/SYSTEMS.md) | Overworld, combat plugins, jobs, save points, accounts |
 | [docs/GAME_DESIGNER.md](docs/GAME_DESIGNER.md) | In-app **Game Designer** (admin world editor) |
+| [docs/MAPS_3D_PHYSICS.md](docs/MAPS_3D_PHYSICS.md) | 3D terrain, physics, and client/server sync migration |
+| [docs/OPEN_WORLD_COMBAT.md](docs/OPEN_WORLD_COMBAT.md) | Open-world combat & instanced sub-maps migration |
 | [data/maps/README.md](data/maps/README.md) | `.map.json` / Tiled assets, layers, sanctuaries, tooling |
 | [site/README.md](site/README.md) | Public content site (status, news, wiki, guide) |
 | [wails/frontend/public/assets/ATTRIBUTION.md](wails/frontend/public/assets/ATTRIBUTION.md) | Third-party art licenses |
@@ -31,8 +33,11 @@ Browser site ──/ + /api/status + /status/ws──┘            Hub + overwo
 
 Bootstrap cluster: `data/cluster.json`. Shared **EXP rates** (`exp.rate`, `exp.main_percent`, `exp.sub_percent`) apply to every map. Stock maps/content/config ship in the binary and are written under `data/` on first standalone run if missing (accounts/profiles stay external only). Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-The client (`wails/frontend/`) uses **Phaser** for world/battle scenes and **React** + Zustand for menus/HUD. Title screen offers **Play Game** or **Game Designer**.
+The client (`wails/frontend/`) uses **Three.js** (`src/three/`) for 3D world navigation, battle scenes, and housing, with **React** + Zustand for menus/HUD. Title screen offers **Play Game** or **Game Designer**.
 **Shared Go libraries:** `internal/game` and `internal/protocol` are used by both the server and the desktop client. `internal/host` boots the cluster (used by `cmd/server` and optional Wails standalone). `internal/clientnet` is the Go WebSocket + prediction client. See [wails/README.md](wails/README.md).
+
+### 3D transition & physics
+The client presentation layer renders 3D scenes via Three.js (`wails/frontend/src/three/WorldView.ts`, `BattleView.ts`, `HouseView.ts`) with GLB character/prop models and Y-up coordinate mapping (`coords.ts`). Server and client are undergoing migration from 2D tile collision to shared 3D terrain heightfields and kinematic character physics; full details in [docs/MAPS_3D_PHYSICS.md](docs/MAPS_3D_PHYSICS.md).
 
 ## Progression & combat
 
@@ -136,7 +141,7 @@ data/                Portable game + player data (seeded from binary when missin
   content/           Game Designer catalogs
   accounts.json      Player accounts (not embedded)
   profiles.json      Player profiles (not embedded)
-wails/               Desktop client (Go bindings + React/Phaser UI)
+wails/               Desktop client (Go bindings + React/Three.js UI)
 docs/                Architecture, systems, Game Designer
 scripts/             Smoke tests / server helpers
 ```
