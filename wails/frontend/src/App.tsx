@@ -3,9 +3,8 @@ import { useGame } from "./state/store";
 import { AuthScreen } from "./components/AuthScreen";
 import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
-// Phaser renderer paused while Three.js placeholder renderer is active.
-// import { PhaserGame } from "./phaser/PhaserGame";
-import { ThreeGame } from "./three/ThreeGame";
+import { PhaserGame } from "./phaser/PhaserGame";
+import { EntityOverlays } from "./components/EntityOverlays";
 import { WorldHUD } from "./components/WorldHUD";
 import { HouseHUD } from "./components/HouseHUD";
 import { InviteToasts } from "./components/InviteToasts";
@@ -24,7 +23,7 @@ import { ExpBar } from "./components/ExpBar";
 import { ItemMenuProvider } from "./components/ItemContextMenu";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
 import { TitleScreen } from "./components/TitleScreen";
-// Game Designer (2D map editor) paused until a 3D authoring flow exists.
+// Game Designer (2D map editor) currently disabled.
 // import { AdminLoginScreen } from "./components/AdminLoginScreen";
 // import { MapEditorScreen } from "./components/MapEditorScreen";
 
@@ -78,7 +77,7 @@ function AppBody() {
     return <TitleScreen />;
   }
 
-  // Game Designer paused for 3D migration.
+  // Game Designer currently disabled.
   // if (screen === "admin_auth") {
   //   return <AdminLoginScreen />;
   // }
@@ -108,8 +107,8 @@ function AppBody() {
     <ItemMenuProvider>
       <div className="game-layout">
         <div className="game-stage">
-          {/* <PhaserGame /> */}
-          <ThreeGame />
+          <PhaserGame />
+          <EntityOverlays />
           {screen === combat.battleScreen ? (
             <CombatHUD />
           ) : screen === "house" ? (

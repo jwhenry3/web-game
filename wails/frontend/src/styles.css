@@ -531,26 +531,7 @@ h3 {
   display: block;
 }
 
-.three-host {
-  position: absolute;
-  inset: 0;
-}
-
-.three-host canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-/* ---- Entity nameplates / cast bars (CSS2D billboards + legacy overlay) ---- */
-.cm-css2d-layer {
-  z-index: 5;
-}
-
-.cm-css2d-object {
-  pointer-events: none;
-}
-
+/* ---- Entity nameplates / cast bars ---- */
 .cm-billboard {
   display: flex;
   flex-direction: column;
@@ -2223,6 +2204,43 @@ h3 {
   line-height: 1.2;
 }
 
+.cm-tree-tag {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(196, 163, 90, 0.35);
+  color: #8c8778;
+}
+
+.cm-tree-tag.field {
+  color: #7ec98a;
+  border-color: rgba(126, 201, 138, 0.45);
+}
+
+.cm-tree-tag.battle {
+  color: #d4bc7d;
+  border-color: rgba(212, 188, 125, 0.45);
+}
+
+.cm-hotbar-assign {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 10px;
+}
+
+.hotbar-set-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8c8778;
+  margin-bottom: 3px;
+}
+
 .cm-tree-detail {
   margin-top: 4px;
 }
@@ -2244,6 +2262,35 @@ h3 {
   display: flex;
   gap: 4px;
   justify-content: center;
+}
+
+/* Embedded copy inside the Actions window — static flow, smaller slots. */
+.hotbar--embedded {
+  position: static;
+  transform: none;
+}
+
+.hotbar--embedded .hotbar-slot {
+  width: 40px;
+  height: 40px;
+}
+
+.hotbar--embedded .hotbar-key {
+  font-size: 8px;
+}
+
+/* While a drag is in flight the incompatible bar is dimmed and refuses drops;
+   the accepting bar gets a subtle highlight. */
+.hotbar--disabled {
+  opacity: 0.35;
+}
+
+.hotbar--disabled .hotbar-slot {
+  cursor: not-allowed;
+}
+
+.hotbar--drop-target .hotbar-slot {
+  border-color: rgba(232, 201, 106, 0.85);
 }
 
 .cm-mainmenu {

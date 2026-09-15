@@ -130,6 +130,9 @@ export interface HotbarBinding {
   id: string;
 }
 
+/** Which hotbar a binding lives on: "world" shows in the overworld, "battle" in combat. */
+export type HotbarBar = "world" | "battle";
+
 export interface CharacterAppearanceWire {
   skin: string;
   face: string;
@@ -160,6 +163,7 @@ export interface ProfileInfo {
   camp_skin?: string;
   equipped: Record<string, string>;
   hotbar: Record<string, HotbarBinding>;
+  world_hotbar?: Record<string, HotbarBinding>;
   keybinds?: Record<string, string>;
   skills: SkillInfo[];
   friends?: string[];

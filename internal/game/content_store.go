@@ -14,14 +14,15 @@ func ContentDir() string {
 }
 
 var validContentKinds = map[string]bool{
-	"entities": true,
-	"prefabs":  true,
-	"tileset":  true,
-	"items":    true,
-	"quests":   true,
-	"jobs":     true,
-	"skills":   true,
-	"drops":    true,
+	"entities":   true,
+	"prefabs":    true,
+	"tileset":    true,
+	"items":      true,
+	"quests":     true,
+	"jobs":       true,
+	"skills":     true,
+	"drops":      true,
+	"characters": true,
 }
 
 // ValidContentKind reports whether kind is a supported content catalog name.
@@ -43,6 +44,8 @@ func defaultContent(kind string) json.RawMessage {
 	switch kind {
 	case "tileset":
 		return json.RawMessage("null")
+	case "characters":
+		return json.RawMessage("{}")
 	default:
 		return json.RawMessage("[]")
 	}

@@ -871,6 +871,7 @@ type ProfileInfo struct {
 	Pets                 []*PetRecord              `protobuf:"bytes,25,rep,name=pets,proto3" json:"pets,omitempty"`
 	FollowPetId          string                    `protobuf:"bytes,26,opt,name=follow_pet_id,json=followPetId,proto3" json:"follow_pet_id,omitempty"`
 	BattlePetId          string                    `protobuf:"bytes,27,opt,name=battle_pet_id,json=battlePetId,proto3" json:"battle_pet_id,omitempty"`
+	WorldHotbar          map[string]*HotbarBinding `protobuf:"bytes,28,rep,name=world_hotbar,json=worldHotbar,proto3" json:"world_hotbar,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1092,6 +1093,13 @@ func (x *ProfileInfo) GetBattlePetId() string {
 		return x.BattlePetId
 	}
 	return ""
+}
+
+func (x *ProfileInfo) GetWorldHotbar() map[string]*HotbarBinding {
+	if x != nil {
+		return x.WorldHotbar
+	}
+	return nil
 }
 
 type OverworldMap struct {
@@ -3551,8 +3559,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
-	"\x05level\x18\x04 \x01(\x05R\x05level\"\xbd\n" +
-	"\n" +
+	"\x05level\x18\x04 \x01(\x05R\x05level\"\xe5\v\n" +
 	"\vProfileInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\x05R\x05level\x12\x0e\n" +
@@ -3583,7 +3590,8 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x16house_storage_capacity\x18\x18 \x01(\x05R\x14houseStorageCapacity\x12)\n" +
 	"\x04pets\x18\x19 \x03(\v2\x15.fantasy.v1.PetRecordR\x04pets\x12\"\n" +
 	"\rfollow_pet_id\x18\x1a \x01(\tR\vfollowPetId\x12\"\n" +
-	"\rbattle_pet_id\x18\x1b \x01(\tR\vbattlePetId\x1a;\n" +
+	"\rbattle_pet_id\x18\x1b \x01(\tR\vbattlePetId\x12K\n" +
+	"\fworld_hotbar\x18\x1c \x03(\v2(.fantasy.v1.ProfileInfo.WorldHotbarEntryR\vworldHotbar\x1a;\n" +
 	"\rEquippedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aT\n" +
@@ -3592,7 +3600,10 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x19.fantasy.v1.HotbarBindingR\x05value:\x028\x01\x1a;\n" +
 	"\rKeybindsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"`\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aY\n" +
+	"\x10WorldHotbarEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12/\n" +
+	"\x05value\x18\x02 \x01(\v2\x19.fantasy.v1.HotbarBindingR\x05value:\x028\x01\"`\n" +
 	"\fOverworldMap\x12\x12\n" +
 	"\x04tile\x18\x01 \x01(\x05R\x04tile\x12\x12\n" +
 	"\x04cols\x18\x02 \x01(\x05R\x04cols\x12\x12\n" +
@@ -3848,7 +3859,7 @@ func file_fantasy_v1_common_proto_rawDescGZIP() []byte {
 	return file_fantasy_v1_common_proto_rawDescData
 }
 
-var file_fantasy_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_fantasy_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_fantasy_v1_common_proto_goTypes = []any{
 	(*CharacterAppearance)(nil), // 0: fantasy.v1.CharacterAppearance
 	(*Item)(nil),                // 1: fantasy.v1.Item
@@ -3888,7 +3899,8 @@ var file_fantasy_v1_common_proto_goTypes = []any{
 	nil,                         // 35: fantasy.v1.ProfileInfo.EquippedEntry
 	nil,                         // 36: fantasy.v1.ProfileInfo.HotbarEntry
 	nil,                         // 37: fantasy.v1.ProfileInfo.KeybindsEntry
-	(*structpb.Struct)(nil),     // 38: google.protobuf.Struct
+	nil,                         // 38: fantasy.v1.ProfileInfo.WorldHotbarEntry
+	(*structpb.Struct)(nil),     // 39: google.protobuf.Struct
 }
 var file_fantasy_v1_common_proto_depIdxs = []int32{
 	34, // 0: fantasy.v1.Item.stats:type_name -> fantasy.v1.Item.StatsEntry
@@ -3903,28 +3915,30 @@ var file_fantasy_v1_common_proto_depIdxs = []int32{
 	37, // 9: fantasy.v1.ProfileInfo.keybinds:type_name -> fantasy.v1.ProfileInfo.KeybindsEntry
 	1,  // 10: fantasy.v1.ProfileInfo.house_storage:type_name -> fantasy.v1.Item
 	8,  // 11: fantasy.v1.ProfileInfo.pets:type_name -> fantasy.v1.PetRecord
-	38, // 12: fantasy.v1.MapTileOverrides.layers:type_name -> google.protobuf.Struct
-	14, // 13: fantasy.v1.MapModule.frontend:type_name -> fantasy.v1.MapFrontend
-	38, // 14: fantasy.v1.MapModule.config:type_name -> google.protobuf.Struct
-	15, // 15: fantasy.v1.MapSnapshot.modules:type_name -> fantasy.v1.MapModule
-	10, // 16: fantasy.v1.MapSnapshot.overworld:type_name -> fantasy.v1.OverworldMap
-	13, // 17: fantasy.v1.MapSnapshot.portals:type_name -> fantasy.v1.MapPortal
-	12, // 18: fantasy.v1.MapSnapshot.tile_overrides:type_name -> fantasy.v1.MapTileOverrides
-	11, // 19: fantasy.v1.MapSnapshot.terrain_layers:type_name -> fantasy.v1.MapTerrainLayers
-	0,  // 20: fantasy.v1.WorldPlayer.appearance:type_name -> fantasy.v1.CharacterAppearance
-	1,  // 21: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
-	2,  // 22: fantasy.v1.BattleEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
-	2,  // 23: fantasy.v1.ActionResult.status_applied:type_name -> fantasy.v1.StatusSnapshot
-	2,  // 24: fantasy.v1.EntityUpdate.statuses:type_name -> fantasy.v1.StatusSnapshot
-	1,  // 25: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
-	31, // 26: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
-	2,  // 27: fantasy.v1.RTBattleEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
-	6,  // 28: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
-	29, // [29:29] is the sub-list for method output_type
-	29, // [29:29] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	38, // 12: fantasy.v1.ProfileInfo.world_hotbar:type_name -> fantasy.v1.ProfileInfo.WorldHotbarEntry
+	39, // 13: fantasy.v1.MapTileOverrides.layers:type_name -> google.protobuf.Struct
+	14, // 14: fantasy.v1.MapModule.frontend:type_name -> fantasy.v1.MapFrontend
+	39, // 15: fantasy.v1.MapModule.config:type_name -> google.protobuf.Struct
+	15, // 16: fantasy.v1.MapSnapshot.modules:type_name -> fantasy.v1.MapModule
+	10, // 17: fantasy.v1.MapSnapshot.overworld:type_name -> fantasy.v1.OverworldMap
+	13, // 18: fantasy.v1.MapSnapshot.portals:type_name -> fantasy.v1.MapPortal
+	12, // 19: fantasy.v1.MapSnapshot.tile_overrides:type_name -> fantasy.v1.MapTileOverrides
+	11, // 20: fantasy.v1.MapSnapshot.terrain_layers:type_name -> fantasy.v1.MapTerrainLayers
+	0,  // 21: fantasy.v1.WorldPlayer.appearance:type_name -> fantasy.v1.CharacterAppearance
+	1,  // 22: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
+	2,  // 23: fantasy.v1.BattleEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
+	2,  // 24: fantasy.v1.ActionResult.status_applied:type_name -> fantasy.v1.StatusSnapshot
+	2,  // 25: fantasy.v1.EntityUpdate.statuses:type_name -> fantasy.v1.StatusSnapshot
+	1,  // 26: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
+	31, // 27: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
+	2,  // 28: fantasy.v1.RTBattleEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
+	6,  // 29: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
+	6,  // 30: fantasy.v1.ProfileInfo.WorldHotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_fantasy_v1_common_proto_init() }
@@ -3938,7 +3952,7 @@ func file_fantasy_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fantasy_v1_common_proto_rawDesc), len(file_fantasy_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   38,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

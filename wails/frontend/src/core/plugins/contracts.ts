@@ -1,3 +1,4 @@
+import type Phaser from "phaser";
 import type { ComponentType } from "react";
 import type { Envelope, MessageType } from "../../types";
 import type { useGame } from "../../state/store";
@@ -14,8 +15,7 @@ export interface PluginContext {
   send: (type: MessageType, payload?: unknown) => void;
   onBattleEvent: (handler: (detail: unknown) => void) => () => void;
   registerScreen: (screen: string, component: ComponentType) => void;
-  /** Legacy Phaser scene registration — unused by Three.js renderer (kept for plugin API). */
-  registerBattleScene: (key: string, scene: unknown) => void;
+  registerBattleScene: (key: string, scene: new () => Phaser.Scene) => void;
   registerHandler: (type: string, handler: (env: Envelope) => void) => void;
 }
 

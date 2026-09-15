@@ -126,6 +126,8 @@ func (p *Proxy) Handler() http.Handler {
 		Proxy: p,
 	}
 	publicMaps.Register(apiMux)
+	publicContent := &PublicContentHandler{}
+	publicContent.Register(apiMux)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", http.StripPrefix("/api", apiMux))

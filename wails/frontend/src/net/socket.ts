@@ -35,6 +35,7 @@ import type {
   WorldPet,
   HouseStatePayload,
   SelectedAction,
+  HotbarBar,
 } from "../types";
 import {
   actionFromItem,
@@ -239,11 +240,17 @@ export const net = {
       job_changer_id: jobChangerId ?? "",
     });
   },
-  setHotbar(slot: string, kind: string, id: string) {
-    send("set_hotbar", { slot, kind, id });
+  setHotbar(bar: HotbarBar, slot: string, kind: string, id: string) {
+    send("set_hotbar", { slot, kind, id, bar });
   },
-  clearHotbar(slot: string) {
-    send("set_hotbar", { slot, kind: "", id: "" });
+  clearHotbar(bar: HotbarBar, slot: string) {
+    send("set_hotbar", { slot, kind: "", id: "", bar });
+  },
+  /** Bind to the bar that accepts this payload (field skills → world bar). */
+  assignHotbar(slot: string, kind: "skill" | "item", id: string) {
+    const profile = useGame.getState().profile;
+    const sk = kind === "skill" ? profile?.skills.find((s) => s.id === id) : undefined;
+    this.setHotbar(sk?.world_only ? "world" : "battle", slot, kind, id);
   },
   setKeybinds(keybinds: Record<string, string>) {
     send("set_keybinds", { keybinds });
@@ -485,7 +492,7 @@ export const net = {
   /** Pressing a hotbar key fires skills/items on the GCD (attack included). */
   activateHotbar(slot: string) {
     const { profile, screen } = useGame.getState();
-    const bind = profile?.hotbar?.[slot];
+    const bind = screen === "battle" ? profile?.hotbar?.[slot] : profile?.world_hotbar?.[slot];
     if (!profile || !bind) return;
 
     if (screen === "world" && bind.kind === "skill") {
@@ -534,7 +541,7 @@ export const net = {
   bindToHotbar(kind: "skill" | "item", id: string) {
     const slot = useGame.getState().bindSlot;
     if (!slot) return;
-    send("set_hotbar", { slot, kind, id });
+    this.assignHotbar(slot, kind, id);
     useGame.setState({ bindSlot: null });
   },
 

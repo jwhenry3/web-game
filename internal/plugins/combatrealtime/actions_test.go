@@ -39,6 +39,29 @@ func TestInterruptCastRefundsMPAndResetsGCD(t *testing.T) {
 	}
 }
 
+func TestMeleeIgnoresFacing(t *testing.T) {
+	r := &Room{}
+	actor := &entity{x: 0, y: 0, facingX: 1} // facing +x
+	behind := &entity{x: -50, y: 0}          // inside melee reach, behind actor
+	beyond := &entity{x: -(attackRange + enemyRadius + 1), y: 0}
+
+	if !r.skillHitsTarget(actor, behind, game.BasicAttack) {
+		t.Fatal("melee should hit a target inside reach regardless of facing")
+	}
+	if r.skillHitsTarget(actor, beyond, game.BasicAttack) {
+		t.Fatal("melee should miss beyond attackRange+enemyRadius")
+	}
+}
+
+func TestFaceToward(t *testing.T) {
+	actor := &entity{x: 0, y: 0, facingX: 1}
+	target := &entity{x: -30, y: 40}
+	faceToward(actor, target)
+	if actor.facingX >= 0 || actor.facingY <= 0 {
+		t.Fatalf("actor should face the target, got (%v, %v)", actor.facingX, actor.facingY)
+	}
+}
+
 func TestSpellAndSpearRange(t *testing.T) {
 	jump, ok := game.FindSkill("lnc_saltus_hasta")
 	if !ok {

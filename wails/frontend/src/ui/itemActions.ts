@@ -93,14 +93,14 @@ export function itemActions(
       actions.push({
         id: `hotbar:${bindSlot}`,
         label: `Set to hotbar ${hotbarSlotLabel(bindSlot)}`,
-        run: () => net.setHotbar(bindSlot, "item", item.consumable || item.id),
+        run: () => net.setHotbar("battle", bindSlot, "item", item.consumable || item.id),
       });
     } else {
       for (const slot of HOTBAR_SLOTS) {
         actions.push({
           id: `hotbar:${slot}`,
-          label: `Hotbar ${hotbarSlotLabel(slot)}`,
-          run: () => net.setHotbar(slot, "item", item.consumable || item.id),
+          label: `Battle hotbar ${hotbarSlotLabel(slot)}`,
+          run: () => net.setHotbar("battle", slot, "item", item.consumable || item.id),
         });
       }
     }

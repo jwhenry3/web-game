@@ -26,7 +26,7 @@ export function BindButtons({ kind, id }: { kind: "skill" | "item"; id: string }
       className="cm-select"
       defaultValue=""
       onChange={(e) => {
-        if (e.target.value) net.setHotbar(e.target.value, kind, id);
+        if (e.target.value) net.assignHotbar(e.target.value, kind, id);
         e.target.value = "";
       }}
     >

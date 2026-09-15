@@ -56,6 +56,7 @@ message SetHotbarPayload {
   string slot = 1;
   string kind = 2;
   string id = 3;
+  string bar = 4; // "world" | "battle" (default "battle")
 }
 
 message SetKeybindsPayload {

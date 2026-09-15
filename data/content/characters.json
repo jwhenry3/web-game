@@ -1,0 +1,1342 @@
+{
+  "kind": "characters",
+  "updated_at": "2026-09-15T19:10:45.767Z",
+  "data": {
+    "dolls": [
+      {
+        "id": "heroes99",
+        "sheet": {
+          "frame_w": 100,
+          "frame_h": 40,
+          "cols": 8,
+          "rows": 17
+        },
+        "pivot": {
+          "foot_x": 39.5,
+          "foot_y": 34
+        },
+        "facings": [
+          "left",
+          "right"
+        ],
+        "slots": [
+          {
+            "id": "skin",
+            "depth": 0
+          },
+          {
+            "id": "cloth_bot",
+            "depth": 1
+          },
+          {
+            "id": "hair_bot",
+            "depth": 2
+          },
+          {
+            "id": "face",
+            "depth": 3
+          },
+          {
+            "id": "cloth_top",
+            "depth": 4
+          },
+          {
+            "id": "hair_top",
+            "depth": 5
+          },
+          {
+            "id": "weapon_bot",
+            "depth": 6
+          },
+          {
+            "id": "weapon_top",
+            "depth": 7
+          }
+        ],
+        "anims": {
+          "idle": {
+            "frames": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "ms_per_frame": 140
+          },
+          "run": {
+            "frames": [
+              16,
+              17,
+              18,
+              19,
+              20,
+              21,
+              22,
+              23
+            ],
+            "ms_per_frame": 80
+          },
+          "attack": {
+            "frames": [
+              36,
+              37,
+              38,
+              39,
+              40,
+              41
+            ],
+            "ms_per_frame": 80
+          }
+        }
+      }
+    ],
+    "parts": [
+      {
+        "id": "c1",
+        "group": "skin",
+        "slots": [
+          "skin"
+        ],
+        "sheets": {
+          "skin": "/assets/heroes99/skin/skin_{id}.png"
+        }
+      },
+      {
+        "id": "c2",
+        "group": "skin",
+        "slots": [
+          "skin"
+        ],
+        "sheets": {
+          "skin": "/assets/heroes99/skin/skin_{id}.png"
+        }
+      },
+      {
+        "id": "c3",
+        "group": "skin",
+        "slots": [
+          "skin"
+        ],
+        "sheets": {
+          "skin": "/assets/heroes99/skin/skin_{id}.png"
+        }
+      },
+      {
+        "id": "c4",
+        "group": "skin",
+        "slots": [
+          "skin"
+        ],
+        "sheets": {
+          "skin": "/assets/heroes99/skin/skin_{id}.png"
+        }
+      },
+      {
+        "id": "c5",
+        "group": "skin",
+        "slots": [
+          "skin"
+        ],
+        "sheets": {
+          "skin": "/assets/heroes99/skin/skin_{id}.png"
+        }
+      },
+      {
+        "id": "c6",
+        "group": "skin",
+        "slots": [
+          "skin"
+        ],
+        "sheets": {
+          "skin": "/assets/heroes99/skin/skin_{id}.png"
+        }
+      },
+      {
+        "id": "c1",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "c2",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "c3",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "c4",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "c5",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "c6",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "c7",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "f1",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f2",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f3",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f4",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f5",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f6",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f7",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f8",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "f9",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m1",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m2",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m3",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m4",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m5",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m6",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m7",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m8",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m9",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m10",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m11",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m12",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m13",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "m14",
+        "group": "hair",
+        "slots": [
+          "hair_bot",
+          "hair_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "sheets": {
+          "hair_bot": "/assets/heroes99/hair/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "hair_top": "/assets/heroes99/hair/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth1",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth2",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth3",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth4",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth5",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth6",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth7",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth8",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth9",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth10",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth11",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth12",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth13",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth14",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth15",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth16",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "cloth17",
+        "group": "cloth",
+        "slots": [
+          "cloth_bot",
+          "cloth_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8"
+        ],
+        "sheets": {
+          "cloth_bot": "/assets/heroes99/cloth/{id}/{id}_bot/{id}_{variant}_bot.png",
+          "cloth_top": "/assets/heroes99/cloth/{id}/{id}_top/{id}_{variant}_top.png"
+        }
+      },
+      {
+        "id": "weapon1",
+        "group": "weapon",
+        "slots": [
+          "weapon_bot",
+          "weapon_top"
+        ],
+        "tags": [
+          "sword",
+          "katana"
+        ],
+        "sheets": {
+          "weapon_bot": "/assets/heroes99/weapon/{id}/{id}_bot/{id}_bot.png",
+          "weapon_top": "/assets/heroes99/weapon/{id}/{id}_top/{id}_top.png"
+        }
+      },
+      {
+        "id": "weapon2",
+        "group": "weapon",
+        "slots": [
+          "weapon_bot",
+          "weapon_top"
+        ],
+        "tags": [
+          "axe",
+          "hammer",
+          "mace"
+        ],
+        "sheets": {
+          "weapon_bot": "/assets/heroes99/weapon/{id}/{id}_bot/{id}_bot.png",
+          "weapon_top": "/assets/heroes99/weapon/{id}/{id}_top/{id}_top.png"
+        }
+      },
+      {
+        "id": "weapon3",
+        "group": "weapon",
+        "slots": [
+          "weapon_bot",
+          "weapon_top"
+        ],
+        "tags": [
+          "dagger",
+          "knuckles"
+        ],
+        "sheets": {
+          "weapon_bot": "/assets/heroes99/weapon/{id}/{id}_bot/{id}_bot.png",
+          "weapon_top": "/assets/heroes99/weapon/{id}/{id}_top/{id}_top.png"
+        }
+      },
+      {
+        "id": "weapon4",
+        "group": "weapon",
+        "slots": [
+          "weapon_bot",
+          "weapon_top"
+        ],
+        "tags": [
+          "spear"
+        ],
+        "sheets": {
+          "weapon_bot": "/assets/heroes99/weapon/{id}/{id}_bot/{id}_bot.png",
+          "weapon_top": "/assets/heroes99/weapon/{id}/{id}_top/{id}_top.png"
+        }
+      },
+      {
+        "id": "weapon5",
+        "group": "weapon",
+        "slots": [
+          "weapon_bot",
+          "weapon_top"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4"
+        ],
+        "tags": [
+          "staff",
+          "wand"
+        ],
+        "sheets": {
+          "weapon_bot": "/assets/heroes99/weapon/weapon5/weapon5_bot/weapon5_{variant}_bot.png",
+          "weapon_top": "/assets/heroes99/weapon/weapon5/weapon5_top/weapon5_{variant}_top.png"
+        }
+      }
+    ],
+    "races": {
+      "humanus": {
+        "skin": "c1",
+        "face": "c1",
+        "hair": "m1",
+        "hair_color": "c2",
+        "cloth": "cloth1",
+        "cloth_color": "c1",
+        "weapon": "weapon1",
+        "weapon_color": "c1"
+      },
+      "altus": {
+        "skin": "c1",
+        "face": "c2",
+        "hair": "f2",
+        "hair_color": "c8",
+        "cloth": "cloth10",
+        "cloth_color": "c2",
+        "weapon": "weapon1",
+        "weapon_color": "c1"
+      },
+      "parvus": {
+        "skin": "c3",
+        "face": "c3",
+        "hair": "m5",
+        "hair_color": "c5",
+        "cloth": "cloth5",
+        "cloth_color": "c4",
+        "weapon": "weapon5",
+        "weapon_color": "c1"
+      },
+      "felis": {
+        "skin": "c4",
+        "face": "c4",
+        "hair": "f3",
+        "hair_color": "c1",
+        "cloth": "cloth3",
+        "cloth_color": "c6",
+        "weapon": "weapon3",
+        "weapon_color": "c1"
+      },
+      "saxum": {
+        "skin": "c6",
+        "face": "c5",
+        "hair": "m2",
+        "hair_color": "c1",
+        "cloth": "cloth12",
+        "cloth_color": "c3",
+        "weapon": "weapon2",
+        "weapon_color": "c1"
+      },
+      "hume": {
+        "skin": "c1",
+        "face": "c1",
+        "hair": "m1",
+        "hair_color": "c2",
+        "cloth": "cloth1",
+        "cloth_color": "c1",
+        "weapon": "weapon1",
+        "weapon_color": "c1"
+      },
+      "elvaan": {
+        "skin": "c1",
+        "face": "c2",
+        "hair": "f2",
+        "hair_color": "c8",
+        "cloth": "cloth10",
+        "cloth_color": "c2",
+        "weapon": "weapon1",
+        "weapon_color": "c1"
+      },
+      "tarutaru": {
+        "skin": "c3",
+        "face": "c3",
+        "hair": "m5",
+        "hair_color": "c5",
+        "cloth": "cloth5",
+        "cloth_color": "c4",
+        "weapon": "weapon5",
+        "weapon_color": "c1"
+      },
+      "mithra": {
+        "skin": "c4",
+        "face": "c4",
+        "hair": "f3",
+        "hair_color": "c1",
+        "cloth": "cloth3",
+        "cloth_color": "c6",
+        "weapon": "weapon3",
+        "weapon_color": "c1"
+      },
+      "galka": {
+        "skin": "c6",
+        "face": "c5",
+        "hair": "m2",
+        "hair_color": "c1",
+        "cloth": "cloth12",
+        "cloth_color": "c3",
+        "weapon": "weapon2",
+        "weapon_color": "c1"
+      }
+    }
+  }
+}

@@ -8,13 +8,15 @@ import { CharacterSprite } from "../../phaser/CharacterSprite";
 import { EnemySprite } from "../../phaser/EnemySprite";
 import { enemyKindFromName } from "../../characters/enemies";
 import { ensureEnemyTextures } from "../../characters/enemyAssets";
-import { isJumpAction, playBattleVfx, playCastStartVfx, playFizzleVfx, playJumpCrash } from "../../phaser/battleVfx";
+import { isJumpAction, playActionArc, playBattleVfx, playCastStartVfx, playFizzleVfx, playJumpCrash, vfxCategoryForAction } from "../../phaser/battleVfx";
 import { battleDuration, DEFAULT_BATTLE_SPEED } from "../../phaser/battleAnim";
 import { bindingToPhaserKeyCode, mergeKeybinds } from "../../input/keybinds";
 
 const ARENA_W = 720;
 const ARENA_H = 480;
 const SPEED = 220;
+/** Mirrors server attackRange(70) + enemyRadius(20); drawn as the melee reach ring. */
+const MELEE_RANGE = 90;
 
 interface Fighter {
   wrapper: Phaser.GameObjects.Container;
@@ -37,6 +39,7 @@ export class RTBattleScene extends Phaser.Scene {
   private lastSentY = 0;
   private lastPos = new Map<string, { x: number; y: number }>();
   private jumping = new Set<string>();
+  private meleeRing: Phaser.GameObjects.Graphics | null = null;
   private createGen = 0;
   private onRtEvent = (p: RTBattleEventPayload) => this.animateEvent(p);
   private onBattleShutdown = () => {
@@ -67,6 +70,7 @@ export class RTBattleScene extends Phaser.Scene {
     g.fillRect(0, 0, ARENA_W, ARENA_H);
     g.lineStyle(2, 0x3a5068, 1);
     g.strokeRect(0, 0, ARENA_W, ARENA_H);
+    this.meleeRing = this.add.graphics().setDepth(9);
 
     await ensureEnemyTextures(this);
     if (gen !== this.createGen || !this.sys.isActive()) return;
@@ -165,6 +169,11 @@ export class RTBattleScene extends Phaser.Scene {
   private animateEvent(p: RTBattleEventPayload) {
     const actor = this.fighters.get(p.attacker_id);
     const target = p.target_id ? this.fighters.get(p.target_id) : undefined;
+    // Turn the actor toward whoever it is acting on.
+    if (actor && target) {
+      const fdx = target.wrapper.x - actor.wrapper.x;
+      if (Math.abs(fdx) > 0.5) actor.sprite.setFacing(fdx < 0 ? "left" : "right");
+    }
     const speed = DEFAULT_BATTLE_SPEED;
     const result: ActionResult = {
       actor_id: p.attacker_id,
@@ -198,6 +207,9 @@ export class RTBattleScene extends Phaser.Scene {
       if (actor) {
         actor.sprite.setCasting(true);
         playCastStartVfx(this, actor.wrapper.x, actor.wrapper.y - 20, result.action_id, speed);
+        if (target && target !== actor) {
+          playActionArc(this, actor.wrapper, target.wrapper, result.action_id, speed);
+        }
       }
       return;
     }
@@ -244,6 +256,9 @@ export class RTBattleScene extends Phaser.Scene {
       return;
     }
 
+    if (actor && target && actor !== target && vfxCategoryForAction(result.action_id, result.heal) !== "physical") {
+      playActionArc(this, actor.wrapper, target.wrapper, result.action_id, speed, result.heal);
+    }
     playBattleVfx(this, result, actorPos, targetPos, speed);
 
     if (actor && target) {
@@ -351,6 +366,23 @@ export class RTBattleScene extends Phaser.Scene {
       f.sprite.setCasting(casting);
       this.syncCastBar(f, ent, casting);
       f.sprite.update(this.game.loop.delta);
+    }
+
+    if (this.meleeRing) {
+      this.meleeRing.clear();
+      const selfEnt = selfId ? rt.entities.find((e) => e.id === selfId) : undefined;
+      if (self && selfEnt?.alive && !rt.end) {
+        const focusId = useGame.getState().battleTargetId ?? selfEnt.target_id;
+        const ft = focusId ? this.fighters.get(focusId) : undefined;
+        const inRange =
+          !!ft &&
+          Math.hypot(ft.wrapper.x - self.wrapper.x, ft.wrapper.y - self.wrapper.y) <= MELEE_RANGE;
+        const color = inRange ? 0x7dd3fc : 0x54627e;
+        this.meleeRing.fillStyle(color, inRange ? 0.045 : 0.02);
+        this.meleeRing.fillCircle(self.wrapper.x, self.wrapper.y, MELEE_RANGE);
+        this.meleeRing.lineStyle(1.5, color, inRange ? 0.4 : 0.18);
+        this.meleeRing.strokeCircle(self.wrapper.x, self.wrapper.y, MELEE_RANGE);
+      }
     }
 
     if (!selfId || rt.end || !self) return;

@@ -202,6 +202,12 @@ func (l *JobLoadout) migrateLegacySkillMaps() {
 			l.Hotbar[slot] = b
 		}
 	}
+	if l.WorldHotbar != nil {
+		for slot, b := range l.WorldHotbar {
+			b.ID = mapLegacyID(b.ID, legacySkillIDs)
+			l.WorldHotbar[slot] = b
+		}
+	}
 	if l.SkillLevels != nil {
 		next := make(map[string]int, len(l.SkillLevels))
 		for id, lv := range l.SkillLevels {
@@ -237,6 +243,14 @@ func mergeLoadout(dst *JobLoadout, src JobLoadout) {
 	for k, v := range src.Hotbar {
 		if _, ok := dst.Hotbar[k]; !ok {
 			dst.Hotbar[k] = v
+		}
+	}
+	if dst.WorldHotbar == nil {
+		dst.WorldHotbar = map[string]HotbarBinding{}
+	}
+	for k, v := range src.WorldHotbar {
+		if _, ok := dst.WorldHotbar[k]; !ok {
+			dst.WorldHotbar[k] = v
 		}
 	}
 	if dst.SkillLevels == nil {

@@ -45,6 +45,25 @@ export function vfxCategoryForAction(actionId: string, heal?: number): VfxCatego
   return "physical";
 }
 
+const CATEGORY_COLORS: Record<VfxCategory, number> = {
+  physical: 0xf0f0f0,
+  fire: 0xff6633,
+  ice: 0x88ccff,
+  thunder: 0xffff66,
+  wind: 0xaaffaa,
+  earth: 0xcc9966,
+  water: 0x44aaff,
+  holy: 0xffffcc,
+  dark: 0x6633aa,
+  poison: 0x66cc44,
+  heal: 0x4ade80,
+  buff: 0xffd700,
+};
+
+function vfxColorForAction(actionId: string, heal?: number): number {
+  return CATEGORY_COLORS[vfxCategoryForAction(actionId, heal)];
+}
+
 function burst(
   scene: Phaser.Scene,
   x: number,
@@ -56,13 +75,13 @@ function burst(
   opts?: { rise?: boolean; size?: number; duration?: number },
 ): void {
   const rise = opts?.rise ?? false;
-  const size = opts?.size ?? 3;
-  const baseDuration = opts?.duration ?? 450;
+  const size = opts?.size ?? 5;
+  const baseDuration = opts?.duration ?? 600;
   for (let i = 0; i < count; i++) {
-    const dot = scene.add.circle(x, y, size * (0.5 + Math.random()), color, 0.9);
+    const dot = scene.add.circle(x, y, size * (0.6 + Math.random()), color, 0.9);
     dot.setDepth(200);
     const angle = Math.random() * Math.PI * 2;
-    const dist = 12 + Math.random() * spread;
+    const dist = 18 + Math.random() * spread * 1.4;
     const duration = battleDuration(baseDuration, speed) * (0.6 + Math.random() * 0.6);
     scene.tweens.add({
       targets: dot,
@@ -77,31 +96,144 @@ function burst(
   }
 }
 
-function slashArc(scene: Phaser.Scene, x: number, y: number, flip: boolean, speed: number): void {
-  const g = scene.add.graphics().setDepth(199);
-  g.lineStyle(3, 0xffffff, 0.9);
-  const dir = flip ? -1 : 1;
-  g.beginPath();
-  g.arc(x, y, 28, -Math.PI * 0.2 * dir, Math.PI * 0.5 * dir, flip);
-  g.strokePath();
+/**
+ * Progressively draws a quadratic bezier with a glow pass, a bright core, and
+ * a leading head dot, then fades it out — shared by the lob (target arc) and
+ * the swing (melee) paths.
+ */
+function drawBezierArc(
+  scene: Phaser.Scene,
+  curve: Phaser.Curves.QuadraticBezier,
+  color: number,
+  battleSpeed: number,
+  onDrawn?: () => void,
+): void {
+  const points = curve.getPoints(28);
+  const g = scene.add.graphics().setDepth(196);
+  const head = scene.add.circle(points[0].x, points[0].y, 3, color, 0.95).setDepth(197);
+  const prog = { p: 0 };
   scene.tweens.add({
-    targets: g,
-    alpha: 0,
-    scaleX: 1.4,
-    scaleY: 1.2,
-    duration: battleDuration(220, speed),
-    ease: "Power2",
-    onComplete: () => g.destroy(),
+    targets: prog,
+    p: 1,
+    duration: battleDuration(240, battleSpeed),
+    ease: "Cubic.easeOut",
+    onUpdate: () => {
+      const k = Math.max(2, Math.ceil(prog.p * points.length));
+      const tip = points[Math.min(k - 1, points.length - 1)];
+      g.clear();
+      g.lineStyle(5, color, 0.18);
+      g.beginPath();
+      g.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < k; i++) g.lineTo(points[i].x, points[i].y);
+      g.strokePath();
+      g.lineStyle(2, color, 0.9);
+      g.beginPath();
+      g.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < k; i++) g.lineTo(points[i].x, points[i].y);
+      g.strokePath();
+      head.setPosition(tip.x, tip.y);
+    },
+    onComplete: () => {
+      onDrawn?.();
+      scene.tweens.add({
+        targets: [g, head],
+        alpha: 0,
+        duration: battleDuration(320, battleSpeed),
+        ease: "Power1",
+        onComplete: () => {
+          g.destroy();
+          head.destroy();
+        },
+      });
+    },
   });
 }
 
+/**
+ * Animated quadratic bezier from the actor to the action's target. The arc
+ * draws itself progressively toward the target with a bright head, then fades
+ * — the draw direction reads as the action's direction.
+ */
+export function playActionArc(
+  scene: Phaser.Scene,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  actionId: string,
+  battleSpeed: number,
+  heal?: number,
+  onDrawn?: () => void,
+): void {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 24) {
+    onDrawn?.();
+    return;
+  }
+
+  const color = vfxColorForAction(actionId, heal);
+  const start = new Phaser.Math.Vector2(from.x, from.y - 16);
+  const end = new Phaser.Math.Vector2(to.x, to.y - 16);
+
+  // Control point offset perpendicular to the shot, biased so the arc bends
+  // upward on screen (y grows downward).
+  let nx = -dy / dist;
+  let ny = dx / dist;
+  if (ny > 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const lift = Math.min(70, dist * 0.28);
+  const ctrl = new Phaser.Math.Vector2(
+    (start.x + end.x) / 2 + nx * lift,
+    (start.y + end.y) / 2 + ny * lift,
+  );
+
+  drawBezierArc(scene, new Phaser.Curves.QuadraticBezier(start, ctrl, end), color, battleSpeed, onDrawn);
+}
+
+/**
+ * Melee variant: the curve starts cocked behind the actor and sweeps wide
+ * through the target, reading as the path of a swung weapon rather than a
+ * lobbed projectile.
+ */
+export function playSwingArc(
+  scene: Phaser.Scene,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  color: number,
+  battleSpeed: number,
+): void {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 16) return;
+
+  let nx = -dy / dist;
+  let ny = dx / dist;
+  if (ny > 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+
+  const start = new Phaser.Math.Vector2(from.x - nx * 16, from.y - 16 - ny * 16);
+  const end = new Phaser.Math.Vector2(to.x, to.y - 16);
+  const lift = Math.min(90, dist * 0.55);
+  const ctrl = new Phaser.Math.Vector2(
+    start.x + (end.x - start.x) * 0.4 + nx * lift,
+    start.y + (end.y - start.y) * 0.4 + ny * lift,
+  );
+
+  drawBezierArc(scene, new Phaser.Curves.QuadraticBezier(start, ctrl, end), color, battleSpeed);
+}
+
 function ringFlash(scene: Phaser.Scene, x: number, y: number, color: number, speed: number): void {
-  const ring = scene.add.circle(x, y, 8, color, 0.35).setDepth(198);
+  const ring = scene.add.circle(x, y, 12, color, 0.45).setDepth(198);
   scene.tweens.add({
     targets: ring,
-    scale: 3.5,
+    scale: 7,
     alpha: 0,
-    duration: battleDuration(400, speed),
+    duration: battleDuration(500, speed),
     ease: "Power2",
     onComplete: () => ring.destroy(),
   });
@@ -119,65 +251,65 @@ function playCategoryVfx(
 ): void {
   switch (category) {
     case "physical":
-      slashArc(scene, targetX, targetY - 10, !actorOnLeft, speed);
-      burst(scene, targetX, targetY, 6, 0xdddddd, 18, speed, { size: 2 });
+      playSwingArc(scene, { x: actorX, y: actorY }, { x: targetX, y: targetY }, 0xf0f0f0, speed);
+      burst(scene, targetX, targetY, 18, 0xdddddd, 34, speed, { size: 4 });
       break;
     case "fire":
-      burst(scene, targetX, targetY - 8, 14, 0xff6622, 28, speed);
-      burst(scene, targetX, targetY - 4, 8, 0xffcc44, 20, speed, { size: 2 });
+      burst(scene, targetX, targetY - 8, 40, 0xff6622, 55, speed);
+      burst(scene, targetX, targetY - 4, 24, 0xffcc44, 40, speed, { size: 4 });
       ringFlash(scene, targetX, targetY, 0xff4400, speed);
       break;
     case "ice":
-      burst(scene, targetX, targetY, 12, 0x88ddff, 24, speed);
-      burst(scene, targetX, targetY - 6, 6, 0xffffff, 16, speed, { size: 2 });
+      burst(scene, targetX, targetY, 36, 0x88ddff, 45, speed);
+      burst(scene, targetX, targetY - 6, 18, 0xffffff, 30, speed, { size: 4 });
       ringFlash(scene, targetX, targetY, 0x66ccff, speed);
       break;
     case "thunder":
-      burst(scene, targetX, targetY - 20, 10, 0xffff88, 30, speed, { rise: true });
-      burst(scene, targetX, targetY, 8, 0xaaaaff, 22, speed);
+      burst(scene, targetX, targetY - 20, 30, 0xffff88, 55, speed, { rise: true });
+      burst(scene, targetX, targetY, 24, 0xaaaaff, 40, speed);
       ringFlash(scene, targetX, targetY, 0x8888ff, speed);
       break;
     case "wind":
-      burst(scene, targetX, targetY, 10, 0xccffcc, 32, speed);
-      burst(scene, targetX + (actorOnLeft ? -10 : 10), targetY, 6, 0xaaffaa, 24, speed, { size: 2 });
+      burst(scene, targetX, targetY, 30, 0xccffcc, 60, speed);
+      burst(scene, targetX + (actorOnLeft ? -10 : 10), targetY, 18, 0xaaffaa, 42, speed, { size: 4 });
       break;
     case "earth":
-      burst(scene, targetX, targetY + 4, 10, 0x8a6a4a, 20, speed);
-      burst(scene, targetX, targetY - 4, 6, 0xaa8866, 16, speed, { size: 4, duration: 600 });
+      burst(scene, targetX, targetY + 4, 30, 0x8a6a4a, 36, speed);
+      burst(scene, targetX, targetY - 4, 18, 0xaa8866, 28, speed, { size: 6, duration: 800 });
       break;
     case "water":
-      burst(scene, targetX, targetY, 12, 0x44aaff, 22, speed);
-      burst(scene, targetX, targetY - 8, 6, 0x88ccff, 18, speed, { rise: true });
+      burst(scene, targetX, targetY, 36, 0x44aaff, 40, speed);
+      burst(scene, targetX, targetY - 8, 20, 0x88ccff, 34, speed, { rise: true });
       break;
     case "holy":
       ringFlash(scene, targetX, targetY, 0xffffcc, speed);
-      burst(scene, targetX, targetY - 10, 10, 0xffffaa, 20, speed, { rise: true });
-      burst(scene, targetX, targetY, 6, 0xffffff, 14, speed, { size: 2 });
+      burst(scene, targetX, targetY - 10, 30, 0xffffaa, 36, speed, { rise: true });
+      burst(scene, targetX, targetY, 18, 0xffffff, 24, speed, { size: 4 });
       break;
     case "dark":
-      burst(scene, targetX, targetY, 12, 0x6633aa, 24, speed);
-      burst(scene, targetX, targetY - 6, 6, 0x220044, 18, speed);
+      burst(scene, targetX, targetY, 36, 0x6633aa, 45, speed);
+      burst(scene, targetX, targetY - 6, 18, 0x220044, 34, speed);
       ringFlash(scene, targetX, targetY, 0x440066, speed);
       break;
     case "poison":
-      burst(scene, targetX, targetY, 10, 0x66cc44, 20, speed, { rise: true });
-      burst(scene, targetX, targetY - 4, 6, 0x88ff66, 14, speed, { size: 2, rise: true });
+      burst(scene, targetX, targetY, 30, 0x66cc44, 36, speed, { rise: true });
+      burst(scene, targetX, targetY - 4, 18, 0x88ff66, 24, speed, { size: 4, rise: true });
       break;
     case "heal":
-      burst(scene, targetX, targetY - 8, 12, 0x4ade80, 16, speed, { rise: true, size: 3 });
-      burst(scene, targetX, targetY, 6, 0x86efac, 12, speed, { rise: true, size: 2 });
+      burst(scene, targetX, targetY - 8, 36, 0x4ade80, 30, speed, { rise: true, size: 5 });
+      burst(scene, targetX, targetY, 18, 0x86efac, 22, speed, { rise: true, size: 4 });
       ringFlash(scene, targetX, targetY, 0x4ade80, speed);
       break;
     case "buff":
       ringFlash(scene, targetX, targetY, 0xffe9a8, speed);
-      burst(scene, targetX, targetY - 12, 8, 0xffd700, 14, speed, { rise: true, size: 2 });
+      burst(scene, targetX, targetY - 12, 24, 0xffd700, 24, speed, { rise: true, size: 4 });
       break;
   }
 
   if (category !== "physical" && category !== "buff" && category !== "heal") {
     const midX = (actorX + targetX) / 2;
     const midY = (actorY + targetY) / 2 - 20;
-    burst(scene, midX, midY, 4, 0xffffff, 10, speed, { size: 1, duration: 300 });
+    burst(scene, midX, midY, 12, 0xffffff, 18, speed, { size: 3, duration: 400 });
   }
 }
 
@@ -260,7 +392,7 @@ export function playJumpCrash(
         },
         onComplete: () => {
           actor.setPosition(target.x, target.y);
-          burst(scene, target.x, target.y + 10, 16, 0xccbb88, 30, battleSpeed, { size: 3, duration: 400 });
+          burst(scene, target.x, target.y + 10, 48, 0xccbb88, 55, battleSpeed, { size: 5, duration: 500 });
           onImpact?.();
           followHop.h = 0;
           scene.tweens.add({
@@ -308,15 +440,9 @@ export function playCastStartVfx(
   actionId: string,
   battleSpeed: number,
 ): void {
-  const category = vfxCategoryForAction(actionId);
-  const color =
-    category === "heal" ? 0x4ade80 :
-    category === "fire" ? 0xff6633 :
-    category === "ice" ? 0x88ccff :
-    category === "thunder" ? 0xffff66 :
-    category === "holy" ? 0xffffcc :
-    category === "dark" ? 0x6633aa :
-    0xa78bfa;
+  const color = vfxColorForAction(actionId);
   ringFlash(scene, x, y, color, battleSpeed);
-  burst(scene, x, y - 8, 10, color, 16, battleSpeed, { rise: true, size: 2, duration: 550 });
+  burst(scene, x, y - 8, 28, color, 30, battleSpeed, { rise: true, size: 4, duration: 650 });
 }
+
+

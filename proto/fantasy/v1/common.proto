@@ -126,6 +126,7 @@ message ProfileInfo {
   repeated PetRecord pets = 25;
   string follow_pet_id = 26;
   string battle_pet_id = 27;
+  map<string, HotbarBinding> world_hotbar = 28;
 }
 
 message OverworldMap {

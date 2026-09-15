@@ -230,14 +230,14 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		})
 	}
 	return &protocol.MapSnapshot{
-		ID:           h.mapID,
-		Name:         h.mapName,
-		Combat:       h.modCfg.Combat,
-		Capabilities: caps,
-		Modules:      mods,
-		Overworld:    protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
+		ID:            h.mapID,
+		Name:          h.mapName,
+		Combat:        h.modCfg.Combat,
+		Capabilities:  caps,
+		Modules:       mods,
+		Overworld:     protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
 		TiledMap:      "",
-		Portals:      portals,
+		Portals:       portals,
 		TileOverrides: tileOverridesPayload(h.overworld.TileOverrides),
 		TerrainLayers: terrainLayersPayload(h.overworld),
 	}
@@ -798,7 +798,7 @@ func (h *Hub) handleSetHotbar(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	profile, ok := h.store.SetHotbar(c.Name, p.Slot, p.Kind, p.ID)
+	profile, ok := h.store.SetHotbar(c.Name, p.Bar, p.Slot, p.Kind, p.ID)
 	if !ok {
 		h.sendError(c, "Invalid hotbar slot.")
 		return
@@ -971,6 +971,10 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 	for slot, b := range loadout.Hotbar {
 		hotbar[slot] = protocol.HotbarBinding{Kind: b.Kind, ID: b.ID}
 	}
+	worldHotbar := map[string]protocol.HotbarBinding{}
+	for slot, b := range loadout.WorldHotbar {
+		worldHotbar[slot] = protocol.HotbarBinding{Kind: b.Kind, ID: b.ID}
+	}
 
 	mainLvl := p.MainJobLevel()
 	subLvl := p.SubJobEffectiveLevel()
@@ -1024,6 +1028,7 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		CampSkin:          game.NormalizeCampSkin(p.CampSkin),
 		Equipped:          equipped,
 		Hotbar:            hotbar,
+		WorldHotbar:       worldHotbar,
 		Skills:            skills,
 		Friends:           append([]string(nil), p.Friends...),
 		SavePointID:       p.SavePointID,

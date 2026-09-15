@@ -20,24 +20,23 @@ const (
 	arenaW = 720.0
 	arenaH = 480.0
 
-	playerRadius  = 18.0
-	enemyRadius   = 20.0
-	playerSpeed   = 220.0
-	enemySpeed    = 90.0
-	attackRange   = 42.0
-	meleeStopDist = attackRange
-	attackArc     = 0.85
+	playerRadius   = 18.0
+	enemyRadius    = 20.0
+	playerSpeed    = 220.0
+	enemySpeed     = 90.0
+	attackRange    = 70.0
+	meleeStopDist  = attackRange
 	allySkillRange = game.AllySkillRange
-	attackDamage  = 18
-	contactDamage     = 8
-	enemyAttackCD     = 1200 * time.Millisecond // 50% longer than the original 800ms swing
-	gcdDuration       = 2500 * time.Millisecond
-	tickInterval      = 50 * time.Millisecond
-	npcHoldSlack      = 10.0 // stay put until the player pulls this far past melee
-	npcOverlapPad     = 4.0  // ignore overlaps shallower than this (stops oscillation)
-	npcBlockCone      = 0.55 // cos of half-angle: NPCs ahead count as blockers
-	npcBlockRange     = enemyRadius * 3.2
-	castMoveCancel    = 4.0 // px: moving this far interrupts a cast
+	attackDamage   = 18
+	contactDamage  = 8
+	enemyAttackCD  = 1200 * time.Millisecond // 50% longer than the original 800ms swing
+	gcdDuration    = 2500 * time.Millisecond
+	tickInterval   = 50 * time.Millisecond
+	npcHoldSlack   = 10.0 // stay put until the player pulls this far past melee
+	npcOverlapPad  = 4.0  // ignore overlaps shallower than this (stops oscillation)
+	npcBlockCone   = 0.55 // cos of half-angle: NPCs ahead count as blockers
+	npcBlockRange  = enemyRadius * 3.2
+	castMoveCancel = 4.0 // px: moving this far interrupts a cast
 )
 
 // ResultsGracePeriod is how long results stay up before the server destroys the
@@ -138,7 +137,7 @@ func (r *Room) spawnEnemies(encounter game.EncounterConfig) {
 			side = -1
 		}
 		r.entities = append(r.entities, &entity{
-			id: fmt.Sprintf("%s-enemy-%d", r.id, i+1),
+			id:   fmt.Sprintf("%s-enemy-%d", r.id, i+1),
 			name: tpl.name, kind: tpl.kind, isPlayer: false,
 			x: 520 + float64(i*40), y: 120 + float64(i*80),
 			hp: maxHP, maxHP: maxHP, alive: true, level: enemyLevel,
@@ -204,10 +203,10 @@ func (r *Room) Join(clientID string, profile store.Profile) {
 	r.entities = append(r.entities, &entity{
 		id: clientID, name: profile.Name, isPlayer: true,
 		profileName: profile.Name,
-		weapon: profile.WeaponType(), subWeapon: profile.SubWeaponType(),
+		weapon:      profile.WeaponType(), subWeapon: profile.SubWeaponType(),
 		mainJob: game.JobID(profile.MainJob), subJob: game.JobID(profile.SubJob),
 		level: profile.MainJobLevel(),
-		x: 80 + float64(slot*50), y: arenaH/2 + float64(slot*20),
+		x:     80 + float64(slot*50), y: arenaH/2 + float64(slot*20),
 		hp: hp, maxHP: hp, mp: mp, maxMP: mp,
 		str: str, mag: mag, agi: agi,
 		alive: true, targetID: targetID, facingX: 1,
@@ -252,7 +251,7 @@ func (r *Room) spawnBattlePet(ownerClientID string, profile store.Profile) {
 		id: petID, name: pet.Name, kind: pet.Kind,
 		isAlly: true, ownerClientID: ownerClientID,
 		level: pet.Level,
-		x: 100 + float64(slot*40), y: arenaH/2 + 40,
+		x:     100 + float64(slot*40), y: arenaH/2 + 40,
 		hp: hp, maxHP: hp, mp: 20, maxMP: 20,
 		str: str, mag: str / 2, agi: agi,
 		alive: true, targetID: targetID, facingX: 1,
@@ -315,17 +314,10 @@ func (r *Room) Attack(clientID string, facingX, facingY float64) {
 		return
 	}
 	mag := math.Hypot(facingX, facingY)
-	if mag < 0.01 {
-		facingX, facingY = attacker.facingX, attacker.facingY
-		if math.Hypot(facingX, facingY) < 0.01 {
-			facingX, facingY = 1, 0
-		}
-	} else {
-		facingX /= mag
-		facingY /= mag
+	if mag > 0.01 {
+		attacker.facingX = facingX / mag
+		attacker.facingY = facingY / mag
 	}
-	attacker.facingX = facingX
-	attacker.facingY = facingY
 	if !attacker.gcdReady(time.Now()) {
 		return
 	}
@@ -333,7 +325,10 @@ func (r *Room) Attack(clientID string, facingX, facingY float64) {
 	if target == nil {
 		return
 	}
-	if !inMeleeArc(attacker, target, attackArc) {
+	if mag < 0.01 {
+		faceToward(attacker, target)
+	}
+	if dist(attacker.x, attacker.y, target.x, target.y) > attackRange+enemyRadius {
 		ev := protocol.RTBattleEventPayload{
 			AttackerID: attacker.id, Hit: false, Success: false,
 			ActionID: game.BasicAttack.ID, ActionName: game.BasicAttack.Name,

@@ -121,7 +121,6 @@ const plugin = {
   id: "combat.ordo",
   register(ctx: PluginContext) {
     ctx.registerScreen("battle", BattleHUD);
-    // Phaser battle scene unused while Three.js BattleView is active.
     ctx.registerBattleScene("battle", BattleScene);
 
     ctx.registerHandler("battle_invite_received", (env) => {

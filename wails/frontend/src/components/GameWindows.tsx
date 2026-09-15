@@ -33,6 +33,7 @@ import { SocialPane } from "./SocialPane";
 import { MainMenuTrigger } from "./MainMenu";
 import { MapWindow } from "./WorldMap";
 import { PetsPane } from "./PetsPane";
+import { HotbarBar } from "./Hotbar";
 import { DraggableWindowShell } from "./DraggableWindow";
 import { useBackdropDismiss } from "../ui/backdropDismiss";
 
@@ -596,9 +597,19 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <p className="hint">
         {tab === "general"
-          ? "Attack and Capture are always available in battle. Return, Teleport, and Camp are used in the field. Drag skills onto the hotbar."
-          : "Skills unlock as your jobs level up. Use them in battle to raise skill level."}
+          ? "Field skills (Return, Port, Camp) go on the Overworld bar; Attack, Capture, and job skills go on the Battle bar. Drag a skill onto its hotbar."
+          : "Skills unlock as your jobs level up. Battle skills go on the Battle hotbar — use them in battle to raise skill level."}
       </p>
+      <div className="cm-hotbar-assign">
+        <div className="hotbar-set">
+          <div className="hotbar-set-label">Overworld</div>
+          <HotbarBar bar="world" embedded />
+        </div>
+        <div className="hotbar-set">
+          <div className="hotbar-set-label">Battle</div>
+          <HotbarBar bar="battle" embedded />
+        </div>
+      </div>
       <div className="cm-tree" style={{ width, height }}>
         <svg className="cm-tree-links" width={width} height={height}>
           {tree.map((sk) => {
@@ -686,6 +697,9 @@ function SkillNode({
         {sk.name}
         {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
       </span>
+      <span className={`cm-tree-tag ${sk.world_only ? "field" : "battle"}`}>
+        {sk.world_only ? "Field" : "Battle"}
+      </span>
     </button>
   );
   return (
@@ -732,7 +746,7 @@ function SkillDetail({
       <div className="cm-detail-actions">
         {sk.world_only && sk.unlocked ? (
           <>
-            <span className="dim">Drag onto the hotbar or use now in the field.</span>
+            <span className="dim">Drag onto the Overworld bar or use now in the field.</span>
             <button
               type="button"
               className="cm-btn gold"
@@ -756,7 +770,7 @@ function SkillDetail({
         ) : !sk.unlocked ? (
           <span className="dim">Level your job to unlock this action.</span>
         ) : atMax ? (
-          <span className="dim">Max level. Drag onto the hotbar.</span>
+          <span className="dim">Max level. Drag onto the Battle bar.</span>
         ) : (
           <span className="dim">{locked ? "Train through battle use." : "Use in battle to level up."}</span>
         )}

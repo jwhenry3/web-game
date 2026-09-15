@@ -151,9 +151,17 @@ async function main() {
     bartz.profile.skill_points.swordplay.available === 0 &&
       bartz.profile.skills.find((s) => s.id === "power_slash").unlocked);
 
-  bartz.send("set_hotbar", { slot: "3", kind: "skill", id: "power_slash" });
+  bartz.send("set_hotbar", { slot: "3", kind: "skill", id: "power_slash", bar: "battle" });
   await bartz.until((p) => p.profile.hotbar?.["3"]?.id === "power_slash", "hotbar bind");
   check("hotbar bind", bartz.profile.hotbar["3"].kind === "skill");
+
+  // Battle skills are rejected on the world bar; field skills bind there.
+  bartz.send("set_hotbar", { slot: "4", kind: "skill", id: "power_slash", bar: "world" });
+  bartz.send("set_hotbar", { slot: "4", kind: "skill", id: "return", bar: "world" });
+  await bartz.until((p) => p.profile.world_hotbar?.["4"]?.id === "return", "world hotbar bind");
+  check("world hotbar bind", bartz.profile.world_hotbar["4"].kind === "skill");
+  check("battle skill rejected on world bar",
+    !Object.values(bartz.profile.world_hotbar).some((b) => b.id === "power_slash"));
 
   const lenna = makePlayer("SmokeLenna-" + suffix, "staff");
   await lenna.until((p) => p.id !== null, "lenna welcome");

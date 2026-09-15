@@ -119,6 +119,7 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 			res.Message = "Invalid target."
 			return r.eventFromResult(actor, res)
 		}
+		faceToward(actor, target)
 		if dist(actor.x, actor.y, target.x, target.y) > allySkillRange {
 			res.Message = "Target out of range."
 			return r.eventFromResult(actor, res)
@@ -134,6 +135,7 @@ func (r *Room) resolveAction(clientID string, action protocol.ActionPayload) *pr
 			res.Message = "No valid target."
 			return r.eventFromResult(actor, res)
 		}
+		faceToward(actor, target)
 		if !r.skillHitsTarget(actor, target, skill) {
 			res.Message = "Target out of range."
 			return r.eventFromResult(actor, res)
@@ -284,30 +286,16 @@ func (r *Room) skillHitsTarget(actor, target *entity, skill game.Skill) bool {
 	if max := game.SkillMaxRange(skill); max > 0 {
 		return d <= max
 	}
-	return inMeleeArc(actor, target, attackArc)
+	return d <= attackRange+enemyRadius
 }
 
-func inMeleeArc(actor, target *entity, halfArc float64) bool {
-	d := dist(actor.x, actor.y, target.x, target.y)
-	if d > attackRange+enemyRadius {
-		return false
+// faceToward turns the actor toward its target. Actors are expected to face
+// whatever they act on, so reach checks are distance-only.
+func faceToward(actor, target *entity) {
+	dx, dy := target.x-actor.x, target.y-actor.y
+	if d := math.Hypot(dx, dy); d > 0.01 {
+		actor.facingX, actor.facingY = dx/d, dy/d
 	}
-	dx := target.x - actor.x
-	dy := target.y - actor.y
-	dm := math.Hypot(dx, dy)
-	if dm < 0.01 {
-		return true
-	}
-	fx, fy := actor.facingX, actor.facingY
-	fm := math.Hypot(fx, fy)
-	if fm < 0.01 {
-		fx, fy = 1, 0
-	} else {
-		fx /= fm
-		fy /= fm
-	}
-	dot := (dx/dm)*fx + (dy/dm)*fy
-	return dot >= math.Cos(halfArc)
 }
 
 func (r *Room) resolveCapture(actor *entity, action protocol.ActionPayload) protocol.ActionResult {

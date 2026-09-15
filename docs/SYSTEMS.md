@@ -68,7 +68,8 @@ Buffs/debuffs (`internal/game/status.go`) tick with combat timing: defense/attac
 - **Combo aliases** (Spellblade, Nightveil, …) are named main+sub pairs — display labels and loadout presets, not separate skill trees.
 - New characters pick **main only**; `profile.unlocked_jobs` starts as the six starters. Subclass requires main level ≥ `exp.subjob_unlock_level` (default **5**).
 - Each core has a **four-skill tree**; skills unlock at class levels 1 / 5 / 9 / 13 and train through use (up to skill level 5).
-- Equipment, hotbar, and skill progress are stored **per main/sub combo** (`store` loadouts). Eight equipment slots: main, sub, six armor.
+- Equipment, hotbars, and skill progress are stored **per main/sub combo** (`store` loadouts). Eight equipment slots: main, sub, six armor.
+- Each loadout keeps **two hotbars**: the world bar (`world_hotbar`) shows in the overworld and holds field-only skills (Return, Port, Camp); the battle bar (`hotbar`) shows in combat and holds battle skills and consumables. `set_hotbar` takes a `bar` field (`world` | `battle`, default `battle`) and the server rejects bindings on the wrong bar. The Skills window shows both bars for assignment and dims the incompatible one while dragging.
 - Only **equipped** items contribute battle stats.
 - Procedural loot on victory; Mug improves rarity.
 

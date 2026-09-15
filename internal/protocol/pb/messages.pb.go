@@ -434,6 +434,7 @@ type SetHotbarPayload struct {
 	Slot          string                 `protobuf:"bytes,1,opt,name=slot,proto3" json:"slot,omitempty"`
 	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
 	Id            string                 `protobuf:"bytes,3,opt,name=id,proto3" json:"id,omitempty"`
+	Bar           string                 `protobuf:"bytes,4,opt,name=bar,proto3" json:"bar,omitempty"` // "world" | "battle" (default "battle")
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -485,6 +486,13 @@ func (x *SetHotbarPayload) GetKind() string {
 func (x *SetHotbarPayload) GetId() string {
 	if x != nil {
 		return x.Id
+	}
+	return ""
+}
+
+func (x *SetHotbarPayload) GetBar() string {
+	if x != nil {
+		return x.Bar
 	}
 	return ""
 }
@@ -3177,11 +3185,12 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x0eSetJobsPayload\x12\x19\n" +
 	"\bmain_job\x18\x01 \x01(\tR\amainJob\x12\x17\n" +
 	"\asub_job\x18\x02 \x01(\tR\x06subJob\x12$\n" +
-	"\x0ejob_changer_id\x18\x03 \x01(\tR\fjobChangerId\"J\n" +
+	"\x0ejob_changer_id\x18\x03 \x01(\tR\fjobChangerId\"\\\n" +
 	"\x10SetHotbarPayload\x12\x12\n" +
 	"\x04slot\x18\x01 \x01(\tR\x04slot\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x0e\n" +
-	"\x02id\x18\x03 \x01(\tR\x02id\"\x9b\x01\n" +
+	"\x02id\x18\x03 \x01(\tR\x02id\x12\x10\n" +
+	"\x03bar\x18\x04 \x01(\tR\x03bar\"\x9b\x01\n" +
 	"\x12SetKeybindsPayload\x12H\n" +
 	"\bkeybinds\x18\x01 \x03(\v2,.fantasy.v1.SetKeybindsPayload.KeybindsEntryR\bkeybinds\x1a;\n" +
 	"\rKeybindsEntry\x12\x10\n" +

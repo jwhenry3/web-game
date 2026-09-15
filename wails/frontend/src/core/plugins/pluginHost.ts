@@ -1,3 +1,4 @@
+import Phaser from "phaser";
 import type { ComponentType } from "react";
 import type { LoadedCombatPlugin, ModulesManifest, PluginContext } from "./contracts";
 import { PLUGIN_REGISTRY } from "./registry";
@@ -61,10 +62,9 @@ export class PluginHost {
         this.battleScreen = screen;
         this.HUD = component;
       },
-      registerBattleScene: (key, _scene) => {
-        // Phaser scenes are unused by the Three.js renderer; keep the key for HUD routing.
+      registerBattleScene: (key, scene) => {
         this.battleSceneKey = key;
-        void _scene;
+        (window as unknown as { __battleSceneCtor?: new () => Phaser.Scene }).__battleSceneCtor = scene;
       },
       registerHandler: (type, handler) => {
         this.handlers.set(type, handler);

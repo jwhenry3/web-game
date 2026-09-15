@@ -110,6 +110,8 @@ interface GameState {
   selectedAction: SelectedAction | null;
   openWindow: WindowId | null;
   bindSlot: string | null;
+  /** In-flight hotbar drag payload (dataTransfer is unreadable until drop). */
+  hotbarDrag: { kind: "skill" | "item"; id: string; slot?: string; bar?: "world" | "battle" } | null;
   mainMenuOpen: boolean;
   mainMenuView: MainMenuView;
   options: GameOptions;
@@ -125,6 +127,7 @@ interface GameState {
   toggleWindow: (w: WindowId) => void;
   closeWindow: () => void;
   setBindSlot: (slot: string | null) => void;
+  setHotbarDrag: (d: GameState["hotbarDrag"]) => void;
   setChatTab: (tab: ChatChannel) => void;
   setAuth: (auth: {
     token: string;
@@ -202,6 +205,7 @@ const initial = {
   selectedAction: null,
   openWindow: null,
   bindSlot: null,
+  hotbarDrag: null as GameState["hotbarDrag"],
   mainMenuOpen: false,
   mainMenuView: "menu" as MainMenuView,
   options: loadOptions(),
@@ -227,6 +231,7 @@ export const useGame = create<GameState>((set) => ({
     }),
   closeWindow: () => set({ openWindow: null, bindSlot: null }),
   setBindSlot: (slot) => set({ bindSlot: slot }),
+  setHotbarDrag: (d) => set({ hotbarDrag: d }),
   setChatTab: (tab) => set({ chatTab: tab }),
   setAuth: (auth) =>
     set({

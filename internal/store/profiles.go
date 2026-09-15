@@ -24,16 +24,16 @@ type HotbarBinding struct {
 const MaxCharactersPerAccount = 8
 
 type Profile struct {
-	AccountID         string                      `json:"account_id,omitempty"`
-	Name              string                      `json:"name"`
-	Race              string                      `json:"race,omitempty"`
-	MainJob           string                      `json:"main_job"`
-	SubJob            string                      `json:"sub_job"`
-	UnlockedJobs      []string                    `json:"unlocked_jobs,omitempty"`
-	Appearance        Appearance                  `json:"appearance,omitempty"`
-	Jobs              map[string]game.JobProgress `json:"jobs"`
-	Loadouts          map[string]JobLoadout       `json:"loadouts"`
-	Inventory         []game.Item                 `json:"inventory"`
+	AccountID    string                      `json:"account_id,omitempty"`
+	Name         string                      `json:"name"`
+	Race         string                      `json:"race,omitempty"`
+	MainJob      string                      `json:"main_job"`
+	SubJob       string                      `json:"sub_job"`
+	UnlockedJobs []string                    `json:"unlocked_jobs,omitempty"`
+	Appearance   Appearance                  `json:"appearance,omitempty"`
+	Jobs         map[string]game.JobProgress `json:"jobs"`
+	Loadouts     map[string]JobLoadout       `json:"loadouts"`
+	Inventory    []game.Item                 `json:"inventory"`
 	// HouseStorage is separate from inventory; only accessible inside an active camp house.
 	HouseStorage []game.Item `json:"house_storage,omitempty"`
 	// HouseFurniture persists decorations placed inside the house.
@@ -45,19 +45,19 @@ type Profile struct {
 	// FollowPetID is the pet that follows on the overworld (empty = none).
 	FollowPetID string `json:"follow_pet_id,omitempty"`
 	// BattlePetID is the pet that joins as a battle ally (empty = none).
-	BattlePetID string `json:"battle_pet_id,omitempty"`
-	Friends                  []string `json:"friends"`
-	IncomingFriendRequests   []string `json:"incoming_friend_requests,omitempty"`
-	OutgoingFriendRequests   []string `json:"outgoing_friend_requests,omitempty"`
-	Keybinds                 map[string]string `json:"keybinds,omitempty"`
-	SavePointID       string                      `json:"save_point_id,omitempty"`
-	VisitedSavePoints []string                    `json:"visited_save_points,omitempty"`
-	MapID             string                      `json:"map_id,omitempty"`
-	PrevMapID         string                      `json:"pdnc_map_id,omitempty"`
-	WorldX            float64                     `json:"world_x,omitempty"`
-	WorldY            float64                     `json:"world_y,omitempty"`
-	Facing            game.FacingYaw              `json:"facing,omitempty"`
-	HasWorldPos       bool                        `json:"has_world_pos,omitempty"`
+	BattlePetID            string            `json:"battle_pet_id,omitempty"`
+	Friends                []string          `json:"friends"`
+	IncomingFriendRequests []string          `json:"incoming_friend_requests,omitempty"`
+	OutgoingFriendRequests []string          `json:"outgoing_friend_requests,omitempty"`
+	Keybinds               map[string]string `json:"keybinds,omitempty"`
+	SavePointID            string            `json:"save_point_id,omitempty"`
+	VisitedSavePoints      []string          `json:"visited_save_points,omitempty"`
+	MapID                  string            `json:"map_id,omitempty"`
+	PrevMapID              string            `json:"pdnc_map_id,omitempty"`
+	WorldX                 float64           `json:"world_x,omitempty"`
+	WorldY                 float64           `json:"world_y,omitempty"`
+	Facing                 game.FacingYaw    `json:"facing,omitempty"`
+	HasWorldPos            bool              `json:"has_world_pos,omitempty"`
 
 	// Legacy fields migrated into Jobs/Loadouts on load.
 	Level          int                      `json:"level,omitempty"`
@@ -235,7 +235,7 @@ func (s *Store) GetOrCreate(name string, startJob game.JobID) Profile {
 		}
 		starter := game.StarterWeaponForJob(startJob)
 		inv := append([]game.Item{starter}, game.StarterConsumables()...)
-	inv = append(inv, game.StarterHousingGoods()...)
+		inv = append(inv, game.StarterHousingGoods()...)
 		jobs := map[string]game.JobProgress{}
 		for _, def := range game.AllJobs() {
 			jobs[string(def.ID)] = game.JobProgress{Level: 1, XP: 0}
@@ -532,22 +532,31 @@ func (s *Store) UseConsumable(name, itemID string) (game.Item, bool) {
 	return game.Item{}, false
 }
 
-func (s *Store) SetHotbar(name, slot, kind, id string) (Profile, bool) {
+func (s *Store) SetHotbar(name, bar, slot, kind, id string) (Profile, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.profiles[name]
 	if !ok {
 		return Profile{}, false
 	}
-	valid := game.ValidHotbarSlot(slot)
-	if !valid {
+	if bar == "" {
+		bar = game.HotbarBarBattle
+	}
+	if !game.ValidHotbarBar(bar) || !game.ValidHotbarSlot(slot) {
+		return *p, false
+	}
+	if kind != "" && game.HotbarBarFor(kind, id) != bar {
 		return *p, false
 	}
 	l := p.ActiveLoadout()
+	hb := l.Hotbar
+	if bar == game.HotbarBarWorld {
+		hb = l.WorldHotbar
+	}
 	if kind == "" {
-		delete(l.Hotbar, slot)
+		delete(hb, slot)
 	} else {
-		l.Hotbar[slot] = HotbarBinding{Kind: kind, ID: id}
+		hb[slot] = HotbarBinding{Kind: kind, ID: id}
 	}
 	p.Loadouts[p.ComboKey()] = *l
 	s.save()
