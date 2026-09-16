@@ -96,15 +96,19 @@ function nextViableEnemy(self: CombatEntity): CombatEntity | undefined {
   return entities.find((e) => !e.is_player && !e.is_ally && e.alive);
 }
 
-function castEnemySkill(actionId: string, self: CombatEntity) {
-  const target = livingEnemyTarget(self);
-  if (!target) return;
-  send("action", { action_id: actionId, target_id: target.id });
-  if ((selfTargetId() ?? self.target_id) !== target.id) {
-    send("set_target", { target_id: target.id });
+function castEnemySkill(actionId: string, self: CombatEntity | undefined) {
+  const target = self ? livingEnemyTarget(self) : undefined;
+  // If we have a combat-entity target, use it; otherwise fall back to the
+  // world-level target (e.g. an NPC we clicked on that isn't engaged yet).
+  // If neither exists, send with no target — the server's autoTargetNPC
+  // picks the nearest hostile NPC.
+  const targetId = target?.id ?? selfTargetId() ?? "";
+  send("action", { action_id: actionId, target_id: targetId });
+  if (targetId && (selfTargetId() ?? self?.target_id) !== targetId) {
+    send("set_target", { target_id: targetId });
   }
   useGame.setState({ selectedAction: null });
-  patchSelfTargetId(target.id);
+  if (targetId) patchSelfTargetId(targetId);
 }
 
 let ws: WebSocket | null = null;
@@ -495,7 +499,10 @@ export const net = {
         if (selfId) this.armOrSelfCast(actionFromSkill(sk), selfId);
       } else if (sk.id === "capture" && (!self || !livingEnemyTarget(self))) {
         this.toggleAction(actionFromSkill(sk));
-      } else if (self) {
+      } else {
+        // castEnemySkill handles self being undefined — it falls back to
+        // the world-level target so players can open with a ranged skill on
+        // an NPC they clicked/targeted before any combat entity exists.
         castEnemySkill(sk.id, self);
       }
       return;
@@ -732,7 +739,7 @@ export function handleMessage(env: Envelope) {
       break;
     }
     case "social_state": {
-      const p = env.payload as SocialStatePayload;
+      const p = (env.payload ?? {}) as SocialStatePayload;
       g.setState({
         friends: p.friends ?? [],
         friendRequests: p.pending_friend_requests ?? [],

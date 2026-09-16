@@ -28,7 +28,7 @@ export function canShowWorldInteractPrompts(state: InteractPromptState): boolean
   if (state.screen !== "world" || !state.selfId) return false;
   if (state.mainMenuOpen || state.openWindow || state.worldSkillDialog || state.npcDialog || state.jobChangeDialog) return false;
   const self = state.players[state.selfId];
-  return !!self && !self.in_combat && !self.in_house;
+  return !!self && !self.in_house;
 }
 
 export function tryWorldInteract(): boolean {

@@ -26,14 +26,6 @@ function labelFor(bind: HotbarBinding | undefined, profile: ProfileInfo): string
 
 /** HUD hotbar — the single 24-slot bar shown in the overworld. */
 export function Hotbar() {
-  const screen = useGame((s) => s.screen);
-  const profile = useGame((s) => s.profile);
-  const openWindow = useGame((s) => s.openWindow);
-  if (!profile || screen === "house" || openWindow === "skills") return null;
-  return <HotbarBar />;
-}
-
-export function HotbarBar({ embedded = false }: { embedded?: boolean }) {
   const profile = useGame((s) => s.profile);
   const selected = useGame((s) => s.selectedAction);
   const selfCombat = useGame((s) => (s.selfId ? s.combatEntities[s.selfId] : undefined));
@@ -42,7 +34,7 @@ export function HotbarBar({ embedded = false }: { embedded?: boolean }) {
   if (!profile) return null;
 
   const bindings = profile.hotbar ?? {};
-  const inCombat = !embedded && !!selfCombat?.alive;
+  const inCombat = !!selfCombat?.alive;
   const gcd = selfCombat?.skill_atb ?? 0;
   const casting = !!selfCombat?.casting_skill_id;
 
@@ -54,7 +46,6 @@ export function HotbarBar({ embedded = false }: { embedded?: boolean }) {
     const onGcd = inCombat && !!bind;
     const gcdLocked = onGcd && (gcd < 100 || casting);
     const active =
-      !embedded &&
       selected &&
       ((bind?.kind === "skill" && selected.actionId === bind.id) ||
         (bind?.kind === "item" &&
@@ -95,7 +86,7 @@ export function HotbarBar({ embedded = false }: { embedded?: boolean }) {
             net.setHotbar(slot, payload.kind, payload.id);
           }}
           onClick={() => {
-            if (!embedded) net.activateHotbar(slot);
+            net.activateHotbar(slot);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -125,7 +116,7 @@ export function HotbarBar({ embedded = false }: { embedded?: boolean }) {
 
   return (
     <div
-      className={`hotbar ${embedded ? "hotbar--embedded" : ""} ${drag ? "hotbar--drop-target" : ""}`}
+      className={`hotbar ${drag ? "hotbar--drop-target" : ""}`}
       onKeyDown={(e) => {
         if (e.key.startsWith("Arrow")) e.preventDefault();
       }}

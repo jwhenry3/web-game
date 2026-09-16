@@ -20,7 +20,7 @@ import { GameIcon } from "../ui/GameIcon";
 import { ICONS } from "../ui/icons";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { SkillTooltipContent } from "../ui/tooltipContent";
-import { readHotbarDrag, writeHotbarDrag } from "../ui/hotbarDrag";
+import { writeHotbarDrag } from "../ui/hotbarDrag";
 import {
   hasItemTransfer,
   readItemTransfer,
@@ -33,7 +33,6 @@ import { SocialPane } from "./SocialPane";
 import { MainMenuTrigger } from "./MainMenu";
 import { MapWindow } from "./WorldMap";
 import { PetsPane } from "./PetsPane";
-import { HotbarBar } from "./Hotbar";
 import { DraggableWindowShell } from "./DraggableWindow";
 import { useBackdropDismiss } from "../ui/backdropDismiss";
 
@@ -209,10 +208,6 @@ function BagPane({
   acceptFrom?: ItemBagId;
   compact?: boolean;
 }) {
-  const locked = useGame((s) => {
-    const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_combat ?? false;
-  });
   const [tab, setTab] = useState<ItemBagTab>("all");
   const [focus, setFocus] = useState<Item | null>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -268,7 +263,6 @@ function BagPane({
               item={item}
               profile={profile}
               bag={bag}
-              locked={bag === "inventory" ? locked : false}
               showLevel={false}
               transferEnabled={transferEnabled}
               actionCtx={ctx}
@@ -403,10 +397,6 @@ function previewWeaponForEquipment(profile: ProfileInfo, focus: Item | null): st
 
 function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   const selfId = useGame((s) => s.selfId);
-  const locked = useGame((s) => {
-    const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_combat ?? false;
-  });
   const byId = new Map(profile.inventory.map((i) => [i.id, i]));
   const [focus, setFocus] = useState<Item | null>(null);
   const [armouryTab, setArmouryTab] = useState<ArmouryTabId>("weapon");
@@ -451,7 +441,6 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
 
   return (
     <div className="cm-equip">
-      {locked && <p className="hint">Gear cannot be changed while engaged.</p>}
       <div className="cm-doll">
         <div className="cm-equip-preview">
           <CharacterPreviewAnimated appearance={previewAppearance} scale={1.25} />
@@ -489,7 +478,6 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
               key={item.id}
               item={item}
               profile={profile}
-              locked={locked}
               equipped={!!equippedSlotForItem(profile.equipped, item.id)}
               equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
               selected={focus?.id === item.id}
@@ -561,7 +549,6 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
   });
   const [tab, setTab] = useState<ActionTab>("general");
   const [focusId, setFocusId] = useState<string | null>(null);
-  const drag = useGame((s) => s.hotbarDrag);
   const byId = new Map(profile.skills.map((s) => [s.id, s]));
   const tabs = jobTabs(profile);
   const activeJob = tab === "general" ? null : tab;
@@ -637,24 +624,6 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
         })}
       </div>
       {focus && <SkillDetail sk={focus} byId={byId} locked={locked} />}
-      <div
-        className={`cm-hotbar-assign ${drag?.slot ? "cm-hotbar-assign--unbind" : ""}`}
-        onDragOver={(e) => {
-          // Bound-slot drags can be dropped anywhere in this area to unbind.
-          if (!drag?.slot) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
-        }}
-        onDrop={(e) => {
-          const payload = readHotbarDrag(e);
-          if (!payload?.slot) return;
-          e.preventDefault();
-          useGame.setState({ hotbarDrag: null });
-          net.clearHotbar(payload.slot);
-        }}
-      >
-        <HotbarBar embedded />
-      </div>
     </div>
   );
 }

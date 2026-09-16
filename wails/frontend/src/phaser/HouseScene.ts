@@ -170,8 +170,12 @@ export class HouseScene extends Phaser.Scene {
 
     const pal = campSkinById(house.skin);
     const g = this.add.graphics().setDepth(0);
+    // Dark surround must be large enough to fill the viewport at any camera
+    // position (no bounds). 2000px padding covers the 960×600 design viewport
+    // at max zoom-out plus comfortable margin.
+    const pad = 2000;
     g.fillStyle(0x0c0a08, 1);
-    g.fillRect(ox - 160, oy - 160, w + 320, h + 320);
+    g.fillRect(ox - pad, oy - pad, w + pad * 2, h + pad * 2);
     g.fillStyle(0x3a2e22, 1);
     g.fillRect(ox, oy, w, h);
     g.fillStyle(0x4a3a2c, 0.35);
@@ -188,7 +192,9 @@ export class HouseScene extends Phaser.Scene {
     g.fillTriangle(ox, oy, ox + w, oy, ox + w / 2, oy - 48);
 
     this.floor = g;
-    this.cameras.main.setBounds(ox - 64, oy - 80, w + 128, h + 128);
+    // No camera bounds — the camp is small, so let the camera freely center
+    // on the player even when they're near the room edges.
+    this.cameras.main.removeBounds();
     this.visibility?.setGrid({
       blocked: new Uint8Array(house.walk_cols * house.walk_rows),
       cols: house.walk_cols,

@@ -344,7 +344,8 @@ func (h *Hub) combatActive() bool {
 		}
 	}
 	for _, pc := range h.combatants {
-		if pc.inCombat || pc.casting != nil {
+		if pc.inCombat || pc.casting != nil || pc.targetID != "" ||
+			len(pc.statuses) > 0 || !pc.gcdReady(time.Now()) {
 			return true
 		}
 	}
@@ -352,9 +353,11 @@ func (h *Hub) combatActive() bool {
 }
 
 // tickCombat runs the detailed combat simulation on the 50ms cast ticker, but
-// only while a fight is actually active. All state is hub-owned (the loop
+// only while a fight is actually active. Status effects tick regardless so
+// DoTs/HoTs keep working outside combat. All state is hub-owned (the loop
 // already serializes it), so no locks are needed here.
 func (h *Hub) tickCombat(now time.Time) {
+	h.tickPlayerStatuses(now)
 	if !h.combatActive() {
 		if len(h.aoi) > 0 {
 			h.clearAoI()
@@ -365,7 +368,6 @@ func (h *Hub) tickCombat(now time.Time) {
 	h.advanceCasts(now)
 	h.tickEngagedNPCs(now)
 	h.tickBattlePets(now)
-	h.tickPlayerStatuses(now)
 	h.updateCombatFlags(now)
 	h.broadcastCombatTick()
 }
@@ -663,7 +665,7 @@ func (h *Hub) chaseAlongPath(n *worldNPC, wp *protocol.WorldPlayer, step float64
 // tickBattlePets lets each combatant's battle pet attack the owner's target.
 func (h *Hub) tickBattlePets(now time.Time) {
 	for _, pc := range h.combatants {
-		if !pc.inCombat || pc.hp <= 0 || !now.After(pc.petCD) {
+		if pc.hp <= 0 || pc.targetID == "" || !now.After(pc.petCD) {
 			continue
 		}
 		c := h.clients[pc.clientID]
@@ -680,7 +682,7 @@ func (h *Hub) tickBattlePets(now time.Time) {
 			continue
 		}
 		n := h.npcs[pc.targetID]
-		if n == nil || !n.onWorld() || !n.Engaged {
+		if n == nil || !n.onWorld() || !n.hostile() {
 			continue
 		}
 		if dist(wp.X, wp.Y, n.X, n.Y) > meleeStopDistW+60 {
@@ -711,7 +713,8 @@ func (h *Hub) tickBattlePets(now time.Time) {
 func petEntityID(ownerID string) string { return "pet-" + ownerID }
 
 // tickPlayerStatuses applies DoT/HoT to players on the ATB-cadence (every 4th
-// 50ms tick ≈ 200ms).
+// 50ms tick ≈ 200ms). Runs outside combat too so effects persist after a
+// fight ends; non-combat hp changes go out over player_sync.
 func (h *Hub) tickPlayerStatuses(now time.Time) {
 	for _, pc := range h.combatants {
 		if pc.hp <= 0 {
@@ -737,6 +740,12 @@ func (h *Hub) tickPlayerStatuses(now time.Time) {
 					h.defeatPlayer(pc.clientID)
 				}
 				continue
+			}
+		}
+		if (heal > 0 || poison > 0) && !pc.inCombat {
+			if wp := h.world[pc.clientID]; wp != nil {
+				h.syncWorldPlayer(wp, pc)
+				h.sendPlayerSync(wp)
 			}
 		}
 	}
@@ -771,9 +780,9 @@ func (h *Hub) updateCombatFlags(now time.Time) {
 		pc.inCombat = engaged
 		if !engaged {
 			h.flushSkillUsage(pc)
-			pc.casting = nil
-			pc.statuses = nil
-			pc.targetID = ""
+			// Statuses, casting, and target persist — they expire naturally
+			// or are consumed by combat ticks. Only the inCombat flag (which
+			// gates teleport/equip) clears here.
 		}
 		if wp := h.world[id]; wp != nil {
 			h.syncWorldPlayer(wp, pc)
@@ -803,7 +812,12 @@ func (h *Hub) combatSnapshots(now time.Time) []protocol.CombatEntity {
 		})
 	}
 	for id, pc := range h.combatants {
-		if !pc.inCombat {
+		// Include any player who is actively fighting: has a target, GCD
+		// running, casting, or statuses applied — not just the inCombat flag
+		// (which only tracks whether an engaged NPC references this player).
+		active := pc.inCombat || pc.targetID != "" || pc.casting != nil ||
+			len(pc.statuses) > 0 || !pc.gcdReady(now)
+		if !active {
 			continue
 		}
 		wp := h.world[id]
@@ -870,7 +884,7 @@ func (h *Hub) broadcastCombatTick() {
 			continue
 		}
 		in := false
-		if pc := h.combatants[id]; pc != nil && pc.inCombat {
+		if pc := h.combatants[id]; pc != nil && (pc.inCombat || pc.targetID != "" || pc.casting != nil || len(pc.statuses) > 0 || !pc.gcdReady(now)) {
 			in = true
 		} else {
 			for _, e := range entities {
@@ -1119,7 +1133,9 @@ func (h *Hub) resolveAction(c *Client, wp *protocol.WorldPlayer, pc *combatant, 
 		res.TargetID = tgtID
 		if game.SkillCastTime(skill) > 0 {
 			pc.mp -= skill.MPCost
-			pc.startGCD(now)
+			if pc.inCombat {
+				pc.startGCD(now)
+			}
 			pc.casting = &activeCast{SkillID: skill.ID, TargetID: tgtID}
 			pc.castX, pc.castY = wp.X, wp.Y
 			res.Success = true
@@ -1235,7 +1251,9 @@ func (h *Hub) applySkillToPlayer(c *Client, wp *protocol.WorldPlayer, pc, tpc *c
 	now := time.Now()
 	if pc.casting == nil && game.SkillCastTime(skill) == 0 {
 		pc.mp -= skill.MPCost
-		pc.startGCD(now)
+		if pc.inCombat {
+			pc.startGCD(now)
+		}
 	}
 	res.Success = true
 	amount := h.rollDamage(pc, skill)
@@ -1359,7 +1377,9 @@ func (h *Hub) resolveItemUse(c *Client, wp *protocol.WorldPlayer, pc *combatant,
 	}
 	res.ActionName = item.Name
 	res.TargetID = tgtID
-	pc.startGCD(time.Now())
+	if pc.inCombat {
+		pc.startGCD(time.Now())
+	}
 	res.Success = true
 	if hp > 0 {
 		tpc.hp = min(tpc.maxHP, tpc.hp+hp)

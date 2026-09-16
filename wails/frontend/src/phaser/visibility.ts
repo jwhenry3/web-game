@@ -256,12 +256,19 @@ export class VisibilityFX {
     tex.refresh();
   }
 
+  /** Force the mask to recompute on the next update() call. */
+  invalidate() {
+    this.lastCX = Number.NaN;
+    this.lastCY = Number.NaN;
+  }
+
   destroy() {
     if (this.ctrl) {
-      this.scene.cameras.main.filters.external.remove(this.ctrl);
+      // During scene.stop() the camera may already be torn down.
+      this.scene.cameras?.main?.filters?.external?.remove(this.ctrl);
       this.ctrl = null;
     }
-    if (this.scene.textures.exists(this.texKey)) this.scene.textures.remove(this.texKey);
+    if (this.scene.textures?.exists(this.texKey)) this.scene.textures.remove(this.texKey);
     this.maskTex = undefined;
     this.grid = null;
   }

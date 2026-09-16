@@ -2225,29 +2225,6 @@ h3 {
   border-color: rgba(212, 188, 125, 0.45);
 }
 
-.cm-hotbar-assign {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin: 12px 0 4px;
-  padding-top: 10px;
-  border-top: 1px solid rgba(196, 163, 90, 0.25);
-}
-
-.cm-hotbar-tabs {
-  margin-bottom: 8px;
-}
-
-/* While a bound slot is dragged, the whole assign area is an unbind zone. */
-.cm-hotbar-assign--unbind {
-  outline: 1px dashed rgba(196, 163, 90, 0.4);
-  outline-offset: 6px;
-}
-
-.cm-hotbar-tabs .cm-tab--incompat {
-  opacity: 0.4;
-}
-
 .cm-tree-detail {
   margin-top: 4px;
 }
@@ -2271,27 +2248,7 @@ h3 {
   justify-content: center;
 }
 
-/* Embedded copy inside the Actions window — static flow, smaller slots. */
-.hotbar--embedded {
-  position: static;
-  transform: none;
-}
-
-.hotbar--embedded .hotbar-slot {
-  width: 48px;
-  height: 48px;
-}
-
-/* While a drag is in flight the incompatible bar is dimmed and refuses drops;
-   the accepting bar gets a subtle highlight. */
-.hotbar--disabled {
-  opacity: 0.35;
-}
-
-.hotbar--disabled .hotbar-slot {
-  cursor: not-allowed;
-}
-
+/* While a drag is in flight the bar's slots highlight as drop targets. */
 .hotbar--drop-target .hotbar-slot {
   border-color: rgba(232, 201, 106, 0.85);
 }

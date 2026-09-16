@@ -385,6 +385,23 @@ export class WorldScene extends Phaser.Scene {
     this.events.on(Phaser.Scenes.Events.SLEEP, () => {
       clearEntityOverlays();
     });
+    this.events.on(Phaser.Scenes.Events.WAKE, () => {
+      // Returning from the house scene: force the self avatar to re-snap so
+      // the camera follows the updated world position instead of the stale
+      // pre-sleep location.  Also clear overlays so no house-scene labels
+      // linger and invalidate the visibility mask so it recomputes.
+      this.selfSpawned = false;
+      for (const [, av] of this.avatars) av.wrapper.destroy();
+      this.avatars.clear();
+      for (const [, f] of this.foes) f.wrapper.destroy();
+      this.foes.clear();
+      this.combatExtras.forEach((ex) => ex.wrapper.destroy());
+      this.combatExtras.clear();
+      clearEntityOverlays();
+      this.visibility?.invalidate();
+      // Don't replay combat events that fired while the scene was asleep.
+      this.combatSeenSeq = useGame.getState().combatEvents.reduce((m, e) => Math.max(m, e.seq), 0);
+    });
   }
 
   private bindTerrainSync() {

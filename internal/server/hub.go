@@ -671,10 +671,6 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	if !ok {
 		return
 	}
-	if wp.InCombat {
-		h.sendError(c, "Cannot change equipment while in combat.")
-		return
-	}
 	var p protocol.EquipPayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
@@ -685,6 +681,10 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp.Weapon = string(profile.WeaponType())
+	if pc := h.combatants[c.ID]; pc != nil {
+		h.refreshCombatStats(c, pc)
+		h.syncWorldPlayer(wp, pc)
+	}
 	h.sendWelcome(c, profile)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 }
@@ -692,10 +692,6 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	wp, ok := h.world[c.ID]
 	if !ok {
-		return
-	}
-	if wp.InCombat {
-		h.sendError(c, "Cannot change equipment while in combat.")
 		return
 	}
 	var p protocol.UnequipPayload
@@ -707,6 +703,10 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp.Weapon = string(profile.WeaponType())
+	if pc := h.combatants[c.ID]; pc != nil {
+		h.refreshCombatStats(c, pc)
+		h.syncWorldPlayer(wp, pc)
+	}
 	h.sendWelcome(c, profile)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 }
