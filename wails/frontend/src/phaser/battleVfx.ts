@@ -99,52 +99,68 @@ function burst(
 /**
  * Progressively draws a quadratic bezier with a glow pass, a bright core, and
  * a leading head dot, then fades it out — shared by the lob (target arc) and
- * the swing (melee) paths.
+ * the swing (melee) paths. getCurve is re-evaluated every frame so the arc
+ * tracks live source/target positions while it draws.
  */
 function drawBezierArc(
   scene: Phaser.Scene,
-  curve: Phaser.Curves.QuadraticBezier,
+  getCurve: () => Phaser.Curves.QuadraticBezier,
   color: number,
   battleSpeed: number,
   onDrawn?: () => void,
+  timing?: { draw?: number; tailDelay?: number; tail?: number },
 ): void {
-  const points = curve.getPoints(28);
+  const drawMs = timing?.draw ?? 240;
+  const tailDelayMs = timing?.tailDelay ?? 180;
+  const tailMs = timing?.tail ?? 420;
   const g = scene.add.graphics().setDepth(196);
-  const head = scene.add.circle(points[0].x, points[0].y, 3, color, 0.95).setDepth(197);
-  const prog = { p: 0 };
+  const head = scene.add.circle(0, 0, 3, color, 0.95).setDepth(197);
+  // p is the draw frontier (head), tail the erosion frontier chasing behind it.
+  const prog = { p: 0, tail: 0 };
+
+  const render = () => {
+    const points = getCurve().getPoints(28);
+    const hi = Math.max(2, Math.ceil(prog.p * points.length));
+    const lo = Math.min(hi - 1, Math.floor(prog.tail * points.length));
+    const tip = points[Math.min(hi - 1, points.length - 1)];
+    // Opacity falls off with tail progress so the surviving segment dims as
+    // it dissolves instead of staying full-bright until the last point.
+    const fade = 1 - prog.tail;
+    g.clear();
+    g.lineStyle(5, color, 0.18 * fade);
+    g.beginPath();
+    g.moveTo(points[lo].x, points[lo].y);
+    for (let i = lo + 1; i < hi; i++) g.lineTo(points[i].x, points[i].y);
+    g.strokePath();
+    g.lineStyle(2, color, 0.9 * fade);
+    g.beginPath();
+    g.moveTo(points[lo].x, points[lo].y);
+    for (let i = lo + 1; i < hi; i++) g.lineTo(points[i].x, points[i].y);
+    g.strokePath();
+    head.setPosition(tip.x, tip.y);
+    head.setAlpha(0.95 * fade);
+  };
+
   scene.tweens.add({
     targets: prog,
     p: 1,
-    duration: battleDuration(240, battleSpeed),
+    duration: battleDuration(drawMs, battleSpeed),
     ease: "Cubic.easeOut",
-    onUpdate: () => {
-      const k = Math.max(2, Math.ceil(prog.p * points.length));
-      const tip = points[Math.min(k - 1, points.length - 1)];
-      g.clear();
-      g.lineStyle(5, color, 0.18);
-      g.beginPath();
-      g.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < k; i++) g.lineTo(points[i].x, points[i].y);
-      g.strokePath();
-      g.lineStyle(2, color, 0.9);
-      g.beginPath();
-      g.moveTo(points[0].x, points[0].y);
-      for (let i = 1; i < k; i++) g.lineTo(points[i].x, points[i].y);
-      g.strokePath();
-      head.setPosition(tip.x, tip.y);
-    },
+    onUpdate: render,
+    onComplete: () => onDrawn?.(),
+  });
+  // Tail starts eroding while the head is still drawing, so the arc dissolves
+  // start→tip over time instead of blinking out or dimming all at once.
+  scene.tweens.add({
+    targets: prog,
+    tail: 1,
+    delay: battleDuration(tailDelayMs, battleSpeed),
+    duration: battleDuration(tailMs, battleSpeed),
+    ease: "Power1",
+    onUpdate: render,
     onComplete: () => {
-      onDrawn?.();
-      scene.tweens.add({
-        targets: [g, head],
-        alpha: 0,
-        duration: battleDuration(320, battleSpeed),
-        ease: "Power1",
-        onComplete: () => {
-          g.destroy();
-          head.destroy();
-        },
-      });
+      g.destroy();
+      head.destroy();
     },
   });
 }
@@ -172,24 +188,37 @@ export function playActionArc(
   }
 
   const color = vfxColorForAction(actionId, heal);
-  const start = new Phaser.Math.Vector2(from.x, from.y - 16);
-  const end = new Phaser.Math.Vector2(to.x, to.y - 16);
 
-  // Control point offset perpendicular to the shot, biased so the arc bends
-  // upward on screen (y grows downward).
-  let nx = -dy / dist;
-  let ny = dx / dist;
-  if (ny > 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  const lift = Math.min(70, dist * 0.28);
-  const ctrl = new Phaser.Math.Vector2(
-    (start.x + end.x) / 2 + nx * lift,
-    (start.y + end.y) / 2 + ny * lift,
+  drawBezierArc(
+    scene,
+    () => {
+      const start = new Phaser.Math.Vector2(from.x, from.y - 16);
+      const end = new Phaser.Math.Vector2(to.x, to.y - 16);
+
+      // Control point offset perpendicular to the shot, biased so the arc
+      // bends upward on screen (y grows downward).
+      const ddx = end.x - start.x;
+      const ddy = end.y - start.y;
+      const d = Math.hypot(ddx, ddy) || 1;
+      let nx = -ddy / d;
+      let ny = ddx / d;
+      if (ny > 0) {
+        nx = -nx;
+        ny = -ny;
+      }
+      const lift = Math.min(70, d * 0.28);
+      const ctrl = new Phaser.Math.Vector2(
+        (start.x + end.x) / 2 + nx * lift,
+        (start.y + end.y) / 2 + ny * lift,
+      );
+      return new Phaser.Curves.QuadraticBezier(start, ctrl, end);
+    },
+    color,
+    battleSpeed,
+    onDrawn,
+    // Lob lingers longer than the melee swing and dissolves more gradually.
+    { draw: 340, tailDelay: 320, tail: 900 },
   );
-
-  drawBezierArc(scene, new Phaser.Curves.QuadraticBezier(start, ctrl, end), color, battleSpeed, onDrawn);
 }
 
 /**
@@ -209,22 +238,31 @@ export function playSwingArc(
   const dist = Math.hypot(dx, dy);
   if (dist < 16) return;
 
-  let nx = -dy / dist;
-  let ny = dx / dist;
-  if (ny > 0) {
-    nx = -nx;
-    ny = -ny;
-  }
+  drawBezierArc(
+    scene,
+    () => {
+      const ddx = to.x - from.x;
+      const ddy = to.y - from.y;
+      const d = Math.hypot(ddx, ddy) || 1;
+      let nx = -ddy / d;
+      let ny = ddx / d;
+      if (ny > 0) {
+        nx = -nx;
+        ny = -ny;
+      }
 
-  const start = new Phaser.Math.Vector2(from.x - nx * 16, from.y - 16 - ny * 16);
-  const end = new Phaser.Math.Vector2(to.x, to.y - 16);
-  const lift = Math.min(90, dist * 0.55);
-  const ctrl = new Phaser.Math.Vector2(
-    start.x + (end.x - start.x) * 0.4 + nx * lift,
-    start.y + (end.y - start.y) * 0.4 + ny * lift,
+      const start = new Phaser.Math.Vector2(from.x - nx * 16, from.y - 16 - ny * 16);
+      const end = new Phaser.Math.Vector2(to.x, to.y - 16);
+      const lift = Math.min(90, d * 0.55);
+      const ctrl = new Phaser.Math.Vector2(
+        start.x + (end.x - start.x) * 0.4 + nx * lift,
+        start.y + (end.y - start.y) * 0.4 + ny * lift,
+      );
+      return new Phaser.Curves.QuadraticBezier(start, ctrl, end);
+    },
+    color,
+    battleSpeed,
   );
-
-  drawBezierArc(scene, new Phaser.Curves.QuadraticBezier(start, ctrl, end), color, battleSpeed);
 }
 
 function ringFlash(scene: Phaser.Scene, x: number, y: number, color: number, speed: number): void {
@@ -242,16 +280,18 @@ function ringFlash(scene: Phaser.Scene, x: number, y: number, color: number, spe
 function playCategoryVfx(
   scene: Phaser.Scene,
   category: VfxCategory,
-  actorX: number,
-  actorY: number,
-  targetX: number,
-  targetY: number,
+  actorPos: { x: number; y: number },
+  targetPos: { x: number; y: number },
   actorOnLeft: boolean,
   speed: number,
 ): void {
+  const actorX = actorPos.x;
+  const actorY = actorPos.y;
+  const targetX = targetPos.x;
+  const targetY = targetPos.y;
   switch (category) {
     case "physical":
-      playSwingArc(scene, { x: actorX, y: actorY }, { x: targetX, y: targetY }, 0xf0f0f0, speed);
+      playSwingArc(scene, actorPos, targetPos, 0xf0f0f0, speed);
       burst(scene, targetX, targetY, 18, 0xdddddd, 34, speed, { size: 4 });
       break;
     case "fire":
@@ -326,10 +366,8 @@ export function playBattleVfx(
   playCategoryVfx(
     scene,
     category,
-    actorPos?.x ?? targetPos.x,
-    actorPos?.y ?? targetPos.y,
-    targetPos.x,
-    targetPos.y,
+    actorPos ?? targetPos,
+    targetPos,
     actorOnLeft,
     battleSpeed,
   );
@@ -344,6 +382,28 @@ export function playBattleVfx(
 
 export function playFizzleVfx(scene: Phaser.Scene, x: number, y: number, battleSpeed: number): void {
   burst(scene, x, y, 6, 0x8899aa, 12, battleSpeed, { size: 2, duration: 350 });
+}
+
+/**
+ * Overworld-combat hit feedback: burst/ring/flash at the target only.
+ * actorPos == targetPos so playSwingArc early-returns (<16px) — no
+ * actor→target bezier arcs are ever drawn in the field.
+ */
+export function playHitVfx(
+  scene: Phaser.Scene,
+  actionId: string,
+  heal: number | undefined,
+  x: number,
+  y: number,
+  battleSpeed: number,
+): void {
+  const category = vfxCategoryForAction(actionId, heal);
+  playCategoryVfx(scene, category, { x, y }, { x, y }, true, battleSpeed);
+}
+
+/** Dust puff where a dodge dash lands. */
+export function playDodgeVfx(scene: Phaser.Scene, x: number, y: number, battleSpeed: number): void {
+  burst(scene, x, y + 10, 12, 0x9fb6c9, 26, battleSpeed, { size: 3, duration: 320 });
 }
 
 export function isJumpAction(actionId: string): boolean {

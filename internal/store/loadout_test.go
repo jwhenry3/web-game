@@ -20,13 +20,6 @@ func TestDefaultHotbarMainOnly(t *testing.T) {
 	if _, ok := hb["4"]; ok {
 		t.Fatal("slot 4 should be empty without sub job")
 	}
-	if hb["7"].ID != game.ActionIDCapture {
-		t.Fatalf("slot 7 = %q, want capture", hb["7"].ID)
-	}
-	wb := defaultWorldHotbar()
-	if wb["1"].ID != game.SkillIDReturn || wb["2"].ID != game.SkillIDPort || wb["3"].ID != game.SkillIDCamp {
-		t.Fatalf("world hotbar = %+v, want return/port/camp", wb)
-	}
 }
 
 func TestDefaultHotbarWithSub(t *testing.T) {
@@ -37,93 +30,84 @@ func TestDefaultHotbarWithSub(t *testing.T) {
 	if hb["4"].ID != game.RootSkillID(game.JobCAN) {
 		t.Fatalf("slot 4 = %q, want %q", hb["4"].ID, game.RootSkillID(game.JobCAN))
 	}
-	if hb["7"].ID != game.ActionIDCapture {
-		t.Fatalf("slot 7 = %q, want capture", hb["7"].ID)
-	}
 }
 
-func TestNormalizeSplitsWorldSkills(t *testing.T) {
+func TestNormalizeMergesWorldHotbar(t *testing.T) {
 	l := JobLoadout{
 		Hotbar: map[string]HotbarBinding{
 			"1": {Kind: "skill", ID: game.BasicAttack.ID},
 			"8": {Kind: "skill", ID: game.SkillIDReturn},
 		},
-	}
-	l.normalize()
-	if _, ok := l.Hotbar["8"]; ok {
-		t.Fatalf("return should move off the battle bar: %+v", l.Hotbar)
-	}
-	if l.WorldHotbar["8"].ID != game.SkillIDReturn {
-		t.Fatalf("world hotbar slot 8 = %q, want return", l.WorldHotbar["8"].ID)
-	}
-	if l.WorldHotbar["2"].ID != game.SkillIDPort || l.WorldHotbar["3"].ID != game.SkillIDCamp {
-		t.Fatalf("world hotbar = %+v, want port/camp soft-filled", l.WorldHotbar)
-	}
-	if l.Hotbar["7"].ID != game.ActionIDCapture {
-		t.Fatalf("battle hotbar slot 7 = %q, want capture", l.Hotbar["7"].ID)
-	}
-}
-
-func TestNormalizeSplitsBattleSkillsOffWorldBar(t *testing.T) {
-	l := JobLoadout{
 		WorldHotbar: map[string]HotbarBinding{
-			"5": {Kind: "skill", ID: game.BasicAttack.ID},
-			"6": {Kind: "item", ID: "potio"},
+			"1": {Kind: "skill", ID: game.SkillIDPort},
 		},
 	}
 	l.normalize()
-	if _, ok := l.WorldHotbar["5"]; ok {
-		t.Fatalf("attack should move off the world bar: %+v", l.WorldHotbar)
+	if l.WorldHotbar != nil {
+		t.Fatalf("world hotbar should be merged away: %+v", l.WorldHotbar)
 	}
-	if _, ok := l.WorldHotbar["6"]; ok {
-		t.Fatalf("items should move off the world bar: %+v", l.WorldHotbar)
+	// Legacy mixed bar stays put; the old world-bar binding lands on a free slot.
+	if l.Hotbar["8"].ID != game.SkillIDReturn {
+		t.Fatalf("slot 8 = %q, want return", l.Hotbar["8"].ID)
 	}
-	if l.Hotbar["5"].ID != game.BasicAttack.ID || l.Hotbar["6"].ID != "potio" {
-		t.Fatalf("battle hotbar = %+v, want attack + potio", l.Hotbar)
+	foundPort := false
+	for _, b := range l.Hotbar {
+		if b.ID == game.SkillIDPort {
+			foundPort = true
+		}
+	}
+	if !foundPort {
+		t.Fatalf("world-bar binding lost in merge: %+v", l.Hotbar)
+	}
+	if l.Hotbar["7"].ID != game.ActionIDCapture {
+		t.Fatalf("slot 7 = %q, want capture soft-fill", l.Hotbar["7"].ID)
+	}
+	// Return and port are already on the bar; camp soft-fills at ctrl+3.
+	if l.Hotbar["ctrl+3"].ID != game.SkillIDCamp {
+		t.Fatalf("ctrl+3 = %q, want camp soft-fill", l.Hotbar["ctrl+3"].ID)
 	}
 }
 
-func TestSetHotbarRoutesByBar(t *testing.T) {
+func TestNormalizeStripsDodge(t *testing.T) {
+	l := JobLoadout{
+		Hotbar: map[string]HotbarBinding{
+			"8": {Kind: "skill", ID: game.ActionIDDodge},
+		},
+	}
+	l.normalize()
+	for _, b := range l.Hotbar {
+		if b.ID == game.ActionIDDodge {
+			t.Fatal("dodge must not sit on the hotbar (Shift keybind)")
+		}
+	}
+}
+
+func TestSetHotbar(t *testing.T) {
 	s := testStore(t)
 	s.profiles["Hero"] = testProfile("Hero", game.JobVAN, "", nil)
 
-	// Field skills bind on the world bar; battle skills and items on the
-	// battle bar. Cross-bar writes are rejected.
-	if _, ok := s.SetHotbar("Hero", game.HotbarBarWorld, "5", "skill", game.SkillIDReturn); !ok {
-		t.Fatal("return should bind on the world bar")
+	// Skills and items share the single hotbar.
+	if _, ok := s.SetHotbar("Hero", "5", "skill", game.SkillIDReturn); !ok {
+		t.Fatal("return should bind on the hotbar")
 	}
-	if _, ok := s.SetHotbar("Hero", game.HotbarBarWorld, "6", "skill", game.BasicAttack.ID); ok {
-		t.Fatal("attack should be rejected on the world bar")
+	if _, ok := s.SetHotbar("Hero", "6", "item", "potio"); !ok {
+		t.Fatal("item should bind on the hotbar")
 	}
-	if _, ok := s.SetHotbar("Hero", game.HotbarBarWorld, "6", "item", "potio"); ok {
-		t.Fatal("items should be rejected on the world bar")
+	if _, ok := s.SetHotbar("Hero", "7", "skill", game.ActionIDDodge); ok {
+		t.Fatal("dodge should be rejected (Shift keybind)")
 	}
-	if _, ok := s.SetHotbar("Hero", game.HotbarBarBattle, "6", "item", "potio"); !ok {
-		t.Fatal("item should bind on the battle bar")
+	if _, ok := s.SetHotbar("Hero", "bogus", "skill", game.BasicAttack.ID); ok {
+		t.Fatal("unknown slot should be rejected")
 	}
-	if _, ok := s.SetHotbar("Hero", game.HotbarBarBattle, "5", "skill", game.SkillIDReturn); ok {
-		t.Fatal("return should be rejected on the battle bar")
-	}
-	// Empty bar defaults to battle for backwards compatibility.
-	if _, ok := s.SetHotbar("Hero", "", "8", "skill", game.BasicAttack.ID); !ok {
-		t.Fatal("default bar should accept battle skills")
-	}
-	if _, ok := s.SetHotbar("Hero", "bogus", "8", "skill", game.BasicAttack.ID); ok {
-		t.Fatal("unknown bar should be rejected")
-	}
-	// Clearing is per-bar: clearing the world slot leaves the battle slot.
-	if _, ok := s.SetHotbar("Hero", game.HotbarBarWorld, "5", "", ""); !ok {
-		t.Fatal("clear on world bar should succeed")
+	if _, ok := s.SetHotbar("Hero", "5", "", ""); !ok {
+		t.Fatal("clear should succeed")
 	}
 	l := s.profiles["Hero"].ActiveLoadout()
-	if _, ok := l.WorldHotbar["5"]; ok {
-		t.Fatalf("world slot 5 should be cleared: %+v", l.WorldHotbar)
+	if _, ok := l.Hotbar["5"]; ok {
+		t.Fatalf("slot 5 should be cleared: %+v", l.Hotbar)
 	}
-	if l.WorldHotbar["6"].ID != "" || l.Hotbar["6"].ID != "potio" {
-		t.Fatalf("bars = %+v / %+v", l.WorldHotbar, l.Hotbar)
-	}
-	if l.Hotbar["8"].ID != game.BasicAttack.ID {
-		t.Fatalf("battle slot 8 = %q, want attack", l.Hotbar["8"].ID)
+	if l.Hotbar["6"].ID != "potio" {
+		t.Fatalf("slot 6 = %q, want potio", l.Hotbar["6"].ID)
 	}
 }
 

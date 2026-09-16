@@ -52,7 +52,7 @@ func (h *Hub) broadcastCamps() {
 }
 
 func (h *Hub) placeCamp(c *Client, wp *protocol.WorldPlayer) {
-	if wp == nil || wp.InBattle || wp.InHouse {
+	if wp == nil || wp.InCombat || wp.InHouse {
 		h.sendError(c, "You cannot pitch a camp right now.")
 		return
 	}
@@ -125,7 +125,7 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp, ok := h.world[c.ID]
-	if !ok || wp.InBattle || wp.InHouse {
+	if !ok || wp.InCombat || wp.InHouse {
 		h.sendError(c, "You cannot enter a house right now.")
 		return
 	}

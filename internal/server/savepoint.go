@@ -107,7 +107,7 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp, ok := h.world[c.ID]
-	if !ok || wp.InBattle || wp.InHouse {
+	if !ok || wp.InCombat || wp.InHouse {
 		h.sendError(c, "You cannot use that right now.")
 		return
 	}
@@ -237,7 +237,7 @@ func (h *Hub) completeWorldCast(c *Client) {
 	}
 	wp := h.world[c.ID]
 	h.clearWorldCast(c, wp)
-	if wp == nil || wp.InBattle || wp.InHouse {
+	if wp == nil || wp.InCombat || wp.InHouse {
 		if wp != nil {
 			h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
 		}
@@ -301,7 +301,7 @@ func (h *Hub) handleSetSavePoint(c *Client, raw json.RawMessage) {
 		return
 	}
 	wp, ok := h.world[c.ID]
-	if !ok || wp.InBattle {
+	if !ok || wp.InCombat {
 		h.sendError(c, "You cannot set a save point right now.")
 		return
 	}

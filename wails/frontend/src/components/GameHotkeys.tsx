@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { net } from "../net/socket";
-import { useGame } from "../state/store";
+import { gameDialogOpen, useGame } from "../state/store";
 import { getChatControl } from "../input/chatControl";
 import {
   bindingMatchesEvent,
@@ -20,18 +20,11 @@ import {
 } from "../world/houseSkinBridge";
 
 function inGameScreen(screen: string): boolean {
-  return screen === "world" || screen === "battle" || screen === "house";
+  return screen === "world" || screen === "house";
 }
 
 function dialogIsOpen(state: ReturnType<typeof useGame.getState>): boolean {
-  return !!(
-    state.mainMenuOpen ||
-    state.worldSkillDialog ||
-    state.npcDialog ||
-    state.jobChangeDialog ||
-    state.teleportConfirm ||
-    state.openWindow
-  );
+  return gameDialogOpen(state);
 }
 
 /** House tool strip uses 1–5 so WASD movement stays free. */
@@ -93,7 +86,11 @@ export function GameHotkeys() {
 
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
-      const inFormField = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+      const inFormField =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        !!target?.isContentEditable;
       const chat = getChatControl();
       const chatFocused = chat?.isFocused() ?? false;
 
@@ -113,9 +110,7 @@ export function GameHotkeys() {
         return;
       }
 
-      if (inFormField && !chatFocused) return;
-
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && (!inFormField || chatFocused)) {
         if (!inGame) return;
         if (state.teleportConfirm) {
           state.closeTeleportConfirm();
@@ -163,6 +158,10 @@ export function GameHotkeys() {
         return;
       }
 
+      // Keystrokes aimed at a form field — chat included — are text entry, not
+      // game keybinds. Only Enter/Escape above apply while typing.
+      if (inFormField || chatFocused) return;
+
       if (bindingMatchesEvent(keybinds.interact ?? "Space", e)) {
         e.preventDefault();
         if (dialogIsOpen(state)) return;
@@ -189,10 +188,12 @@ export function GameHotkeys() {
       if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();
         if (chatFocused || dialogIsOpen(state)) return;
-        if (state.screen === "battle" && (state.battle || state.rtBattle)) {
+        if (state.screen === "world") {
+          // Left/right cycle hostile targets, up/down cycle allies. No-ops
+          // outside combat (no self combat entity).
           const horizontal = e.key === "ArrowLeft" || e.key === "ArrowRight";
           const dir: 1 | -1 = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
-          net.cycleBattleTarget(horizontal ? "horizontal" : "vertical", dir);
+          net.cycleTarget(horizontal ? "horizontal" : "vertical", dir);
         }
         return;
       }
@@ -213,12 +214,9 @@ export function GameHotkeys() {
 
       const hotbarSlot = resolveHotbarSlot(e, keybinds);
       if (hotbarSlot) {
-        const { screen, battle, rtBattle } = state;
-        if (screen === "house") return;
-        if (screen === "battle" && (battle || rtBattle)) {
-          e.preventDefault();
-          net.activateHotbar(hotbarSlot);
-        } else if (screen === "world") {
+        if (dialogIsOpen(state)) return;
+        if (state.screen === "house") return;
+        if (state.screen === "world") {
           e.preventDefault();
           net.activateHotbar(hotbarSlot);
         }

@@ -214,41 +214,6 @@ export function EntityTypeInspector({
             />
 
             <div className="map-editor-group-label">Encounter</div>
-            <div className="map-editor-encounter-counts">
-              <div>
-                <label className="field-label">Min enemies</label>
-                <input
-                  className="cm-input"
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={encounter.minEnemies}
-                  onChange={(e) =>
-                    writeEncounter({
-                      ...encounter,
-                      minEnemies: parseInt(e.target.value, 10) || 1,
-                    })
-                  }
-                />
-              </div>
-              <div>
-                <label className="field-label">Max enemies</label>
-                <input
-                  className="cm-input"
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={encounter.maxEnemies}
-                  onChange={(e) =>
-                    writeEncounter({
-                      ...encounter,
-                      maxEnemies: parseInt(e.target.value, 10) || 1,
-                    })
-                  }
-                />
-              </div>
-            </div>
-
             <label className="field-label">Spawn pool</label>
             <div className="map-editor-encounter-list">
               {encounter.enemies.map((row, i) => {

@@ -64,8 +64,8 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.PlayerNamePayload{}
 	case TypePartyKick:
 		return &pb.PartyKickPayload{}
-	case TypePartyAccept, TypePartyDecline, TypePartyLeave, TypeDeclineBattleInvite,
-		TypeLeaveBattle, TypeBattleReturn, TypeLeaveHouse:
+	case TypePartyAccept, TypePartyDecline, TypePartyLeave,
+		TypeLeaveHouse, TypeDodge:
 		return &pb.EmptyPayload{}
 	case TypeEnterHouse:
 		return &pb.EnterHousePayload{}
@@ -89,8 +89,6 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.HouseReturnPayload{}
 	case TypePetState:
 		return &pb.PetStatePayload{}
-	case TypeJoinBattle:
-		return &pb.JoinBattlePayload{}
 	case TypeAction:
 		return &pb.ActionPayload{}
 	case TypeSetTarget:
@@ -99,10 +97,6 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.SetSavePointPayload{}
 	case TypeUseWorldSkill:
 		return &pb.UseWorldSkillPayload{}
-	case TypeRTMove:
-		return &pb.RTMovePayload{}
-	case TypeRTAttack:
-		return &pb.RTAttackPayload{}
 	case TypeWelcome:
 		return &pb.WelcomePayload{}
 	case TypeMapConfig:
@@ -123,32 +117,16 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.SocialStatePayload{}
 	case TypePartyInviteMsg:
 		return &pb.PartyInvitePayload{}
-	case TypeBattleInviteMsg:
-		return &pb.BattleInvitePayload{}
 	case TypeFriendRequestMsg:
 		return &pb.FriendRequestPayload{}
 	case TypeRewardNotice:
 		return &pb.RewardNoticePayload{}
-	case TypeBattleList:
-		return &pb.BattleListPayload{}
-	case TypeBattleState:
-		return &pb.BattleStatePayload{}
-	case TypeBattleEvent:
-		return &pb.BattleEventPayload{}
-	case TypeBattleTick:
-		return &pb.BattleTickPayload{}
-	case TypeBattleEnd:
-		return &pb.BattleEndPayload{}
+	case TypeCombatTick:
+		return &pb.CombatTickPayload{}
+	case TypeCombatEvent:
+		return &pb.CombatEventPayload{}
 	case TypeError:
 		return &pb.ErrorPayload{}
-	case TypeRTBattleState:
-		return &pb.RTBattleStatePayload{}
-	case TypeRTBattleTick:
-		return &pb.RTBattleTickPayload{}
-	case TypeRTBattleEvent:
-		return &pb.RTBattleEventPayload{}
-	case TypeRTBattleEnd:
-		return &pb.RTBattleEndPayload{}
 	default:
 		return &pb.EmptyPayload{}
 	}
@@ -182,10 +160,8 @@ func decodeProtobuf(data []byte) (Envelope, error) {
 	if err != nil {
 		return Envelope{}, err
 	}
-	// Truly empty client acks (leave_battle, etc.) may omit payload. Keep an
-	// explicit {} for types whose all-zero value is meaningful (e.g. defeat:
-	// victory=false with no rewards still must reach the UI).
-	if isEmptyProto(msg) && !keepsEmptyPayload(t) {
+	// Truly empty client acks may omit payload.
+	if isEmptyProto(msg) {
 		return Envelope{Type: t}, nil
 	}
 	return Envelope{Type: t, Payload: raw}, nil
@@ -193,15 +169,6 @@ func decodeProtobuf(data []byte) (Envelope, error) {
 
 func isEmptyProto(msg proto.Message) bool {
 	return proto.Size(msg) == 0
-}
-
-func keepsEmptyPayload(t MessageType) bool {
-	switch t {
-	case TypeBattleEnd, TypeRTBattleEnd:
-		return true
-	default:
-		return false
-	}
 }
 
 // EncodeFrame encodes a hub JSON frame (from Encode) for the client codec.
@@ -260,20 +227,18 @@ var messageTypeSet = map[MessageType]struct{}{
 	TypeSetJobs: {}, TypeSetHotbar: {}, TypeSetKeybinds: {},
 	TypeAddFriend: {}, TypeAcceptFriend: {}, TypeDeclineFriend: {}, TypeRemoveFriend: {},
 	TypePartyInvite: {}, TypePartyAccept: {}, TypePartyDecline: {}, TypePartyLeave: {}, TypePartyKick: {},
-	TypeDeclineBattleInvite: {}, TypeJoinBattle: {}, TypeLeaveBattle: {},
-	TypeAction: {}, TypeSetTarget: {}, TypeSetSavePoint: {}, 	TypeUseWorldSkill: {},
+	TypeAction: {}, TypeSetTarget: {}, TypeSetSavePoint: {}, TypeUseWorldSkill: {},
+	TypeDodge:      {},
 	TypeEnterHouse: {}, TypeLeaveHouse: {}, TypeHouseInteract: {},
 	TypeHouseStorageDeposit: {}, TypeHouseStorageWithdraw: {},
 	TypeHousePlaceFurniture: {}, TypeHousePickFurniture: {}, TypeSetCampSkin: {},
 	TypePetSetFollow: {}, TypePetSetBattle: {}, TypePetRelease: {},
-	TypeRTMove: {}, TypeRTAttack: {},
 	TypeWelcome: {}, TypeWorldState: {}, TypePlayerJoin: {}, TypePlayerLeft: {}, TypePlayerMoved: {},
 	TypePlayerSync: {}, TypeChatMsg: {}, TypeNPCState: {}, TypeSocialState: {},
-	TypePartyInviteMsg: {}, TypeBattleInviteMsg: {}, TypeFriendRequestMsg: {}, TypeRewardNotice: {},
-	TypeBattleList: {}, TypeBattleState: {}, TypeBattleEvent: {}, TypeBattleTick: {}, TypeBattleEnd: {},
-	TypeBattleReturn: {}, TypeCampState: {}, TypeHouseState: {}, TypeHouseReturn: {}, TypePetState: {},
+	TypePartyInviteMsg: {}, TypeFriendRequestMsg: {}, TypeRewardNotice: {},
+	TypeCombatTick: {}, TypeCombatEvent: {},
+	TypeCampState: {}, TypeHouseState: {}, TypeHouseReturn: {}, TypePetState: {},
 	TypeError: {}, TypeMapConfig: {},
-	TypeRTBattleState: {}, TypeRTBattleTick: {}, TypeRTBattleEvent: {}, TypeRTBattleEnd: {},
 }
 
 // AssertPayloadType ensures the registry can construct a message for t.

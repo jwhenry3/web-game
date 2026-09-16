@@ -207,14 +207,14 @@ export function Minimap() {
         dot(ctx, p.x, p.y, "#7ecf6a", 3.5 * scale, "#d8f5c8");
       }
       for (const npc of Object.values(state.npcs)) {
-        if (npc.in_battle || !inView(npc.x, npc.y)) continue;
+        if (npc.engaged || !inView(npc.x, npc.y)) continue;
         const p = toMini(npc.x, npc.y);
         dot(ctx, p.x, p.y, "#e06060", 2 * scale);
       }
       for (const wp of Object.values(state.players)) {
         if (wp.id === selfId || wp.in_house || !inView(wp.x, wp.y)) continue;
         const p = toMini(wp.x, wp.y);
-        dot(ctx, p.x, p.y, wp.in_battle ? "#ffe9a8" : "#f0f4f8", 2.5 * scale);
+        dot(ctx, p.x, p.y, wp.in_combat ? "#ffe9a8" : "#f0f4f8", 2.5 * scale);
       }
 
       const me = toMini(selfX, selfY);

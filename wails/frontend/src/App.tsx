@@ -8,7 +8,6 @@ import { EntityOverlays } from "./components/EntityOverlays";
 import { WorldHUD } from "./components/WorldHUD";
 import { HouseHUD } from "./components/HouseHUD";
 import { InviteToasts } from "./components/InviteToasts";
-import { pluginHost } from "./core/plugins/pluginHost";
 import { SidePanel } from "./components/SidePanel";
 import { GameWindows, WindowBar } from "./components/GameWindows";
 import { WorldSkillDialogs } from "./components/WorldSkillDialogs";
@@ -100,22 +99,13 @@ function AppBody() {
     return <CharacterCreationWizard />;
   }
 
-  const combat = pluginHost.getCombatPlugin();
-  const CombatHUD = combat.HUD;
-
   return (
     <ItemMenuProvider>
       <div className="game-layout">
         <div className="game-stage">
           <PhaserGame />
           <EntityOverlays />
-          {screen === combat.battleScreen ? (
-            <CombatHUD />
-          ) : screen === "house" ? (
-            <HouseHUD />
-          ) : (
-            <WorldHUD />
-          )}
+          {screen === "house" ? <HouseHUD /> : <WorldHUD />}
           <SidePanel />
           {screen === "house" ? <HouseToolbar /> : <Hotbar />}
           {screen === "house" && <HousePlaceLayer />}

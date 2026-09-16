@@ -15,8 +15,9 @@ summary: Move, interact, and survive the open world.
 
 ## Combat
 
-- Bumping hostile wildlife or accepting a battle invite starts combat on that map’s ruleset (**realtime** or **Ordo/ATB**).
-- Hotbar skills and targeting depend on your jobs and the active combat plugin.
+- Walking within aggro range of hostile wildlife — or attacking it — starts combat right in the overworld; nearby hostiles may assist their ally.
+- The **hotbar** has 24 slots (1–8, Ctrl+1–8, Shift+1–8) shared by field skills, combat skills, and items. Press **Shift** alone to dodge — it costs stamina and works in and out of combat.
+- Hotbar skills and targeting depend on your jobs.
 
 ## Social
 

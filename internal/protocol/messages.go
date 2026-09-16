@@ -31,11 +31,9 @@ const (
 	TypePartyDecline         MessageType = "party_decline"
 	TypePartyLeave           MessageType = "party_leave"
 	TypePartyKick            MessageType = "party_kick"
-	TypeDeclineBattleInvite  MessageType = "decline_battle_invite"
-	TypeJoinBattle           MessageType = "join_battle"
-	TypeLeaveBattle          MessageType = "leave_battle"
 	TypeAction               MessageType = "action"
 	TypeSetTarget            MessageType = "set_target"
+	TypeDodge                MessageType = "dodge"
 	TypeSetSavePoint         MessageType = "set_save_point"
 	TypeUseWorldSkill        MessageType = "use_world_skill"
 	TypeEnterHouse           MessageType = "enter_house"
@@ -49,9 +47,6 @@ const (
 	TypePetSetFollow         MessageType = "pet_set_follow"
 	TypePetSetBattle         MessageType = "pet_set_battle"
 	TypePetRelease           MessageType = "pet_release"
-	// Realtime combat plugin (combat.realtime)
-	TypeRTMove   MessageType = "rt_move"
-	TypeRTAttack MessageType = "rt_attack"
 )
 
 // Server -> Client
@@ -66,26 +61,16 @@ const (
 	TypeNPCState         MessageType = "npc_state"
 	TypeSocialState      MessageType = "social_state"
 	TypePartyInviteMsg   MessageType = "party_invite_received"
-	TypeBattleInviteMsg  MessageType = "battle_invite_received"
 	TypeFriendRequestMsg MessageType = "friend_request_received"
 	TypeRewardNotice     MessageType = "reward_notice"
-	TypeBattleList       MessageType = "battle_list"
-	TypeBattleState      MessageType = "battle_state"
-	TypeBattleEvent      MessageType = "battle_event" // batched action-window results
-	TypeBattleTick       MessageType = "battle_tick"  // lightweight ATB sync
-	TypeBattleEnd        MessageType = "battle_end"
-	TypeBattleReturn     MessageType = "battle_return" // server force/ack return to overworld
+	TypeCombatTick       MessageType = "combat_tick"  // AoI-scoped combat snapshots
+	TypeCombatEvent      MessageType = "combat_event" // AoI-scoped hits/casts/fizzles
 	TypeCampState        MessageType = "camp_state"
 	TypeHouseState       MessageType = "house_state"
 	TypeHouseReturn      MessageType = "house_return"
 	TypePetState         MessageType = "pet_state"
 	TypeError            MessageType = "error"
 	TypeMapConfig        MessageType = "map_config"
-	// Realtime combat plugin (combat.realtime)
-	TypeRTBattleState MessageType = "rt_battle_state"
-	TypeRTBattleTick  MessageType = "rt_battle_tick"
-	TypeRTBattleEvent MessageType = "rt_battle_event"
-	TypeRTBattleEnd   MessageType = "rt_battle_end"
 )
 
 type Envelope struct {
@@ -161,7 +146,6 @@ type SetHotbarPayload struct {
 	Slot string `json:"slot"` // "1".."8", "ctrl+1".."ctrl+8", "shift+1".."shift+8"
 	Kind string `json:"kind"` // "skill" | "item" | "" to clear
 	ID   string `json:"id"`
-	Bar  string `json:"bar,omitempty"` // "world" | "battle" (default "battle")
 }
 
 type SetKeybindsPayload struct {
@@ -174,10 +158,6 @@ type PlayerNamePayload struct {
 
 type PartyKickPayload struct {
 	MemberID string `json:"member_id"`
-}
-
-type JoinBattlePayload struct {
-	BattleID string `json:"battle_id"`
 }
 
 type ActionPayload struct {
@@ -251,34 +231,34 @@ type HotbarBinding struct {
 }
 
 type ProfileInfo struct {
-	Name              string                   `json:"name"`
-	Level             int                      `json:"level"` // main job level
-	XP                int                      `json:"xp"`
-	MaxXP             int                      `json:"max_xp"`
-	Race              string                   `json:"race,omitempty"`
-	MainJob           string                   `json:"main_job"`
-	SubJob            string                   `json:"sub_job"`
-	SubjobUnlock      int                      `json:"subjob_unlock_level"`
-	UnlockedJobs      []string                 `json:"unlocked_jobs"`
-	Appearance        CharacterAppearance      `json:"appearance,omitempty"`
-	Jobs              []JobProgressInfo        `json:"jobs"`
-	Stats             StatBlock                `json:"stats"`
-	Inventory         []game.Item              `json:"inventory"`
-	HouseStorage      []game.Item              `json:"house_storage,omitempty"`
-	HouseStorageCap   int                      `json:"house_storage_capacity,omitempty"`
-	CampSkin          string                   `json:"camp_skin,omitempty"`
-	Equipped          map[string]string        `json:"equipped"`
-	Hotbar            map[string]HotbarBinding `json:"hotbar"`
-	WorldHotbar       map[string]HotbarBinding `json:"world_hotbar"`
-	Skills            []SkillInfo              `json:"skills"`
-	Friends           []string                 `json:"friends"`
-	SavePointID       string                   `json:"save_point_id,omitempty"`
-	SavePointName     string                   `json:"save_point_name,omitempty"`
-	VisitedSavePoints []VisitedSavePoint       `json:"visited_save_points,omitempty"`
-	Keybinds          map[string]string        `json:"keybinds,omitempty"`
-	Pets              []game.PetRecord         `json:"pets,omitempty"`
-	FollowPetID       string                   `json:"follow_pet_id,omitempty"`
-	BattlePetID       string                   `json:"battle_pet_id,omitempty"`
+	Name            string                   `json:"name"`
+	Level           int                      `json:"level"` // main job level
+	XP              int                      `json:"xp"`
+	MaxXP           int                      `json:"max_xp"`
+	Race            string                   `json:"race,omitempty"`
+	MainJob         string                   `json:"main_job"`
+	SubJob          string                   `json:"sub_job"`
+	SubjobUnlock    int                      `json:"subjob_unlock_level"`
+	UnlockedJobs    []string                 `json:"unlocked_jobs"`
+	Appearance      CharacterAppearance      `json:"appearance,omitempty"`
+	Jobs            []JobProgressInfo        `json:"jobs"`
+	Stats           StatBlock                `json:"stats"`
+	Inventory       []game.Item              `json:"inventory"`
+	HouseStorage    []game.Item              `json:"house_storage,omitempty"`
+	HouseStorageCap int                      `json:"house_storage_capacity,omitempty"`
+	CampSkin        string                   `json:"camp_skin,omitempty"`
+	Equipped        map[string]string        `json:"equipped"`
+	Hotbar          map[string]HotbarBinding `json:"hotbar"`
+
+	Skills            []SkillInfo        `json:"skills"`
+	Friends           []string           `json:"friends"`
+	SavePointID       string             `json:"save_point_id,omitempty"`
+	SavePointName     string             `json:"save_point_name,omitempty"`
+	VisitedSavePoints []VisitedSavePoint `json:"visited_save_points,omitempty"`
+	Keybinds          map[string]string  `json:"keybinds,omitempty"`
+	Pets              []game.PetRecord   `json:"pets,omitempty"`
+	FollowPetID       string             `json:"follow_pet_id,omitempty"`
+	BattlePetID       string             `json:"battle_pet_id,omitempty"`
 }
 
 type VisitedSavePoint struct {
@@ -299,9 +279,6 @@ type WelcomePayload struct {
 type MapSnapshot struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
-	Combat        string            `json:"combat"`
-	Capabilities  []string          `json:"capabilities"`
-	Modules       []MapModule       `json:"modules"`
 	Overworld     OverworldMap      `json:"overworld"`
 	TiledMap      string            `json:"tiled_map,omitempty"`
 	Portals       []MapPortal       `json:"portals,omitempty"`
@@ -335,19 +312,6 @@ type MapPortal struct {
 	H float64 `json:"h"`
 }
 
-type MapModule struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Version      string         `json:"version"`
-	Capabilities []string       `json:"capabilities"`
-	Frontend     MapFrontend    `json:"frontend"`
-	Config       map[string]any `json:"config,omitempty"`
-}
-
-type MapFrontend struct {
-	PluginID string `json:"pluginId"`
-}
-
 type WorldPlayer struct {
 	ID          string              `json:"id"`
 	Name        string              `json:"name"`
@@ -359,9 +323,14 @@ type WorldPlayer struct {
 	Appearance  CharacterAppearance `json:"appearance,omitempty"`
 	X           float64             `json:"x"`
 	Y           float64             `json:"y"`
-	Facing      float64             `json:"facing"`    // Y-axis yaw radians (Three.js)
-	InBattle    bool                `json:"in_battle"` // combat-locked state
-	BattleID    string              `json:"battle_id,omitempty"`
+	Facing      float64             `json:"facing"` // Y-axis yaw radians (Three.js)
+	InCombat    bool                `json:"in_combat,omitempty"`
+	HP          int                 `json:"hp"`
+	MaxHP       int                 `json:"max_hp"`
+	MP          int                 `json:"mp"`
+	MaxMP       int                 `json:"max_mp"`
+	Stamina     float64             `json:"stamina"`
+	TargetID    string              `json:"target_id,omitempty"`
 	InHouse     bool                `json:"in_house,omitempty"`
 	HouseOwner  string              `json:"house_owner,omitempty"`  // owner character name
 	ImmuneUntil int64               `json:"immune_until,omitempty"` // unix millis; collision/search blocked
@@ -371,14 +340,6 @@ type WorldPlayer struct {
 	CastEndsAt     int64  `json:"cast_ends_at,omitempty"` // unix millis
 }
 
-type BattleInfo struct {
-	BattleID     string `json:"battle_id"`
-	Participants int    `json:"participants"`
-	MaxPlayers   int    `json:"max_players"`
-	Level        int    `json:"level"`
-	Mode         string `json:"mode,omitempty"`
-}
-
 type WorldNPC struct {
 	ID       string  `json:"id"`
 	Name     string  `json:"name"`
@@ -386,8 +347,10 @@ type WorldNPC struct {
 	Level    int     `json:"level"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
-	InBattle bool    `json:"in_battle"`
-	BattleID string  `json:"battle_id,omitempty"`
+	Engaged  bool    `json:"engaged,omitempty"`
+	HP       int     `json:"hp"`
+	MaxHP    int     `json:"max_hp"`
+	TargetID string  `json:"target_id,omitempty"`
 }
 
 type OverworldMap struct {
@@ -436,7 +399,6 @@ type WorldStatePayload struct {
 	NPCs        []WorldNPC    `json:"npcs"`
 	Camps       []WorldCamp   `json:"camps,omitempty"`
 	Pets        []WorldPet    `json:"pets,omitempty"`
-	Battles     []BattleInfo  `json:"battles"`
 	SavePoints  []SavePoint   `json:"save_points"`
 	JobChangers []JobChanger  `json:"job_changers"`
 	Map         OverworldMap  `json:"map"`
@@ -556,43 +518,6 @@ type ChatMessagePayload struct {
 	Message  string `json:"message"`
 }
 
-type BattleListPayload struct {
-	Battles []BattleInfo `json:"battles"`
-}
-
-type BattleEntity struct {
-	ID              string                `json:"id"`
-	Name            string                `json:"name"`
-	Kind            string                `json:"kind,omitempty"` // enemies: goblin, dire_wolf, stone_imp
-	IsPlayer        bool                  `json:"is_player"`
-	IsAlly          bool                  `json:"is_ally,omitempty"`
-	OwnerID         string                `json:"owner_id,omitempty"`
-	Weapon          string                `json:"weapon,omitempty"`
-	Level           int                   `json:"level"`
-	HP              int                   `json:"hp"`
-	MaxHP           int                   `json:"max_hp"`
-	MP              int                   `json:"mp"`
-	MaxMP           int                   `json:"max_mp"`
-	Agility         int                   `json:"agility"`
-	SkillATB        float64               `json:"skill_atb"` // GCD for skills, attack, and consumables
-	ATB             float64               `json:"atb"`       // alias of skill_atb for older clients
-	TargetID        string                `json:"target_id,omitempty"`
-	Alive           bool                  `json:"alive"`
-	Capturable      bool                  `json:"capturable,omitempty"`
-	Statuses        []game.StatusSnapshot `json:"statuses,omitempty"`
-	CastingSkillID  string                `json:"casting_skill_id,omitempty"`
-	CastTargetID    string                `json:"cast_target_id,omitempty"`
-	CastProgress    float64               `json:"cast_progress,omitempty"`
-	CastTimeMs      int                   `json:"cast_time_ms,omitempty"`
-	HasQueuedAction bool                  `json:"has_queued_action,omitempty"`
-}
-
-type BattleStatePayload struct {
-	BattleID    string         `json:"battle_id"`
-	Entities    []BattleEntity `json:"entities"`
-	BattleSpeed float64        `json:"battle_speed,omitempty"`
-}
-
 // ActionResult carries the validated outcome of one queued action so clients
 // can play the matching animation deterministically (attack vs. fizzle).
 type ActionResult struct {
@@ -608,41 +533,6 @@ type ActionResult struct {
 	Message       string                `json:"message,omitempty"`
 	StatusApplied []game.StatusSnapshot `json:"status_applied,omitempty"`
 	CastStarted   bool                  `json:"cast_started,omitempty"`
-}
-
-type EntityUpdate struct {
-	ID             string                `json:"id"`
-	HP             int                   `json:"hp"`
-	MP             int                   `json:"mp"`
-	SkillATB       float64               `json:"skill_atb"`
-	ATB            float64               `json:"atb"`
-	TargetID       string                `json:"target_id,omitempty"`
-	Alive          bool                  `json:"alive"`
-	Statuses       []game.StatusSnapshot `json:"statuses,omitempty"`
-	CastingSkillID string                `json:"casting_skill_id,omitempty"`
-	CastTargetID   string                `json:"cast_target_id,omitempty"`
-	CastProgress   float64               `json:"cast_progress,omitempty"`
-	CastTimeMs     int                   `json:"cast_time_ms,omitempty"`
-}
-
-// BattleEventPayload is the atomic broadcast at the close of each action
-// window: every result from the batch plus resulting entity state.
-type BattleEventPayload struct {
-	Results   []ActionResult `json:"results"`
-	Entities  []EntityUpdate `json:"entities"`
-	Timestamp int64          `json:"timestamp"`
-}
-
-type BattleTickPayload struct {
-	SkillATB       map[string]float64               `json:"skill_atb"`
-	ATB            map[string]float64               `json:"atb"` // skill_atb alias
-	HP             map[string]int                   `json:"hp,omitempty"`
-	Alive          map[string]bool                  `json:"alive,omitempty"`
-	Statuses       map[string][]game.StatusSnapshot `json:"statuses,omitempty"`
-	CastingSkillID map[string]string                `json:"casting_skill_id,omitempty"`
-	CastTargetID   map[string]string                `json:"cast_target_id,omitempty"`
-	CastProgress   map[string]float64               `json:"cast_progress,omitempty"`
-	CastTimeMs     map[string]int                   `json:"cast_time_ms,omitempty"`
 }
 
 type PlayerReward struct {
@@ -662,17 +552,12 @@ type PlayerReward struct {
 	PartyBonus      bool        `json:"party_bonus,omitempty"`
 }
 
-type BattleEndPayload struct {
-	Victory bool           `json:"victory"`
-	Rewards []PlayerReward `json:"rewards"`
-}
-
 type FriendInfo struct {
 	Name     string `json:"name"`
 	Online   bool   `json:"online"`
 	Level    int    `json:"level,omitempty"`
 	Weapon   string `json:"weapon,omitempty"`
-	InBattle bool   `json:"in_battle"`
+	InCombat bool   `json:"in_combat,omitempty"`
 }
 
 type PartyMember struct {
@@ -681,7 +566,7 @@ type PartyMember struct {
 	Level    int    `json:"level"`
 	Weapon   string `json:"weapon"`
 	Leader   bool   `json:"leader"`
-	InBattle bool   `json:"in_battle"`
+	InCombat bool   `json:"in_combat,omitempty"`
 }
 
 type PartyInfo struct {
@@ -694,12 +579,6 @@ type PartyInvitePayload struct {
 	FromID   string `json:"from_id"`
 	FromName string `json:"from_name"`
 	PartyID  string `json:"party_id"`
-}
-
-type BattleInvitePayload struct {
-	BattleID string `json:"battle_id"`
-	FromID   string `json:"from_id"`
-	FromName string `json:"from_name"`
 }
 
 type FriendRequestPayload struct {
@@ -726,25 +605,19 @@ type ErrorPayload struct {
 	Message string `json:"message"`
 }
 
-// ---- Realtime combat (combat.realtime) ----
+// ---- Overworld realtime combat ----
 
-type RTMovePayload struct {
-	X float64 `json:"x"`
-	Y float64 `json:"y"`
-}
-
-type RTAttackPayload struct {
-	FacingX float64 `json:"facing_x"`
-	FacingY float64 `json:"facing_y"`
-}
-
-type RTBattleEntity struct {
+// CombatEntity is one combat participant snapshot: an engaged NPC, a fighting
+// player, or a battle pet. Sent via combat_tick / combat_event only to clients
+// whose AoI overlaps the fight.
+type CombatEntity struct {
 	ID              string                `json:"id"`
 	Name            string                `json:"name"`
 	Kind            string                `json:"kind,omitempty"`
 	IsPlayer        bool                  `json:"is_player"`
 	IsAlly          bool                  `json:"is_ally,omitempty"`
 	OwnerID         string                `json:"owner_id,omitempty"`
+	Level           int                   `json:"level,omitempty"`
 	X               float64               `json:"x"`
 	Y               float64               `json:"y"`
 	HP              int                   `json:"hp"`
@@ -763,33 +636,22 @@ type RTBattleEntity struct {
 	HasQueuedAction bool                  `json:"has_queued_action,omitempty"`
 }
 
-type RTBattleStatePayload struct {
-	BattleID string           `json:"battle_id"`
-	Entities []RTBattleEntity `json:"entities"`
-	Mode     string           `json:"mode"`
+type CombatTickPayload struct {
+	Entities []CombatEntity `json:"entities"`
 }
 
-type RTBattleTickPayload struct {
-	Entities []RTBattleEntity `json:"entities"`
-}
-
-type RTBattleEventPayload struct {
-	AttackerID    string           `json:"attacker_id"`
-	TargetID      string           `json:"target_id"`
-	Damage        int              `json:"damage"`
-	Heal          int              `json:"heal,omitempty"`
-	MPRestored    int              `json:"mp_restored,omitempty"`
-	Hit           bool             `json:"hit"`
-	Message       string           `json:"message,omitempty"`
-	ActionID      string           `json:"action_id,omitempty"`
-	ActionName    string           `json:"action_name,omitempty"`
-	Success       bool             `json:"success,omitempty"`
-	CastStarted   bool             `json:"cast_started,omitempty"`
-	CastCancelled bool             `json:"cast_cancelled,omitempty"`
-	Entities      []RTBattleEntity `json:"entities"`
-}
-
-type RTBattleEndPayload struct {
-	Victory bool           `json:"victory"`
-	Rewards []PlayerReward `json:"rewards"`
+type CombatEventPayload struct {
+	AttackerID    string         `json:"attacker_id"`
+	TargetID      string         `json:"target_id"`
+	Damage        int            `json:"damage"`
+	Heal          int            `json:"heal,omitempty"`
+	MPRestored    int            `json:"mp_restored,omitempty"`
+	Hit           bool           `json:"hit"`
+	Message       string         `json:"message,omitempty"`
+	ActionID      string         `json:"action_id,omitempty"`
+	ActionName    string         `json:"action_name,omitempty"`
+	Success       bool           `json:"success,omitempty"`
+	CastStarted   bool           `json:"cast_started,omitempty"`
+	CastCancelled bool           `json:"cast_cancelled,omitempty"`
+	Entities      []CombatEntity `json:"entities"`
 }

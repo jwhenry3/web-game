@@ -5,7 +5,6 @@ package fantasy.v1;
 option go_package = "clara-mundi/internal/protocol/pb";
 
 import "fantasy/v1/common.proto";
-import "google/protobuf/struct.proto";
 
 // WireEnvelope is the binary frame exchanged over WebSocket BinaryMessage
 // when the client negotiates codec=protobuf.
@@ -56,7 +55,6 @@ message SetHotbarPayload {
   string slot = 1;
   string kind = 2;
   string id = 3;
-  string bar = 4; // "world" | "battle" (default "battle")
 }
 
 message SetKeybindsPayload {
@@ -69,10 +67,6 @@ message PlayerNamePayload {
 
 message PartyKickPayload {
   string member_id = 1;
-}
-
-message JoinBattlePayload {
-  string battle_id = 1;
 }
 
 message ActionPayload {
@@ -167,16 +161,6 @@ message HouseReturnPayload {
   string reason = 1;
 }
 
-message RTMovePayload {
-  double x = 1;
-  double y = 2;
-}
-
-message RTAttackPayload {
-  double facing_x = 1;
-  double facing_y = 2;
-}
-
 // ---- Server → Client ----
 
 message WelcomePayload {
@@ -192,7 +176,6 @@ message MapConfigPayload {
 message WorldStatePayload {
   repeated WorldPlayer players = 1;
   repeated WorldNPC npcs = 2;
-  repeated BattleInfo battles = 3;
   repeated SavePoint save_points = 4;
   repeated JobChanger job_changers = 5;
   OverworldMap map = 6;
@@ -222,50 +205,10 @@ message NPCStatePayload {
   repeated WorldNPC npcs = 1;
 }
 
-message BattleListPayload {
-  repeated BattleInfo battles = 1;
-}
-
-message BattleStatePayload {
-  string battle_id = 1;
-  repeated BattleEntity entities = 2;
-  double battle_speed = 3;
-}
-
-message BattleEventPayload {
-  repeated ActionResult results = 1;
-  repeated EntityUpdate entities = 2;
-  int64 timestamp = 3;
-}
-
-message BattleTickPayload {
-  map<string, double> skill_atb = 1;
-  map<string, double> atb = 2;
-  map<string, int32> hp = 3;
-  map<string, bool> alive = 4;
-  // map[string][]StatusSnapshot — encoded as Struct for JSON round-trip.
-  google.protobuf.Struct statuses = 5;
-  map<string, string> casting_skill_id = 6;
-  map<string, string> cast_target_id = 7;
-  map<string, double> cast_progress = 8;
-  map<string, int32> cast_time_ms = 9;
-}
-
-message BattleEndPayload {
-  bool victory = 1;
-  repeated PlayerReward rewards = 2;
-}
-
 message PartyInvitePayload {
   string from_id = 1;
   string from_name = 2;
   string party_id = 3;
-}
-
-message BattleInvitePayload {
-  string battle_id = 1;
-  string from_id = 2;
-  string from_name = 3;
 }
 
 message FriendRequestPayload {
@@ -292,17 +235,11 @@ message ErrorPayload {
   string message = 1;
 }
 
-message RTBattleStatePayload {
-  string battle_id = 1;
-  repeated RTBattleEntity entities = 2;
-  string mode = 3;
+message CombatTickPayload {
+  repeated CombatEntity entities = 1;
 }
 
-message RTBattleTickPayload {
-  repeated RTBattleEntity entities = 1;
-}
-
-message RTBattleEventPayload {
+message CombatEventPayload {
   string attacker_id = 1;
   string target_id = 2;
   int32 damage = 3;
@@ -315,13 +252,8 @@ message RTBattleEventPayload {
   bool success = 10;
   bool cast_started = 11;
   bool cast_cancelled = 12;
-  repeated RTBattleEntity entities = 13;
+  repeated CombatEntity entities = 13;
 }
 
-message RTBattleEndPayload {
-  bool victory = 1;
-  repeated PlayerReward rewards = 2;
-}
-
-// EmptyPayload covers leave_battle, party_accept, etc.
+// EmptyPayload covers dodge, party_accept, leave_house, etc.
 message EmptyPayload {}

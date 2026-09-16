@@ -16,14 +16,8 @@ func TestMapSnapshotFromHub(t *testing.T) {
 	if snap.ID != "greenwood" || snap.Name != "Greenwood" {
 		t.Fatalf("id/name = %s %s", snap.ID, snap.Name)
 	}
-	if snap.Combat != "combat.atb" {
-		t.Fatalf("combat = %s", snap.Combat)
-	}
 	if snap.Overworld.Cols == 0 || snap.Overworld.Cells == "" {
 		t.Fatal("overworld missing from snapshot")
-	}
-	if len(snap.Modules) == 0 {
-		t.Fatal("expected modules in snapshot")
 	}
 	if len(snap.Portals) == 0 {
 		t.Fatal("expected zone portals in snapshot")

@@ -4,28 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
 	"clara-mundi/internal/auth"
 	"clara-mundi/internal/game"
-	"clara-mundi/internal/plugins"
-	"clara-mundi/internal/plugins/combatatb"
-	"clara-mundi/internal/plugins/contracts"
 	"clara-mundi/internal/protocol"
 	"clara-mundi/internal/store"
 )
 
 // World bounds for the open-world layer (matches the client's map size).
 const (
-	worldWidth  = 1600.0
-	worldHeight = 1200.0
-
-	// Maximum players per battle instance.
+	// Maximum players per party.
 	maxPartySize = 4
 
-	// Grace after win, defeat, or leave so the next collision cannot instantly re-aggro.
+	// Grace after join, defeat, or transfer so a player cannot instantly re-aggro.
 	battleImmunity = 5 * time.Second
 
 	worldPosSaveInterval = 5 * time.Second
@@ -38,12 +34,12 @@ type Event struct {
 	Sender  *Client
 }
 
-// Hub is the central orchestrator: it routes client messages, owns the
-// persistent Open World layer, and manages BattleRoom lifecycles. All world
-// state is owned by the Run goroutine; battle rooms run their own loops and
-// call back into the hub via the tasks channel.
+// Hub is the central orchestrator: it routes client messages and owns the
+// persistent open-world layer including realtime combat. All world state is
+// owned by the Run goroutine — there are no separate battle rooms or locks on
+// entity state.
 type Hub struct {
-	mu      sync.RWMutex // guards clients map (accessed from battle goroutines)
+	mu      sync.RWMutex // guards clients map (read by senders outside Run)
 	clients map[string]*Client
 
 	register   chan *Client
@@ -56,22 +52,17 @@ type Hub struct {
 	tokens   *auth.TokenIssuer
 
 	// Run-goroutine owned:
-	world         map[string]*protocol.WorldPlayer // clientID -> world presence
-	npcs          map[string]*worldNPC
-	battleSeq     int
-	combat        contracts.CombatPlugin
-	modCfg        plugins.Config
-	parties       map[string]*hubParty
-	clientParty   map[string]string
-	partyInvites  map[string]*partyInvite
-	partySeq      int
-	battleInvites map[string]*battleInvite
-	battleMeta    map[string]*battleMeta
-	camps         map[string]*worldCamp // owner character name -> camp
-	houses        map[string]*houseRoom // owner character name -> instance
-
-	tickWindow  time.Duration
-	battleSpeed float64
+	world        map[string]*protocol.WorldPlayer // clientID -> world presence
+	npcs         map[string]*worldNPC
+	combatants   map[string]*combatant // clientID -> combat state
+	aoi          map[string]bool       // clientIDs currently receiving combat ticks
+	rng          *rand.Rand
+	parties      map[string]*hubParty
+	clientParty  map[string]string
+	partyInvites map[string]*partyInvite
+	partySeq     int
+	camps        map[string]*worldCamp // owner character name -> camp
+	houses       map[string]*houseRoom // owner character name -> instance
 
 	overworld  *game.Overworld
 	mapID      string
@@ -83,43 +74,32 @@ type Hub struct {
 	stopOnce sync.Once
 }
 
-func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer, battleSpeed float64, modCfg plugins.Config) (*Hub, error) {
-	if battleSpeed <= 0 {
-		battleSpeed = combatatb.DefaultBattleSpeed
-	}
+func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer) (*Hub, error) {
 	if err := game.ReloadLootCatalogs(); err != nil {
 		log.Printf("warning: loot catalogs: %v", err)
 	}
 	h := &Hub{
-		clients:       make(map[string]*Client),
-		register:      make(chan *Client, 16),
-		unregister:    make(chan *Client, 16),
-		events:        make(chan Event, 256),
-		tasks:         make(chan func(), 256),
-		store:         profiles,
-		accounts:      accounts,
-		tokens:        tokens,
-		world:         make(map[string]*protocol.WorldPlayer),
-		npcs:          make(map[string]*worldNPC),
-		parties:       make(map[string]*hubParty),
-		clientParty:   make(map[string]string),
-		partyInvites:  make(map[string]*partyInvite),
-		battleInvites: make(map[string]*battleInvite),
-		battleMeta:    make(map[string]*battleMeta),
-		camps:         make(map[string]*worldCamp),
-		houses:        make(map[string]*houseRoom),
-		tickWindow:    combatatb.BattleTickWindow(battleSpeed),
-		battleSpeed:   battleSpeed,
-		modCfg:        modCfg,
-		overworld:     game.Loaded(),
-		quit:          make(chan struct{}),
-		done:          make(chan struct{}),
+		clients:      make(map[string]*Client),
+		register:     make(chan *Client, 16),
+		unregister:   make(chan *Client, 16),
+		events:       make(chan Event, 256),
+		tasks:        make(chan func(), 256),
+		store:        profiles,
+		accounts:     accounts,
+		tokens:       tokens,
+		world:        make(map[string]*protocol.WorldPlayer),
+		npcs:         make(map[string]*worldNPC),
+		combatants:   make(map[string]*combatant),
+		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		parties:      make(map[string]*hubParty),
+		clientParty:  make(map[string]string),
+		partyInvites: make(map[string]*partyInvite),
+		camps:        make(map[string]*worldCamp),
+		houses:       make(map[string]*houseRoom),
+		overworld:    game.Loaded(),
+		quit:         make(chan struct{}),
+		done:         make(chan struct{}),
 	}
-	combat, err := plugins.NewCombatPlugin(modCfg, h)
-	if err != nil {
-		return nil, err
-	}
-	h.combat = combat
 	return h, nil
 }
 
@@ -168,7 +148,7 @@ func (h *Hub) ApplyOverworldReload(id, name string, ow *game.Overworld) {
 
 func (h *Hub) reloadOverworld(id, name string, ow *game.Overworld) {
 	h.SetMap(id, name, ow)
-	h.reseedNPCsPreservingBattles(npcCount)
+	h.reseedNPCsPreservingCombat(npcCount)
 	h.BroadcastMapConfig()
 	h.broadcastWorldState()
 	nClients := 0
@@ -189,7 +169,6 @@ func (h *Hub) broadcastWorldState() {
 		NPCs:        h.worldNPCs(),
 		Camps:       h.campList(),
 		Pets:        h.worldPets(),
-		Battles:     h.battleInfos(),
 		SavePoints:  h.worldSavePoints(),
 		JobChangers: h.worldJobChangers(),
 		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
@@ -208,17 +187,6 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		return nil
 	}
 	tile, cols, rows, cells := h.overworld.MapPayload()
-	caps := []string{}
-	mods := make([]protocol.MapModule, 0)
-	for _, m := range h.modCfg.ClientManifest().Modules {
-		mods = append(mods, protocol.MapModule{
-			ID: m.ID, Name: m.Name, Version: m.Version,
-			Capabilities: m.Capabilities,
-			Frontend:     protocol.MapFrontend{PluginID: m.Frontend.PluginID},
-			Config:       m.Config,
-		})
-		caps = append(caps, m.Capabilities...)
-	}
 	portals := make([]protocol.MapPortal, 0, len(h.overworld.Exits))
 	ts := float64(h.overworld.TileSizePx())
 	for _, e := range h.overworld.Exits {
@@ -232,9 +200,6 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 	return &protocol.MapSnapshot{
 		ID:            h.mapID,
 		Name:          h.mapName,
-		Combat:        h.modCfg.Combat,
-		Capabilities:  caps,
-		Modules:       mods,
 		Overworld:     protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
 		TiledMap:      "",
 		Portals:       portals,
@@ -282,8 +247,6 @@ func (h *Hub) mapCells() (tile, cols, rows int, cells string) {
 	}
 	return game.OverworldMapPayload()
 }
-
-func (h *Hub) BattleSpeed() float64 { return h.battleSpeed }
 
 func (h *Hub) KickByCharacterName(name string) {
 	h.tasks <- func() {
@@ -336,9 +299,11 @@ func (h *Hub) Run() {
 
 		case <-ticker.C:
 			h.tickNPCs()
+			h.outOfCombatRegen()
 
 		case <-castTicker.C:
 			h.finishDueWorldCasts(time.Now())
+			h.tickCombat(time.Now())
 		}
 	}
 }
@@ -349,41 +314,6 @@ func (h *Hub) Stop() {
 		close(h.quit)
 	})
 	<-h.done
-}
-
-// ---- roomHost implementation (safe to call from battle goroutines) ----
-
-func (h *Hub) SendToClients(ids []string, msg []byte) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, id := range ids {
-		if c, ok := h.clients[id]; ok {
-			h.sendRaw(c, msg)
-		}
-	}
-}
-
-func (h *Hub) Profiles() *store.Store { return h.store }
-
-// FinishBattle marshals room teardown onto the hub goroutine: participants
-// are released from the combat-locked state and the room is removed.
-func (h *Hub) FinishBattle(roomID string, participantIDs []string, victory bool) {
-	h.tasks <- func() {
-		if !h.combat.RoomExists(roomID) {
-			return
-		}
-		delete(h.battleMeta, roomID)
-		h.combat.CloseRoom(roomID)
-		for _, id := range participantIDs {
-			if !victory {
-				h.respawnAtSavePoint(id)
-			}
-			h.releaseFromBattle(id)
-		}
-		h.releaseNPCs(roomID)
-		h.broadcastBattleList()
-		log.Printf("battle %s finished", roomID)
-	}
 }
 
 // ---- hub-goroutine internals ----
@@ -430,9 +360,17 @@ func (h *Hub) handleDisconnect(client *Client) {
 	if wp, ok := h.world[client.ID]; ok {
 		h.persistWorldLocation(client, wp, true)
 	}
-	if client.BattleID != "" {
-		h.combat.OnDisconnect(client.ID)
+	if pc := h.combatants[client.ID]; pc != nil {
+		h.flushSkillUsage(pc)
+		for _, n := range h.npcs {
+			if n.Engaged && n.targetID == client.ID {
+				n.targetID = "" // retarget next tick
+			}
+			delete(n.contributors, client.ID)
+		}
+		delete(h.combatants, client.ID)
 	}
+	delete(h.aoi, client.ID)
 	h.onHousingDisconnect(client)
 	if _, ok := h.world[client.ID]; ok {
 		delete(h.world, client.ID)
@@ -488,14 +426,12 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handlePartyLeave(c)
 	case protocol.TypePartyKick:
 		h.handlePartyKick(c, ev.Payload)
-	case protocol.TypeDeclineBattleInvite, protocol.TypeJoinBattle,
-		protocol.TypeAction, protocol.TypeSetTarget,
-		protocol.TypeRTMove, protocol.TypeRTAttack:
-		if h.combat != nil {
-			h.combat.HandleMessage(c.ID, ev.Type, ev.Payload)
-		}
-	case protocol.TypeLeaveBattle:
-		h.handleLeaveBattle(c)
+	case protocol.TypeAction:
+		h.handleAction(c, ev.Payload)
+	case protocol.TypeSetTarget:
+		h.handleSetTarget(c, ev.Payload)
+	case protocol.TypeDodge:
+		h.handleDodge(c)
 	case protocol.TypeSetSavePoint:
 		h.handleSetSavePoint(c, ev.Payload)
 	case protocol.TypeUseWorldSkill:
@@ -609,10 +545,12 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 		Y:          spawnY,
 		Facing:     facing,
 	}
-	// Zone transfers attach with UseSpawn — grant the same post-battle invuln window.
+	// Zone transfers attach with UseSpawn — grant the same invuln window.
 	if c.UseSpawn {
 		h.grantBattleImmunity(wp)
 	}
+	pc := h.ensureCombatant(c)
+	h.syncWorldPlayer(wp, pc)
 	h.world[c.ID] = wp
 	h.persistWorldLocation(c, wp, true)
 
@@ -623,7 +561,6 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 		NPCs:        h.worldNPCs(),
 		Camps:       h.campList(),
 		Pets:        h.worldPets(),
-		Battles:     h.battleInfos(),
 		SavePoints:  h.worldSavePoints(),
 		JobChangers: h.worldJobChangers(),
 		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
@@ -669,8 +606,8 @@ func (h *Hub) persistWorldLocation(c *Client, wp *protocol.WorldPlayer, flush bo
 
 func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	wp, ok := h.world[c.ID]
-	if !ok || wp.InBattle {
-		return // combat-locked players cannot move in the world
+	if !ok {
+		return
 	}
 	var p protocol.MovePayload
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -681,9 +618,27 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 		return
 	}
 	prevX, prevY := wp.X, wp.Y
-	wp.X, wp.Y = h.clampMove(wp.X, wp.Y, p.X, p.Y)
+	pc := h.combatants[c.ID]
+	maxStep := maxMoveStep
+	if pc != nil && time.Since(pc.dodgedAt) < dodgeLandingWindow {
+		maxStep += dodgeDashDist
+	}
+	wp.X, wp.Y = h.clampMoveStep(wp.X, wp.Y, p.X, p.Y, maxStep)
 	wp.Facing = game.ResolveFacingYaw(wp.X-prevX, wp.Y-prevY, derefFacing(p.Facing), p.Facing != nil, wp.Facing)
 	h.interruptWorldCastOnMove(c, wp)
+	// Combat: movement while casting a battle skill interrupts it past the
+	// cancel threshold, and real displacement keeps the dodge window alive.
+	if pc != nil {
+		moved := math.Hypot(wp.X-prevX, wp.Y-prevY)
+		if moved > 0.5 {
+			pc.lastMoveAt = time.Now()
+			pc.lastMoveDX = wp.X - prevX
+			pc.lastMoveDY = wp.Y - prevY
+		}
+		if pc.casting != nil && dist(wp.X, wp.Y, pc.castX, pc.castY) >= castMoveCancel {
+			h.interruptCast(pc)
+		}
+	}
 	h.persistWorldLocation(c, wp, false)
 	if h.OnTransfer != nil && h.overworld != nil {
 		if exit, ok := h.overworld.ExitAt(wp.X, wp.Y); ok && exit.DestMap != h.mapID {
@@ -694,9 +649,7 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 		ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
 	}))
-	if !h.engageFirstNPCAt(c, wp, wp.X, wp.Y) {
-		h.engagePartyMemberAt(c, wp, wp.X, wp.Y)
-	}
+	h.checkAggroAt(c.ID, wp.X, wp.Y)
 }
 
 func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
@@ -718,8 +671,8 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	if !ok {
 		return
 	}
-	if wp.InBattle {
-		h.sendError(c, "Cannot change equipment while combat-locked.")
+	if wp.InCombat {
+		h.sendError(c, "Cannot change equipment while in combat.")
 		return
 	}
 	var p protocol.EquipPayload
@@ -741,8 +694,8 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	if !ok {
 		return
 	}
-	if wp.InBattle {
-		h.sendError(c, "Cannot change equipment while combat-locked.")
+	if wp.InCombat {
+		h.sendError(c, "Cannot change equipment while in combat.")
 		return
 	}
 	var p protocol.UnequipPayload
@@ -763,8 +716,8 @@ func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
 	if !ok {
 		return
 	}
-	if wp.InBattle {
-		h.sendError(c, "Cannot change jobs while combat-locked.")
+	if wp.InCombat {
+		h.sendError(c, "Cannot change jobs while in combat.")
 		return
 	}
 	var p protocol.SetJobsPayload
@@ -798,7 +751,7 @@ func (h *Hub) handleSetHotbar(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	profile, ok := h.store.SetHotbar(c.Name, p.Bar, p.Slot, p.Kind, p.ID)
+	profile, ok := h.store.SetHotbar(c.Name, p.Slot, p.Kind, p.ID)
 	if !ok {
 		h.sendError(c, "Invalid hotbar slot.")
 		return
@@ -819,70 +772,6 @@ func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
 	h.sendWelcome(c, profile)
 }
 
-func (h *Hub) handleLeaveBattle(c *Client) {
-	wp := h.world[c.ID]
-	// Prefer the world player's battle id; Client.BattleID can desync after
-	// end-of-fight teardown races or reconnect-adjacent edge cases.
-	if wp != nil && wp.BattleID == "" && c.BattleID != "" {
-		wp.BattleID = c.BattleID
-		wp.InBattle = true
-	}
-	stillIn := c.BattleID != "" || (wp != nil && (wp.InBattle || wp.BattleID != ""))
-	if stillIn && h.combat != nil {
-		h.combat.HandleMessage(c.ID, protocol.TypeLeaveBattle, nil)
-	}
-	// Plugin Leave should unlock, but always force a clean release so a missed
-	// room teardown cannot leave the player combat-locked in the overworld.
-	if wp != nil && (wp.InBattle || wp.BattleID != "" || c.BattleID != "") {
-		h.releaseFromBattle(c.ID)
-		h.broadcastBattleList()
-		return
-	}
-	h.handleLeaveBattleReleased(c)
-}
-
-func (h *Hub) handleLeaveBattleReleased(c *Client) {
-	if wp, ok := h.world[c.ID]; ok && !wp.InBattle {
-		h.grantBattleImmunity(wp)
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
-	}
-}
-
-// releaseFromBattle clears the combat-locked state for one player and syncs
-// their (possibly leveled-up) world presence.
-func (h *Hub) releaseFromBattle(clientID string) {
-	h.mu.RLock()
-	c, ok := h.clients[clientID]
-	h.mu.RUnlock()
-	if ok {
-		c.BattleID = ""
-	}
-	wp, ok := h.world[clientID]
-	if !ok {
-		return
-	}
-	wp.InBattle = false
-	wp.BattleID = ""
-	h.grantBattleImmunity(wp)
-	if c != nil {
-		if profile, ok := h.store.Get(c.Name); ok {
-			wp.Level = profile.MainJobLevel()
-			wp.MainJob = profile.MainJob
-			wp.SubJob = profile.SubJob
-			wp.Weapon = string(profile.WeaponType())
-			// Push the authoritative post-battle profile (XP, loot,
-			// proficiency gains, and any newly unlocked skills).
-			h.sendWelcome(c, profile)
-		}
-		// Force the client off the battle screen even if leave_battle was never sent.
-		h.send(c, protocol.TypeBattleReturn, map[string]any{})
-	}
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
-	if partyID, ok := h.clientParty[clientID]; ok {
-		h.broadcastPartySocial(h.parties[partyID])
-	}
-}
-
 func (h *Hub) worldPlayers() []protocol.WorldPlayer {
 	out := make([]protocol.WorldPlayer, 0, len(h.world))
 	for _, wp := range h.world {
@@ -898,34 +787,13 @@ func (h *Hub) grantBattleImmunity(wp *protocol.WorldPlayer) {
 	wp.ImmuneUntil = time.Now().Add(battleImmunity).UnixMilli()
 }
 
-func (h *Hub) battleInfos() []protocol.BattleInfo {
-	counts := map[string]int{}
-	for _, wp := range h.world {
-		if wp.InBattle {
-			counts[wp.BattleID]++
-		}
-	}
-	if h.combat == nil {
-		return nil
-	}
-	return h.combat.BattleInfos(counts)
-}
-
-// StatusCounts returns online player and active battle counts plus the combat plugin id.
+// StatusCounts returns online player count and engaged NPC count for this map.
 // Safe to call from any goroutine; does not expose world state.
-func (h *Hub) StatusCounts() (players, battles int, combat string) {
+func (h *Hub) StatusCounts() (players, engaged int) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	players = len(h.clients)
-	combat = h.modCfg.Combat
-	battles = len(h.battleInfos())
 	return
-}
-
-func (h *Hub) broadcastBattleList() {
-	h.broadcastAll(protocol.Encode(protocol.TypeBattleList, protocol.BattleListPayload{
-		Battles: h.battleInfos(),
-	}))
 }
 
 func profileInfo(p store.Profile) protocol.ProfileInfo {
@@ -956,7 +824,7 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 			WorldOnly:   s.WorldOnly,
 		}
 	}
-	skills := []protocol.SkillInfo{toInfo(game.BasicAttack), toInfo(game.SkillCapture)}
+	skills := []protocol.SkillInfo{toInfo(game.BasicAttack), toInfo(game.SkillCapture), toInfo(game.SkillDodge)}
 	for _, s := range game.Catalog {
 		if s.WorldOnly || jobActive(s.Job) {
 			skills = append(skills, toInfo(s))
@@ -971,11 +839,6 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 	for slot, b := range loadout.Hotbar {
 		hotbar[slot] = protocol.HotbarBinding{Kind: b.Kind, ID: b.ID}
 	}
-	worldHotbar := map[string]protocol.HotbarBinding{}
-	for slot, b := range loadout.WorldHotbar {
-		worldHotbar[slot] = protocol.HotbarBinding{Kind: b.Kind, ID: b.ID}
-	}
-
 	mainLvl := p.MainJobLevel()
 	subLvl := p.SubJobEffectiveLevel()
 	hp, mp, str, mag, agi := game.ComputeJobStats(
@@ -1028,7 +891,6 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 		CampSkin:          game.NormalizeCampSkin(p.CampSkin),
 		Equipped:          equipped,
 		Hotbar:            hotbar,
-		WorldHotbar:       worldHotbar,
 		Skills:            skills,
 		Friends:           append([]string(nil), p.Friends...),
 		SavePointID:       p.SavePointID,

@@ -8,8 +8,6 @@ export interface EncounterEnemy {
 }
 
 export interface EncounterConfig {
-  minEnemies: number;
-  maxEnemies: number;
   enemies: EncounterEnemy[];
 }
 
@@ -25,8 +23,6 @@ export function defaultEncounterEnemy(kind: string, level: number, dropPoolId = 
 
 export function defaultEncounterConfig(kind: string, level: number, dropPoolId = ""): EncounterConfig {
   return {
-    minEnemies: 2,
-    maxEnemies: 3,
     enemies: [defaultEncounterEnemy(kind, level, dropPoolId)],
   };
 }
@@ -54,12 +50,6 @@ export function normalizeEncounter(
   const base = defaultEncounterConfig(fallbackKind, fallbackLevel);
   if (!raw || typeof raw !== "object") return base;
 
-  let minEnemies = Math.floor(Number(raw.minEnemies));
-  let maxEnemies = Math.floor(Number(raw.maxEnemies));
-  if (!Number.isFinite(minEnemies) || minEnemies < 1) minEnemies = base.minEnemies;
-  if (!Number.isFinite(maxEnemies) || maxEnemies < 1) maxEnemies = base.maxEnemies;
-  if (maxEnemies < minEnemies) maxEnemies = minEnemies;
-
   const enemiesIn = Array.isArray(raw.enemies) ? raw.enemies : [];
   const enemies: EncounterEnemy[] = [];
   for (const e of enemiesIn) {
@@ -77,7 +67,7 @@ export function normalizeEncounter(
     enemies.push(...base.enemies);
   }
 
-  return { minEnemies, maxEnemies, enemies };
+  return { enemies };
 }
 
 /** Default drop pool id seeded per enemy kind. */

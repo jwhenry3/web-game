@@ -15,7 +15,7 @@ Launch the Clara Mundi client, create an account if needed, and make a character
 
 ## 3. Fight when you are ready
 
-Hostile creatures patrol regions outside sanctuaries. Early battles teach your combat mode — some maps are realtime, others use Ordo (ATB). Defeat returns you to your save point.
+Hostile creatures patrol regions outside sanctuaries. Combat is realtime and happens right in the field — walk close to a hostile or attack it to engage, and its nearby allies may join in. Defeat returns you to your save point.
 
 ## 4. Grow into the Mandate
 

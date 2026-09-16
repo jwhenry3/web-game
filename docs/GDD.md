@@ -48,7 +48,7 @@ Maps today: **18 playable zones** across three regions (6 each). Lore seats are 
 
 **Advanced cores / aliases:** Aegis (hammer tank), Lorekeeper (SAN/CAN), Beastward (BRW/CAN).
 
-**Combat feel (current tech):** realtime maps suit dense forest skirmishes.
+**Combat feel:** realtime overworld combat suits dense forest skirmishes.
 
 ---
 
@@ -69,7 +69,7 @@ Maps today: **18 playable zones** across three regions (6 each). Lore seats are 
 
 **Advanced cores / aliases:** Ronin (katana), Lancer (spear), Reaver (axe), Sigilblade (VAN/CAN).
 
-**Combat feel (current tech):** ATB suits measured, harsh frontier engagements.
+**Combat feel:** harsh frontier engagements — leashed pack fights in the open field.
 
 ---
 
@@ -90,7 +90,7 @@ Maps today: **18 playable zones** across three regions (6 each). Lore seats are 
 
 **Advanced cores / aliases:** Spellblade (VAN/HEX), Privateer (CUT/BRW), Duelist (RON/CUT), Nightveil (CUT/CAN).
 
-**Combat feel (current tech):** realtime suits chaotic shore fights and ambushes.
+**Combat feel:** realtime overworld combat suits chaotic shore fights and ambushes.
 
 ---
 
@@ -266,7 +266,7 @@ world clock
    encounter / patrol spawn (per map + region)
          │
          ▼
-   combat plugins (ATB / realtime) — enemy templates already support level ranges & drop pools
+   overworld combat — enemy templates already support level ranges & drop pools
 ```
 
 **Recommended hooks (implementation order):**

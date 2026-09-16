@@ -13,10 +13,8 @@ import (
 	"clara-mundi/internal/auth"
 	"clara-mundi/internal/cluster"
 	"clara-mundi/internal/mapnode"
-	"clara-mundi/internal/plugins"
 	"clara-mundi/internal/protocol"
 	"clara-mundi/internal/server"
-	"clara-mundi/internal/servercfg"
 	"clara-mundi/internal/store"
 
 	"github.com/gorilla/websocket"
@@ -103,14 +101,8 @@ func (p *Proxy) KickByCharacterName(name string) {
 }
 
 func (p *Proxy) Handler() http.Handler {
-	modCfg := plugins.Config{}
-	if spec := p.cfg.DefaultMap(); spec.Config != "" {
-		if mc, err := servercfg.Load(spec.Config); err == nil {
-			modCfg = mc.Plugins
-		}
-	}
 	apiMux := http.NewServeMux()
-	server.RegisterAPIRoutes(apiMux, p.auth, modCfg)
+	server.RegisterAPIRoutes(apiMux, p.auth)
 	apiMux.HandleFunc("/atlas", p.handleAtlas)
 	apiMux.HandleFunc("/status", p.handleStatus)
 	admin := &AdminMapsHandler{

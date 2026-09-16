@@ -12,9 +12,9 @@ import (
 
 // Config is the cluster document: one global proxy and N map servers.
 type Config struct {
-	Proxy ProxyConfig  `json:"proxy"`
+	Proxy ProxyConfig   `json:"proxy"`
 	Exp   game.ExpRates `json:"exp"`
-	Maps  []MapSpec    `json:"maps"`
+	Maps  []MapSpec     `json:"maps"`
 }
 
 type ProxyConfig struct {

@@ -32,7 +32,6 @@ type Client struct {
 	Username       string
 	Name           string
 	Joined         bool
-	BattleID       string
 	SpawnX         float64
 	SpawnY         float64
 	UseSpawn       bool

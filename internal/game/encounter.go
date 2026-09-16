@@ -33,11 +33,9 @@ func (e *EncounterEnemy) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// EncounterConfig controls enemy count, types, levels, and drop pools for a combat NPC.
+// EncounterConfig controls enemy types, levels, and drop pools for a combat NPC.
 type EncounterConfig struct {
-	MinEnemies int              `json:"minEnemies"`
-	MaxEnemies int              `json:"maxEnemies"`
-	Enemies    []EncounterEnemy `json:"enemies"`
+	Enemies []EncounterEnemy `json:"enemies"`
 }
 
 // DefaultEncounter builds a legacy-compatible encounter from kind + level.
@@ -49,8 +47,6 @@ func DefaultEncounter(kind string, level int) EncounterConfig {
 		level = 1
 	}
 	return EncounterConfig{
-		MinEnemies: 2,
-		MaxEnemies: 3,
 		Enemies: []EncounterEnemy{{
 			Kind:       kind,
 			LevelMin:   level,
@@ -60,24 +56,9 @@ func DefaultEncounter(kind string, level int) EncounterConfig {
 	}
 }
 
-// NormalizeEncounter clamps counts/levels and fills empty enemy lists.
+// NormalizeEncounter clamps levels and fills empty enemy lists.
 func NormalizeEncounter(cfg EncounterConfig, fallbackKind string, fallbackLevel int) EncounterConfig {
 	base := DefaultEncounter(fallbackKind, fallbackLevel)
-	if cfg.MinEnemies < 1 {
-		cfg.MinEnemies = base.MinEnemies
-	}
-	if cfg.MaxEnemies < 1 {
-		cfg.MaxEnemies = base.MaxEnemies
-	}
-	if cfg.MaxEnemies < cfg.MinEnemies {
-		cfg.MaxEnemies = cfg.MinEnemies
-	}
-	if cfg.MaxEnemies > 8 {
-		cfg.MaxEnemies = 8
-	}
-	if cfg.MinEnemies > 8 {
-		cfg.MinEnemies = 8
-	}
 	out := make([]EncounterEnemy, 0, len(cfg.Enemies))
 	for _, e := range cfg.Enemies {
 		e.Kind = strings.TrimSpace(e.Kind)
@@ -127,20 +108,6 @@ func EncounterFromProps(props []tiledProp) EncounterConfig {
 	kind := tiledPropString(props, "kind")
 	level := tiledPropInt(props, "level")
 	return ParseEncounterJSON(tiledPropString(props, "encounter"), kind, level)
-}
-
-// RollEnemyCount picks a count in [min, max].
-func (cfg EncounterConfig) RollEnemyCount(rng *rand.Rand) int {
-	if cfg.MinEnemies < 1 {
-		cfg.MinEnemies = 1
-	}
-	if cfg.MaxEnemies < cfg.MinEnemies {
-		cfg.MaxEnemies = cfg.MinEnemies
-	}
-	if cfg.MaxEnemies == cfg.MinEnemies {
-		return cfg.MinEnemies
-	}
-	return cfg.MinEnemies + rng.Intn(cfg.MaxEnemies-cfg.MinEnemies+1)
 }
 
 // PickEnemy picks a uniform random spawn entry.

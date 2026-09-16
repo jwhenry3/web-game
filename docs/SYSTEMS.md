@@ -11,7 +11,7 @@ Each map node owns one `game.Overworld`:
 - Tile grid from `data/maps/{id}.map.json` (plus optional `data/maps/overrides/{id}.json`)
 - **Regions** — wilderness / town / camp; `sanctuary: true` marks safe zones
 - **Collision** — non-walkable tiles; pathfinding and engage respect sanctuaries
-- **NPCs** — patrol/wander in a region; engage starts combat (not inside sanctuaries)
+- **NPCs** — patrol/wander in a region; proximity or an attack pulls them into combat (not inside sanctuaries)
 - **Exits** — rectangles that transfer the player to another map (`destMap`, `destX`, `destY`)
 - **Save points** — attune / respawn / Return–Teleport destinations
 - **Job changers** — optional POIs inside sanctuaries
@@ -23,7 +23,7 @@ Movement is server-authoritative (slide / bounds checks). Clients send move inte
 - Every sanctuary must contain **at least one save point** (validated on map load).
 - Job masters are optional (common in towns, optional at camps).
 - Enemies do not path into or engage players inside sanctuaries.
-- Entering a map via transfer can grant a short battle immunity window.
+- Entering a map via transfer can grant a short combat immunity window.
 
 ## Save points & travel skills
 
@@ -31,30 +31,48 @@ Profiles store `save_point_id` and `visited_save_points`. Setting a crystal requ
 
 ## Combat
 
-Combat is a **plugin** selected per map (`plugins.combat` in the map's server JSON):
+All combat is **realtime** and fought **directly in the overworld** — there are no instanced battle rooms and no per-map combat modes. One authoritative physics/combat simulation runs inside the map hub goroutine, driven by the single `move` path.
 
-| Plugin ID | Package | Typical map |
-|-----------|---------|-------------|
-| `combat.realtime` | `internal/plugins/combatrealtime` | Greenwood |
-| `combat.atb` | `internal/plugins/combatatb` | Northern Wastes |
+### Engagement
+
+- Walking within ~110px of a hostile NPC, or attacking one, pulls it into combat.
+- Nearby hostile NPCs within ~150px of an engaged ally assist it.
+- Engaged NPCs chase at melee range; dragged ~380px from where the fight began they leash back to that spot and reset to full HP. Targets farther than ~460px are dropped.
+- A world NPC's identity (kind, level, drop pool, capturable) is rolled from its patrol's encounter config; the patrol's own kind/level are fallbacks for encounters that omit them.
+- Enemies do not path into or engage players inside sanctuaries.
+
+### Tick & broadcast
+
+- Combat ticks run every **50ms**, but only while at least one fight is active on the map.
+- `combat_tick` / `combat_event` use area-of-interest filtering: only clients within ~900px of a fight (or flagged in-combat) receive them. Clients leaving the AoI get one empty `combat_tick` so the HUD clears.
+
+### Actions & dodge
+
+- Combat intents: `action` (`action_id`, optional `target_id` / `item_id`), `set_target`, `dodge`.
+- **Dodge** is a universal action bound to **Shift** (not a hotbar slot): works in and out of combat, requires recent movement (250ms grace), costs **25 stamina** (max 100, regens 35/s), 500ms cooldown after the dash, and interrupts casting.
+- Skills with cast times report progress; moving or dodging interrupts the cast.
+
+### Defeat & rewards
+
+- XP is awarded **per kill**: everyone who damaged the NPC gets a share, with a party bonus when 2+ same-party contributors dealt damage. Nearby party members who didn't fight get a smaller passive share.
+- Defeated NPCs despawn and respawn after a delay at their patrol home.
+- Defeated players respawn at their save point with a **5s immunity** window.
 
 ### Pets & capture
 
 - Encounter enemies may set `"capturable": false` (default **true** when omitted).
-- While an enemy is alive, capturable, and under **20% HP**, the player may use the **Capture** skill (`capture`) from the hotbar (default slot 7) or the battle HUD shortcut.
+- While an enemy is alive, capturable, and under **20% HP**, the player may use the **Capture** skill (`capture`) from the hotbar (default slot 7).
 - Success chance: `clamp(0.05, 0.85, 0.35 + 0.04*(playerMainLvl − enemyLvl))`.
 - Captured pets go on the profile (`pets`, max 20) at the enemy's level.
-- One pet may **follow** on the overworld; one may be the **battle ally**.
-- Battle allies are friendly non-players (`is_ally`): enemy AI can hit them; they AI-attack foes. The owner may queue **one** skill via `actor_id`; after it resolves, AI resumes.
-- Ally heals/buffs/items may target pets. Wipe when **no human players** remain alive — pets do not keep the fight open.
-
-Battles are isolated **rooms** on the Hub (cap **4** players). Clients load matching frontend modules under `wails/frontend/src/plugins/`. `welcome.map` tells the client which combat module the current map uses.
+- One pet may **follow** on the overworld; one may fight as an **ally**.
+- Allies are friendly non-players (`is_ally`): enemy AI can hit them; they AI-attack foes. The owner may queue **one** skill via `actor_id`; after it resolves, AI resumes.
+- Ally heals/buffs/items may target pets.
 
 Crossing a map exit (e.g. Wolfrun road → Northern Wastes) keeps the same WebSocket; only the owning map node changes.
 
 ### Status effects
 
-Buffs/debuffs (`internal/game/status.go`) tick with combat timing: defense/attack mods, shields, regen/poison, haste, stun, etc. Synced to the client as badges on HUD and sprites.
+Buffs/debuffs (`internal/game/status.go`) tick inside the combat sim: defense/attack mods, shields, regen/poison, haste, stun, etc. Synced to the client as badges on HUD and sprites.
 
 ### Targeting (client)
 
@@ -69,8 +87,8 @@ Buffs/debuffs (`internal/game/status.go`) tick with combat timing: defense/attac
 - New characters pick **main only**; `profile.unlocked_jobs` starts as the six starters. Subclass requires main level ≥ `exp.subjob_unlock_level` (default **5**).
 - Each core has a **four-skill tree**; skills unlock at class levels 1 / 5 / 9 / 13 and train through use (up to skill level 5).
 - Equipment, hotbars, and skill progress are stored **per main/sub combo** (`store` loadouts). Eight equipment slots: main, sub, six armor.
-- Each loadout keeps **two hotbars**: the world bar (`world_hotbar`) shows in the overworld and holds field-only skills (Return, Port, Camp); the battle bar (`hotbar`) shows in combat and holds battle skills and consumables. `set_hotbar` takes a `bar` field (`world` | `battle`, default `battle`) and the server rejects bindings on the wrong bar. The Skills window shows both bars for assignment and dims the incompatible one while dragging.
-- Only **equipped** items contribute battle stats.
+- Each loadout keeps a single **hotbar** of **24 slots** (1–8, ctrl+1–8, shift+1–8) shared by field skills (Return, Port, Camp), combat skills, and consumables. `set_hotbar` binds a slot directly — there is no `bar` field. The Skills window assigns onto the one bar.
+- Only **equipped** items contribute combat stats.
 - Procedural loot on victory; Mug improves rarity.
 
 ### EXP rates (cluster-wide)
@@ -80,7 +98,7 @@ Configured once in `data/cluster.json` under `exp` and applied by every map serv
 1. Scale base award by `exp.rate`.
 2. If a subjob is set, split by `exp.main_percent` / `exp.sub_percent`; otherwise all EXP goes to main.
 
-Used for battle victory shares and party passive EXP. Defaults: rate `1.0`, main `75%`, sub `25%`.
+Used for per-kill XP shares and party passive EXP. Defaults: rate `1.0`, main `75%`, sub `25%`.
 
 ## Housing / camps
 
@@ -92,7 +110,7 @@ Used for battle victory shares and party passive EXP. Defaults: rate `1.0`, main
 
 ## Social
 
-Friends list and chat are Hub-mediated and persist on the profile. Rosters show nearby players; click a fighting hero (⚔) to join their battle when seats remain.
+Friends list and chat are Hub-mediated and persist on the profile. Rosters show nearby players (⚔ marks those in combat); party members fight alongside each other in the overworld and share kill XP.
 
 ## Accounts & profiles
 
@@ -105,12 +123,11 @@ JWT claims identify the account on HTTP and WebSocket. Character select / create
 
 ## Client presentation
 
-- **WorldScene** — tiled overworld, HEROES 99 layered sprites, engage, markers.
-- **BattleScene** / realtime plugin scenes — staging and VFX driven by server results.
-- React windows — Character, Equipment, Inventory, Skills, hotbar (1–5), main menu, social.
+- **WorldScene** — tiled overworld, HEROES 99 layered sprites, realtime combat staging and VFX driven by server results, engage markers.
+- React windows — Character, Equipment, Inventory, Skills, hotbar (24 slots), main menu, social.
 
 Asset licenses: `wails/frontend/public/assets/ATTRIBUTION.md`.
 
 ## Not yet implemented
 
-Spectator mode, party level syncing, passive party XP, quests/events, and trading remain future work.
+Party level syncing, quests/events, and trading remain future work.

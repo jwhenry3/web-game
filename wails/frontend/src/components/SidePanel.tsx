@@ -28,11 +28,9 @@ function loadChatSize(): { w: number; h: number } {
 }
 
 export function SidePanel() {
-  const battles = useGame((s) => s.battles);
   const chat = useGame((s) => s.chat);
   const chatTab = useGame((s) => s.chatTab);
   const setChatTab = useGame((s) => s.setChatTab);
-  const screen = useGame((s) => s.screen);
   const [draft, setDraft] = useState("");
   const [size, setSize] = useState(loadChatSize);
   const draftRef = useRef(draft);
@@ -117,8 +115,6 @@ export function SidePanel() {
     });
   }, []);
 
-  const inBattle = screen === "battle";
-
   const onChatKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
@@ -131,37 +127,6 @@ export function SidePanel() {
 
   return (
     <>
-      {screen === "world" && (
-        <div className="cm-hud-left">
-          <div className="cm-panel cm-duty">
-            <div className="cm-panel-head">Engagements</div>
-            {battles.length === 0 && <div className="dim">No engagements.</div>}
-            {battles.map((b) => {
-              const full = b.participants >= b.max_players;
-              return (
-                <div key={b.battle_id} className="cm-duty-line">
-                  <span>
-                    {b.battle_id}{" "}
-                    <span className="dim">
-                      {b.participants}/{b.max_players}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="cm-btn"
-                    tabIndex={-1}
-                    disabled={inBattle || full}
-                    onClick={() => net.joinBattle(b.battle_id)}
-                  >
-                    {full ? "Full" : "Join"}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       <div className="cm-chat" style={{ width: size.w, height: size.h }}>
         <div className="cm-chat-tabs">
           {CHAT_TABS.map((t) => (

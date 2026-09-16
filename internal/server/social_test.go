@@ -94,81 +94,28 @@ func TestPartyLeavePromotesLeader(t *testing.T) {
 	}
 }
 
-func TestPromptPartyDoesNotAutoJoin(t *testing.T) {
+func TestPartyCombatShareShowsInCombat(t *testing.T) {
 	h, a, b := testSocialHub(t)
 	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
 	h.handlePartyInvite(a, raw)
 	h.handlePartyAccept(b)
 
-	h.world[a.ID].InBattle = true
-	h.world[a.ID].BattleID = "battle-test"
-	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
-	h.world[b.ID].X, h.world[b.ID].Y = 520, 520 // within range
-
-	h.promptPartyForBattle(a.ID, "battle-test", 500, 500)
-
-	if h.world[b.ID].InBattle {
-		t.Fatal("party mates must opt in, not auto-join")
+	// Overworld combat: a party member fighting an engaged NPC is flagged
+	// in_combat for the party UI — no room join required.
+	h.world[a.ID].InCombat = true
+	party := h.parties[h.clientParty[a.ID]]
+	info := h.buildPartyInfo(party)
+	if info == nil || len(info.Members) != 2 {
+		t.Fatalf("party info: %+v", info)
 	}
-	if h.battleInvites[b.ID] == nil {
-		t.Fatal("nearby party mate should receive a battle prompt")
+	var alphaInCombat bool
+	for _, m := range info.Members {
+		if m.ID == a.ID {
+			alphaInCombat = m.InCombat
+		}
 	}
-}
-
-func TestMoveIntoPartyMemberJoinsBattle(t *testing.T) {
-	h, a, b := testSocialHub(t)
-	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
-	h.handlePartyInvite(a, raw)
-	h.handlePartyAccept(b)
-
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 510, Y: 500}
-	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
-	h.world[b.ID].X, h.world[b.ID].Y = 400, 500
-	h.startBattleFromNPC(a, h.world[a.ID], h.npcs["npc-1"])
-	battleID := h.world[a.ID].BattleID
-
-	move, _ := json.Marshal(protocol.MovePayload{X: 500, Y: 500})
-	h.handleMove(b, move)
-
-	if !h.world[b.ID].InBattle || h.world[b.ID].BattleID != battleID {
-		t.Fatalf("party mate should join by collision, got %+v", h.world[b.ID])
-	}
-}
-
-func TestMoveIntoNonPartyMemberDoesNotJoin(t *testing.T) {
-	h, a, b := testSocialHub(t)
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: 510, Y: 500}
-	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
-	h.world[b.ID].X, h.world[b.ID].Y = 400, 500
-	h.startBattleFromNPC(a, h.world[a.ID], h.npcs["npc-1"])
-
-	move, _ := json.Marshal(protocol.MovePayload{X: 500, Y: 500})
-	h.handleMove(b, move)
-
-	if h.world[b.ID].InBattle {
-		t.Fatal("non-party members must not auto-join by collision")
-	}
-}
-
-func TestPromptPartySkipsDistantMembers(t *testing.T) {
-	h, a, b := testSocialHub(t)
-	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
-	h.handlePartyInvite(a, raw)
-	h.handlePartyAccept(b)
-
-	h.world[a.ID].InBattle = true
-	h.world[a.ID].BattleID = "battle-test"
-	h.world[a.ID].X, h.world[a.ID].Y = 500, 500
-	h.world[b.ID].X, h.world[b.ID].Y = 900, 900 // out of range
-
-	h.promptPartyForBattle(a.ID, "battle-test", 500, 500)
-
-	if h.battleInvites[b.ID] != nil {
-		t.Fatal("distant party mates must not be prompted")
-	}
-	meta := h.battleMeta["battle-test"]
-	if meta != nil && meta.passiveEligible[b.ID] != "" {
-		t.Fatal("distant party mates must not earn passive eligibility")
+	if !alphaInCombat {
+		t.Fatal("party member in combat should report in_combat")
 	}
 }
 

@@ -46,7 +46,7 @@ func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
 func (h *Hub) worldPets() []protocol.WorldPet {
 	out := make([]protocol.WorldPet, 0)
 	for id, wp := range h.world {
-		if wp == nil || wp.InBattle || wp.InHouse {
+		if wp == nil || wp.InCombat || wp.InHouse {
 			continue
 		}
 		c := h.clients[id]

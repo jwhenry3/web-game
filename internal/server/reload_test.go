@@ -68,7 +68,7 @@ func TestApplyOverworldReloadStreamsMapAndWorld(t *testing.T) {
 	}
 }
 
-func TestReseedNPCsPreservesInBattle(t *testing.T) {
+func TestReseedNPCsPreservesEngagement(t *testing.T) {
 	h := mustTestHub()
 	h.SetMap("greenwood", "Greenwood", game.Loaded())
 	h.seedNPCs(npcCount)
@@ -80,17 +80,21 @@ func TestReseedNPCsPreservesInBattle(t *testing.T) {
 		id = k
 		break
 	}
-	h.npcs[id].InBattle = true
-	h.npcs[id].BattleID = "battle-1"
+	h.npcs[id].Engaged = true
+	h.npcs[id].targetID = "client-1"
+	h.npcs[id].contributors = map[string]int{"client-1": 42}
 	h.npcs[id].X = 111
 	h.npcs[id].Y = 222
 
-	h.reseedNPCsPreservingBattles(npcCount)
+	h.reseedNPCsPreservingCombat(npcCount)
 	n := h.npcs[id]
 	if n == nil {
 		t.Fatal("npc missing after reseed")
 	}
-	if !n.InBattle || n.BattleID != "battle-1" || n.X != 111 || n.Y != 222 {
-		t.Fatalf("battle state not preserved: %+v", n)
+	if !n.Engaged || n.targetID != "client-1" || n.X != 111 || n.Y != 222 {
+		t.Fatalf("combat state not preserved: %+v", n)
+	}
+	if n.contributors["client-1"] != 42 {
+		t.Fatalf("contributors not preserved: %+v", n.contributors)
 	}
 }

@@ -4,7 +4,7 @@ import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import type { FriendRequestPayload } from "../types";
 
-function toastKey(kind: "party" | "battle" | "friend", id: string) {
+function toastKey(kind: "party" | "friend", id: string) {
   return `${kind}:${id}`;
 }
 
@@ -52,19 +52,12 @@ function friendRequestKey(req: FriendRequestPayload) {
 export function InviteToasts() {
   const profile = useGame((s) => s.profile);
   const selfId = useGame((s) => s.selfId);
-  const players = useGame((s) => s.players);
   const partyInvite = useGame((s) => s.partyInvite);
-  const battleInvite = useGame((s) => s.battleInvite);
   const friendRequests = useGame((s) => s.friendRequests);
   const [dismissedParty, setDismissedParty] = useState<string | null>(null);
-  const [dismissedBattle, setDismissedBattle] = useState<string | null>(null);
   const [dismissedFriends, setDismissedFriends] = useState<Set<string>>(() => new Set());
 
-  const self = selfId ? players[selfId] : undefined;
-  const inBattle = self?.in_battle ?? false;
-
   const partyKey = partyInvite ? toastKey("party", partyInvite.from_id) : null;
-  const battleKey = battleInvite ? toastKey("battle", battleInvite.battle_id) : null;
 
   const visibleFriendRequests = useMemo(
     () => friendRequests.filter((req) => !dismissedFriends.has(friendRequestKey(req))),
@@ -72,9 +65,7 @@ export function InviteToasts() {
   );
 
   const showParty = !!profile && !!selfId && !!partyInvite && partyKey !== dismissedParty;
-  const showBattle =
-    !!profile && !!selfId && !!battleInvite && battleKey !== dismissedBattle && !inBattle;
-  const hasToast = showParty || showBattle || visibleFriendRequests.length > 0;
+  const hasToast = showParty || visibleFriendRequests.length > 0;
 
   if (!profile || !selfId) return null;
   if (!hasToast) return null;
@@ -107,17 +98,6 @@ export function InviteToasts() {
           onAccept={() => net.partyAccept()}
           onDecline={() => net.partyDecline()}
           onDismiss={() => setDismissedParty(partyKey)}
-        />
-      )}
-      {showBattle && battleInvite && battleKey && (
-        <ActionToast
-          title="Battle Nearby"
-          message={`${battleInvite.from_name} engaged a foe nearby.`}
-          hint="Declining still earns passive EXP if your party wins."
-          acceptLabel="Join"
-          onAccept={() => net.joinBattle(battleInvite.battle_id)}
-          onDecline={() => net.declineBattleInvite()}
-          onDismiss={() => setDismissedBattle(battleKey)}
         />
       )}
     </div>,

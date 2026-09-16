@@ -2228,17 +2228,24 @@ h3 {
 .cm-hotbar-assign {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin: 4px 0 10px;
+  align-items: center;
+  margin: 12px 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(196, 163, 90, 0.25);
 }
 
-.hotbar-set-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #8c8778;
-  margin-bottom: 3px;
+.cm-hotbar-tabs {
+  margin-bottom: 8px;
+}
+
+/* While a bound slot is dragged, the whole assign area is an unbind zone. */
+.cm-hotbar-assign--unbind {
+  outline: 1px dashed rgba(196, 163, 90, 0.4);
+  outline-offset: 6px;
+}
+
+.cm-hotbar-tabs .cm-tab--incompat {
+  opacity: 0.4;
 }
 
 .cm-tree-detail {
@@ -2271,12 +2278,8 @@ h3 {
 }
 
 .hotbar--embedded .hotbar-slot {
-  width: 40px;
-  height: 40px;
-}
-
-.hotbar--embedded .hotbar-key {
-  font-size: 8px;
+  width: 48px;
+  height: 48px;
 }
 
 /* While a drag is in flight the incompatible bar is dimmed and refuses drops;

@@ -58,19 +58,7 @@ func TestMapsRegistryRoundTrip(t *testing.T) {
     "data": "d",
     "accounts": "a",
     "static": "s",
-    "overworld": "OVERWORLD",
-    "battle_speed": 0.75
-  },
-  "plugins": {
-    "combat": "combat.atb",
-    "modules": [{
-      "id": "combat.atb",
-      "name": "ATB",
-      "version": "1.0.0",
-      "capabilities": ["combat"],
-      "enabled": true,
-      "frontend": {"pluginId": "combat.atb"}
-    }]
+    "overworld": "OVERWORLD"
   }
 }`, "OVERWORLD", filepath.ToSlash(mapPath))
 	if err := os.WriteFile(serverCfg, []byte(serverJSON), 0o644); err != nil {

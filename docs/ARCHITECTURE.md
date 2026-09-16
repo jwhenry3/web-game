@@ -20,10 +20,12 @@ Map node       Map node       Map node     internal/mapnode
    │              │              │
    Hub            Hub            Hub         internal/server
    Overworld      Overworld      Overworld   internal/game
-   Combat plugin  Combat plugin  …           (18 stock maps; see GDD)
+   + realtime combat in the overworld        (18 stock maps; see GDD)
 ```
 
 Today all map nodes run **in-process** inside `cmd/server`. The same APIs can later host remote map processes; transfer validation stays on the proxy.
+
+Each Hub runs a **single authoritative simulation** (movement + realtime combat) on its goroutine — there are no instanced battle rooms and no intra-map threading. If a single map gets too busy, the scaling plan is to **shard the map** (spawn additional map nodes for the same map) rather than thread inside a hub.
 
 ## Processes & packages
 
@@ -33,7 +35,7 @@ Today all map nodes run **in-process** inside `cmd/server`. The same APIs can la
 | Host bootstrap | `internal/host` | Load cluster, start maps, serve proxy (also used by Wails standalone) |
 | Proxy | `internal/proxy` | JWT auth HTTP, WebSocket sessions, route frames to the player's current map, validate transfers, admin map lifecycle |
 | Map node | `internal/mapnode` | One map: load overworld + server config, run Hub, forward bytes to proxy, request transfers |
-| Hub | `internal/server` | Per-map gameplay loop: movement, NPCs, battles, social, exits, save points |
+| Hub | `internal/server` | Per-map gameplay loop: movement, NPCs, realtime combat, social, exits, save points |
 | Game rules | `internal/game` | Jobs, skills, status, loot, overworld load/collision/pathfinding (**shared** with desktop client prediction) |
 | Protocol | `internal/protocol` | JSON `Envelope` message types (mirrored in `wails/frontend/src/types.ts`); protobuf schemas in `proto/fantasy/v1` (**shared** contract) |
 | Client net | `internal/clientnet` | Desktop Go client: WebSocket + local SlideMove prediction |
@@ -74,9 +76,9 @@ Each map has a `MapSpec`: `id`, `name`, `config` (path to a server JSON), option
 
 | Path | Typical use |
 |------|-------------|
-| `data/maps/{id}.server.json` | Every map — overworld path, combat plugin, battle speed |
+| `data/maps/{id}.server.json` | Every map — overworld path |
 
-Important fields: `server.overworld` (usually `data/maps/{id}.map.json`), `server.battle_speed`, `plugins.combat` (`combat.realtime` or `combat.atb`).
+Important fields: `server.overworld` (usually `data/maps/{id}.map.json`). Legacy `plugins` / `battle_speed` keys are ignored — combat is always the shared realtime simulation in the overworld.
 
 ### Portable `data/` tree
 
@@ -98,8 +100,8 @@ Default admin account is ensured on startup: **admin / admin**.
 | Area | Examples |
 |------|----------|
 | Auth | `POST /api/register`, `POST /api/login`, `GET /api/me` |
-| Public maps | `GET /api/maps`, `GET /api/maps/{id}`, `GET /api/atlas`, `GET /api/modules` |
-| Public status | `GET /api/status` — aggregate uptime, player/battle counts, per-map running state (no identities) |
+| Public maps | `GET /api/maps`, `GET /api/maps/{id}`, `GET /api/atlas` |
+| Public status | `GET /api/status` — aggregate uptime, player counts, per-map running state (no identities) |
 | Content site | `proxy.static` (default `site/dist`) — SPA with news / wiki / guide; falls back to `index.html` |
 | Admin | `GET/POST /api/admin/maps`, enable/disable/remove, overrides CRUD |
 
@@ -109,7 +111,7 @@ Admin auth: Bearer JWT for an account with `is_admin`, or legacy `ADMIN_SECRET` 
 
 1. Client obtains JWT from login.
 2. Connects `ws://host/ws?token=…` (`wails/frontend/src/net/socket.ts` via Go `clientnet`).
-3. Sends `join_world` → receives `welcome` (map snapshot, combat module, portals, terrain).
+3. Sends `join_world` → receives `welcome` (map snapshot, portals, terrain).
 4. Proxy attaches the session to a map node; subsequent envelopes are forwarded both ways.
 5. On map exit / cross-map warp: proxy detaches, attaches to destination, re-issues join with spawn — **same socket**.
 
@@ -139,7 +141,7 @@ Saving Game Designer overrides:
 
 1. `PUT /api/admin/maps/{id}/overrides` writes `data/maps/overrides/{id}.json`.
 2. Owning map node calls `ReloadOverworld`.
-3. Hub refreshes overworld + NPC seed (players in battle stay in battle).
+3. Hub refreshes overworld + NPC seed (players in combat stay in combat).
 4. Clients receive updated `map_config` / world state.
 
 ## Frontend topology
@@ -148,7 +150,7 @@ Saving Game Designer overrides:
 |-------|----------|-------|
 | Screens | `wails/frontend/src/App.tsx`, `state/store.ts` | `title` → auth / Game Designer / play |
 | Net | `wails/frontend/src/net/` | auth, transport, public maps, adminMaps |
-| Phaser | `wails/frontend/src/phaser/` | `WorldScene`, `BattleScene`, combat plugins |
+| Phaser | `wails/frontend/src/phaser/` | `WorldScene` (overworld + realtime combat) |
 | React HUD | `wails/frontend/src/components/` | menus, hotbar, social, windows |
 | Editor | `wails/frontend/src/components/MapEditor*.tsx`, `editor/` | Game Designer UI + logic |
 | Wails glue | `wails/frontend/src/wails*.ts`, `bootstrap.ts` | Go API / transport / movement bridges |

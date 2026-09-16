@@ -1,6 +1,4 @@
-import Phaser from "phaser";
-import { pushChat, useGame } from "../state/store";
-import { pluginHost, applyMapSnapshot } from "../core/plugins/pluginHost";
+import { applyCombatEvent, applyCombatTick, pushChat, useGame } from "../state/store";
 import { fetchAtlas } from "./atlas";
 import { applyMapSnapshotToGame, prefetchMapConfig, defaultMapId } from "./mapConfig";
 import { loadDraftAppearance, saveAppearance } from "../characters/appearanceStorage";
@@ -16,13 +14,15 @@ import {
   transportSend,
 } from "./transport";
 import type {
-  BattleInfo,
-  BattleEntity,
   ChatMessagePayload,
+  CombatEntity,
+  CombatEventPayload,
+  CombatTickPayload,
   Envelope,
   MessageType,
   PartyInvitePayload,
   FriendRequestPayload,
+  RewardNoticePayload,
   SocialStatePayload,
   WelcomePayload,
   MapConfigPayload,
@@ -35,7 +35,6 @@ import type {
   WorldPet,
   HouseStatePayload,
   SelectedAction,
-  HotbarBar,
 } from "../types";
 import {
   actionFromItem,
@@ -45,65 +44,67 @@ import {
   skillTargetsAlly,
   skillWeaponMatches,
 } from "../types";
-import { activeBattleView } from "../battle/activeBattle";
-
-export const battleEvents = new Phaser.Events.EventEmitter();
-
-function livingEnemyTarget(battle: { entities: BattleEntity[] }, self: BattleEntity): BattleEntity | undefined {
-  const focusId = useGame.getState().battleTargetId ?? self.target_id;
-  const focus =
-    focusId &&
-    battle.entities.find((e) => e.id === focusId && e.alive && !e.is_player && !e.is_ally);
-  if (focus) return focus;
-  return battle.entities.find((e) => !e.is_player && !e.is_ally && e.alive);
+/** All combat entities currently visible to this client (AoI-scoped). */
+function combatEntityList(): CombatEntity[] {
+  return Object.values(useGame.getState().combatEntities);
 }
 
-function battleContext(): { self: BattleEntity; entities: BattleEntity[]; ended: boolean } | null {
-  const { battle, rtBattle, selfId, screen } = useGame.getState();
-  if (screen !== "battle" || !selfId) return null;
-  const view = activeBattleView(battle, rtBattle);
-  if (!view) return null;
-  const self = view.entities.find((e) => e.id === selfId);
-  if (!self) return null;
-  return { self, entities: view.entities, ended: !!view.end };
+/** The local player's combat entity, if the server is tracking one. */
+function selfCombatEntity(): CombatEntity | undefined {
+  const { combatEntities, selfId } = useGame.getState();
+  return selfId ? combatEntities[selfId] : undefined;
 }
 
-function patchSelfTarget(
-  entities: BattleEntity[],
-  selfId: string,
-  targetId: string,
-): BattleEntity[] {
-  return entities.map((e) => (e.id === selfId ? { ...e, target_id: targetId } : e));
+/** The local player's current focus target (combat entity, else world player sync). */
+function selfTargetId(): string | undefined {
+  const { combatEntities, players, selfId } = useGame.getState();
+  if (!selfId) return undefined;
+  return combatEntities[selfId]?.target_id ?? players[selfId]?.target_id;
 }
 
-function castEnemySkill(actionId: string, entities: BattleEntity[], self: BattleEntity) {
-  const target = livingEnemyTarget({ entities }, self);
-  if (!target) return;
-  send("action", { action_id: actionId, target_id: target.id });
-  const focusId = useGame.getState().battleTargetId ?? self.target_id;
-  if (focusId !== target.id) {
-    send("set_target", { target_id: target.id });
-  }
+/** Optimistically reflect a new focus target on the local player replicas. */
+function patchSelfTargetId(targetId: string) {
   useGame.setState((s) => {
-    if (!s.selfId) return { selectedAction: null, battleTargetId: target.id };
+    if (!s.selfId) return s;
+    const wp = s.players[s.selfId];
+    const ce = s.combatEntities[s.selfId];
     return {
-      selectedAction: null,
-      battleTargetId: target.id,
-      ...(s.battle
-        ? { battle: { ...s.battle, entities: patchSelfTarget(s.battle.entities, s.selfId, target.id) } }
-        : {}),
-      ...(s.rtBattle
-        ? {
-            rtBattle: {
-              ...s.rtBattle,
-              entities: s.rtBattle.entities.map((e) =>
-                e.id === s.selfId ? { ...e, target_id: target.id } : e,
-              ),
-            },
-          }
+      ...(wp ? { players: { ...s.players, [s.selfId]: { ...wp, target_id: targetId } } } : {}),
+      ...(ce
+        ? { combatEntities: { ...s.combatEntities, [s.selfId]: { ...ce, target_id: targetId } } }
         : {}),
     };
   });
+}
+
+function livingEnemyTarget(self: CombatEntity): CombatEntity | undefined {
+  const entities = combatEntityList();
+  const focusId = selfTargetId() ?? self.target_id;
+  const focus =
+    focusId && entities.find((e) => e.id === focusId && e.alive && !e.is_player && !e.is_ally);
+  if (focus) return focus;
+  return entities.find((e) => !e.is_player && !e.is_ally && e.alive);
+}
+
+/** Enemy to focus when the current focus is missing, dead, or not an enemy; undefined if focus is already viable. */
+function nextViableEnemy(self: CombatEntity): CombatEntity | undefined {
+  const entities = combatEntityList();
+  const focusId = selfTargetId() ?? self.target_id;
+  const focus =
+    focusId && entities.find((e) => e.id === focusId && e.alive && !e.is_player && !e.is_ally);
+  if (focus) return undefined;
+  return entities.find((e) => !e.is_player && !e.is_ally && e.alive);
+}
+
+function castEnemySkill(actionId: string, self: CombatEntity) {
+  const target = livingEnemyTarget(self);
+  if (!target) return;
+  send("action", { action_id: actionId, target_id: target.id });
+  if ((selfTargetId() ?? self.target_id) !== target.id) {
+    send("set_target", { target_id: target.id });
+  }
+  useGame.setState({ selectedAction: null });
+  patchSelfTargetId(target.id);
 }
 
 let ws: WebSocket | null = null;
@@ -129,7 +130,7 @@ function bindTransportHandlers() {
     onMessage: (env) => handleMessage(env),
     onClose: (intentional) => {
       const screen = useGame.getState().screen;
-      const wasInGame = screen === "world" || screen === "battle";
+      const wasInGame = screen === "world" || screen === "house";
       if (wasInGame) {
         useGame.getState().reset();
         if (!intentional) {
@@ -180,7 +181,7 @@ export const net = {
     };
     ws.onclose = () => {
       const screen = useGame.getState().screen;
-      const wasInGame = screen === "world" || screen === "battle";
+      const wasInGame = screen === "world" || screen === "house";
       const intentional = intentionalClose;
       intentionalClose = false;
       if (wasInGame) {
@@ -240,24 +241,18 @@ export const net = {
       job_changer_id: jobChangerId ?? "",
     });
   },
-  setHotbar(bar: HotbarBar, slot: string, kind: string, id: string) {
-    send("set_hotbar", { slot, kind, id, bar });
+  setHotbar(slot: string, kind: string, id: string) {
+    send("set_hotbar", { slot, kind, id });
   },
-  clearHotbar(bar: HotbarBar, slot: string) {
-    send("set_hotbar", { slot, kind: "", id: "", bar });
+  clearHotbar(slot: string) {
+    send("set_hotbar", { slot, kind: "", id: "" });
   },
-  /** Bind to the bar that accepts this payload (field skills → world bar). */
+  /** Bind a skill/item to a slot on the unified hotbar. */
   assignHotbar(slot: string, kind: "skill" | "item", id: string) {
-    const profile = useGame.getState().profile;
-    const sk = kind === "skill" ? profile?.skills.find((s) => s.id === id) : undefined;
-    this.setHotbar(sk?.world_only ? "world" : "battle", slot, kind, id);
+    this.setHotbar(slot, kind, id);
   },
   setKeybinds(keybinds: Record<string, string>) {
     send("set_keybinds", { keybinds });
-  },
-  joinBattle(battleId: string) {
-    send("join_battle", { battle_id: battleId });
-    useGame.setState({ battleInvite: null });
   },
   addFriend(playerName: string) {
     send("add_friend", { player_name: playerName });
@@ -288,61 +283,24 @@ export const net = {
   partyKick(memberId: string) {
     send("party_kick", { member_id: memberId });
   },
-  declineBattleInvite() {
-    send("decline_battle_invite");
-    useGame.setState({ battleInvite: null });
+  /** Dedicated dodge message — sent when Shift is pressed while moving. */
+  dodge() {
+    send("dodge");
   },
-  leaveBattle() {
-    send("leave_battle");
-    // Optimistically leave the battle UI; server leave unlocks InBattle and
-    // player_sync confirms. If the server rejects/misses leave, world movement
-    // stays locked until a sync arrives — see handleLeaveBattle on the hub.
-    useGame.setState({
-      battle: null,
-      rtBattle: null,
-      battleTargetId: null,
-      screen: "world",
-      selectedAction: null,
-    });
-  },
-  rtMove(x: number, y: number) {
-    send("rt_move", { x, y });
-  },
-  rtAttack(facingX: number, facingY: number) {
-    send("rt_attack", { facing_x: facingX, facing_y: facingY });
-  },
-  action(actionId: string, targetId: string, itemId?: string) {
+  action(actionId: string, targetId?: string, itemId?: string) {
     send("action", { action_id: actionId, target_id: targetId, item_id: itemId });
   },
   setTarget(targetId: string) {
     send("set_target", { target_id: targetId });
-    useGame.setState((s) => {
-      if (!s.selfId) return { battleTargetId: targetId };
-      return {
-        battleTargetId: targetId,
-        ...(s.battle
-          ? { battle: { ...s.battle, entities: patchSelfTarget(s.battle.entities, s.selfId, targetId) } }
-          : {}),
-        ...(s.rtBattle
-          ? {
-              rtBattle: {
-                ...s.rtBattle,
-                entities: s.rtBattle.entities.map((e) =>
-                  e.id === s.selfId ? { ...e, target_id: targetId } : e,
-                ),
-              },
-            }
-          : {}),
-      };
-    });
+    patchSelfTargetId(targetId);
   },
 
-  /** Arrow targeting: left/right cycle enemies, up/down cycle living party members. */
-  cycleBattleTarget(axis: "horizontal" | "vertical", dir: 1 | -1) {
-    const ctx = battleContext();
-    if (!ctx || ctx.ended) return;
-    const { self, entities } = ctx;
-    const focusId = useGame.getState().battleTargetId ?? self.target_id;
+  /** Arrow targeting: left/right cycle enemies, up/down cycle living allies. */
+  cycleTarget(axis: "horizontal" | "vertical", dir: 1 | -1) {
+    const self = selfCombatEntity();
+    if (!self) return;
+    const entities = combatEntityList();
+    const focusId = selfTargetId() ?? self.target_id;
     const pool =
       axis === "horizontal"
         ? entities.filter((e) => !e.is_player && !e.is_ally && e.alive)
@@ -439,10 +397,9 @@ export const net = {
 
   castSelectedOn(target: { id: string; alive: boolean; is_player: boolean; is_ally?: boolean }): boolean {
     const { selectedAction, commandPetId } = useGame.getState();
-    const ctx = battleContext();
-    if (!selectedAction || !target.alive || !ctx) return false;
-    const { self } = ctx;
-    if (!commandPetId && !isGcdReady(self)) return false;
+    if (!selectedAction || !target.alive) return false;
+    const self = selfCombatEntity();
+    if (!commandPetId && self && !isGcdReady(self)) return false;
     const friendly = !!target.is_player || !!target.is_ally;
     if (selectedAction.heals ? !friendly : friendly) return false;
     if (commandPetId) {
@@ -492,49 +449,73 @@ export const net = {
   /** Pressing a hotbar key fires skills/items on the GCD (attack included). */
   activateHotbar(slot: string) {
     const { profile, screen } = useGame.getState();
-    const bind = screen === "battle" ? profile?.hotbar?.[slot] : profile?.world_hotbar?.[slot];
+    const bind = profile?.hotbar?.[slot];
     if (!profile || !bind) return;
-
-    if (screen === "world" && bind.kind === "skill") {
-      this.activateWorldSkill(bind.id);
-      return;
-    }
-
-    const ctx = battleContext();
-    if (screen !== "battle" || !ctx || ctx.ended) return;
-    const { self, entities } = ctx;
-    if (!self.alive) return;
-    if (entityIsCasting(self)) {
-      pushChat("battle", "Already casting.");
-      return;
-    }
-    if ((self.skill_atb ?? self.atb ?? 0) < 100) {
-      pushChat("battle", "Ability not ready yet.");
-      return;
-    }
 
     if (bind.kind === "skill") {
       const sk = profile.skills.find((s) => s.id === bind.id);
       if (!sk?.unlocked) return;
-      if (!skillWeaponMatches(sk, profile)) return;
-      if (self.mp < sk.mp_cost) {
-        pushChat("battle", "Not enough MP.");
+      // Field skills (return/port/camp, other world_only) run outside combat.
+      if (sk.world_only || sk.id === "return" || sk.id === "port" || sk.id === "camp") {
+        this.activateWorldSkill(sk.id);
         return;
       }
+      if (screen !== "world") {
+        pushChat("system", "That can only be used in the field.");
+        return;
+      }
+      // Dodge bypasses the casting/GCD gates — interrupting a cast is its job.
+      if (sk.id === "dodge") {
+        this.dodge();
+        return;
+      }
+      if (!skillWeaponMatches(sk, profile)) return;
+      const self = selfCombatEntity();
+      if (self && !self.alive) return;
+      // Retarget first so pressing a skill on cooldown still fixes a dead or
+      // missing focus.
+      if (self && !skillTargetsAlly(sk)) {
+        const next = nextViableEnemy(self);
+        if (next) this.setTarget(next.id);
+      }
+      if (entityIsCasting(self)) {
+        pushChat("system", "Already casting.");
+        return;
+      }
+      if (self && (self.skill_atb ?? 0) < 100) {
+        pushChat("system", "Ability not ready yet.");
+        return;
+      }
+      if (self && (self.mp ?? 0) < sk.mp_cost) {
+        pushChat("system", "Not enough MP.");
+        return;
+      }
+      const selfId = useGame.getState().selfId;
       if (skillTargetsAlly(sk)) {
-        this.armOrSelfCast(actionFromSkill(sk), self.id);
-      } else if (sk.id === "capture" && !livingEnemyTarget({ entities }, self)) {
+        if (selfId) this.armOrSelfCast(actionFromSkill(sk), selfId);
+      } else if (sk.id === "capture" && (!self || !livingEnemyTarget(self))) {
         this.toggleAction(actionFromSkill(sk));
-      } else {
-        castEnemySkill(sk.id, entities, self);
+      } else if (self) {
+        castEnemySkill(sk.id, self);
       }
       return;
     }
 
     if (bind.kind === "item") {
+      const self = selfCombatEntity();
+      if (self && !self.alive) return;
+      if (entityIsCasting(self)) {
+        pushChat("system", "Already casting.");
+        return;
+      }
+      if (self && (self.skill_atb ?? 0) < 100) {
+        pushChat("system", "Ability not ready yet.");
+        return;
+      }
       const item = firstConsumable(profile.inventory, bind.id);
-      if (!item) return;
-      this.armOrSelfCast(actionFromItem(item), self.id);
+      const selfId = useGame.getState().selfId;
+      if (!item || !selfId) return;
+      this.armOrSelfCast(actionFromItem(item), selfId);
     }
   },
 
@@ -546,20 +527,11 @@ export const net = {
   },
 
   useItemFromBag(itemId: string) {
-    const { screen, selfId, profile } = useGame.getState();
-    const ctx = battleContext();
+    const { selfId, profile } = useGame.getState();
     const item = profile?.inventory.find((i) => i.id === itemId);
-    if (!item) return;
-    if (screen !== "battle" || !selfId || !ctx || ctx.ended) {
-      pushChat("system", "Consumables are used during battle (assign to hotbar).");
-      return;
-    }
-    const { self } = ctx;
-    if (!self.alive) {
-      useGame.setState({ selectedAction: actionFromItem(item) });
-      return;
-    }
-    if (!isGcdReady(self)) {
+    if (!item || !selfId) return;
+    const self = selfCombatEntity();
+    if (self && (!self.alive || !isGcdReady(self))) {
       useGame.setState({ selectedAction: actionFromItem(item) });
       return;
     }
@@ -583,24 +555,16 @@ function entityIsCasting(e: { casting_skill_id?: string } | undefined): boolean 
   return !!e?.casting_skill_id;
 }
 
-function isGcdReady(self: { alive: boolean; skill_atb?: number; atb?: number; casting_skill_id?: string } | undefined): boolean {
-  return !!self?.alive && (self.skill_atb ?? self.atb ?? 0) >= 100 && !entityIsCasting(self);
+function isGcdReady(self: { alive: boolean; skill_atb?: number; casting_skill_id?: string } | undefined): boolean {
+  return !!self?.alive && (self.skill_atb ?? 0) >= 100 && !entityIsCasting(self);
 }
 
 export function handleMessage(env: Envelope) {
-  if (pluginHost.dispatch(env)) return;
   const g = useGame;
   switch (env.type) {
     case "welcome": {
       const p = env.payload as WelcomePayload;
       void (async () => {
-        if (p.map?.modules?.length && p.map.combat) {
-          try {
-            await applyMapSnapshot(p.map);
-          } catch (err) {
-            console.error("failed to load map modules", err);
-          }
-        }
         const fromServer = appearanceFromWire(p.profile.appearance);
         const appearance = fromServer ?? loadDraftAppearance(p.profile.race ?? "humanus");
         saveAppearance(p.player_id, appearance);
@@ -620,9 +584,9 @@ export function handleMessage(env: Envelope) {
               ? { ...s.players, [p.player_id]: { ...selfWp, weapon: selfWeapon } }
               : s.players;
           // Profile refreshes (equip, house furniture, storage) also send welcome.
-          // Do not yank the player out of battle/house/world mid-session.
+          // Do not yank the player out of house/world mid-session.
           const screen =
-            s.screen === "battle" || s.screen === "house" || s.screen === "world"
+            s.screen === "house" || s.screen === "world"
               ? s.screen
               : "world";
           return {
@@ -641,18 +605,6 @@ export function handleMessage(env: Envelope) {
           .then((atlas) => useGame.setState({ atlas: atlas.maps ?? [] }))
           .catch(() => {});
       })();
-      break;
-    }
-    case "battle_return": {
-      g.setState({
-        battle: null,
-        rtBattle: null,
-        battleTargetId: null,
-        commandPetId: null,
-        screen: "world",
-        selectedAction: null,
-        chatTab: "general",
-      });
       break;
     }
     case "map_config": {
@@ -681,7 +633,6 @@ export function handleMessage(env: Envelope) {
         jobChangers,
         camps,
         pets,
-        battles: p.battles ?? [],
         overworld: p.map ?? g.getState().overworld,
       });
       break;
@@ -711,22 +662,25 @@ export function handleMessage(env: Envelope) {
     }
     case "player_sync": {
       const wp = env.payload as WorldPlayer;
-      g.setState((s) => {
-        const players = { ...s.players, [wp.id]: wp };
-        // If we left combat on the server, drop any stale battle UI (e.g. end
-        // modal) so the world is interactive again.
-        if (wp.id === s.selfId && !wp.in_battle && s.screen === "battle") {
-          return {
-            players,
-            screen: "world",
-            battle: null,
-            rtBattle: null,
-            battleTargetId: null,
-            selectedAction: null,
-          };
-        }
-        return { players };
-      });
+      // WorldPlayer now carries combat fields (hp/mp/stamina/target/in_combat).
+      g.setState((s) => ({ players: { ...s.players, [wp.id]: wp } }));
+      break;
+    }
+    case "combat_tick": {
+      const p = env.payload as CombatTickPayload;
+      applyCombatTick(p);
+      break;
+    }
+    case "combat_event": {
+      const p = env.payload as CombatEventPayload;
+      applyCombatEvent(p);
+      break;
+    }
+    case "pet_state": {
+      const p = env.payload as { pets?: WorldPet[] };
+      const pets: Record<string, WorldPet> = {};
+      for (const pet of p.pets ?? []) pets[pet.id] = pet;
+      g.setState({ pets });
       break;
     }
     case "player_joined": {
@@ -805,18 +759,13 @@ export function handleMessage(env: Envelope) {
       break;
     }
     case "reward_notice": {
-      const p = env.payload as { message: string };
+      const p = env.payload as RewardNoticePayload;
       pushChat("system", p.message);
       break;
     }
     case "chat_message": {
       const p = env.payload as ChatMessagePayload;
       pushChat(p.channel ?? "general", p.message, { id: p.from_id, name: p.from_name });
-      break;
-    }
-    case "battle_list": {
-      const p = env.payload as { battles: BattleInfo[] };
-      g.setState({ battles: p.battles ?? [] });
       break;
     }
     case "error": {

@@ -17,10 +17,5 @@ export class BootScene extends Phaser.Scene {
 }
 
 export function buildGameScenes(): (typeof Phaser.Scene)[] {
-  const scenes: (typeof Phaser.Scene)[] = [BootScene, WorldScene, HouseScene];
-  const battleCtor = (window as unknown as { __battleSceneCtor?: new () => Phaser.Scene }).__battleSceneCtor;
-  if (battleCtor) {
-    scenes.push(battleCtor);
-  }
-  return scenes;
+  return [BootScene, WorldScene, HouseScene];
 }

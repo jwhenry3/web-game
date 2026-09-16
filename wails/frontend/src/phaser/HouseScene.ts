@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { net } from "../net/socket";
-import { useGame } from "../state/store";
+import { uiOwnsKeyboard, useGame } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import {
   appearanceKey,
@@ -10,6 +10,8 @@ import {
 import { bindingToPhaserKeyCode, mergeKeybinds } from "../input/keybinds";
 import type { HouseFurniture, HousePlayer, HousePOI, HouseStatePayload } from "../types";
 import { CharacterSprite } from "./CharacterSprite";
+import { trackContentZoom } from "./contentZoom";
+import { VisibilityFX } from "./visibility";
 import { INTERACT_RANGE, interactKeyLabel } from "../world/interact";
 import {
   clearHousePlace,
@@ -73,6 +75,7 @@ export class HouseScene extends Phaser.Scene {
   private lastSentX = 0;
   private lastSentY = 0;
   private layoutKey = "";
+  private visibility?: VisibilityFX;
 
   constructor() {
     super("house");
@@ -80,6 +83,10 @@ export class HouseScene extends Phaser.Scene {
 
   create() {
     this.cameras.main.setBackgroundColor(0x1a1410);
+    trackContentZoom(this);
+    // No interior walls — sight covers the room; outside the walls dims.
+    this.visibility?.destroy();
+    this.visibility = new VisibilityFX(this, { radiusTiles: 0 });
     // Scene instances are reused across stop/start; stale Key refs won't receive input.
     this.moveKeys = {};
     this.moveKeysSig = "";
@@ -89,7 +96,11 @@ export class HouseScene extends Phaser.Scene {
     this.syncMoveKeys();
     this.input.keyboard?.disableGlobalCapture();
     this.placeGhost = this.add.graphics().setDepth(20);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.clearAll());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.visibility?.destroy();
+      this.visibility = undefined;
+      this.clearAll();
+    });
     this.events.off(Phaser.Scenes.Events.SLEEP, this.clearAll, this);
     this.events.on(Phaser.Scenes.Events.SLEEP, this.clearAll, this);
   }
@@ -178,6 +189,14 @@ export class HouseScene extends Phaser.Scene {
 
     this.floor = g;
     this.cameras.main.setBounds(ox - 64, oy - 80, w + 128, h + 128);
+    this.visibility?.setGrid({
+      blocked: new Uint8Array(house.walk_cols * house.walk_rows),
+      cols: house.walk_cols,
+      rows: house.walk_rows,
+      tileSize: t,
+      originX: ox,
+      originY: oy,
+    });
   }
 
   private ensureAvatar(p: HousePlayer): HouseAvatar {
@@ -408,10 +427,12 @@ export class HouseScene extends Phaser.Scene {
 
     let mx = 0;
     let my = 0;
-    if (this.isMoveDown("move_left")) mx -= 1;
-    if (this.isMoveDown("move_right")) mx += 1;
-    if (this.isMoveDown("move_up")) my -= 1;
-    if (this.isMoveDown("move_down")) my += 1;
+    if (!uiOwnsKeyboard()) {
+      if (this.isMoveDown("move_left")) mx -= 1;
+      if (this.isMoveDown("move_right")) mx += 1;
+      if (this.isMoveDown("move_up")) my -= 1;
+      if (this.isMoveDown("move_down")) my += 1;
+    }
     if (mx || my) {
       const len = Math.hypot(mx, my) || 1;
       const step = (SPEED * delta) / 1000;

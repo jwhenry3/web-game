@@ -18,11 +18,9 @@ export type MessageType =
   | "party_decline"
   | "party_leave"
   | "party_kick"
-  | "decline_battle_invite"
-  | "join_battle"
-  | "leave_battle"
   | "action"
   | "set_target"
+  | "dodge"
   | "set_save_point"
   | "use_world_skill"
   | "enter_house"
@@ -36,8 +34,6 @@ export type MessageType =
   | "pet_set_follow"
   | "pet_set_battle"
   | "pet_release"
-  | "rt_move"
-  | "rt_attack"
   | "welcome"
   | "map_config"
   | "world_state"
@@ -52,20 +48,11 @@ export type MessageType =
   | "house_return"
   | "social_state"
   | "party_invite_received"
-  | "battle_invite_received"
   | "friend_request_received"
   | "reward_notice"
+  | "combat_tick"
+  | "combat_event"
   | "chat_message"
-  | "battle_list"
-  | "battle_state"
-  | "battle_event"
-  | "battle_tick"
-  | "battle_end"
-  | "battle_return"
-  | "rt_battle_state"
-  | "rt_battle_tick"
-  | "rt_battle_event"
-  | "rt_battle_end"
   | "error";
 
 export interface Envelope {
@@ -130,9 +117,6 @@ export interface HotbarBinding {
   id: string;
 }
 
-/** Which hotbar a binding lives on: "world" shows in the overworld, "battle" in combat. */
-export type HotbarBar = "world" | "battle";
-
 export interface CharacterAppearanceWire {
   skin: string;
   face: string;
@@ -163,7 +147,6 @@ export interface ProfileInfo {
   camp_skin?: string;
   equipped: Record<string, string>;
   hotbar: Record<string, HotbarBinding>;
-  world_hotbar?: Record<string, HotbarBinding>;
   keybinds?: Record<string, string>;
   skills: SkillInfo[];
   friends?: string[];
@@ -195,7 +178,7 @@ export interface FriendInfo {
   online: boolean;
   level?: number;
   weapon?: string;
-  in_battle?: boolean;
+  in_combat?: boolean;
 }
 
 export interface PartyMember {
@@ -204,7 +187,7 @@ export interface PartyMember {
   level: number;
   weapon: string;
   leader: boolean;
-  in_battle: boolean;
+  in_combat: boolean;
 }
 
 export interface PartyInfo {
@@ -217,12 +200,6 @@ export interface PartyInvitePayload {
   from_id: string;
   from_name: string;
   party_id: string;
-}
-
-export interface BattleInvitePayload {
-  battle_id: string;
-  from_id: string;
-  from_name: string;
 }
 
 export interface FriendRequestPayload {
@@ -247,17 +224,8 @@ export interface WelcomePayload {
 export interface MapSnapshot {
   id: string;
   name: string;
-  combat: string;
-  capabilities: string[];
-  modules: Array<{
-    id: string;
-    name: string;
-    version: string;
-    capabilities: string[];
-    frontend: { pluginId: string };
-    config?: Record<string, unknown>;
-  }>;
   overworld: OverworldMap;
+  tiled_map?: string;
   portals?: MapPortal[];
   tile_overrides?: MapTileOverrides;
   terrain_layers?: MapTerrainLayers;
@@ -308,21 +276,19 @@ export interface WorldPlayer {
   x: number;
   y: number;
   facing?: number | string;
-  in_battle: boolean;
-  battle_id?: string;
+  in_combat?: boolean;
+  hp: number;
+  max_hp: number;
+  mp: number;
+  max_mp: number;
+  stamina: number;
+  target_id?: string;
   in_house?: boolean;
   house_owner?: string;
   immune_until?: number;
   casting_skill_id?: string;
   cast_time_ms?: number;
   cast_ends_at?: number;
-}
-
-export interface BattleInfo {
-  battle_id: string;
-  participants: number;
-  max_players: number;
-  level: number;
 }
 
 export interface WorldNPC {
@@ -332,8 +298,10 @@ export interface WorldNPC {
   level: number;
   x: number;
   y: number;
-  in_battle: boolean;
-  battle_id?: string;
+  engaged?: boolean;
+  hp: number;
+  max_hp: number;
+  target_id?: string;
 }
 
 export interface SavePoint {
@@ -434,7 +402,6 @@ export interface WorldStatePayload {
   npcs?: WorldNPC[];
   camps?: WorldCamp[];
   pets?: WorldPet[];
-  battles: BattleInfo[];
   save_points?: SavePoint[];
   job_changers?: JobChanger[];
   map?: OverworldMap;
@@ -495,37 +462,58 @@ export interface StatusSnapshot {
   shield_hp?: number;
 }
 
-export interface BattleEntity {
+/** One combat participant snapshot: engaged NPC, fighting player, or battle pet. */
+export interface CombatEntity {
   id: string;
   name: string;
   kind?: string;
   is_player: boolean;
   is_ally?: boolean;
   owner_id?: string;
-  weapon?: string;
-  level: number;
+  level?: number;
+  x: number;
+  y: number;
   hp: number;
   max_hp: number;
-  mp: number;
-  max_mp: number;
-  agility: number;
-  skill_atb: number;
-  atb: number;
+  mp?: number;
+  max_mp?: number;
+  skill_atb?: number;
   target_id?: string;
   alive: boolean;
   capturable?: boolean;
-  has_queued_action?: boolean;
   statuses?: StatusSnapshot[];
   casting_skill_id?: string;
   cast_target_id?: string;
   cast_progress?: number;
   cast_time_ms?: number;
+  has_queued_action?: boolean;
 }
 
-export interface BattleStatePayload {
-  battle_id: string;
-  entities: BattleEntity[];
-  battle_speed?: number;
+export interface CombatTickPayload {
+  entities: CombatEntity[];
+}
+
+export interface CombatEventPayload {
+  attacker_id: string;
+  target_id: string;
+  damage: number;
+  heal?: number;
+  mp_restored?: number;
+  hit: boolean;
+  message?: string;
+  action_id?: string;
+  action_name?: string;
+  success?: boolean;
+  cast_started?: boolean;
+  cast_cancelled?: boolean;
+  entities: CombatEntity[];
+}
+
+export interface RewardNoticePayload {
+  xp: number;
+  passive?: boolean;
+  victory: boolean;
+  message: string;
 }
 
 export interface ActionResult {
@@ -543,39 +531,6 @@ export interface ActionResult {
   cast_started?: boolean;
 }
 
-export interface EntityUpdate {
-  id: string;
-  hp: number;
-  mp: number;
-  skill_atb: number;
-  atb: number;
-  target_id?: string;
-  alive: boolean;
-  statuses?: StatusSnapshot[];
-  casting_skill_id?: string;
-  cast_target_id?: string;
-  cast_progress?: number;
-  cast_time_ms?: number;
-}
-
-export interface BattleEventPayload {
-  results: ActionResult[];
-  entities: EntityUpdate[];
-  timestamp: number;
-}
-
-export interface BattleTickPayload {
-  skill_atb?: Record<string, number>;
-  atb: Record<string, number>;
-  hp?: Record<string, number>;
-  alive?: Record<string, boolean>;
-  statuses?: Record<string, StatusSnapshot[]>;
-  casting_skill_id?: Record<string, string>;
-  cast_target_id?: Record<string, string>;
-  cast_progress?: Record<string, number>;
-  cast_time_ms?: Record<string, number>;
-}
-
 export interface PlayerReward {
   player_id: string;
   xp: number;
@@ -588,74 +543,7 @@ export interface PlayerReward {
   party_bonus?: boolean;
 }
 
-export interface BattleEndPayload {
-  victory: boolean;
-  rewards: PlayerReward[];
-}
-
-export interface RTBattleEntity {
-  id: string;
-  name: string;
-  kind?: string;
-  is_player: boolean;
-  is_ally?: boolean;
-  owner_id?: string;
-  x: number;
-  y: number;
-  hp: number;
-  max_hp: number;
-  mp?: number;
-  max_mp?: number;
-  skill_atb?: number;
-  target_id?: string;
-  alive: boolean;
-  capturable?: boolean;
-  has_queued_action?: boolean;
-  statuses?: StatusSnapshot[];
-  casting_skill_id?: string;
-  cast_target_id?: string;
-  cast_progress?: number;
-  cast_time_ms?: number;
-}
-
-export interface RTBattleStatePayload {
-  battle_id: string;
-  entities: RTBattleEntity[];
-  mode?: string;
-}
-
-export interface RTBattleTickPayload {
-  entities: RTBattleEntity[];
-}
-
-export interface RTBattleEventPayload {
-  attacker_id: string;
-  target_id?: string;
-  damage?: number;
-  heal?: number;
-  mp_restored?: number;
-  hit: boolean;
-  message?: string;
-  action_id?: string;
-  action_name?: string;
-  success?: boolean;
-  cast_started?: boolean;
-  cast_cancelled?: boolean;
-  entities: RTBattleEntity[];
-}
-
-export interface RTBattleEndPayload {
-  victory: boolean;
-  rewards: PlayerReward[];
-}
-
-export interface RTBattleView {
-  battleId: string;
-  entities: RTBattleEntity[];
-  end: RTBattleEndPayload | null;
-}
-
-/** A pending battle action waiting for a target click. */
+/** A pending combat action waiting for a target click. */
 export interface SelectedAction {
   actionId: string;
   name: string;

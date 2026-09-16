@@ -21,12 +21,12 @@ const (
 
 // link is a contiguous zone-line connection (FFXI-style edge walk).
 type link struct {
-	from, to      string
-	fromSide      edge
-	toSide        edge
-	midBias       int
-	span          int
-	interRegion   bool
+	from, to    string
+	fromSide    edge
+	toSide      edge
+	midBias     int
+	span        int
+	interRegion bool
 }
 
 // ferry is a non-contiguous boat portal inside hub maps (Frost ↔ Tide).
@@ -45,7 +45,7 @@ type settlement struct {
 }
 
 type wildRegion struct {
-	id, kind string
+	id, kind       string
 	c0, r0, c1, r1 int
 	enemies        []enemySpec
 }
@@ -58,13 +58,12 @@ type enemySpec struct {
 }
 
 type mapDef struct {
-	id, name       string
-	region         regionKind
-	cols, rows     int
-	settlements    []settlement
-	wild           []wildRegion
-	combat         string
-	seed           uint64
+	id, name    string
+	region      regionKind
+	cols, rows  int
+	settlements []settlement
+	wild        []wildRegion
+	seed        uint64
 }
 
 type exitRec struct {
@@ -79,7 +78,7 @@ func allMapDefs() []mapDef {
 		// ── Verdant March (6) ──────────────────────────────────────
 		{
 			id: "greenwood", name: "Greenwood", region: regionVerdant, cols: 128, rows: 96,
-			combat: "combat.realtime", seed: 0x56100d,
+			seed: 0x56100d,
 			settlements: []settlement{{
 				id: "greenwood_city", name: "Greenwood",
 				c0: 44, r0: 32, c1: 84, r1: 64, hub: true, jobMaster: true,
@@ -87,12 +86,16 @@ func allMapDefs() []mapDef {
 			wild: []wildRegion{{
 				id: "city_fringe", kind: "wilderness",
 				c0: 8, r0: 8, c1: 119, r1: 87,
-				enemies: []enemySpec{{"goblin", "Goblin Scout", 1, 3}},
+				enemies: []enemySpec{
+					{"goblin", "Goblin Scout", 1, 5},
+					{"dire_wolf", "Fringe Wolf", 2, 4},
+					{"stone_imp", "Thicket Imp", 2, 3},
+				},
 			}},
 		},
 		{
 			id: "timberroad", name: "Timber Road", region: regionVerdant, cols: 128, rows: 96,
-			combat: "combat.realtime", seed: 0x71b8e2,
+			seed: 0x71b8e2,
 			settlements: []settlement{{
 				id: "roadside_camp", name: "Roadside Camp",
 				c0: 54, r0: 42, c1: 72, r1: 54, minor: true,
@@ -108,7 +111,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "deepcanopy", name: "Deep Canopy", region: regionVerdant, cols: 128, rows: 96,
-			combat: "combat.realtime", seed: 0xdee9ca,
+			seed: 0xdee9ca,
 			settlements: []settlement{{
 				id: "canopy_ward", name: "Canopy Ward",
 				c0: 56, r0: 40, c1: 72, r1: 52, minor: true,
@@ -124,7 +127,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "willowford", name: "Willowford", region: regionVerdant, cols: 112, rows: 88,
-			combat: "combat.realtime", seed: 0x91770f,
+			seed: 0x91770f,
 			settlements: []settlement{{
 				id: "willowford_town", name: "Willowford",
 				c0: 36, r0: 28, c1: 76, r1: 58, minor: true, jobMaster: true,
@@ -137,7 +140,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "sanctuarygrove", name: "Sanctuary Grove", region: regionVerdant, cols: 112, rows: 88,
-			combat: "combat.realtime", seed: 0x5a7c70,
+			seed: 0x5a7c70,
 			settlements: []settlement{{
 				id: "covenant_temple", name: "Covenant Temple",
 				c0: 38, r0: 30, c1: 74, r1: 56, minor: true, jobMaster: true,
@@ -150,7 +153,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "northwatch", name: "Northwatch March", region: regionVerdant, cols: 128, rows: 80,
-			combat: "combat.realtime", seed: 0x70b7c4,
+			seed: 0x70b7c4,
 			settlements: []settlement{{
 				id: "northwatch_fort", name: "Northwatch Fort",
 				c0: 52, r0: 30, c1: 76, r1: 48, minor: true,
@@ -168,7 +171,7 @@ func allMapDefs() []mapDef {
 		// ── Frost Bastion (6) ──────────────────────────────────────
 		{
 			id: "frostkeep", name: "Frostkeep", region: regionFrost, cols: 128, rows: 96,
-			combat: "combat.ordo", seed: 0xf2057,
+			seed: 0xf2057,
 			settlements: []settlement{{
 				id: "frostkeep_city", name: "Frostkeep",
 				c0: 44, r0: 32, c1: 84, r1: 64, hub: true, jobMaster: true,
@@ -181,7 +184,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "windswept", name: "Windswept Flats", region: regionFrost, cols: 128, rows: 96,
-			combat: "combat.ordo", seed: 0x1711d5,
+			seed: 0x1711d5,
 			settlements: []settlement{{
 				id: "windcairn", name: "Windcairn Shelter",
 				c0: 56, r0: 42, c1: 72, r1: 54, minor: true,
@@ -197,7 +200,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "icehollow", name: "Icehollow Crags", region: regionFrost, cols: 112, rows: 88,
-			combat: "combat.ordo", seed: 0x1ce401,
+			seed: 0x1ce401,
 			settlements: []settlement{{
 				id: "hollow_refuge", name: "Hollow Refuge",
 				c0: 46, r0: 36, c1: 66, r1: 50, minor: true,
@@ -213,7 +216,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "stillstone", name: "Stillstone Monastery", region: regionFrost, cols: 112, rows: 88,
-			combat: "combat.ordo", seed: 0x57111,
+			seed: 0x57111,
 			settlements: []settlement{{
 				id: "stillstone_abbey", name: "Stillstone Abbey",
 				c0: 36, r0: 28, c1: 76, r1: 58, minor: true, jobMaster: true,
@@ -226,7 +229,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "cairnwatch", name: "Cairnwatch", region: regionFrost, cols: 112, rows: 88,
-			combat: "combat.ordo", seed: 0xca12a,
+			seed: 0xca12a,
 			settlements: []settlement{{
 				id: "cairnwatch_outpost", name: "Cairnwatch Outpost",
 				c0: 36, r0: 28, c1: 76, r1: 58, minor: true, jobMaster: true,
@@ -239,7 +242,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "frostmarch", name: "Frostmarch Gate", region: regionFrost, cols: 128, rows: 80,
-			combat: "combat.ordo", seed: 0xf204c4,
+			seed: 0xf204c4,
 			settlements: []settlement{{
 				id: "frostmarch_gate", name: "Frostmarch Gate",
 				c0: 52, r0: 30, c1: 76, r1: 48, minor: true,
@@ -257,7 +260,7 @@ func allMapDefs() []mapDef {
 		// ── Tide Courts (6) ────────────────────────────────────────
 		{
 			id: "tidecourt", name: "Tide Court", region: regionTide, cols: 128, rows: 96,
-			combat: "combat.realtime", seed: 0x71de,
+			seed: 0x71de,
 			settlements: []settlement{{
 				id: "tidecourt_city", name: "Tide Court",
 				c0: 44, r0: 32, c1: 84, r1: 64, hub: true, jobMaster: true,
@@ -270,7 +273,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "brinecoast", name: "Brine Coast", region: regionTide, cols: 128, rows: 96,
-			combat: "combat.realtime", seed: 0xb21e,
+			seed: 0xb21e,
 			settlements: []settlement{{
 				id: "brine_lantern", name: "Brine Lantern",
 				c0: 54, r0: 40, c1: 72, r1: 54, minor: true,
@@ -286,7 +289,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "dunesreach", name: "Dunesreach", region: regionTide, cols: 128, rows: 96,
-			combat: "combat.realtime", seed: 0xd01e5,
+			seed: 0xd01e5,
 			settlements: []settlement{{
 				id: "reach_camp", name: "Reach Camp",
 				c0: 56, r0: 40, c1: 72, r1: 52, minor: true,
@@ -302,7 +305,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "redsash", name: "Red Sash Quay", region: regionTide, cols: 112, rows: 88,
-			combat: "combat.realtime", seed: 0x2ed5a5,
+			seed: 0x2ed5a5,
 			settlements: []settlement{{
 				id: "academy_quay", name: "Academy Quay",
 				c0: 36, r0: 28, c1: 76, r1: 58, minor: true, jobMaster: true,
@@ -315,7 +318,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "cliffhaven", name: "Cliffhaven", region: regionTide, cols: 112, rows: 88,
-			combat: "combat.realtime", seed: 0xc11ff,
+			seed: 0xc11ff,
 			settlements: []settlement{{
 				id: "cliffhaven_town", name: "Cliffhaven",
 				c0: 36, r0: 28, c1: 76, r1: 58, minor: true, jobMaster: true,
@@ -328,7 +331,7 @@ func allMapDefs() []mapDef {
 		},
 		{
 			id: "westwharf", name: "West Wharf Road", region: regionTide, cols: 128, rows: 80,
-			combat: "combat.realtime", seed: 0x4e57,
+			seed: 0x4e57,
 			settlements: []settlement{{
 				id: "wharf_toll", name: "Wharf Tollhouse",
 				c0: 52, r0: 30, c1: 76, r1: 48, minor: true,

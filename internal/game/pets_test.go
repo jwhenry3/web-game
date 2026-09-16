@@ -43,11 +43,11 @@ func TestSkillCaptureFindable(t *testing.T) {
 }
 
 func TestEncounterCapturableDefault(t *testing.T) {
-	cfg := ParseEncounterJSON(`{"minEnemies":1,"maxEnemies":1,"enemies":[{"kind":"goblin","levelMin":1,"levelMax":1}]}`, "goblin", 1)
+	cfg := ParseEncounterJSON(`{"enemies":[{"kind":"goblin","levelMin":1,"levelMax":1}]}`, "goblin", 1)
 	if len(cfg.Enemies) != 1 || !cfg.Enemies[0].Capturable {
 		t.Fatalf("missing capturable should default true: %+v", cfg.Enemies)
 	}
-	cfg2 := ParseEncounterJSON(`{"minEnemies":1,"maxEnemies":1,"enemies":[{"kind":"goblin","levelMin":1,"levelMax":1,"capturable":false}]}`, "goblin", 1)
+	cfg2 := ParseEncounterJSON(`{"enemies":[{"kind":"goblin","levelMin":1,"levelMax":1,"capturable":false}]}`, "goblin", 1)
 	if cfg2.Enemies[0].Capturable {
 		t.Fatal("explicit false should stick")
 	}

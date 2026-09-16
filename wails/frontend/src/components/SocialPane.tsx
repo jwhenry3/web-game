@@ -10,7 +10,7 @@ function PlayerRow({
   selfId,
   actions,
 }: {
-  p: Pick<WorldPlayer, "id" | "name" | "level" | "weapon" | "in_battle">;
+  p: Pick<WorldPlayer, "id" | "name" | "level" | "weapon" | "in_combat">;
   selfId: string | null;
   actions?: ReactNode;
 }) {
@@ -22,7 +22,7 @@ function PlayerRow({
         <span className="dim">
           Lv{p.level} {p.weapon || "—"}
         </span>
-        {p.in_battle && <span className="cm-tag">In Combat</span>}
+        {p.in_combat && <span className="cm-tag">In Combat</span>}
       </div>
       {actions && <div className="cm-social-row-actions">{actions}</div>}
     </div>
@@ -37,7 +37,7 @@ function FriendRow({ f, actions }: { f: FriendInfo; actions?: React.ReactNode })
         <span className="dim">
           {f.online ? `Lv${f.level} ${f.weapon || "—"}` : "Offline"}
         </span>
-        {f.online && f.in_battle && <span className="cm-tag">In Combat</span>}
+        {f.online && f.in_combat && <span className="cm-tag">In Combat</span>}
       </div>
       {actions && <div className="cm-social-row-actions">{actions}</div>}
     </div>
@@ -194,7 +194,7 @@ export function SocialPane() {
                       <span className="dim">
                         Lv{m.level} {m.weapon || "—"}
                       </span>
-                      {m.in_battle && <span className="cm-tag">In Combat</span>}
+                      {m.in_combat && <span className="cm-tag">In Combat</span>}
                     </div>
                     {isLeader && m.id !== selfId && (
                       <button className="cm-btn" onClick={() => net.partyKick(m.id)}>
@@ -207,7 +207,7 @@ export function SocialPane() {
               <button className="cm-btn wide" onClick={() => net.partyLeave()}>
                 Leave Party
               </button>
-              <p className="hint">Any party member can start fights. Nearby allies are prompted to join.</p>
+              <p className="hint">Any party member can start fights. Nearby allies share in the rewards.</p>
             </>
           )}
         </div>

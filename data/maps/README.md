@@ -9,7 +9,7 @@ Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Lore & regi
 | Artifact | Role |
 |----------|------|
 | `data/maps/{id}.map.json` | **Loaded by the server** — terrain grids, regions, NPCs, save points, exits, objects |
-| `data/maps/{id}.server.json` | Per-map server config (combat, battle speed, overworld path) |
+| `data/maps/{id}.server.json` | Per-map server config (name, addr, overworld path) |
 | `data/maps/overrides/{id}.json` | Sparse patches from **Game Designer** / `genmapwalls` |
 | `base_chip.tsx` / `base_chip.png` | Base terrain tileset definition (GID centers for paint / walls) |
 | `tilesets/pipoya/` | Full Pipoya pack + catalog + sample map (client mirror under `wails/frontend/public/assets/tilesets/pipoya/`) |
@@ -34,7 +34,7 @@ Three regions × 6 maps. Hubs are mother cities; each region also has ≥2 minor
 - Inter-region contiguous borders: `northwatch` ↔ `frostmarch`, `deepcanopy` ↔ `westwharf`.
 - Non-contiguous ferry: `frostkeep` ↔ `tidecourt` (Mandate boat docks).
 
-Combat plugins: Verdant + Tide = `combat.realtime`; Frost = `combat.ordo`.
+Combat is realtime in the overworld on every map — proximity/attack aggro, ally assist, leashing. See [docs/SYSTEMS.md](../docs/SYSTEMS.md).
 
 ## Tooling
 

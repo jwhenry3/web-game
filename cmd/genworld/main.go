@@ -120,33 +120,14 @@ func removeMapFiles(id string) {
 }
 
 func writeServerJSON(path string, def mapDef) error {
-	combat := def.combat
 	doc := map[string]any{
 		"server": map[string]any{
-			"name":         def.name,
-			"addr":         ":8080",
-			"data":         "data/profiles.json",
-			"accounts":     "data/accounts.json",
-			"static":       "",
-			"overworld":    filepath.ToSlash(filepath.Join("data", "maps", def.id+".map.json")),
-			"battle_speed": 0.75,
-		},
-		"plugins": map[string]any{
-			"combat": combat,
-			"modules": []map[string]any{
-				{
-					"id": "combat.ordo", "name": "Ordo Combat", "version": "1.0.0",
-					"capabilities": []string{"combat"}, "enabled": true,
-					"frontend": map[string]any{"pluginId": "combat.ordo"},
-					"config":   map[string]any{"battle_speed": 0.75},
-				},
-				{
-					"id": "combat.realtime", "name": "Realtime Combat", "version": "1.0.0",
-					"capabilities": []string{"combat"}, "enabled": true,
-					"frontend": map[string]any{"pluginId": "combat.realtime"},
-					"config":   map[string]any{},
-				},
-			},
+			"name":      def.name,
+			"addr":      ":8080",
+			"data":      "data/profiles.json",
+			"accounts":  "data/accounts.json",
+			"static":    "",
+			"overworld": filepath.ToSlash(filepath.Join("data", "maps", def.id+".map.json")),
 		},
 	}
 	raw, err := json.MarshalIndent(doc, "", "  ")

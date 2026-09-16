@@ -48,10 +48,10 @@ export function SkillTooltipContent({
       <div className="cm-tooltip-meta">
         {sk.world_only
           ? "Field skill · 0 MP"
-          : sk.id === "attack"
+          : sk.id === "attack" || sk.id === "dodge"
             ? "0 MP · uses GCD"
             : `${sk.mp_cost} MP${sk.cast_time_ms ? ` · ${(sk.cast_time_ms / 1000).toFixed(1)}s cast` : ""}${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
-        {!sk.world_only && sk.id !== "attack" && (
+        {!sk.world_only && sk.id !== "attack" && sk.id !== "dodge" && (
           <>
             {" "}
             · Lv {sk.unlocked ? sk.level : 0}/{sk.max_level}

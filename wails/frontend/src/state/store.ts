@@ -1,24 +1,21 @@
 import { create } from "zustand";
 import { setStoredToken } from "../net/auth";
 import type {
-  BattleEndPayload,
-  BattleEntity,
-  BattleInfo,
   ChatChannel,
   ChatLine,
   ChatTone,
+  CombatEntity,
+  CombatEventPayload,
   FriendInfo,
   FriendRequestPayload,
   PartyInfo,
   PartyInvitePayload,
-  BattleInvitePayload,
   ProfileInfo,
   SelectedAction,
   WindowId,
   OverworldMap,
   WorldNPC,
   WorldPlayer,
-  RTBattleView,
   SavePoint,
   AtlasMap,
   JobChanger,
@@ -30,7 +27,7 @@ import type {
 } from "../types";
 import type { NpcDialogueTarget } from "../world/npcDialogue";
 
-export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "battle" | "house" | "map_editor";
+export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "house" | "map_editor";
 
 import type { CharacterAppearance } from "../characters/types";
 import { appearanceFromRace } from "../characters/types";
@@ -53,13 +50,8 @@ export interface CharacterSummary {
   sub_job: string;
 }
 
-export interface BattleView {
-  battleId: string;
-  entities: BattleEntity[];
-  battleSpeed: number;
-  log: string[];
-  end: BattleEndPayload | null;
-}
+/** A combat event with a client-assigned sequence number for VFX consumers. */
+export type CombatEvent = CombatEventPayload & { seq: number };
 
 interface GameState {
   screen: Screen;
@@ -86,13 +78,10 @@ interface GameState {
   mapInfo: {
     id: string;
     name: string;
-    combat: string;
-    capabilities: string[];
     portals: { x: number; y: number; w: number; h: number }[];
     tileOverrides?: MapTileOverrides;
     terrainLayers?: MapTerrainLayers;
   } | null;
-  battles: BattleInfo[];
   chat: ChatLine[];
   chatTab: ChatChannel;
   friends: FriendInfo[];
@@ -100,18 +89,18 @@ interface GameState {
   outgoingFriendRequests: string[];
   party: PartyInfo | null;
   partyInvite: PartyInvitePayload | null;
-  battleInvite: BattleInvitePayload | null;
-  battle: BattleView | null;
-  rtBattle: RTBattleView | null;
-  /** Client focus target; survives tick merges until cleared or battle ends. */
-  battleTargetId: string | null;
-  combatMode: string | null;
+  /** AoI-scoped combat participants, keyed by entity id (replaced by combat_tick). */
+  combatEntities: Record<string, CombatEntity>;
+  /** Recent combat messages from combat_event (capped). */
+  combatLog: string[];
+  /** Recent combat events for VFX/animation triggers (capped, seq-tagged). */
+  combatEvents: CombatEvent[];
   commandPetId: string | null;
   selectedAction: SelectedAction | null;
   openWindow: WindowId | null;
   bindSlot: string | null;
   /** In-flight hotbar drag payload (dataTransfer is unreadable until drop). */
-  hotbarDrag: { kind: "skill" | "item"; id: string; slot?: string; bar?: "world" | "battle" } | null;
+  hotbarDrag: { kind: "skill" | "item"; id: string; slot?: string } | null;
   mainMenuOpen: boolean;
   mainMenuView: MainMenuView;
   options: GameOptions;
@@ -188,7 +177,6 @@ const initial = {
   house: null,
   overworld: null,
   mapInfo: null,
-  battles: [],
   chat: [] as ChatLine[],
   chatTab: "general" as ChatChannel,
   friends: [] as FriendInfo[],
@@ -196,11 +184,9 @@ const initial = {
   outgoingFriendRequests: [] as string[],
   party: null,
   partyInvite: null,
-  battleInvite: null,
-  battle: null,
-  rtBattle: null,
-  battleTargetId: null as string | null,
-  combatMode: null,
+  combatEntities: {} as Record<string, CombatEntity>,
+  combatLog: [] as string[],
+  combatEvents: [] as CombatEvent[],
   commandPetId: null as string | null,
   selectedAction: null,
   openWindow: null,
@@ -215,6 +201,38 @@ const initial = {
   teleportConfirm: null as { id: string; name: string } | null,
   atlas: [] as AtlasMap[],
 };
+
+/** True while a menu, dialog, or game window is open and owns keyboard input. */
+export function gameDialogOpen(
+  s: Pick<
+    GameState,
+    | "mainMenuOpen"
+    | "openWindow"
+    | "worldSkillDialog"
+    | "npcDialog"
+    | "jobChangeDialog"
+    | "teleportConfirm"
+  >,
+): boolean {
+  return !!(
+    s.mainMenuOpen ||
+    s.openWindow ||
+    s.worldSkillDialog ||
+    s.npcDialog ||
+    s.jobChangeDialog ||
+    s.teleportConfirm
+  );
+}
+
+/** True when a text field or an open game window/dialog owns keyboard input. */
+export function uiOwnsKeyboard(): boolean {
+  const el = document.activeElement as HTMLElement | null;
+  const tag = el?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) {
+    return true;
+  }
+  return gameDialogOpen(useGame.getState());
+}
 
 export const useGame = create<GameState>((set) => ({
   ...initial,
@@ -359,11 +377,67 @@ export function pushChat(
   }));
 }
 
-export function appendBattleLog(line: string, tone?: ChatTone) {
-  pushChat("battle", line, undefined, tone);
+export function appendCombatLog(line: string, tone?: ChatTone) {
+  useGame.setState((s) => ({
+    combatLog: [...s.combatLog, line].slice(-50),
+    chat: line
+      ? [
+          ...s.chat,
+          {
+            channel: "battle" as ChatChannel,
+            from_id: "",
+            from_name: "",
+            message: line,
+            ...(tone ? { tone } : {}),
+          },
+        ].slice(-200)
+      : s.chat,
+  }));
+}
+
+function combatTone(p: CombatEventPayload): ChatTone | undefined {
+  if (p.cast_started) return "cast";
+  if (!p.success && !p.cast_cancelled) return "fail";
+  if (p.damage) return "damage";
+  if (p.heal) return "heal";
+  if (p.mp_restored) return "buff";
+  if (p.action_id === "capture" && p.success) return "capture";
+  return undefined;
+}
+
+let combatEventSeq = 0;
+
+/** Record a combat_event: merge entity snapshots, append message, push VFX event. */
+export function applyCombatEvent(p: CombatEventPayload) {
   useGame.setState((s) => {
-    if (!s.battle) return s;
-    const log = [...s.battle.log, line].slice(-60);
-    return { battle: { ...s.battle, log } };
+    const combatEntities = { ...s.combatEntities };
+    for (const e of p.entities ?? []) combatEntities[e.id] = e;
+    const ev: CombatEvent = { ...p, seq: ++combatEventSeq };
+    const tone = combatTone(p);
+    const chat = p.message
+      ? [
+          ...s.chat,
+          {
+            channel: "battle" as ChatChannel,
+            from_id: "",
+            from_name: "",
+            message: p.message,
+            ...(tone ? { tone } : {}),
+          },
+        ].slice(-200)
+      : s.chat;
+    return {
+      combatEntities,
+      combatLog: p.message ? [...s.combatLog, p.message].slice(-50) : s.combatLog,
+      combatEvents: [...s.combatEvents, ev].slice(-100),
+      chat,
+    };
   });
+}
+
+/** Replace the whole combat entity map (empty array clears it). */
+export function applyCombatTick(p: { entities?: CombatEntity[] }) {
+  const combatEntities: Record<string, CombatEntity> = {};
+  for (const e of p.entities ?? []) combatEntities[e.id] = e;
+  useGame.setState({ combatEntities });
 }

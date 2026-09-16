@@ -106,6 +106,18 @@ var BasicAttack = Skill{
 	Description: "A basic weapon strike.",
 }
 
+// ActionIDDodge is the universal dash: every class has it from level 1. It
+// is usable while casting (and interrupts the cast), moves the player two
+// squares along their current movement direction, and does nothing — no
+// cooldown — while standing still.
+const ActionIDDodge = "dodge"
+
+var SkillDodge = Skill{
+	ID:          ActionIDDodge,
+	Name:        "Dodge",
+	Description: "Dash two squares in your movement direction. Usable while casting — interrupts the cast. Does nothing while standing still.",
+}
+
 // Catalog is populated in job_skills.go (init).
 var Catalog []Skill
 
@@ -135,7 +147,7 @@ func SkillTier(id string) int {
 
 // SkillAlwaysUnlocked reports skills every character has without a tree unlock.
 func SkillAlwaysUnlocked(id string) bool {
-	return id == BasicAttack.ID || id == ActionIDCapture
+	return id == BasicAttack.ID || id == ActionIDCapture || id == ActionIDDodge
 }
 
 func SkillUnlockLevel(id string) int {
@@ -219,6 +231,9 @@ func FindSkill(id string) (Skill, bool) {
 	}
 	if id == ActionIDCapture {
 		return SkillCapture, true
+	}
+	if id == ActionIDDodge {
+		return SkillDodge, true
 	}
 	for _, s := range Catalog {
 		if s.ID == id {

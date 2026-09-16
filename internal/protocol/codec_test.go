@@ -31,10 +31,10 @@ func TestProtobufRoundTripMove(t *testing.T) {
 }
 
 func TestProtobufRoundTripEmpty(t *testing.T) {
-	frame := protocol.Encode(protocol.TypeLeaveBattle, struct{}{})
+	frame := protocol.Encode(protocol.TypeDodge, struct{}{})
 	// Encode with empty object
 	if frame == nil {
-		frame = []byte(`{"type":"leave_battle"}`)
+		frame = []byte(`{"type":"dodge"}`)
 	}
 	bin, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)
 	if err != nil {
@@ -44,7 +44,7 @@ func TestProtobufRoundTripEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env.Type != protocol.TypeLeaveBattle {
+	if env.Type != protocol.TypeDodge {
 		t.Fatalf("type %s", env.Type)
 	}
 }
@@ -58,9 +58,8 @@ func TestProtobufRoundTripWelcome(t *testing.T) {
 			Level:   5,
 		},
 		Map: &protocol.MapSnapshot{
-			ID:     "greenwood",
-			Name:   "Greenwood",
-			Combat: "combat.realtime",
+			ID:   "greenwood",
+			Name: "Greenwood",
 			Overworld: protocol.OverworldMap{
 				Tile: 32, Cols: 2, Rows: 2, Cells: "....",
 			},
@@ -86,10 +85,10 @@ func TestProtobufRoundTripWelcome(t *testing.T) {
 	}
 }
 
-func TestProtobufRoundTripBattleEndDefeat(t *testing.T) {
-	frame := protocol.Encode(protocol.TypeBattleEnd, protocol.BattleEndPayload{
+func TestProtobufRoundTripRewardNoticeDefeat(t *testing.T) {
+	frame := protocol.Encode(protocol.TypeRewardNotice, protocol.RewardNoticePayload{
 		Victory: false,
-		Rewards: []protocol.PlayerReward{},
+		Message: "You were defeated.",
 	})
 	bin, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)
 	if err != nil {
@@ -99,28 +98,26 @@ func TestProtobufRoundTripBattleEndDefeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if env.Type != protocol.TypeBattleEnd {
+	if env.Type != protocol.TypeRewardNotice {
 		t.Fatalf("type %s", env.Type)
 	}
 	if len(env.Payload) == 0 {
-		t.Fatal("defeat battle_end must keep a payload (victory=false is meaningful)")
+		t.Fatal("reward_notice must keep a payload (victory=false is meaningful)")
 	}
-	var end protocol.BattleEndPayload
-	if err := json.Unmarshal(env.Payload, &end); err != nil {
+	var rn protocol.RewardNoticePayload
+	if err := json.Unmarshal(env.Payload, &rn); err != nil {
 		t.Fatal(err)
 	}
-	if end.Victory {
+	if rn.Victory {
 		t.Fatal("expected victory=false")
 	}
 }
 
-func TestProtobufRoundTripEntityUpdateZeroHP(t *testing.T) {
-	frame := protocol.Encode(protocol.TypeBattleEvent, protocol.BattleEventPayload{
-		Results: []protocol.ActionResult{},
-		Entities: []protocol.EntityUpdate{{
-			ID: "p1", HP: 0, MP: 10, SkillATB: 0, ATB: 0, Alive: false,
+func TestProtobufRoundTripCombatEntityZeroHP(t *testing.T) {
+	frame := protocol.Encode(protocol.TypeCombatTick, protocol.CombatTickPayload{
+		Entities: []protocol.CombatEntity{{
+			ID: "p1", HP: 0, MP: 10, SkillATB: 0, Alive: false, IsPlayer: true,
 		}},
-		Timestamp: 1,
 	})
 	bin, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)
 	if err != nil {

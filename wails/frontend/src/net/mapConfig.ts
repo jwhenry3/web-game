@@ -7,8 +7,6 @@ export function applyMapSnapshotToGame(map: MapSnapshot) {
     mapInfo: {
       id: map.id,
       name: map.name,
-      combat: map.combat,
-      capabilities: map.capabilities ?? [],
       portals: map.portals ?? [],
       tileOverrides: map.tile_overrides,
       terrainLayers: map.terrain_layers,
@@ -62,9 +60,6 @@ export async function ensureMapConfigLoaded(mapId?: string): Promise<MapSnapshot
     return {
       id: cur.mapInfo.id,
       name: cur.mapInfo.name,
-      combat: cur.mapInfo.combat,
-      capabilities: cur.mapInfo.capabilities,
-      modules: [],
       overworld: cur.overworld,
       portals: cur.mapInfo.portals,
       tile_overrides: cur.mapInfo.tileOverrides,

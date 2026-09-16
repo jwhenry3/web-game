@@ -13,7 +13,6 @@ type canvas struct {
 	plantDirt  bool // frost: allow planting on dirt fills
 }
 
-
 func newCanvas(cols, rows int, fillGID int) *canvas {
 	n := cols * rows
 	g := make([]int, n)

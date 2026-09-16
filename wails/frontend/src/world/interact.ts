@@ -20,8 +20,7 @@ type InteractPromptState = {
   worldSkillDialog: string | null;
   npcDialog: unknown;
   jobChangeDialog: unknown;
-  players: Record<string, { in_battle?: boolean; in_house?: boolean }>;
-  battles: { battle_id: string; participants: number; max_players: number }[];
+  players: Record<string, { in_combat?: boolean; in_house?: boolean }>;
   camps?: Record<string, { owner_name: string; x: number; y: number }>;
 };
 
@@ -29,13 +28,7 @@ export function canShowWorldInteractPrompts(state: InteractPromptState): boolean
   if (state.screen !== "world" || !state.selfId) return false;
   if (state.mainMenuOpen || state.openWindow || state.worldSkillDialog || state.npcDialog || state.jobChangeDialog) return false;
   const self = state.players[state.selfId];
-  return !!self && !self.in_battle && !self.in_house;
-}
-
-export function battleJoinable(state: Pick<InteractPromptState, "battles">, battleId?: string): boolean {
-  if (!battleId) return false;
-  const info = state.battles.find((b) => b.battle_id === battleId);
-  return !info || info.participants < info.max_players;
+  return !!self && !self.in_combat && !self.in_house;
 }
 
 export function tryWorldInteract(): boolean {
@@ -83,19 +76,17 @@ export function tryWorldInteract(): boolean {
     return true;
   }
 
+  // Combat is proximity/attack driven — interacting near an engaged NPC
+  // focuses it as your target rather than joining an instanced battle.
+  let nearestFoe: { id: string; dist: number } | null = null;
   for (const npc of Object.values(state.npcs)) {
-    if (!npc.in_battle || !npc.battle_id) continue;
-    if (Math.hypot(x - npc.x, y - npc.y) > INTERACT_RANGE) continue;
-    if (!battleJoinable(state, npc.battle_id)) continue;
-    net.joinBattle(npc.battle_id);
-    return true;
+    const dist = Math.hypot(x - npc.x, y - npc.y);
+    if (dist <= INTERACT_RANGE && (!nearestFoe || dist < nearestFoe.dist)) {
+      nearestFoe = { id: npc.id, dist };
+    }
   }
-
-  for (const p of Object.values(state.players)) {
-    if (p.id === state.selfId || p.in_house || !p.in_battle || !p.battle_id) continue;
-    if (Math.hypot(x - p.x, y - p.y) > INTERACT_RANGE) continue;
-    if (!battleJoinable(state, p.battle_id)) continue;
-    net.joinBattle(p.battle_id);
+  if (nearestFoe) {
+    net.setTarget(nearestFoe.id);
     return true;
   }
 

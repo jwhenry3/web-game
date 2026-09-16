@@ -200,6 +200,7 @@ func buildMap(def mapDef, exits []exitRec) (*game.MapConfig, error) {
 		}
 	}
 
+	usedHomes := map[[2]int]bool{}
 	for _, w := range def.wild {
 		regions = append(regions, regionJSON{
 			ID: w.id, MinC: w.c0, MinR: w.r0, MaxC: w.c1, MaxR: w.r1,
@@ -213,12 +214,29 @@ func buildMap(def mapDef, exits []exitRec) (*game.MapConfig, error) {
 				n++
 				homeC := w.c0 + 4 + int(hash2(def.seed, uint64(n), 1)%uint64(max(1, w.c1-w.c0-8)))
 				homeR := w.r0 + 4 + int(hash2(def.seed, uint64(n), 2)%uint64(max(1, w.r1-w.r0-8)))
-				for _, s := range def.settlements {
-					if homeC >= s.c0 && homeC <= s.c1 && homeR >= s.r0 && homeR <= s.r1 {
-						homeC = min(def.cols-5, s.c1+3)
-						homeR = min(def.rows-5, s.r1+3)
+				// Scan forward until the home is walkable, outside every
+				// settlement, and not already claimed by another npc.
+				for tries := 0; tries < 128; tries++ {
+					blocked := usedHomes[[2]int{homeC, homeR}] || !c.in(homeC, homeR) || c.collision[c.idx(homeC, homeR)] != 0
+					for _, s := range def.settlements {
+						if homeC >= s.c0 && homeC <= s.c1 && homeR >= s.r0 && homeR <= s.r1 {
+							blocked = true
+							break
+						}
+					}
+					if !blocked {
+						break
+					}
+					homeC++
+					if homeC > w.c1-4 {
+						homeC = w.c0 + 4
+						homeR++
+						if homeR > w.r1-4 {
+							homeR = w.r0 + 4
+						}
 					}
 				}
+				usedHomes[[2]int{homeC, homeR}] = true
 				id := fmt.Sprintf("%s_%s_%d", def.id, en.kind, n)
 				npcs = append(npcs, npcJSON{
 					ID: id, Kind: en.kind, Name: en.name, Level: en.level,

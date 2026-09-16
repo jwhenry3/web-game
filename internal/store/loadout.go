@@ -9,8 +9,8 @@ import (
 
 const hotbarSlotCount = game.HotbarSlotCount
 
-// defaultHotbar builds battle-bar bindings for a main/sub combo: attack,
-// starter consumable, then each job's root skill in ActiveJobs order.
+// defaultHotbar builds hotbar bindings for a main/sub combo: attack, starter
+// consumable, then each job's root skill in ActiveJobs order.
 func defaultHotbar(main, sub game.JobID) map[string]HotbarBinding {
 	hb := map[string]HotbarBinding{
 		"1": {Kind: "skill", ID: game.BasicAttack.ID},
@@ -26,27 +26,15 @@ func defaultHotbar(main, sub game.JobID) map[string]HotbarBinding {
 			slot++
 		}
 	}
-	if _, ok := hb["7"]; !ok {
-		hb["7"] = HotbarBinding{Kind: "skill", ID: game.ActionIDCapture}
-	}
 	return hb
 }
 
-// defaultWorldHotbar seeds the field bar with the always-available world skills.
-func defaultWorldHotbar() map[string]HotbarBinding {
-	return map[string]HotbarBinding{
-		"1": {Kind: "skill", ID: game.SkillIDReturn},
-		"2": {Kind: "skill", ID: game.SkillIDPort},
-		"3": {Kind: "skill", ID: game.SkillIDCamp},
-	}
-}
-
-// JobLoadout holds equipment, hotbars, and skill progress for one main/sub combo.
+// JobLoadout holds equipment, the hotbar, and skill progress for one
+// main/sub combo. WorldHotbar only exists to migrate legacy two-bar profiles
+// into the unified bar.
 type JobLoadout struct {
-	Equipped map[string]string        `json:"equipped"`
-	Hotbar   map[string]HotbarBinding `json:"hotbar"`
-	// WorldHotbar holds field-only skills (return/port/camp); a skill lives on
-	// exactly one bar depending on its world_only flag.
+	Equipped    map[string]string        `json:"equipped"`
+	Hotbar      map[string]HotbarBinding `json:"hotbar"`
 	WorldHotbar map[string]HotbarBinding `json:"world_hotbar,omitempty"`
 	SkillLevels map[string]int           `json:"skill_levels"`
 	SkillUsage  map[string]int           `json:"skill_usage"`
@@ -60,9 +48,6 @@ func (l *JobLoadout) normalize() {
 	if l.Hotbar == nil {
 		l.Hotbar = map[string]HotbarBinding{}
 	}
-	if l.WorldHotbar == nil {
-		l.WorldHotbar = map[string]HotbarBinding{}
-	}
 	if l.SkillLevels == nil {
 		l.SkillLevels = map[string]int{}
 	}
@@ -72,68 +57,53 @@ func (l *JobLoadout) normalize() {
 	if l.Proficiency == nil {
 		l.Proficiency = map[string]int{}
 	}
-	l.splitHotbars()
-	// Soft-fill Capture on slot 7 when missing so existing loadouts get the skill.
-	hasCapture := false
-	for _, b := range l.Hotbar {
-		if b.Kind == "skill" && b.ID == game.ActionIDCapture {
-			hasCapture = true
-			break
+	l.mergeWorldHotbar()
+	// Dodge moved to the Shift keybind — strip any stale hotbar binding.
+	for slot, b := range l.Hotbar {
+		if b.Kind == "skill" && b.ID == game.ActionIDDodge {
+			delete(l.Hotbar, slot)
 		}
 	}
-	if !hasCapture {
-		if _, ok := l.Hotbar["7"]; !ok {
-			l.Hotbar["7"] = HotbarBinding{Kind: "skill", ID: game.ActionIDCapture}
-		}
-	}
-	// Soft-fill the world skills so existing loadouts get a usable field bar.
+	// Soft-fill Capture and the field skills so existing loadouts get them.
 	for slot, id := range map[string]string{
-		"1": game.SkillIDReturn,
-		"2": game.SkillIDPort,
-		"3": game.SkillIDCamp,
+		"7":      game.ActionIDCapture,
+		"ctrl+1": game.SkillIDReturn,
+		"ctrl+2": game.SkillIDPort,
+		"ctrl+3": game.SkillIDCamp,
 	} {
 		has := false
-		for _, b := range l.WorldHotbar {
+		for _, b := range l.Hotbar {
 			if b.Kind == "skill" && b.ID == id {
 				has = true
 				break
 			}
 		}
 		if !has {
-			if _, ok := l.WorldHotbar[slot]; !ok {
-				l.WorldHotbar[slot] = HotbarBinding{Kind: "skill", ID: id}
+			if _, ok := l.Hotbar[slot]; !ok {
+				l.Hotbar[slot] = HotbarBinding{Kind: "skill", ID: id}
 			}
 		}
 	}
 }
 
-// splitHotbars moves stray bindings onto the bar their skill belongs to.
-// Legacy profiles kept one mixed bar; field-only skills live on the world bar.
-func (l *JobLoadout) splitHotbars() {
-	moveToBar := func(to map[string]HotbarBinding, slot string, b HotbarBinding) {
-		if _, ok := to[slot]; !ok {
-			to[slot] = b
-			return
+// mergeWorldHotbar folds legacy world-bar bindings onto the single hotbar.
+func (l *JobLoadout) mergeWorldHotbar() {
+	for slot, b := range l.WorldHotbar {
+		if b.Kind == "" {
+			continue
+		}
+		if _, ok := l.Hotbar[slot]; !ok {
+			l.Hotbar[slot] = b
+			continue
 		}
 		for _, s := range game.HotbarSlotIDs() {
-			if _, ok := to[s]; !ok {
-				to[s] = b
-				return
+			if _, ok := l.Hotbar[s]; !ok {
+				l.Hotbar[s] = b
+				break
 			}
 		}
 	}
-	for slot, b := range l.Hotbar {
-		if game.HotbarBarFor(b.Kind, b.ID) == game.HotbarBarWorld {
-			delete(l.Hotbar, slot)
-			moveToBar(l.WorldHotbar, slot, b)
-		}
-	}
-	for slot, b := range l.WorldHotbar {
-		if game.HotbarBarFor(b.Kind, b.ID) != game.HotbarBarWorld {
-			delete(l.WorldHotbar, slot)
-			moveToBar(l.Hotbar, slot, b)
-		}
-	}
+	l.WorldHotbar = nil
 }
 
 func (p *Profile) ComboKey() string {
@@ -257,7 +227,6 @@ func (p *Profile) newLoadout() JobLoadout {
 	l := JobLoadout{
 		Equipped:    map[string]string{},
 		Hotbar:      defaultHotbar(game.JobID(p.MainJob), game.JobID(p.SubJob)),
-		WorldHotbar: defaultWorldHotbar(),
 		SkillLevels: map[string]int{},
 		SkillUsage:  map[string]int{},
 		Proficiency: map[string]int{},

@@ -532,31 +532,24 @@ func (s *Store) UseConsumable(name, itemID string) (game.Item, bool) {
 	return game.Item{}, false
 }
 
-func (s *Store) SetHotbar(name, bar, slot, kind, id string) (Profile, bool) {
+func (s *Store) SetHotbar(name, slot, kind, id string) (Profile, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.profiles[name]
 	if !ok {
 		return Profile{}, false
 	}
-	if bar == "" {
-		bar = game.HotbarBarBattle
-	}
-	if !game.ValidHotbarBar(bar) || !game.ValidHotbarSlot(slot) {
+	if !game.ValidHotbarSlot(slot) {
 		return *p, false
 	}
-	if kind != "" && game.HotbarBarFor(kind, id) != bar {
+	if kind != "" && !game.HotbarBindable(kind, id) {
 		return *p, false
 	}
 	l := p.ActiveLoadout()
-	hb := l.Hotbar
-	if bar == game.HotbarBarWorld {
-		hb = l.WorldHotbar
-	}
 	if kind == "" {
-		delete(hb, slot)
+		delete(l.Hotbar, slot)
 	} else {
-		hb[slot] = HotbarBinding{Kind: kind, ID: id}
+		l.Hotbar[slot] = HotbarBinding{Kind: kind, ID: id}
 	}
 	p.Loadouts[p.ComboKey()] = *l
 	s.save()

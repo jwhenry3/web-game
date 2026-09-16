@@ -1,6 +1,9 @@
-// Debug: reproduce "target out of range" in realtime combat.
-// Registers a guest account, joins, walks into an NPC, then probes ranges.
+// Debug: reproduce "target out of range" in overworld combat.
+// Registers a guest account, joins, walks into an NPC's aggro radius, then
+// probes attack/spell ranges.
 // Usage: node scripts/debug-range.mjs   (server must be running on :8080)
+
+import { findPath } from "./lib/path.mjs";
 
 const API = "http://localhost:8080/api";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -17,8 +20,8 @@ console.log("registered", user);
 
 const ws = new WebSocket(`ws://localhost:8080/ws?token=${encodeURIComponent(token)}`);
 const p = {
-  id: null, profile: null, worldPlayers: {}, npcs: {},
-  rt: null, events: [],
+  id: null, profile: null, worldPlayers: {}, npcs: {}, map: null,
+  combat: new Map(), events: [],
   send: (t, pl) => ws.send(JSON.stringify({ type: t, payload: pl })),
   waiters: [],
 };
@@ -33,21 +36,22 @@ ws.addEventListener("message", (evt) => {
     case "world_state":
       for (const w of pl.players ?? []) p.worldPlayers[w.id] = w;
       for (const n of pl.npcs ?? []) p.npcs[n.id] = n;
+      if (pl.map?.cells) p.map = pl.map;
       break;
     case "player_joined": case "player_sync": p.worldPlayers[pl.id] = pl; break;
     case "player_moved": if (p.worldPlayers[pl.id]) Object.assign(p.worldPlayers[pl.id], { x: pl.x, y: pl.y }); break;
     case "npc_state": for (const n of pl.npcs ?? []) p.npcs[n.id] = n; break;
-    case "profile": p.profile = pl; break;
-    case "rt_battle_state": p.rt = { id: pl.battle_id, entities: new Map(pl.entities.map((e) => [e.id, e])) }; break;
-    case "rt_battle_tick":
-      if (p.rt) for (const u of pl.entities ?? []) { const e = p.rt.entities.get(u.id); if (e) Object.assign(e, u); }
+    case "combat_tick":
+      p.combat.clear();
+      for (const e of pl.entities ?? []) p.combat.set(e.id, e);
       break;
-    case "rt_battle_event":
+    case "combat_event":
       p.events.push(pl);
       if (pl.message) console.log(`  EVENT: ${pl.message}  (action=${pl.action_id})`);
-      if (p.rt) for (const u of pl.entities ?? []) { const e = p.rt.entities.get(u.id); if (e) Object.assign(e, u); }
+      p.combat.clear();
+      for (const e of pl.entities ?? []) p.combat.set(e.id, e);
       break;
-    case "rt_battle_end": console.log("  BATTLE END", pl.victory ? "victory" : "defeat"); break;
+    case "reward_notice": console.log("  REWARD:", pl.message); break;
     case "error": console.log("  SERVER ERROR:", pl.message); break;
   }
   for (const w of [...p.waiters]) {
@@ -60,95 +64,119 @@ p.until = (pred, label) => new Promise((res, rej) => {
   p.waiters.push({ pred, resolve: (v) => { clearTimeout(t); res(v); } });
 });
 
-const self = () => p.rt?.entities.get(p.id);
-const foes = () => [...p.rt.entities.values()].filter((e) => !e.is_player && !e.is_ally && e.alive);
+const self = () => p.worldPlayers[p.id];
+const foes = () => [...p.combat.values()].filter((e) => !e.is_player && !e.is_ally && e.alive);
+const npcById = (id) => p.combat.get(id) ?? p.npcs[id];
 const distTo = (e) => Math.hypot(self().x - e.x, self().y - e.y).toFixed(1);
 
 async function moveStep(x, y) {
-  p.send("rt_move", { x, y });
+  p.send("move", { x, y });
   await sleep(80);
 }
 
+// A*-guided approach: repaths each pass so a moving target and walls both
+// work; falls back to a direct step when no path resolves.
 async function approach(e, gap) {
-  for (let i = 0; i < 60; i++) {
+  let path = null;
+  for (let i = 0; i < 120; i++) {
     const s = self(); if (!s) return;
-    const dx = e.x - s.x, dy = e.y - s.y, d = Math.hypot(dx, dy);
+    const t = npcById(e.id) ?? e;
+    const dx = t.x - s.x, dy = t.y - s.y, d = Math.hypot(dx, dy);
     if (d <= gap) return;
-    const step = Math.min(30, d - gap);
-    await moveStep(s.x + (dx / d) * step, s.y + (dy / d) * step);
+    if (!path || !path.length) {
+      path = findPath(p.map, s.x, s.y, t.x, t.y) ?? [];
+    }
+    const wp = path.length ? path[0] : t;
+    const wd = Math.hypot(wp.x - s.x, wp.y - s.y) || 1;
+    if (path.length && wd <= 8) { path.shift(); continue; }
+    const step = Math.min(30, Math.min(wd, d - gap));
+    await moveStep(s.x + ((wp.x - s.x) / wd) * step, s.y + ((wp.y - s.y) / wd) * step);
+    const t2 = npcById(e.id) ?? e;
+    const ts = p.map?.tile ?? 32;
+    if (path.length &&
+      (Math.floor(t2.x / ts) !== Math.floor(t.x / ts) || Math.floor(t2.y / ts) !== Math.floor(t.y / ts))) {
+      path = null;
+    }
   }
 }
 
 async function attack(actionId, targetId, tag) {
-  const e = p.rt.entities.get(targetId);
+  const e = npcById(targetId);
   console.log(`\n[${tag}] action=${actionId} target=${e?.name} dist=${e ? distTo(e) : "?"} selfPos=(${self().x.toFixed(0)},${self().y.toFixed(0)})`);
   p.send("action", { action_id: actionId, target_id: targetId });
-  await sleep(350);
+  await sleep(2700); // GCD is 2.5s
 }
 
 async function main() {
   await p.until((pl) => pl.id !== null, "welcome");
   console.log("joined:", p.id, "job:", p.profile.main_job);
   console.log("unlocked:", p.profile.skills.filter(s => s.unlocked).map(s => s.id).join(","));
-  console.log("skill_points:", JSON.stringify(p.profile.skill_points));
-
-  const pts = Object.entries(p.profile.skill_points ?? {}).find(([, v]) => v.available > 0);
-  if (pts) {
-    p.send("unlock_skill", { skill_id: "hex_ignis_hex" });
-    await sleep(600);
-    console.log("ignis unlocked:", p.profile.skills.find((s) => s.id === "hex_ignis_hex")?.unlocked);
-  }
 
   await p.until((pl) => Object.values(pl.npcs).length > 0, "npcs");
-  for (let i = 0; i < 80 && !p.rt; i++) {
+  // Walk into the first NPC's aggro radius (~110px), routing around walls.
+  {
     const npc = Object.values(p.npcs)[0];
-    const s = p.worldPlayers[p.id];
-    if (!npc || !s) break;
-    const dx = npc.x - s.x, dy = npc.y - s.y, d = Math.hypot(dx, dy) || 1;
-    p.send("move", { x: Math.round(s.x + (dx / d) * Math.min(72, d)), y: Math.round(s.y + (dy / d) * Math.min(72, d)) });
-    await sleep(280);
+    let path = null;
+    for (let i = 0; i < 200 && !self()?.in_combat; i++) {
+      const cur = p.npcs[npc?.id] ?? Object.values(p.npcs)[0];
+      const s = self();
+      if (!cur || !s) break;
+      const d = Math.hypot(cur.x - s.x, cur.y - s.y) || 1;
+      if (d <= 24) break;
+      if (!path || !path.length) {
+        path = findPath(p.map, s.x, s.y, cur.x, cur.y) ?? [];
+        if (!path.length) break;
+      }
+      const wp = path[0];
+      const wd = Math.hypot(wp.x - s.x, wp.y - s.y);
+      if (wd <= 8) { path.shift(); continue; }
+      const step = Math.min(72, wd);
+      p.send("move", { x: Math.round(s.x + ((wp.x - s.x) / wd) * step), y: Math.round(s.y + ((wp.y - s.y) / wd) * step) });
+      await sleep(280);
+    }
   }
-  await p.until((pl) => pl.rt !== null, "rt battle start");
-  console.log("\nbattle started:", p.rt.id);
-  for (const e of p.rt.entities.values()) console.log(`  ${e.id} ${e.name} @(${e.x.toFixed(0)},${e.y.toFixed(0)}) player=${e.is_player}`);
+  await p.until((pl) => pl.worldPlayers[pl.id]?.in_combat === true, "combat engaged");
+  console.log("\nengaged. combat entities:");
+  for (const e of p.combat.values()) console.log(`  ${e.id} ${e.name} @(${e.x.toFixed(0)},${e.y.toFixed(0)}) player=${e.is_player}`);
 
   const foe = foes()[0];
+  if (!foe) { console.error("no foe in combat snapshot"); process.exit(1); }
 
-  // 1) attack at spawn distance (~440) — expect legit out of range
+  // 1) attack at spawn distance — expect legit out of range
   await attack("attack", foe.id, "spawn distance");
 
-  // 2) walk to ~50px (facing enemy) and attack — expect hit
+  // 2) walk to ~50px and attack — expect hit
   await approach(foe, 50);
-  await sleep(500);
+  await sleep(400);
   await attack("attack", foe.id, "adjacent, facing");
 
-  // 3) strafe sideways ~40px (facing now vertical) then attack — facing bug?
+  // 3) strafe sideways ~40px then attack — facing must not matter
   const s = self();
-  await moveStep(s.x, Math.min(460, s.y + 40));
-  await sleep(500);
+  await moveStep(s.x, s.y + 40);
+  await sleep(400);
   await attack("attack", foe.id, "adjacent, sideways facing");
 
   const foe2 = foes()[0];
   if (foe2) {
     // 4) ranged spell adjacent — should hit
-    await approach(p.rt.entities.get(foe2.id) ?? foe2, 60);
-    await sleep(500);
+    await approach(npcById(foe2.id) ?? foe2, 60);
+    await sleep(400);
     await attack("hex_ignis_hex", foe2.id, "spell adjacent (should hit)");
 
     // 5) back off to ~330px — beyond 320, legit fail
     for (let i = 0; i < 20; i++) {
-      const s2 = self(); const f = p.rt.entities.get(foe2.id);
+      const s2 = self(); const f = npcById(foe2.id);
       if (!s2 || !f) break;
       if (Math.hypot(f.x - s2.x, f.y - s2.y) >= 330) break;
       const dx = s2.x - f.x, dy = s2.y - f.y, m = Math.hypot(dx, dy) || 1;
       await moveStep(s2.x + (dx / m) * 25, s2.y + (dy / m) * 25);
     }
-    await sleep(500);
+    await sleep(400);
     await attack("hex_ignis_hex", foe2.id, "spell ~330 (should fail)");
 
     // 6) mid range ~200 — should hit
-    await approach(p.rt.entities.get(foe2.id) ?? foe2, 200);
-    await sleep(500);
+    await approach(npcById(foe2.id) ?? foe2, 200);
+    await sleep(400);
     await attack("hex_ignis_hex", foe2.id, "spell ~200 (should hit)");
   }
 

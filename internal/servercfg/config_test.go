@@ -13,7 +13,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	path := filepath.Join(dir, "server.json")
-	body := `{"server":{"overworld":"` + filepath.ToSlash(overworld) + `"},"plugins":{"combat":"combat.atb","modules":[{"id":"combat.atb","enabled":true,"frontend":{"pluginId":"combat.atb"}}]}}`
+	// Legacy fields (plugins, battle_speed) must parse cleanly even though the
+	// unified combat model no longer reads them.
+	body := `{"server":{"overworld":"` + filepath.ToSlash(overworld) + `","battle_speed":0.75},"plugins":{"combat":"combat.atb","modules":[{"id":"combat.atb","enabled":true}]}}`
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -27,9 +29,6 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if cfg.Server.Overworld != filepath.ToSlash(overworld) {
 		t.Fatalf("overworld = %q", cfg.Server.Overworld)
 	}
-	if cfg.Plugins.Combat != "combat.ordo" {
-		t.Fatalf("combat = %q", cfg.Plugins.Combat)
-	}
 }
 
 const minOverworldJSON = `{
@@ -38,7 +37,7 @@ const minOverworldJSON = `{
   "map": {"baseTile": ".", "borderTile": "#", "border": {"top":1,"bottom":1,"left":1,"right":1}}
 }`
 
-func TestApplyOverridesBattleSpeed(t *testing.T) {
+func TestApplyOverrides(t *testing.T) {
 	dir := t.TempDir()
 	overworld := filepath.Join(dir, "overworld.json")
 	if err := os.WriteFile(overworld, []byte(minOverworldJSON), 0o644); err != nil {
@@ -46,15 +45,15 @@ func TestApplyOverridesBattleSpeed(t *testing.T) {
 	}
 	cfg := Default()
 	cfg.Server.Overworld = overworld
-	if err := cfg.ApplyOverrides(Overrides{BattleSpeed: 1.25}); err != nil {
+	if err := cfg.ApplyOverrides(Overrides{Addr: ":9999", Data: "d.json"}); err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Server.BattleSpeed != 1.25 {
-		t.Fatalf("battle speed = %v", cfg.Server.BattleSpeed)
+	if cfg.Server.Addr != ":9999" || cfg.Server.Data != "d.json" {
+		t.Fatalf("overrides not applied: %+v", cfg.Server)
 	}
 }
 
-func TestSetCombatAndSave(t *testing.T) {
+func TestSaveAndReload(t *testing.T) {
 	dir := t.TempDir()
 	overworld := filepath.Join(dir, "overworld.json")
 	if err := os.WriteFile(overworld, []byte(minOverworldJSON), 0o644); err != nil {
@@ -62,13 +61,6 @@ func TestSetCombatAndSave(t *testing.T) {
 	}
 	cfg := Default()
 	cfg.Server.Overworld = overworld
-	cfg.SetBattleSpeed(1.1)
-	if err := cfg.SetCombat("combat.realtime"); err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Plugins.Combat != "combat.realtime" {
-		t.Fatalf("combat = %q", cfg.Plugins.Combat)
-	}
 	path := filepath.Join(dir, "server.json")
 	if err := Save(path, cfg); err != nil {
 		t.Fatal(err)
@@ -77,10 +69,7 @@ func TestSetCombatAndSave(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Plugins.Combat != "combat.realtime" {
-		t.Fatalf("reloaded combat = %q", got.Plugins.Combat)
-	}
-	if got.Server.BattleSpeed != 1.1 {
-		t.Fatalf("reloaded battle_speed = %v", got.Server.BattleSpeed)
+	if got.Server.Overworld != cfg.Server.Overworld || got.Server.Addr != cfg.Server.Addr {
+		t.Fatalf("reloaded %+v", got.Server)
 	}
 }

@@ -43,12 +43,11 @@ func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *protocol.Wor
 	return h, c, wp
 }
 
-func TestWithinEngageRange(t *testing.T) {
-	if !withinEngageRange(100, 100, 100+engageRangePx(), 100) {
-		t.Fatal("edge of radius should engage")
-	}
-	if withinEngageRange(100, 100, 100+engageRangePx()+1, 100) {
-		t.Fatal("outside radius must not engage")
+// hostileNPC returns a combat-capable overworld foe.
+func hostileNPC(id string, x, y float64) *worldNPC {
+	return &worldNPC{
+		ID: id, Name: "Goblin", Kind: "goblin", Level: 1,
+		X: x, Y: y, hp: 50, maxHP: 50,
 	}
 }
 
@@ -61,52 +60,75 @@ func TestClampMoveRejectsTeleport(t *testing.T) {
 	}
 }
 
-func TestMoveOntoNPCStartsBattle(t *testing.T) {
+func TestMoveNearNPCPullsAggro(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, wp := testHubWithPlayer(t, px, py)
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 10, Y: py}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+aggroRadius-10, py)
 	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
-	if !wp.InBattle || wp.BattleID == "" {
-		t.Fatalf("collision should lock the player into a battle, got %+v", wp)
+	if !h.npcs["npc-1"].Engaged {
+		t.Fatal("walking into aggro range should engage the npc")
 	}
-	if !h.combat.RoomExists(wp.BattleID) {
-		t.Fatal("expected combat room")
+	if h.npcs["npc-1"].targetID != c.ID {
+		t.Fatalf("npc should target the player, got %q", h.npcs["npc-1"].targetID)
 	}
-	npc := h.npcs["npc-1"]
-	if !npc.InBattle || npc.BattleID != wp.BattleID {
-		t.Fatalf("npc should be bound to the same room: %+v", npc)
+	if !wp.InCombat {
+		t.Fatal("player should be flagged in combat")
 	}
-	if npc.onWorld() || hasWorldNPC(h, "npc-1") {
-		t.Fatal("engaged npc must despawn from the world map")
-	}
-	h.combat.CloseRoom(wp.BattleID)
 }
 
-func TestMoveFarFromNPCDoesNotStartBattle(t *testing.T) {
+func TestMoveFarFromNPCDoesNotAggro(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, wp := testHubWithPlayer(t, px, py)
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 300, Y: py + 300}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+300, py+300)
 	raw, _ := json.Marshal(protocol.MovePayload{X: px + 20, Y: py})
 	h.handleMove(c, raw)
-	if wp.InBattle {
-		t.Fatal("distant npc must not start a battle")
-	}
-	if wp.BattleID != "" {
-		t.Fatal("no room should exist")
+	if h.npcs["npc-1"].Engaged || wp.InCombat {
+		t.Fatal("distant npc must not engage")
 	}
 }
 
-func TestLockedPlayerDoesNotReengage(t *testing.T) {
+func TestEngagedNPCPullsNearbyAllies(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, _ := testHubWithPlayer(t, px, py)
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+50, py)
+	h.npcs["npc-2"] = hostileNPC("npc-2", px+50+assistRadius-10, py)
+	h.npcs["npc-3"] = hostileNPC("npc-3", px+50+assistRadius+80, py)
+	raw, _ := json.Marshal(protocol.MovePayload{X: px + 4, Y: py})
+	h.handleMove(c, raw)
+	if !h.npcs["npc-1"].Engaged {
+		t.Fatal("primary npc should engage")
+	}
+	if !h.npcs["npc-2"].Engaged {
+		t.Fatal("nearby ally should assist")
+	}
+	if h.npcs["npc-3"].Engaged {
+		t.Fatal("distant npc must not assist")
+	}
+}
+
+func TestAttackAggroEngagesNPC(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, wp := testHubWithPlayer(t, px, py)
-	wp.InBattle = true
-	wp.BattleID = "existing-battle"
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px, Y: py}
-	raw, _ := json.Marshal(protocol.MovePayload{X: px + 2, Y: py})
-	h.handleMove(c, raw)
-	if wp.BattleID != "existing-battle" {
-		t.Fatal("combat-locked players cannot start another battle")
+	n := hostileNPC("npc-1", px+40, py)
+	n.patrol.Home = game.WorldToTile(px, py)
+	h.npcs[n.ID] = n
+	// Attack via the action handler (basic attack, in range).
+	raw, _ := json.Marshal(protocol.ActionPayload{
+		ActionID: game.BasicAttack.ID, TargetID: n.ID,
+	})
+	h.handleAction(c, raw)
+	if !n.Engaged {
+		t.Fatal("attacking an npc should engage it")
+	}
+	if n.hp >= n.maxHP {
+		t.Fatal("attack should have dealt damage")
+	}
+	if n.contributors[c.ID] <= 0 {
+		t.Fatal("attacker should be a damage contributor")
+	}
+	if !wp.InCombat {
+		t.Fatal("attacker should be flagged in combat")
 	}
 }
 
@@ -130,73 +152,33 @@ func TestSeededNPCsStayInRegion(t *testing.T) {
 	}
 }
 
-func TestReleaseFromBattleGrantsImmunity(t *testing.T) {
+func TestBattleImmunityBlocksAggro(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, wp := testHubWithPlayer(t, px, py)
-	c.BattleID = "battle-1"
-	wp.InBattle = true
-	wp.BattleID = "battle-1"
-	h.releaseFromBattle(c.ID)
-	if wp.InBattle {
-		t.Fatal("player should be unlocked")
-	}
+	h.grantBattleImmunity(wp)
 	if !battleImmune(wp) {
-		t.Fatal("win/defeat/leave must grant a short invul window")
+		t.Fatal("join/defeat/transfer must grant a short invul window")
 	}
 	if wp.ImmuneUntil < time.Now().Add(4*time.Second).UnixMilli() {
 		t.Fatalf("immunity should last about 5s, until %d", wp.ImmuneUntil)
 	}
-
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 10, Y: py}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+10, py)
 	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
-	if wp.InBattle || wp.BattleID != "" {
-		t.Fatal("immune player must not start a battle by walking onto an npc")
+	if h.npcs["npc-1"].Engaged || wp.InCombat {
+		t.Fatal("immune player must not pull aggro")
 	}
 }
 
-func TestExpiredImmunityAllowsBattle(t *testing.T) {
+func TestExpiredImmunityAllowsAggro(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, wp := testHubWithPlayer(t, px, py)
 	wp.ImmuneUntil = time.Now().Add(-time.Second).UnixMilli()
-	h.npcs["npc-1"] = &worldNPC{ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1, X: px + 10, Y: py}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+10, py)
 	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
 	h.handleMove(c, raw)
-	if !wp.InBattle {
-		t.Fatal("expired invul should not block collision")
-	}
-	h.combat.CloseRoom(wp.BattleID)
-}
-
-func TestReturnToWorldRefreshesImmunity(t *testing.T) {
-	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	wp.ImmuneUntil = time.Now().Add(-time.Second).UnixMilli()
-	h.handleLeaveBattleReleased(c)
-	if !battleImmune(wp) {
-		t.Fatal("Return to World after a finished fight should refresh invul")
-	}
-}
-
-func TestLeaveBattleUnlocksWhenClientBattleIDEmpty(t *testing.T) {
-	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	// Desync: world still combat-locked but client battle id was cleared.
-	c.BattleID = ""
-	wp.InBattle = true
-	wp.BattleID = "battle-stuck"
-	h.handleLeaveBattle(c)
-	if wp.InBattle || wp.BattleID != "" || c.BattleID != "" {
-		t.Fatalf("leave must unlock desynced player, got in_battle=%v battle=%q client=%q",
-			wp.InBattle, wp.BattleID, c.BattleID)
-	}
-	if !battleImmune(wp) {
-		t.Fatal("leave should grant immunity")
-	}
-	raw, _ := json.Marshal(protocol.MovePayload{X: px + 4, Y: py})
-	h.handleMove(c, raw)
-	if wp.X == px && wp.Y == py {
-		t.Fatal("unlocked player should be able to move in the world")
+	if !h.npcs["npc-1"].Engaged {
+		t.Fatal("expired invul should not block aggro")
 	}
 }
 
@@ -230,14 +212,10 @@ func TestNPCTickSkipsImmunePlayer(t *testing.T) {
 	px, py := wildernessXY()
 	h, _, wp := testHubWithPlayer(t, px, py)
 	wp.ImmuneUntil = time.Now().Add(5 * time.Second).UnixMilli()
-	h.npcs["npc-1"] = &worldNPC{
-		ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: px + engageRangePx() - 4, Y: py,
-		path: []game.Vec2{{X: px, Y: py}},
-	}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+aggroRadius-4, py)
 	h.tickNPCs()
-	if wp.InBattle {
-		t.Fatal("an npc walking onto an immune player must not start a battle")
+	if h.npcs["npc-1"].Engaged || wp.InCombat {
+		t.Fatal("an npc near an immune player must not engage")
 	}
 }
 
@@ -245,46 +223,33 @@ func TestNPCTickSkipsInHousePlayer(t *testing.T) {
 	px, py := wildernessXY()
 	h, _, wp := testHubWithPlayer(t, px, py)
 	wp.InHouse = true
-	h.npcs["npc-1"] = &worldNPC{
-		ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: px + engageRangePx() - 4, Y: py,
-		path: []game.Vec2{{X: px, Y: py}},
-	}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+aggroRadius-4, py)
 	h.tickNPCs()
-	if wp.InBattle {
+	if h.npcs["npc-1"].Engaged || wp.InCombat {
 		t.Fatal("npcs must not engage players who are inside a house")
 	}
 }
 
-func TestNPCDespawnsUntilSpawnWindow(t *testing.T) {
+func TestKillNPCDespawnsUntilSpawnWindow(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	h.npcs["g1"] = &worldNPC{
-		ID: "g1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: px + 10, Y: py,
-		patrol: game.NPCPatrols[0],
-	}
-	raw, _ := json.Marshal(protocol.MovePayload{X: px + 8, Y: py})
-	h.handleMove(c, raw)
-	if !wp.InBattle {
-		t.Fatal("expected a battle")
-	}
-	if hasWorldNPC(h, "g1") {
-		t.Fatal("npc should vanish from the map when the fight starts")
-	}
+	h, c, _ := testHubWithPlayer(t, px, py)
+	n := hostileNPC("g1", px+10, py)
+	n.patrol = game.NPCPatrols[0]
+	n.patrol.Home = game.WorldToTile(px, py)
+	h.npcs[n.ID] = n
 
-	h.combat.CloseRoom(wp.BattleID)
-	h.releaseNPCs(wp.BattleID)
-	n := h.npcs["g1"]
+	h.engageNPC(n, c.ID)
+	n.hp = 0
+	h.killNPC(n, c.ID)
+
 	if n.onWorld() || hasWorldNPC(h, "g1") {
-		t.Fatal("npc must stay hidden after the fight until its spawn window")
+		t.Fatal("dead npc must vanish from the map")
+	}
+	if n.Engaged {
+		t.Fatal("dead npc must disengage")
 	}
 	if n.respawnAt.IsZero() {
-		t.Fatal("release should schedule a respawn from SpawnWindows")
-	}
-	want := time.Now().Add(game.DefaultRespawn)
-	if n.respawnAt.Before(want.Add(-time.Second)) || n.respawnAt.After(want.Add(time.Second)) {
-		t.Fatalf("respawn window should be ~60s, got %s from now", time.Until(n.respawnAt))
+		t.Fatal("kill should schedule a respawn")
 	}
 
 	h.tickNPCs()
@@ -297,9 +262,12 @@ func TestNPCDespawnsUntilSpawnWindow(t *testing.T) {
 	if !n.onWorld() || !hasWorldNPC(h, "g1") {
 		t.Fatal("npc should return to the map after the spawn window")
 	}
-	home := game.TileCenter(game.NPCPatrols[0].Home)
+	home := game.TileCenter(n.patrol.Home)
 	if dist(n.X, n.Y, home.X, home.Y) > 1 {
 		t.Fatalf("respawn should start at patrol home, got %f,%f", n.X, n.Y)
+	}
+	if n.hp != n.maxHP {
+		t.Fatal("respawned npc should be at full hp")
 	}
 }
 
@@ -312,17 +280,12 @@ func hasWorldNPC(h *Hub, id string) bool {
 	return false
 }
 
-func TestNPCTickWalksIntoPlayer(t *testing.T) {
+func TestNPCNearPlayerEngages(t *testing.T) {
 	px, py := wildernessXY()
 	h, _, wp := testHubWithPlayer(t, px, py)
-	h.npcs["npc-1"] = &worldNPC{
-		ID: "npc-1", Name: "Goblin", Kind: "goblin", Level: 1,
-		X: px + engageRangePx() - 4, Y: py,
-		path: []game.Vec2{{X: px, Y: py}},
-	}
+	h.npcs["npc-1"] = hostileNPC("npc-1", px+aggroRadius-4, py)
 	h.tickNPCs()
-	if !wp.InBattle {
-		t.Fatal("an npc walking onto a player should start a battle")
+	if !h.npcs["npc-1"].Engaged || !wp.InCombat {
+		t.Fatal("an npc next to a player should engage on the npc tick")
 	}
-	h.combat.CloseRoom(wp.BattleID)
 }

@@ -126,7 +126,7 @@ message ProfileInfo {
   repeated PetRecord pets = 25;
   string follow_pet_id = 26;
   string battle_pet_id = 27;
-  map<string, HotbarBinding> world_hotbar = 28;
+  reserved 28;
 }
 
 message OverworldMap {
@@ -154,25 +154,9 @@ message MapPortal {
   double h = 4;
 }
 
-message MapFrontend {
-  string pluginId = 1;
-}
-
-message MapModule {
-  string id = 1;
-  string name = 2;
-  string version = 3;
-  repeated string capabilities = 4;
-  MapFrontend frontend = 5;
-  google.protobuf.Struct config = 6;
-}
-
 message MapSnapshot {
   string id = 1;
   string name = 2;
-  string combat = 3;
-  repeated string capabilities = 4;
-  repeated MapModule modules = 5;
   OverworldMap overworld = 6;
   string tiled_map = 7;
   repeated MapPortal portals = 8;
@@ -192,14 +176,19 @@ message WorldPlayer {
   double x = 9;
   double y = 10;
   double facing = 11; // Y-axis yaw radians (Three.js)
-  bool in_battle = 12;
-  string battle_id = 13;
+  bool in_combat = 12;
   int64 immune_until = 14;
   string casting_skill_id = 15;
   int32 cast_time_ms = 16;
   int64 cast_ends_at = 17;
   bool in_house = 18;
   string house_owner = 19;
+  int32 hp = 20;
+  int32 max_hp = 21;
+  int32 mp = 22;
+  int32 max_mp = 23;
+  double stamina = 24;
+  string target_id = 25;
 }
 
 message WorldCamp {
@@ -242,16 +231,10 @@ message WorldNPC {
   int32 level = 4;
   double x = 5;
   double y = 6;
-  bool in_battle = 7;
-  string battle_id = 8;
-}
-
-message BattleInfo {
-  string battle_id = 1;
-  int32 participants = 2;
-  int32 max_players = 3;
-  int32 level = 4;
-  string mode = 5;
+  bool engaged = 7;
+  int32 hp = 9;
+  int32 max_hp = 10;
+  string target_id = 11;
 }
 
 message SavePoint {
@@ -266,62 +249,6 @@ message JobChanger {
   string name = 2;
   double x = 3;
   double y = 4;
-}
-
-message BattleEntity {
-  string id = 1;
-  string name = 2;
-  string kind = 3;
-  bool is_player = 4;
-  string weapon = 5;
-  int32 level = 6;
-  int32 hp = 7;
-  int32 max_hp = 8;
-  int32 mp = 9;
-  int32 max_mp = 10;
-  int32 agility = 11;
-  double skill_atb = 12;
-  double atb = 13;
-  string target_id = 14;
-  bool alive = 15;
-  repeated StatusSnapshot statuses = 16;
-  string casting_skill_id = 17;
-  string cast_target_id = 18;
-  double cast_progress = 19;
-  int32 cast_time_ms = 20;
-  bool is_ally = 21;
-  string owner_id = 22;
-  bool capturable = 23;
-}
-
-message ActionResult {
-  string actor_id = 1;
-  string action_id = 2;
-  string action_name = 3;
-  string target_id = 4;
-  string item_id = 5;
-  bool success = 6;
-  int32 damage = 7;
-  int32 heal = 8;
-  int32 mp_restored = 9;
-  string message = 10;
-  repeated StatusSnapshot status_applied = 11;
-  bool cast_started = 12;
-}
-
-message EntityUpdate {
-  string id = 1;
-  int32 hp = 2;
-  int32 mp = 3;
-  double skill_atb = 4;
-  double atb = 5;
-  string target_id = 6;
-  bool alive = 7;
-  repeated StatusSnapshot statuses = 8;
-  string casting_skill_id = 9;
-  string cast_target_id = 10;
-  double cast_progress = 11;
-  int32 cast_time_ms = 12;
 }
 
 message PlayerReward {
@@ -346,7 +273,7 @@ message FriendInfo {
   bool online = 2;
   int32 level = 3;
   string weapon = 4;
-  bool in_battle = 5;
+  bool in_combat = 5;
 }
 
 message PartyMember {
@@ -355,7 +282,7 @@ message PartyMember {
   int32 level = 3;
   string weapon = 4;
   bool leader = 5;
-  bool in_battle = 6;
+  bool in_combat = 6;
 }
 
 message PartyInfo {
@@ -364,7 +291,7 @@ message PartyInfo {
   repeated PartyMember members = 3;
 }
 
-message RTBattleEntity {
+message CombatEntity {
   string id = 1;
   string name = 2;
   string kind = 3;

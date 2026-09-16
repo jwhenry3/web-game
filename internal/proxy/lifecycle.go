@@ -114,12 +114,6 @@ func (p *Proxy) CreateMap(req CreateMapRequest) (cluster.MapSpec, error) {
 	serverDoc.Server.Accounts = p.cfg.Proxy.Accounts
 	serverDoc.Server.Static = p.cfg.Proxy.Static
 	serverDoc.Server.Overworld = filepath.ToSlash(mapPath)
-	if def := p.cfg.DefaultMap(); def.Config != "" {
-		if base, err := servercfg.Load(def.Config); err == nil {
-			serverDoc.Plugins = base.Plugins
-			serverDoc.Server.BattleSpeed = base.Server.BattleSpeed
-		}
-	}
 	raw, err := json.MarshalIndent(serverDoc, "", "  ")
 	if err != nil {
 		_ = os.Remove(mapPath)
@@ -180,26 +174,21 @@ func (p *Proxy) enableMapLocked(id string) error {
 
 // MapServerInfo is the admin view of a map's server.json + registry flags.
 type MapServerInfo struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name"`
-	Enabled       bool     `json:"enabled"`
-	Running       bool     `json:"running"`
-	Default       bool     `json:"default"`
-	ConfigPath    string   `json:"config_path"`
-	Overworld     string   `json:"overworld"`
-	Addr          string   `json:"addr"`
-	BattleSpeed   float64  `json:"battle_speed"`
-	Combat        string   `json:"combat"`
-	CombatOptions []string `json:"combat_options"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Enabled    bool   `json:"enabled"`
+	Running    bool   `json:"running"`
+	Default    bool   `json:"default"`
+	ConfigPath string `json:"config_path"`
+	Overworld  string `json:"overworld"`
+	Addr       string `json:"addr"`
 }
 
 // MapServerUpdate is the admin PUT body for map server options.
 type MapServerUpdate struct {
-	Enabled     *bool    `json:"enabled"`
-	Name        *string  `json:"name"`
-	Addr        *string  `json:"addr"`
-	BattleSpeed *float64 `json:"battle_speed"`
-	Combat      *string  `json:"combat"`
+	Enabled *bool   `json:"enabled"`
+	Name    *string `json:"name"`
+	Addr    *string `json:"addr"`
 }
 
 func (p *Proxy) MapServerInfo(id string) (MapServerInfo, error) {
@@ -218,17 +207,14 @@ func (p *Proxy) mapServerInfo(spec cluster.MapSpec) (MapServerInfo, error) {
 		return MapServerInfo{}, err
 	}
 	return MapServerInfo{
-		ID:            spec.ID,
-		Name:          spec.Name,
-		Enabled:       spec.IsEnabled(),
-		Running:       p.mapRunning(spec.ID),
-		Default:       spec.Default,
-		ConfigPath:    filepath.ToSlash(spec.Config),
-		Overworld:     cfg.Server.Overworld,
-		Addr:          cfg.Server.Addr,
-		BattleSpeed:   cfg.Server.BattleSpeed,
-		Combat:        cfg.Plugins.Combat,
-		CombatOptions: []string{"combat.realtime", "combat.ordo"},
+		ID:         spec.ID,
+		Name:       spec.Name,
+		Enabled:    spec.IsEnabled(),
+		Running:    p.mapRunning(spec.ID),
+		Default:    spec.Default,
+		ConfigPath: filepath.ToSlash(spec.Config),
+		Overworld:  cfg.Server.Overworld,
+		Addr:       cfg.Server.Addr,
 	}, nil
 }
 
@@ -264,24 +250,6 @@ func (p *Proxy) UpdateMapServer(id string, patch MapServerUpdate) (MapServerInfo
 		addr := strings.TrimSpace(*patch.Addr)
 		if addr != cfg.Server.Addr {
 			cfg.Server.Addr = addr
-			restart = true
-		}
-	}
-	if patch.BattleSpeed != nil {
-		if *patch.BattleSpeed <= 0 {
-			return MapServerInfo{}, fmt.Errorf("battle_speed must be > 0")
-		}
-		if *patch.BattleSpeed != cfg.Server.BattleSpeed {
-			cfg.SetBattleSpeed(*patch.BattleSpeed)
-			restart = true
-		}
-	}
-	if patch.Combat != nil {
-		combat := strings.TrimSpace(*patch.Combat)
-		if combat != cfg.Plugins.Combat {
-			if err := cfg.SetCombat(combat); err != nil {
-				return MapServerInfo{}, err
-			}
 			restart = true
 		}
 	}

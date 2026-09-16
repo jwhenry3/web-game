@@ -50,8 +50,13 @@ func TestDefeatRespawnsAtSavePoint(t *testing.T) {
 
 func TestDefeatWithoutSavePointUsesDefaultSpawn(t *testing.T) {
 	h, c, wp := testHubWithPlayer(t, 500, 500)
+	if len(game.SavePoints) == 0 {
+		t.Fatal("expected save points")
+	}
 	h.respawnAtSavePoint(c.ID)
-	if dist(wp.X, wp.Y, game.DefaultSpawnX, game.DefaultSpawnY) > 1 {
+	// Unattuned defeat respawns at the map's first save point (haven crystal).
+	wantX, wantY := game.SpawnPosition(game.SavePoints[0].ID)
+	if dist(wp.X, wp.Y, wantX, wantY) > 1 {
 		t.Fatalf("default respawn expected haven spawn, got %f,%f", wp.X, wp.Y)
 	}
 }

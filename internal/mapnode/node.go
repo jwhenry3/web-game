@@ -34,7 +34,7 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 	if err != nil {
 		return nil, err
 	}
-	hub, err := server.NewHub(profiles, accounts, nil, cfg.Server.BattleSpeed, cfg.Plugins)
+	hub, err := server.NewHub(profiles, accounts, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 		}
 	}
 	go hub.Run()
-	log.Printf("map %s (%s) overworld %s combat %s", spec.ID, spec.Name, ow.Path, cfg.Plugins.Combat)
+	log.Printf("map %s (%s) overworld %s", spec.ID, spec.Name, ow.Path)
 	return n, nil
 }
 
@@ -130,8 +130,8 @@ func (n *Node) SessionIDs() []string {
 	return out
 }
 
-// StatusCounts returns online players, active battles, and combat plugin for this map.
-func (n *Node) StatusCounts() (players, battles int, combat string) {
+// StatusCounts returns online players and engaged-foe counts for this map.
+func (n *Node) StatusCounts() (players, engaged int) {
 	return n.Hub.StatusCounts()
 }
 

@@ -12,7 +12,7 @@ var knownKeybindActions map[string]bool
 func init() {
 	knownKeybindActions = map[string]bool{
 		"move_up": true, "move_down": true, "move_left": true, "move_right": true,
-		"interact": true,
+		"interact": true, "dodge": true,
 		"window:character": true, "window:equipment": true, "window:inventory": true,
 		"window:skills": true, "window:social": true, "window:map": true,
 	}
@@ -28,6 +28,7 @@ func DefaultKeybinds() map[string]string {
 		"move_left":        "a",
 		"move_right":       "d",
 		"interact":         "Space",
+		"dodge":            "Shift",
 		"window:character": "c",
 		"window:equipment": "e",
 		"window:inventory": "i",

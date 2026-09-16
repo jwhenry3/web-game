@@ -21,12 +21,6 @@ type partyInvite struct {
 	PartyID  string // empty until party exists; filled when inviter already leads one
 }
 
-type battleInvite struct {
-	BattleID string
-	FromID   string
-	FromName string
-}
-
 func (h *Hub) initSocial() {
 	if h.parties == nil {
 		h.parties = map[string]*hubParty{}
@@ -36,12 +30,6 @@ func (h *Hub) initSocial() {
 	}
 	if h.partyInvites == nil {
 		h.partyInvites = map[string]*partyInvite{}
-	}
-	if h.battleInvites == nil {
-		h.battleInvites = map[string]*battleInvite{}
-	}
-	if h.battleMeta == nil {
-		h.battleMeta = map[string]*battleMeta{}
 	}
 }
 
@@ -71,7 +59,7 @@ func (h *Hub) buildFriendList(profile store.Profile) []protocol.FriendInfo {
 			fi.Online = true
 			fi.Level = wp.Level
 			fi.Weapon = wp.Weapon
-			fi.InBattle = wp.InBattle
+			fi.InCombat = wp.InCombat
 		}
 		out = append(out, fi)
 	}
@@ -90,7 +78,7 @@ func (h *Hub) buildPartyInfo(party *hubParty) *protocol.PartyInfo {
 		}
 		members = append(members, protocol.PartyMember{
 			ID: wp.ID, Name: wp.Name, Level: wp.Level, Weapon: wp.Weapon,
-			Leader: id == party.LeaderID, InBattle: wp.InBattle,
+			Leader: id == party.LeaderID, InCombat: wp.InCombat,
 		})
 	}
 	return &protocol.PartyInfo{
@@ -445,115 +433,11 @@ func (h *Hub) removeFromParty(clientID string, kicked bool) {
 
 func (h *Hub) onClientDisconnectSocial(clientID string) {
 	delete(h.partyInvites, clientID)
-	delete(h.battleInvites, clientID)
 	h.removeFromParty(clientID, false)
-}
-
-func (h *Hub) handleDeclineBattleInvite(c *Client) {
-	delete(h.battleInvites, c.ID)
 }
 
 func (h *Hub) sameParty(aID, bID string) bool {
 	pa, oka := h.clientParty[aID]
 	pb, okb := h.clientParty[bID]
 	return oka && okb && pa != "" && pa == pb
-}
-
-func (h *Hub) battleParticipantCount(battleID string) int {
-	n := 0
-	for _, wp := range h.world {
-		if wp.InBattle && wp.BattleID == battleID {
-			n++
-		}
-	}
-	return n
-}
-
-// engagePartyMemberAt joins an in-progress battle when a party mate walks
-// into a combat-locked member on the overworld.
-func (h *Hub) engagePartyMemberAt(c *Client, wp *protocol.WorldPlayer, x, y float64) bool {
-	if wp.InBattle || wp.InHouse {
-		return false
-	}
-	partyID, ok := h.clientParty[c.ID]
-	if !ok || partyID == "" {
-		return false
-	}
-	party := h.parties[partyID]
-	if party == nil {
-		return false
-	}
-	for _, memberID := range party.MemberIDs {
-		if memberID == c.ID {
-			continue
-		}
-		ally := h.world[memberID]
-		if ally == nil || !ally.InBattle || ally.BattleID == "" {
-			continue
-		}
-		if !withinEngageRange(x, y, ally.X, ally.Y) {
-			continue
-		}
-		if h.ParticipantCount(ally.BattleID) >= maxPartySize {
-			continue
-		}
-		if err := h.combat.Join(c.ID, ally.BattleID); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// promptPartyForBattle asks nearby party mates to opt into a fight. Anyone
-// in range who skips still earns passive EXP if the party wins.
-func (h *Hub) promptPartyForBattle(triggerID string, battleID string, x, y float64) {
-	partyID, ok := h.clientParty[triggerID]
-	if !ok {
-		return
-	}
-	party := h.parties[partyID]
-	if party == nil {
-		return
-	}
-
-	meta := &battleMeta{partyID: partyID, passiveEligible: map[string]string{}}
-	h.battleMeta[battleID] = meta
-
-	participants := 0
-	for _, wp := range h.world {
-		if wp.InBattle && wp.BattleID == battleID {
-			participants++
-		}
-	}
-
-	for _, memberID := range party.MemberIDs {
-		if memberID == triggerID {
-			continue
-		}
-		wp := h.world[memberID]
-		if wp == nil || wp.InBattle || wp.InHouse || battleImmune(wp) {
-			continue
-		}
-		if dist(wp.X, wp.Y, x, y) > partyBattleRange {
-			continue
-		}
-
-		h.mu.RLock()
-		mc := h.clients[memberID]
-		h.mu.RUnlock()
-		if mc == nil {
-			continue
-		}
-		meta.passiveEligible[memberID] = mc.Name
-
-		if participants >= maxPartySize || h.battleInvites[memberID] != nil {
-			continue
-		}
-		h.battleInvites[memberID] = &battleInvite{
-			BattleID: battleID, FromID: triggerID, FromName: h.world[triggerID].Name,
-		}
-		h.send(mc, protocol.TypeBattleInviteMsg, protocol.BattleInvitePayload{
-			BattleID: battleID, FromID: triggerID, FromName: h.world[triggerID].Name,
-		})
-	}
 }

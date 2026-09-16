@@ -107,17 +107,12 @@ export interface MapServerInfo {
   config_path: string;
   overworld: string;
   addr: string;
-  battle_speed: number;
-  combat: string;
-  combat_options: string[];
 }
 
 export type MapServerUpdate = {
   enabled?: boolean;
   name?: string;
   addr?: string;
-  battle_speed?: number;
-  combat?: string;
 };
 
 export async function fetchMapServerConfig(id: string): Promise<MapServerInfo> {

@@ -20,7 +20,7 @@ import { GameIcon } from "../ui/GameIcon";
 import { ICONS } from "../ui/icons";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { SkillTooltipContent } from "../ui/tooltipContent";
-import { writeHotbarDrag } from "../ui/hotbarDrag";
+import { readHotbarDrag, writeHotbarDrag } from "../ui/hotbarDrag";
 import {
   hasItemTransfer,
   readItemTransfer,
@@ -211,7 +211,7 @@ function BagPane({
 }) {
   const locked = useGame((s) => {
     const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_battle ?? s.screen === "battle";
+    return self?.in_combat ?? false;
   });
   const [tab, setTab] = useState<ItemBagTab>("all");
   const [focus, setFocus] = useState<Item | null>(null);
@@ -405,7 +405,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   const selfId = useGame((s) => s.selfId);
   const locked = useGame((s) => {
     const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_battle ?? s.screen === "battle";
+    return self?.in_combat ?? false;
   });
   const byId = new Map(profile.inventory.map((i) => [i.id, i]));
   const [focus, setFocus] = useState<Item | null>(null);
@@ -557,16 +557,17 @@ function layoutSkillTree(skills: SkillInfo[]): TreePos[] {
 function SkillsPane({ profile }: { profile: ProfileInfo }) {
   const locked = useGame((s) => {
     const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_battle ?? s.screen === "battle";
+    return self?.in_combat ?? false;
   });
   const [tab, setTab] = useState<ActionTab>("general");
   const [focusId, setFocusId] = useState<string | null>(null);
+  const drag = useGame((s) => s.hotbarDrag);
   const byId = new Map(profile.skills.map((s) => [s.id, s]));
   const tabs = jobTabs(profile);
   const activeJob = tab === "general" ? null : tab;
   const tree = activeJob
     ? profile.skills.filter((s) => s.job === activeJob)
-    : profile.skills.filter((s) => s.id === "attack" || s.id === "capture" || s.world_only);
+    : profile.skills.filter((s) => s.id === "attack" || s.id === "capture" || s.id === "dodge" || s.world_only);
   const layout = useMemo(() => layoutSkillTree(tree), [tree]);
   const focus = (focusId && byId.get(focusId)) || tree[0];
 
@@ -597,19 +598,9 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <p className="hint">
         {tab === "general"
-          ? "Field skills (Return, Port, Camp) go on the Overworld bar; Attack, Capture, and job skills go on the Battle bar. Drag a skill onto its hotbar."
-          : "Skills unlock as your jobs level up. Battle skills go on the Battle hotbar — use them in battle to raise skill level."}
+          ? "Drag a skill onto the hotbar — drag a slot off the bar (or right-click it) to remove it. Dodge is bound to Shift while moving, not a hotbar slot."
+          : "Skills unlock as your jobs level up. Drag them onto the hotbar — use them in combat to raise skill level."}
       </p>
-      <div className="cm-hotbar-assign">
-        <div className="hotbar-set">
-          <div className="hotbar-set-label">Overworld</div>
-          <HotbarBar bar="world" embedded />
-        </div>
-        <div className="hotbar-set">
-          <div className="hotbar-set-label">Battle</div>
-          <HotbarBar bar="battle" embedded />
-        </div>
-      </div>
       <div className="cm-tree" style={{ width, height }}>
         <svg className="cm-tree-links" width={width} height={height}>
           {tree.map((sk) => {
@@ -646,6 +637,24 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
         })}
       </div>
       {focus && <SkillDetail sk={focus} byId={byId} locked={locked} />}
+      <div
+        className={`cm-hotbar-assign ${drag?.slot ? "cm-hotbar-assign--unbind" : ""}`}
+        onDragOver={(e) => {
+          // Bound-slot drags can be dropped anywhere in this area to unbind.
+          if (!drag?.slot) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(e) => {
+          const payload = readHotbarDrag(e);
+          if (!payload?.slot) return;
+          e.preventDefault();
+          useGame.setState({ hotbarDrag: null });
+          net.clearHotbar(payload.slot);
+        }}
+      >
+        <HotbarBar embedded />
+      </div>
     </div>
   );
 }
@@ -728,10 +737,10 @@ function SkillDetail({
       <div className="cm-detail-meta">
         {sk.world_only
           ? "Field skill · 0 MP"
-          : sk.id === "attack"
+          : sk.id === "attack" || sk.id === "dodge"
             ? "0 MP · uses GCD"
             : `${sk.mp_cost} MP${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
-        {!sk.world_only && sk.id !== "attack" && (
+        {!sk.world_only && sk.id !== "attack" && sk.id !== "dodge" && (
           <>
             {" "}
             · Lv {sk.unlocked ? sk.level : 0}/{sk.max_level}
@@ -746,7 +755,7 @@ function SkillDetail({
       <div className="cm-detail-actions">
         {sk.world_only && sk.unlocked ? (
           <>
-            <span className="dim">Drag onto the Overworld bar or use now in the field.</span>
+            <span className="dim">Drag onto the hotbar or use now in the field.</span>
             <button
               type="button"
               className="cm-btn gold"
@@ -770,9 +779,9 @@ function SkillDetail({
         ) : !sk.unlocked ? (
           <span className="dim">Level your job to unlock this action.</span>
         ) : atMax ? (
-          <span className="dim">Max level. Drag onto the Battle bar.</span>
+          <span className="dim">Max level. Drag onto the hotbar.</span>
         ) : (
-          <span className="dim">{locked ? "Train through battle use." : "Use in battle to level up."}</span>
+          <span className="dim">{locked ? "Train through combat use." : "Use in combat to level up."}</span>
         )}
       </div>
     </div>

@@ -3,45 +3,62 @@ package server
 import (
 	"log"
 	"math"
+	"math/rand"
 	"time"
 
 	"clara-mundi/internal/game"
-	"clara-mundi/internal/plugins/contracts"
 	"clara-mundi/internal/protocol"
 )
 
-// Overworld foes are owned by the hub. Clients may predict motion, but only
-// this process decides when a collision becomes a battle.
+// Overworld foes are owned by the hub: they wander, get engaged in place by
+// proximity or player attacks, chase, and despawn on death until respawn.
 const (
 	npcCount    = 12
-	npcRadius   = 22.0
 	npcTickSec  = 0.25
 	maxMoveStep = 80.0 // ~240 px/s plus slack; rejects teleports
 )
 
-func engageRangePx() float64 {
-	return npcRadius + game.PlayerCollisionHalfW
-}
-
 type worldNPC struct {
-	ID       string
-	Name     string
-	Kind     string
-	Level    int
-	X, Y     float64
-	InBattle bool
-	BattleID string
+	ID    string
+	Name  string
+	Kind  string
+	Level int
+	X, Y  float64
 
-	patrol      game.Patrol
-	region      game.Region
-	path        []game.Vec2
-	pathI       int
-	idleUntil   time.Time
-	wanderStep  int
+	// Combat state (overworld realtime combat).
+	Engaged      bool
+	hp, maxHP    int
+	targetID     string
+	attackCD     time.Time
+	statuses     []game.ActiveStatus
+	contributors map[string]int // clientID -> damage dealt
+	avoidSide    float64        // -1 or +1, stable detour around pack-mates
+	statusTick   int
+	dropPoolID   string
+	capturable   bool
+
+	patrol     game.Patrol
+	region     game.Region
+	path       []game.Vec2
+	pathI      int
+	idleUntil  time.Time
+	wanderStep int
+
+	// Chase pathfinding: A* waypoints when straight-line pursuit hits terrain.
+	chasePath []game.Vec2
+	chaseI    int
+	chaseGoal game.Tile
+	repathAt  time.Time
+
+	// Leash anchor: where the NPC stood when combat began. Wandering ranges
+	// region-wide, so distance to patrol.Home says nothing about the fight —
+	// the leash measures how far the battle was dragged from its origin.
+	leashX, leashY float64
+	leashSet       bool
 
 	ow *game.Overworld
 
-	// Hidden from the world while fighting or waiting on SpawnWindows.
+	// Hidden from the world while dead and waiting on respawn.
 	despawned bool
 	respawnAt time.Time
 }
@@ -54,15 +71,31 @@ func dist(ax, ay, bx, by float64) float64 {
 	return math.Hypot(ax-bx, ay-by)
 }
 
-func withinEngageRange(ax, ay, bx, by float64) bool {
-	return dist(ax, ay, bx, by) <= engageRangePx()
-}
-
 func (n *worldNPC) snapshot() protocol.WorldNPC {
 	return protocol.WorldNPC{
 		ID: n.ID, Name: n.Name, Kind: n.Kind, Level: n.Level,
-		X: n.X, Y: n.Y, InBattle: n.InBattle, BattleID: n.BattleID,
+		X: n.X, Y: n.Y, Engaged: n.Engaged,
+		HP: n.hp, MaxHP: n.maxHP, TargetID: n.targetID,
 	}
+}
+
+// npcCombatProfile derives the world NPC's identity from the patrol's
+// encounter config. The encounter is the combat definition ("battle npc"
+// concept): it decides kind, level, drop pool, and capturability. The
+// patrol's own kind/level are only fallbacks for encounters that omit them.
+// Rolls are seeded by patrol ID so a spawn is deterministic across reseeds.
+func npcCombatProfile(p game.Patrol) (kind string, level, maxHP int, dropPoolID string, capturable bool) {
+	enc := game.NormalizeEncounter(p.Encounter, p.Kind, p.Level)
+	rng := rand.New(rand.NewSource(game.SeedFromID(p.ID)))
+	entry := enc.PickEnemy(rng)
+	kind = entry.Kind
+	level = entry.RollLevel(rng)
+	base := enemyTemplates[kind]
+	if base == 0 {
+		base = enemyTemplates["goblin"]
+	}
+	maxHP = int(float64(base) * (1.0 + float64(level-1)*0.15))
+	return kind, level, maxHP, entry.DropPoolID, entry.Capturable
 }
 
 func (h *Hub) seedNPCs(count int) {
@@ -84,41 +117,86 @@ func (h *Hub) seedNPCs(count int) {
 		} else {
 			reg, _ = game.RegionByID(p.Region)
 		}
+		p.Home = h.nudgePatrolHome(p.Home, reg)
 		start := game.TileCenter(p.Home)
+		kind, level, maxHP, dropPoolID, capturable := npcCombatProfile(p)
 		n := &worldNPC{
-			ID:     p.ID,
-			Name:   p.Name,
-			Kind:   p.Kind,
-			Level:  p.Level,
-			X:      start.X,
-			Y:      start.Y,
-			patrol: p,
-			region: reg,
-			ow:     h.overworld,
+			ID:         p.ID,
+			Name:       p.Name,
+			Kind:       kind,
+			Level:      level,
+			X:          start.X,
+			Y:          start.Y,
+			hp:         maxHP,
+			maxHP:      maxHP,
+			dropPoolID: dropPoolID,
+			capturable: capturable,
+			patrol:     p,
+			region:     reg,
+			ow:         h.overworld,
 		}
 		n.beginWander()
 		h.npcs[n.ID] = n
 	}
 }
 
-// reseedNPCsPreservingBattles rebuilds overworld foes from the current map
-// config while keeping any NPCs that are mid-battle.
-func (h *Hub) reseedNPCsPreservingBattles(count int) {
+// nudgePatrolHome relocates a patrol home that sits on a wall or sanctuary
+// tile (hand-authored or older generated maps) to the nearest NPC-walkable
+// tile inside its region, so the foe can actually spawn and be engaged.
+func (h *Hub) nudgePatrolHome(home game.Tile, reg game.Region) game.Tile {
+	ow := h.overworld
+	if ow == nil || ow.NPCWalkableTile(home.C, home.R) {
+		return home
+	}
+	for radius := 1; radius <= 24; radius++ {
+		for dr := -radius; dr <= radius; dr++ {
+			for dc := -radius; dc <= radius; dc++ {
+				if max(absInt(dr), absInt(dc)) != radius {
+					continue
+				}
+				c, r := home.C+dc, home.R+dr
+				if !ow.NPCWalkableTile(c, r) {
+					continue
+				}
+				if reg.ID != "" && !reg.Contains(c, r) {
+					continue
+				}
+				log.Printf("npc %s patrol home (%d,%d) unwalkable; moved to (%d,%d)", reg.ID, home.C, home.R, c, r)
+				return game.Tile{C: c, R: r}
+			}
+		}
+	}
+	return home
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+// reseedNPCsPreservingCombat rebuilds overworld foes from the current map
+// config while keeping NPCs that are mid-fight (position/hp/aggro preserved).
+func (h *Hub) reseedNPCsPreservingCombat(count int) {
 	prev := h.npcs
 	h.seedNPCs(count)
 	for id, n := range h.npcs {
 		old, ok := prev[id]
-		if !ok || !old.InBattle {
+		if !ok || !old.Engaged {
 			continue
 		}
-		n.InBattle = true
-		n.BattleID = old.BattleID
+		n.Engaged = true
+		n.targetID = old.targetID
+		n.contributors = old.contributors
+		n.hp = old.hp
+		n.X, n.Y = old.X, old.Y
+		n.leashX, n.leashY, n.leashSet = old.leashX, old.leashY, old.leashSet
 		n.despawned = old.despawned
 		n.respawnAt = old.respawnAt
-		n.X, n.Y = old.X, old.Y
 	}
 	for id, old := range prev {
-		if !old.InBattle {
+		if !old.Engaged && !old.despawned {
 			continue
 		}
 		if _, ok := h.npcs[id]; ok {
@@ -252,33 +330,16 @@ func (h *Hub) tickNPCs() {
 			}
 			continue
 		}
-		if n.InBattle {
-			continue
+		if n.Engaged {
+			continue // combat tick drives engaged NPCs
 		}
 		if n.step(step) {
 			changed = true
 		}
 	}
+	h.checkProximityAggro()
 	if changed {
-		h.checkNPCPlayerCollisions()
 		h.broadcastNPCs()
-	}
-}
-
-func (h *Hub) checkNPCPlayerCollisions() {
-	for _, wp := range h.world {
-		if wp.InBattle || wp.InHouse {
-			continue
-		}
-		h.mu.RLock()
-		c := h.clients[wp.ID]
-		h.mu.RUnlock()
-		if c == nil || !c.Joined {
-			continue
-		}
-		if h.engageFirstNPCAt(c, wp, wp.X, wp.Y) {
-			return
-		}
 	}
 }
 
@@ -290,14 +351,20 @@ func (h *Hub) worldSize() (w, hgt float64) {
 }
 
 func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
+	return h.clampMoveStep(fromX, fromY, toX, toY, maxMoveStep)
+}
+
+// clampMoveStep bounds one move report to maxStep pixels; the dodge dash gets
+// a larger step right after a dodge so the dash isn't read as a teleport.
+func (h *Hub) clampMoveStep(fromX, fromY, toX, toY, maxStep float64) (float64, float64) {
 	worldW, worldH := h.worldSize()
 	toX = clamp(toX, game.PlayerCollisionHalfW, worldW-game.PlayerCollisionHalfW)
 	toY = clamp(toY, game.PlayerCollisionHalfH, worldH)
 	dx, dy := toX-fromX, toY-fromY
 	d := math.Hypot(dx, dy)
-	if d > maxMoveStep {
-		toX = fromX + dx/d*maxMoveStep
-		toY = fromY + dy/d*maxMoveStep
+	if d > maxStep {
+		toX = fromX + dx/d*maxStep
+		toY = fromY + dy/d*maxStep
 	}
 	if h.overworld != nil {
 		return h.overworld.SlideMovePlayer(fromX, fromY, toX, toY)
@@ -305,58 +372,13 @@ func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
 	return game.SlideMovePlayer(fromX, fromY, toX, toY)
 }
 
-// engageFirstNPCAt starts a battle if an idle NPC sits on (x,y). The
-// player's requested point is ignored: only the hub's coordinates count.
+// battleImmune blocks aggro briefly after join/respawn/transfer.
 func battleImmune(wp *protocol.WorldPlayer) bool {
 	return wp != nil && wp.ImmuneUntil > time.Now().UnixMilli()
 }
 
-func (h *Hub) engageFirstNPCAt(c *Client, wp *protocol.WorldPlayer, x, y float64) bool {
-	if wp.InBattle || wp.InHouse || battleImmune(wp) {
-		return false
-	}
-	if h.overworld != nil && h.overworld.SanctuaryAtWorld(x, y) {
-		return false
-	}
-	for _, n := range h.npcs {
-		if !n.onWorld() || n.InBattle {
-			continue
-		}
-		if withinEngageRange(x, y, n.X, n.Y) {
-			h.startBattleFromNPC(c, wp, n)
-			return true
-		}
-	}
-	return false
-}
-
-func (h *Hub) startBattleFromNPC(c *Client, wp *protocol.WorldPlayer, n *worldNPC) {
-	snap := contracts.NPCSnapshot{
-		ID: n.ID, Name: n.Name, Kind: n.Kind, Level: n.Level, X: n.X, Y: n.Y,
-		Encounter: game.NormalizeEncounter(n.patrol.Encounter, n.Kind, n.Level),
-	}
-	battleID, ok := h.combat.StartFromNPC(c.ID, wp, snap)
-	if !ok {
-		return
-	}
-	n.InBattle = true
-	n.BattleID = battleID
-	n.despawn()
-	h.broadcastNPCs()
-	log.Printf("%s collided with %s and started %s (lv %d)", c.Name, n.Name, battleID, n.Level)
-}
-
-func (n *worldNPC) despawn() {
-	n.despawned = true
-	n.respawnAt = time.Time{}
-}
-
-func (n *worldNPC) placeHome() {
-	n.beginWander()
-}
-
 func (h *Hub) maybeRespawn(n *worldNPC) bool {
-	if n == nil || !n.despawned || n.InBattle || n.respawnAt.IsZero() {
+	if n == nil || !n.despawned || n.Engaged || n.respawnAt.IsZero() {
 		return false
 	}
 	if time.Now().Before(n.respawnAt) {
@@ -364,24 +386,11 @@ func (h *Hub) maybeRespawn(n *worldNPC) bool {
 	}
 	n.despawned = false
 	n.respawnAt = time.Time{}
-	n.placeHome()
+	n.hp = n.maxHP
+	n.contributors = nil
+	n.statuses = nil
+	n.targetID = ""
+	n.beginWander()
 	log.Printf("%s respawned in %s", n.Name, n.region.ID)
 	return true
-}
-
-func (h *Hub) releaseNPCs(battleID string) {
-	changed := false
-	for _, n := range h.npcs {
-		if n.BattleID != battleID {
-			continue
-		}
-		n.InBattle = false
-		n.BattleID = ""
-		n.despawned = true
-		n.respawnAt = time.Now().Add(game.RespawnDelay(n.Kind, n.ID))
-		changed = true
-	}
-	if changed {
-		h.broadcastNPCs()
-	}
 }

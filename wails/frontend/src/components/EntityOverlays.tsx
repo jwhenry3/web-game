@@ -7,6 +7,7 @@ import {
   type PoiLabelMark,
   type WorldOverlayFrame,
 } from "../world/entityOverlayBridge";
+import { StatusIcons } from "../ui/StatusIcons";
 
 function useWorldOverlays(): WorldOverlayFrame {
   return useSyncExternalStore(subscribeEntityOverlays, getWorldOverlays, getWorldOverlays);
@@ -34,6 +35,28 @@ function EntityCastBar({ mark }: { mark: EntityOverlayMark }) {
           style={{ width: `${pct * 100}%` }}
         />
       </div>
+    </div>
+  );
+}
+
+/** Compact combat HP bar under the nameplate for engaged/damaged entities. */
+function EntityHpBar({ mark }: { mark: EntityOverlayMark }) {
+  if (!mark.hp || mark.hp.max <= 0) return null;
+  const ratio = Math.max(0, Math.min(1, mark.hp.value / mark.hp.max));
+  const color = ratio > 0.5 ? "#3dcc6e" : ratio > 0.25 ? "#facc15" : "#ef4444";
+  return (
+    <div className="cm-entity-hp" style={{ left: mark.nameX, top: mark.nameY + 9 }}>
+      <div className="cm-entity-hp-fill" style={{ width: `${ratio * 100}%`, background: color }} />
+    </div>
+  );
+}
+
+/** Status icon chips under the nameplate (below the HP bar when present). */
+function EntityStatuses({ mark }: { mark: EntityOverlayMark }) {
+  if (!mark.statuses?.length) return null;
+  return (
+    <div className="cm-entity-statuses" style={{ left: mark.nameX, top: mark.nameY + (mark.hp ? 17 : 9) }}>
+      <StatusIcons statuses={mark.statuses} className="status-icons--compact" />
     </div>
   );
 }
@@ -71,6 +94,12 @@ export function EntityOverlays() {
       ))}
       {entities.map((mark) =>
         mark.castPct != null ? <EntityCastBar key={`cast-${mark.id}`} mark={mark} /> : null,
+      )}
+      {entities.map((mark) =>
+        mark.hp ? <EntityHpBar key={`hp-${mark.id}`} mark={mark} /> : null,
+      )}
+      {entities.map((mark) =>
+        mark.statuses?.length ? <EntityStatuses key={`st-${mark.id}`} mark={mark} /> : null,
       )}
       {interacts.map((mark) => (
         <InteractPrompt key={`ix-${mark.id}`} mark={mark} />

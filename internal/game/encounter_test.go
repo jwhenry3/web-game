@@ -7,9 +7,6 @@ import (
 
 func TestParseEncounterJSONDefaults(t *testing.T) {
 	cfg := ParseEncounterJSON("", "dire_wolf", 5)
-	if cfg.MinEnemies != 2 || cfg.MaxEnemies != 3 {
-		t.Fatalf("counts = %d-%d", cfg.MinEnemies, cfg.MaxEnemies)
-	}
 	if len(cfg.Enemies) != 1 || cfg.Enemies[0].Kind != "dire_wolf" {
 		t.Fatalf("enemies = %+v", cfg.Enemies)
 	}
@@ -19,35 +16,13 @@ func TestParseEncounterJSONDefaults(t *testing.T) {
 }
 
 func TestParseEncounterJSONValid(t *testing.T) {
-	raw := `{"minEnemies":1,"maxEnemies":4,"enemies":[{"kind":"goblin","levelMin":2,"levelMax":4,"dropPoolId":"pool_goblin"}]}`
+	raw := `{"enemies":[{"kind":"goblin","levelMin":2,"levelMax":4,"dropPoolId":"pool_goblin"}]}`
 	cfg := ParseEncounterJSON(raw, "stone_imp", 1)
-	if cfg.MinEnemies != 1 || cfg.MaxEnemies != 4 {
-		t.Fatalf("counts = %d-%d", cfg.MinEnemies, cfg.MaxEnemies)
-	}
 	if len(cfg.Enemies) != 1 || cfg.Enemies[0].DropPoolID != "pool_goblin" {
 		t.Fatalf("enemies = %+v", cfg.Enemies)
 	}
-}
-
-func TestRollEnemyCountBounds(t *testing.T) {
-	cfg := EncounterConfig{MinEnemies: 2, MaxEnemies: 2, Enemies: []EncounterEnemy{{Kind: "goblin", LevelMin: 1, LevelMax: 1}}}
-	rng := rand.New(rand.NewSource(1))
-	for i := 0; i < 20; i++ {
-		if n := cfg.RollEnemyCount(rng); n != 2 {
-			t.Fatalf("got %d", n)
-		}
-	}
-	cfg.MaxEnemies = 4
-	seen := map[int]bool{}
-	for i := 0; i < 100; i++ {
-		n := cfg.RollEnemyCount(rng)
-		if n < 2 || n > 4 {
-			t.Fatalf("out of range %d", n)
-		}
-		seen[n] = true
-	}
-	if len(seen) < 2 {
-		t.Fatalf("expected variety, got %v", seen)
+	if cfg.Enemies[0].LevelMin != 2 || cfg.Enemies[0].LevelMax != 4 {
+		t.Fatalf("levels = %+v", cfg.Enemies[0])
 	}
 }
 

@@ -39,7 +39,6 @@ type StatusMapEntry struct {
 	Running bool   `json:"running"`
 	Players int    `json:"players"`
 	Battles int    `json:"battles"`
-	Combat  string `json:"combat,omitempty"`
 }
 
 // StatusSnapshot is the public cluster status payload (no player identities).
@@ -92,10 +91,9 @@ func (p *Proxy) buildStatusSnapshot() StatusSnapshot {
 			Running: nodes[spec.ID] != nil,
 		}
 		if n := nodes[spec.ID]; n != nil {
-			players, battles, combat := n.StatusCounts()
+			players, battles := n.StatusCounts()
 			entry.Players = players
 			entry.Battles = battles
-			entry.Combat = combat
 			out.Players += players
 			out.Battles += battles
 		}

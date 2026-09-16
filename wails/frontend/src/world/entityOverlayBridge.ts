@@ -1,5 +1,7 @@
 /** Screen-space overlays published by the active renderer (Three.js / legacy Phaser) for React HUD. */
 
+import type { StatusSnapshot } from "../types";
+
 export type EntityOverlayVariant = "self" | "player" | "enemy";
 
 export type PoiLabelVariant =
@@ -26,6 +28,10 @@ export interface EntityOverlayMark {
   castY: number;
   /** 0–1 while casting; omit when idle. */
   castPct?: number;
+  /** Compact HP bar for engaged/damaged combatants; omit when full/idle. */
+  hp?: { value: number; max: number };
+  /** Live status effects — rendered as icon chips under the nameplate. */
+  statuses?: StatusSnapshot[];
 }
 
 export interface PoiLabelMark {
