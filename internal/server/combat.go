@@ -15,13 +15,24 @@ import (
 // entity core (entity.go); snapshots/events are broadcast per-client on an
 // area-of-interest radius instead of map-wide.
 const (
-	combatTickInterval = 50 * time.Millisecond
+	combatTickInterval   = 50 * time.Millisecond
+	resourceSyncInterval = time.Second
 
 	aggroRadius   = 110.0 // proximity pull: walking this close to a foe starts combat
 	assistRadius  = 150.0 // nearby hostile NPCs join a fight their ally is in
 	leashRadius   = 380.0 // from fight origin; beyond → reset and walk home
 	dropRange     = 460.0 // target this far from the NPC → it gives up
 	combatAoIDist = 900.0 // combat ticks/events reach clients within this of a fight
+
+	// Enmity: every offensive action credits enmityActionBase + damage dealt
+	// on its target; self/ally actions splash enmityAllyBase (+ half any
+	// amount healed) onto every engaged enemy. An NPC switches victims only
+	// when a challenger exceeds the current target's enmity by the margin —
+	// keeps aggro from flapping on every tick.
+	enmityActionBase   = 10
+	enmityAllyBase     = 40
+	enmityEngagePull   = 10 // seed on the puller when a fight starts
+	enmitySwitchMargin = 1.3
 
 	enemySpeedWorld = 90.0
 	enemyAttackCDW  = 1200 * time.Millisecond
@@ -129,7 +140,7 @@ func (h *Hub) flushSkillUsage(e *entity) {
 
 // entitySync adapts a player entity to the wire WorldEntity for join/sync.
 func (h *Hub) entitySync(e *entity) protocol.WorldEntity {
-	return h.entitySnapshot(e, time.Now())
+	return h.projector.project(e, time.Now())
 }
 
 func (h *Hub) sendPlayerSync(e *entity) {
@@ -367,9 +378,9 @@ func (h *Hub) updateCombatFlags(now time.Time) {
 }
 
 func (h *Hub) fireLeaveCombat(e *entity) {
-	for _, p := range e.plugins {
-		if hk, ok := p.(leaveCombatHook); ok {
-			hk.OnLeaveCombat(h, e)
+	for _, system := range e.pipeline {
+		if hook, ok := system.(leaveCombatHook); ok {
+			hook.OnLeaveCombat(h, e)
 		}
 	}
 }
@@ -395,20 +406,20 @@ func (h *Hub) combatSnapshots(now time.Time) []protocol.WorldEntity {
 			if !engagedNPC(e) {
 				continue
 			}
-			out = append(out, h.entitySnapshot(e, now))
+			out = append(out, h.projector.project(e, now))
 		case kindPlayer:
 			if e.hidden || !h.playerActive(e, now) {
 				continue
 			}
 			activeOwners[e.ID] = true
-			out = append(out, h.entitySnapshot(e, now))
+			out = append(out, h.projector.project(e, now))
 		}
 	}
 	h.eachEntity(kindPet, func(e *entity) {
 		if e.hidden || !activeOwners[e.OwnerID] {
 			return
 		}
-		out = append(out, h.entitySnapshot(e, now))
+		out = append(out, h.projector.project(e, now))
 	})
 	return out
 }
@@ -710,12 +721,13 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 }
 
 // autoTarget keeps a valid current target, else picks the nearest attackable
-// entity on the whole map (legacy behaviour: no range limit for auto-target).
+// entity within drop range — the client only offers on-screen targets, so a
+// far-away fallback would target something the player can't see.
 func (h *Hub) autoTarget(e *entity) *entity {
 	if t := h.validTarget(e); t != nil {
 		return t
 	}
-	best := h.nearestAttackable(e, math.MaxFloat64)
+	best := h.nearestAttackable(e, dropRange)
 	if best != nil {
 		e.targetID = best.ID
 	}
@@ -731,6 +743,39 @@ func (h *Hub) skillHits(e, t *entity, skill game.Skill) bool {
 }
 
 const allySkillRangeW = game.AllySkillRange
+
+// splashEnmity credits threat on every engaged enemy that considers `e`
+// attackable — self/ally actions (cures, buffs, items) raise enmity with the
+// whole fight, not just one target.
+func (h *Hub) splashEnmity(e *entity, amount int) {
+	if e == nil || amount <= 0 {
+		return
+	}
+	h.eachEntity(kindNPC, func(n *entity) {
+		ng := npcEngageOf(n)
+		if ng == nil || !ng.engaged || !h.canAttack(n, e) {
+			return
+		}
+		h.addEnmity(n, e, amount)
+	})
+}
+
+// topEnmity returns the attackable entity holding the most threat on e's
+// enmity table, or nil when the table is empty or fully stale.
+func (h *Hub) topEnmity(e *entity) *entity {
+	var best *entity
+	bestV := 0
+	for id, v := range e.enmity {
+		t := h.ent(id)
+		if !h.canAttack(e, t) {
+			continue
+		}
+		if v > bestV || best == nil {
+			best, bestV = t, v
+		}
+	}
+	return best
+}
 
 // applySkillTo resolves an instant or finished-cast skill from caster onto
 // target — heals/buffs for ally skills, damage for enemy skills. The caster
@@ -752,12 +797,15 @@ func (h *Hub) applySkillTo(caster, target *entity, skill game.Skill, res protoco
 	amount := h.rollDamage(caster, skill)
 	amount = game.ModifyDamageDealt(caster.statuses, amount)
 	if ally {
+		healed := 0
 		if skill.Heals {
-			h.applyHeal(target, amount)
+			healed = h.applyHeal(target, amount)
 			res.Heal = amount
 		}
 		h.applyStatuses(caster, target, skill)
 		h.trackSkillUse(caster, skill)
+		// Helping your side raises threat with everything fighting it.
+		h.splashEnmity(caster, enmityAllyBase+healed/2)
 		res.Message = fmt.Sprintf("%s heals %s for %d", caster.Name, target.Name, amount)
 		h.sendCombatEvent(res, caster.X, caster.Y)
 		if target.Kind == kindPlayer {
@@ -879,6 +927,7 @@ func (h *Hub) resolveItemUse(c *Client, e *entity, action protocol.ActionPayload
 		t.mp = min(t.maxMP, t.mp+mp)
 		res.MPRestored = mp
 	}
+	h.splashEnmity(e, enmityAllyBase+hp/2)
 	if profile, ok := h.store.Get(c.Name); ok {
 		h.sendWelcome(c, profile)
 	}
@@ -928,6 +977,7 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 		return
 	}
 	e.startGCD(time.Now())
+	h.addEnmity(n, e, enmityActionBase) // the attempt itself is an offense
 	chance := game.CaptureChance(e.Level, n.Level)
 	if h.rng.Float64() >= chance {
 		res.Message = fmt.Sprintf("Capture failed (%.0f%%).", chance*100)
@@ -977,6 +1027,7 @@ func (h *Hub) defeatPlayer(clientID string) {
 	for _, n := range h.entities {
 		if n.Kind == kindNPC {
 			delete(n.contributors, clientID)
+			delete(n.enmity, clientID)
 		}
 	}
 	// Restore and respawn.
@@ -1221,12 +1272,13 @@ func (h *Hub) outOfCombatRegen() {
 				changed = true
 			}
 		}
-		if changed {
+		if changed || now.Sub(cc.lastResourceSync) >= resourceSyncInterval {
 			h.mu.RLock()
 			c := h.clients[e.ID]
 			h.mu.RUnlock()
-			if c != nil {
+			if c != nil && c.Joined {
 				h.send(c, protocol.TypePlayerSync, h.entitySync(e))
+				cc.lastResourceSync = now
 			}
 		}
 	})

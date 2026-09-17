@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"clara-mundi/internal/game"
 )
@@ -68,10 +69,22 @@ type Profile struct {
 	Hotbar         map[string]HotbarBinding `json:"hotbar,omitempty"`
 }
 
+// saveDebounce is the quiet period after the last mutation before the
+// background flusher writes profiles.json.
+const saveDebounce = 750 * time.Millisecond
+
 type Store struct {
 	mu       sync.Mutex
 	path     string
 	profiles map[string]*Profile
+	dirty    bool
+
+	// Background flusher (nil when path is empty — in-memory only).
+	saveCh    chan struct{}
+	done      chan struct{}
+	flushed   chan struct{}
+	closeOnce sync.Once
+	writeMu   sync.Mutex // serializes Flush callers end-to-end
 }
 
 func Load(path string) *Store {
@@ -118,7 +131,100 @@ func Load(path string) *Store {
 		p.migrateJobs()
 		p.ensureUnlockedJobs()
 	}
+	if path != "" {
+		s.saveCh = make(chan struct{}, 1)
+		s.done = make(chan struct{})
+		s.flushed = make(chan struct{})
+		go s.flushLoop()
+	}
 	return s
+}
+
+// flushLoop debounces save notifications: a burst of mutations collapses into
+// one write, so the hub goroutine never blocks on disk I/O.
+func (s *Store) flushLoop() {
+	defer close(s.flushed)
+	for {
+		select {
+		case <-s.done:
+			s.Flush()
+			return
+		case <-s.saveCh:
+		}
+		t := time.NewTimer(saveDebounce)
+		for {
+			select {
+			case <-s.done:
+				t.Stop()
+				s.Flush()
+				return
+			case <-s.saveCh:
+				if !t.Stop() {
+					select {
+					case <-t.C:
+					default:
+					}
+				}
+				t.Reset(saveDebounce)
+			case <-t.C:
+				s.Flush()
+				goto waitForDirty
+			}
+		}
+	waitForDirty:
+	}
+}
+
+// Flush writes pending profile changes to disk. Safe to call any time; writes
+// are serialized so a slower flush can never clobber a newer snapshot.
+func (s *Store) Flush() {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.Lock()
+	if !s.dirty || s.path == "" {
+		s.mu.Unlock()
+		return
+	}
+	s.dirty = false
+	data, err := json.MarshalIndent(s.profiles, "", "  ")
+	s.mu.Unlock()
+	if err != nil {
+		log.Printf("store: marshal error: %v", err)
+		return
+	}
+	writeFileAtomic(s.path, data)
+}
+
+// Close flushes pending writes and stops the background flusher.
+func (s *Store) Close() {
+	if s.done == nil {
+		return
+	}
+	s.closeOnce.Do(func() {
+		close(s.done)
+		<-s.flushed
+	})
+}
+
+// writeFileAtomic writes via a temp file + rename so a crash mid-write never
+// leaves a torn JSON file.
+func writeFileAtomic(path string, data []byte) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		log.Printf("store: mkdir error: %v", err)
+		return
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		log.Printf("store: write error: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		// Windows may refuse renaming over an existing file.
+		_ = os.Remove(path)
+		if err := os.Rename(tmp, path); err != nil {
+			log.Printf("store: rename error: %v", err)
+		}
+	}
 }
 
 // ListByAccount returns all heroes owned by an account.
@@ -869,20 +975,15 @@ func (s *Store) DeleteCharacter(accountID, name string) string {
 	return ""
 }
 
+// save marks the store dirty and notifies the background flusher; the caller's
+// goroutine (often the hub loop) never touches the disk. Callers hold s.mu.
 func (s *Store) save() {
-	if s.path == "" {
+	if s.saveCh == nil {
 		return
 	}
-	data, err := json.MarshalIndent(s.profiles, "", "  ")
-	if err != nil {
-		log.Printf("store: marshal error: %v", err)
-		return
-	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		log.Printf("store: mkdir error: %v", err)
-		return
-	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		log.Printf("store: write error: %v", err)
+	s.dirty = true
+	select {
+	case s.saveCh <- struct{}{}:
+	default:
 	}
 }

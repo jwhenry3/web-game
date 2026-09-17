@@ -32,6 +32,8 @@ export interface EntityOverlayMark {
   hp?: { value: number; max: number };
   /** Live status effects — rendered as icon chips under the nameplate. */
   statuses?: StatusSnapshot[];
+  /** Self's focus target — draws the target arrow over the nameplate. */
+  targeted?: boolean;
 }
 
 export interface PoiLabelMark {

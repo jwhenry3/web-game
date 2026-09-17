@@ -32,6 +32,28 @@ func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
 	return h, a, b
 }
 
+func TestSocialRoutesRegisteredOutsideCentralSwitch(t *testing.T) {
+	h, a, _ := testSocialHub(t)
+	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
+	h.handleEvent(Event{Type: protocol.TypeAddFriend, Payload: raw, Sender: a})
+
+	bravo, _ := h.store.Get("Bravo")
+	if len(bravo.IncomingFriendRequests) != 1 || !strings.EqualFold(bravo.IncomingFriendRequests[0], "Alpha") {
+		t.Fatalf("social route did not dispatch friend request: %v", bravo.IncomingFriendRequests)
+	}
+}
+
+func TestRouteRegistryRejectsDuplicateRoute(t *testing.T) {
+	routes := newRouteRegistry()
+	handler := func(*Client, json.RawMessage) {}
+	if err := routes.register(protocol.TypeAddFriend, handler); err != nil {
+		t.Fatalf("first registration failed: %v", err)
+	}
+	if err := routes.register(protocol.TypeAddFriend, handler); err == nil || !strings.Contains(err.Error(), "duplicate route") {
+		t.Fatalf("duplicate registration error = %v", err)
+	}
+}
+
 func TestFriendRequestAndAccept(t *testing.T) {
 	h, a, b := testSocialHub(t)
 	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})

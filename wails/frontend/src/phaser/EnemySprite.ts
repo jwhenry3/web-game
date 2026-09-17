@@ -14,8 +14,9 @@ import {
 import { ensureEnemyTextures } from "../characters/enemyAssets";
 import { enemyTextureKey, type EnemyKind } from "../characters/enemies";
 import { playHitFlash } from "./battleAnim";
+import type { IEntitySprite } from "./entitySprite";
 
-export class EnemySprite {
+export class EnemySprite implements IEntitySprite {
   readonly container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite | null = null;
   private kind: EnemyKind;

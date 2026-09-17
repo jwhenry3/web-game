@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"math"
-	"reflect"
 	"time"
 
 	"clara-mundi/internal/game"
@@ -54,20 +53,35 @@ type entity struct {
 	castX, castY         float64
 	gcdReadyAt           time.Time
 	contributors         map[string]int // rewarded entity ID -> damage dealt to me
+	enmity               map[string]int // NPCs only: entity ID -> threat held toward it
 	alive                bool
 	hidden               bool // not present on the world (npc despawned, player in house)
 	petHold              bool // pets only: heeled — never acquire a target, just follow
 
-	plugins []entityPlugin
+	components entityComponents
+	pipeline   []entitySystem
 }
 
-// entityPlugin is a behaviour attached to an entity. Tick runs on every hub
-// tick (combatTickInterval) for every entity; plugins decide when to act.
-type entityPlugin interface {
+// entityComponents are explicit, typed component slots. Archetypes populate
+// only the slots they use; pipeline separately preserves their execution order.
+type entityComponents struct {
+	clientControl *clientControl
+	wander        *wander
+	npcEngage     *npcEngage
+	chaseTarget   *chaseTarget
+	attackTarget  *attackTarget
+	respawn       *respawn
+	followOwner   *followOwner
+	petLevelSync  *petLevelSync
+}
+
+// entitySystem runs on every hub tick (combatTickInterval). Components decide
+// when to act; each archetype's pipeline fixes the legacy plugin order.
+type entitySystem interface {
 	Tick(h *Hub, e *entity, now time.Time, dt float64)
 }
 
-// Optional plugin hooks.
+// Optional component hooks.
 type deathHook interface {
 	OnDeath(h *Hub, e *entity, killer *entity)
 }
@@ -76,30 +90,6 @@ type damagedHook interface {
 }
 type leaveCombatHook interface {
 	OnLeaveCombat(h *Hub, e *entity)
-}
-
-// plugin finds the plugin whose concrete type matches *target (target must be
-// a non-nil pointer to a pointer-typed plugin variable), like errors.As.
-//
-//	var cc *clientControl
-//	if e.plugin(&cc) { ... }
-func (e *entity) plugin(target any) bool {
-	if e == nil || target == nil {
-		return false
-	}
-	tv := reflect.ValueOf(target)
-	if tv.Kind() != reflect.Pointer || tv.IsNil() {
-		return false
-	}
-	want := tv.Elem().Type()
-	for _, p := range e.plugins {
-		pv := reflect.ValueOf(p)
-		if pv.Type() == want {
-			tv.Elem().Set(pv)
-			return true
-		}
-	}
-	return false
 }
 
 func (e *entity) onWorld() bool { return e != nil && !e.hidden }
@@ -160,11 +150,10 @@ func (h *Hub) ownerOf(e *entity) *entity {
 
 // clientControlOf returns the player plugin, or nil.
 func clientControlOf(e *entity) *clientControl {
-	var cc *clientControl
-	if e != nil && e.plugin(&cc) {
-		return cc
+	if e == nil {
+		return nil
 	}
-	return nil
+	return e.components.clientControl
 }
 
 // ---- faction / targeting rules ----
@@ -247,6 +236,7 @@ func (h *Hub) nearestAttackable(from *entity, maxD float64) *entity {
 // set_target "" echo so the client releases the focus ring.
 func (h *Hub) clearTargeting(id string) {
 	for _, e := range h.entities {
+		delete(e.enmity, id)
 		if e.engageID == id {
 			e.engageID = ""
 		}
@@ -271,6 +261,19 @@ func rewardID(src *entity) string {
 		return src.OwnerID
 	}
 	return src.ID
+}
+
+// addEnmity credits threat on dst toward src. Only NPCs keep enmity tables —
+// they are the entities that choose victims by it. src holds the entry under
+// its own ID (pets tank for themselves even though XP credits the owner).
+func (h *Hub) addEnmity(dst, src *entity, amount int) {
+	if dst == nil || src == nil || dst.Kind != kindNPC || amount <= 0 {
+		return
+	}
+	if dst.enmity == nil {
+		dst.enmity = map[string]int{}
+	}
+	dst.enmity[src.ID] += amount
 }
 
 // ---- damage / heal / death ----
@@ -307,6 +310,8 @@ func (h *Hub) applyDamageMsg(src, dst *entity, dmg int, ev protocol.CombatEventP
 			dst.contributors = map[string]int{}
 		}
 		dst.contributors[rewardID(src)] += dmg
+		// Offensive action on the target: flat action enmity + damage dealt.
+		h.addEnmity(dst, src, enmityActionBase+dmg)
 	}
 	srcName := "the world"
 	x, y := dst.X, dst.Y
@@ -326,9 +331,9 @@ func (h *Hub) applyDamageMsg(src, dst *entity, dmg int, ev protocol.CombatEventP
 		}
 	}
 	h.sendCombatEvent(ev, x, y)
-	for _, p := range dst.plugins {
-		if hk, ok := p.(damagedHook); ok {
-			hk.OnDamaged(h, dst, src, dmg)
+	for _, system := range dst.pipeline {
+		if hook, ok := system.(damagedHook); ok {
+			hook.OnDamaged(h, dst, src, dmg)
 		}
 	}
 	if dst.hp <= 0 {
@@ -357,10 +362,11 @@ func (h *Hub) kill(e, killer *entity) {
 	e.casting = nil
 	e.statuses = nil
 	e.targetID = ""
+	e.enmity = nil
 	h.clearTargeting(e.ID)
-	for _, p := range e.plugins {
-		if hk, ok := p.(deathHook); ok {
-			hk.OnDeath(h, e, killer)
+	for _, system := range e.pipeline {
+		if hook, ok := system.(deathHook); ok {
+			hook.OnDeath(h, e, killer)
 		}
 	}
 }
@@ -405,8 +411,8 @@ func (h *Hub) tickEntities(now time.Time) {
 	dt := combatTickInterval.Seconds()
 	h.syncPetEntities()
 	for _, e := range h.entities {
-		for _, p := range e.plugins {
-			p.Tick(h, e, now, dt)
+		for _, system := range e.pipeline {
+			system.Tick(h, e, now, dt)
 		}
 		h.tickEntityStatuses(e)
 		h.advanceCast(e, now)
@@ -445,51 +451,12 @@ func (h *Hub) combatActive() bool {
 	return false
 }
 
-// entitySnapshot adapts any entity to the wire WorldEntity. Kind-specific
-// fields (player presence, npc engagement, pet ownership) come from plugins.
+// entitySnapshot adapts any entity to the wire WorldEntity. It is a
+// compatibility wrapper around the projector; callers that only need a single
+// entity projection should use entitySync / worldEntities / combatSnapshots /
+// serverEntitySnapshots, which delegate to the projector directly.
 func (h *Hub) entitySnapshot(e *entity, now time.Time) protocol.WorldEntity {
-	we := protocol.WorldEntity{
-		ID: e.ID, Name: e.Name, Kind: string(e.Kind), Sprite: e.Sprite,
-		OwnerID: e.OwnerID, Level: e.Level,
-		X: e.X, Y: e.Y, Facing: e.Facing,
-		HP: e.hp, MaxHP: e.maxHP, MP: e.mp, MaxMP: e.maxMP,
-		Alive: e.alive, TargetID: e.targetID,
-		Statuses: game.Snapshots(e.statuses),
-	}
-	switch e.Kind {
-	case kindPlayer:
-		if cc := clientControlOf(e); cc != nil {
-			we.Weapon, we.MainJob, we.SubJob = cc.weaponName, cc.mainJobName, cc.subJobName
-			we.Appearance = cc.appearance
-			we.Engaged = cc.inCombat
-			we.Stamina = cc.staminaNow(now)
-			we.InHouse, we.HouseOwner = cc.inHouse, cc.houseOwner
-			we.ImmuneUntil = cc.immuneUntil
-			we.CastingSkillID = cc.fieldCastSkillID
-			we.CastTimeMs = cc.fieldCastTimeMs
-			we.CastEndsAt = cc.fieldCastEndsAt
-		}
-		we.SkillATB = e.gcdProgress(now)
-		if e.casting != nil {
-			we.CastingSkillID = e.casting.SkillID
-			we.CastTargetID = e.casting.TargetID
-			we.CastProgress = e.casting.Progress
-			we.CastEndsAt = 0
-			if sk, ok := game.FindSkill(e.casting.SkillID); ok {
-				we.CastTimeMs = game.SkillCastTime(sk)
-			}
-		}
-	case kindNPC:
-		if ng := npcEngageOf(e); ng != nil {
-			we.Engaged = ng.engaged
-		}
-		if r := respawnOf(e); r != nil {
-			we.Capturable = r.capturable
-		}
-	case kindPet:
-		we.IsAlly = true
-	}
-	return we
+	return h.projector.project(e, now)
 }
 
 // moveToward advances e toward (gx,gy) by at most step, never overshooting.

@@ -1,7 +1,5 @@
 package game
 
-import "fmt"
-
 // StatusKind identifies a combat buff or debuff.
 type StatusKind string
 
@@ -96,67 +94,35 @@ func StatusesForSkill(skillID string) []StatusEffectDef {
 
 // StatusDisplayName is a short label for UI badges.
 func StatusDisplayName(kind StatusKind) string {
-	switch kind {
-	case StatusDefenseUp:
-		return "Protect"
-	case StatusDefenseDown:
-		return "Weaken"
-	case StatusAttackUp:
-		return "Boost"
-	case StatusAttackDown:
-		return "Sap"
-	case StatusShield:
-		return "Shield"
-	case StatusRegen:
-		return "Regen"
-	case StatusPoison:
-		return "Poison"
-	case StatusHaste:
-		return "Haste"
-	case StatusStun:
-		return "Stun"
-	default:
-		return string(kind)
+	if d := lookupDef(kind); d != nil {
+		return d.DisplayName
 	}
+	return string(kind)
 }
 
 // StatusDescribe builds tooltip text for an active status.
 func StatusDescribe(s ActiveStatus) string {
 	name := StatusDisplayName(s.Kind)
-	secs := (s.Remaining * 200) / 1000
-	switch s.Kind {
-	case StatusDefenseUp:
-		return fmt.Sprintf("%s — −%.0f%% damage taken (%ds)", name, s.Potency*100, secs)
-	case StatusDefenseDown:
-		return fmt.Sprintf("%s — +%.0f%% damage taken (%ds)", name, s.Potency*100, secs)
-	case StatusAttackUp:
-		return fmt.Sprintf("%s — +%.0f%% damage dealt (%ds)", name, s.Potency*100, secs)
-	case StatusAttackDown:
-		return fmt.Sprintf("%s — −%.0f%% damage dealt (%ds)", name, s.Potency*100, secs)
-	case StatusShield:
-		return fmt.Sprintf("%s — %d HP remaining (%ds)", name, s.ShieldHP, secs)
-	case StatusRegen:
-		return fmt.Sprintf("%s — restores HP each tick (%ds)", name, secs)
-	case StatusPoison:
-		return fmt.Sprintf("%s — damage each tick (%ds)", name, secs)
-	case StatusHaste:
-		return fmt.Sprintf("%s — +%.0f%% action speed (%ds)", name, s.Potency*100, secs)
-	case StatusStun:
-		return fmt.Sprintf("%s — cannot act (%ds)", name, secs)
-	default:
-		return name
+	if d := lookupDef(s.Kind); d != nil && d.DescribeFn != nil {
+		secs := (s.Remaining * 200) / 1000
+		return d.DescribeFn(name, s, secs)
 	}
+	return name
 }
 
 // ApplyStatus adds or refreshes a status on a list.
 func ApplyStatus(list *[]ActiveStatus, def StatusEffectDef, sourceID string, shieldAmount int) {
+	isShield := false
+	if d := lookupDef(def.Kind); d != nil {
+		isShield = d.IsShield
+	}
 	for i := range *list {
 		s := &(*list)[i]
 		if s.Kind == def.Kind {
 			s.Source = sourceID
 			s.Remaining = def.Duration
 			s.Potency = def.Potency
-			if def.Kind == StatusShield {
+			if isShield {
 				s.ShieldHP = shieldAmount
 			}
 			return
@@ -168,7 +134,7 @@ func ApplyStatus(list *[]ActiveStatus, def StatusEffectDef, sourceID string, shi
 		Remaining: def.Duration,
 		Potency:   def.Potency,
 	}
-	if def.Kind == StatusShield {
+	if isShield {
 		s.ShieldHP = shieldAmount
 	}
 	*list = append(*list, s)
@@ -182,11 +148,10 @@ func TickStatuses(list *[]ActiveStatus, maxHP int, tickPower int) (heal, damage 
 	kept := (*list)[:0]
 	for _, s := range *list {
 		s.Remaining--
-		switch s.Kind {
-		case StatusRegen:
-			heal += max(1, int(float64(tickPower)*s.Potency))
-		case StatusPoison:
-			damage += max(1, int(float64(tickPower)*s.Potency))
+		if d := lookupDef(s.Kind); d != nil && d.OnTick != nil {
+			h, dmg := d.OnTick(s, tickPower)
+			heal += h
+			damage += dmg
 		}
 		if s.Remaining > 0 {
 			kept = append(kept, s)
@@ -196,17 +161,10 @@ func TickStatuses(list *[]ActiveStatus, maxHP int, tickPower int) (heal, damage 
 	return heal, damage
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // IsStunned reports whether the entity cannot act.
 func IsStunned(list []ActiveStatus) bool {
 	for _, s := range list {
-		if s.Kind == StatusStun && s.Remaining > 0 {
+		if d := lookupDef(s.Kind); d != nil && d.Stuns && s.Remaining > 0 {
 			return true
 		}
 	}
@@ -217,8 +175,8 @@ func IsStunned(list []ActiveStatus) bool {
 func ATBMultiplier(list []ActiveStatus) float64 {
 	mult := 1.0
 	for _, s := range list {
-		if s.Kind == StatusHaste {
-			mult += s.Potency
+		if d := lookupDef(s.Kind); d != nil && d.ATBMod != nil {
+			mult += d.ATBMod(s.Potency)
 		}
 	}
 	return mult
@@ -228,11 +186,8 @@ func ATBMultiplier(list []ActiveStatus) float64 {
 func ModifyDamageDealt(list []ActiveStatus, amount int) int {
 	mult := 1.0
 	for _, s := range list {
-		switch s.Kind {
-		case StatusAttackUp:
-			mult += s.Potency
-		case StatusAttackDown:
-			mult -= s.Potency
+		if d := lookupDef(s.Kind); d != nil && d.DamageDealtMod != nil {
+			mult += d.DamageDealtMod(s.Potency)
 		}
 	}
 	if mult < 0.25 {
@@ -245,11 +200,8 @@ func ModifyDamageDealt(list []ActiveStatus, amount int) int {
 func ModifyDamageTaken(list *[]ActiveStatus, amount int) int {
 	mult := 1.0
 	for _, s := range *list {
-		switch s.Kind {
-		case StatusDefenseUp:
-			mult -= s.Potency
-		case StatusDefenseDown:
-			mult += s.Potency
+		if d := lookupDef(s.Kind); d != nil && d.DamageTakenMod != nil {
+			mult += d.DamageTakenMod(s.Potency)
 		}
 	}
 	if mult < 0.1 {
@@ -264,7 +216,9 @@ func AbsorbShield(list *[]ActiveStatus, amount int) int {
 	remaining := amount
 	out := make([]ActiveStatus, 0, len(*list))
 	for _, s := range *list {
-		if s.Kind == StatusShield && s.ShieldHP > 0 && remaining > 0 {
+		d := lookupDef(s.Kind)
+		isShield := d != nil && d.IsShield
+		if isShield && s.ShieldHP > 0 && remaining > 0 {
 			if s.ShieldHP >= remaining {
 				s.ShieldHP -= remaining
 				remaining = 0
@@ -273,7 +227,7 @@ func AbsorbShield(list *[]ActiveStatus, amount int) int {
 				s.ShieldHP = 0
 			}
 		}
-		if s.Kind == StatusShield && s.ShieldHP <= 0 {
+		if isShield && s.ShieldHP <= 0 {
 			continue
 		}
 		if s.Remaining > 0 {

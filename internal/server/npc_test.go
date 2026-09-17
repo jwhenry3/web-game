@@ -49,13 +49,12 @@ func testHubWithPlayer(t *testing.T, x, y float64) (*Hub, *Client, *entity) {
 	return h, c, e
 }
 
-// wanderOf returns the entity's wander plugin, or nil.
+// wanderOf returns the entity's wander component, or nil.
 func wanderOf(e *entity) *wander {
-	var w *wander
-	if e != nil && e.plugin(&w) {
-		return w
+	if e == nil {
+		return nil
 	}
-	return nil
+	return e.components.wander
 }
 
 // hostileNPC registers a combat-capable overworld foe at (x, y), parked on a

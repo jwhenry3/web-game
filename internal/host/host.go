@@ -52,11 +52,12 @@ type Runtime struct {
 	Config  cluster.Config
 	BaseURL string // e.g. http://127.0.0.1:8080
 
-	mu     sync.Mutex
-	nodes  []*mapnode.Node
-	http   *http.Server
-	ln     net.Listener
-	closed bool
+	mu       sync.Mutex
+	nodes    []*mapnode.Node
+	http     *http.Server
+	ln       net.Listener
+	profiles *store.Store
+	closed   bool
 }
 
 // Start loads cluster config, starts enabled map nodes, and begins serving.
@@ -127,7 +128,7 @@ func Start(opts Options) (*Runtime, error) {
 		log.Printf("cluster: %s", opts.ClusterFile)
 	}
 
-	rt := &Runtime{Proxy: px, Config: cfg}
+	rt := &Runtime{Proxy: px, Config: cfg, profiles: profiles}
 	started := 0
 	for _, spec := range cfg.Maps {
 		if !spec.IsEnabled() {
@@ -193,6 +194,10 @@ func (rt *Runtime) Close() error {
 		n.Stop()
 	}
 	rt.nodes = nil
+	// Hubs are stopped — flush any pending profile writes before returning.
+	if rt.profiles != nil {
+		rt.profiles.Close()
+	}
 	return first
 }
 

@@ -261,6 +261,36 @@ func TestCombatStaminaRegen(t *testing.T) {
 	}
 }
 
+func TestResourceSyncHeartbeat(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
+	cc.stamina = staminaMax
+	cc.staminaAt = time.Now()
+	pe.hp, pe.mp = pe.maxHP, pe.maxMP
+
+	drainClient(c)
+	cc.lastResourceSync = time.Now()
+	h.outOfCombatRegen()
+	if hasFrameType(drainClient(c), protocol.TypePlayerSync) {
+		t.Fatal("resource sync should not repeat before the heartbeat interval")
+	}
+
+	cc.lastResourceSync = time.Now().Add(-resourceSyncInterval)
+	h.outOfCombatRegen()
+	frame, ok := lastFrame(drainClient(c), protocol.TypePlayerSync)
+	if !ok {
+		t.Fatal("resource heartbeat should send player_sync even without a resource delta")
+	}
+	var got protocol.WorldEntity
+	if err := json.Unmarshal(frame.Payload, &got); err != nil {
+		t.Fatalf("decode resource heartbeat: %v", err)
+	}
+	if got.HP != pe.hp || got.MP != pe.mp || math.Abs(got.Stamina-staminaMax) > 1e-6 {
+		t.Fatalf("resource heartbeat mismatch: hp=%d mp=%d stamina=%v", got.HP, got.MP, got.Stamina)
+	}
+}
+
 func TestDodgeInterruptsCast(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, pe := testHubWithPlayer(t, px, py)
@@ -780,5 +810,115 @@ func TestCaptureWithoutTargetPicksNearestEnemy(t *testing.T) {
 	}
 	if got := evs[len(evs)-1].TargetID; got != near.ID {
 		t.Fatalf("capture should target the nearest enemy %q, got %q", near.ID, got)
+	}
+}
+
+func TestEnmityBuildsOnDamage(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, _ := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID, TargetID: n.ID})
+	h.handleAction(c, raw)
+	got := n.enmity[c.ID]
+	if got <= enmityActionBase {
+		t.Fatalf("an attack should credit base enmity + damage on the target, got %d", got)
+	}
+}
+
+func TestEnmitySwitchPullsAggro(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, pe := testHubWithPlayer(t, px, py)
+	_, pe2 := addWorldClient(h, "client-2", "Lenna", px+30, py)
+	n := hostileNPC(h, "npc-1", px+20, py)
+	npcSetHome(h, n, px, py)
+	h.engage(n, pe)
+	if n.enmity[pe.ID] <= 0 {
+		t.Fatal("engaging should seed enmity on the puller")
+	}
+	if n.targetID != pe.ID {
+		t.Fatalf("npc should target the puller, got %q", n.targetID)
+	}
+
+	ng := npcEngageOf(n)
+	// Below the switch margin: aggro stays put.
+	n.enmity[pe2.ID] = int(float64(n.enmity[pe.ID]) * (enmitySwitchMargin - 0.1))
+	ng.Tick(h, n, time.Now(), combatTickInterval.Seconds())
+	if n.targetID != pe.ID {
+		t.Fatal("a challenger below the enmity margin must not pull aggro")
+	}
+	// Past the margin: the NPC switches victims.
+	n.enmity[pe2.ID] = int(float64(n.enmity[pe.ID])*(enmitySwitchMargin+0.2)) + 1
+	ng.Tick(h, n, time.Now(), combatTickInterval.Seconds())
+	if n.targetID != pe2.ID {
+		t.Fatalf("higher enmity should pull aggro, still on %q", n.targetID)
+	}
+}
+
+func TestAllySkillSplashesEnmity(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, pe := testHubWithPlayer(t, px, py)
+	_, healer := addWorldClient(h, "client-2", "Lenna", px+30, py)
+	n1 := hostileNPC(h, "npc-1", px+20, py)
+	n2 := hostileNPC(h, "npc-2", px+60, py)
+	n3 := hostileNPC(h, "npc-3", px+assistRadius+120, py) // out of assist range — never engaged
+	npcSetHome(h, n1, px, py)
+	npcSetHome(h, n2, px, py)
+	npcSetHome(h, n3, px, py)
+	h.engage(n1, pe)
+	h.engage(n2, pe)
+
+	skill, ok := game.FindSkill("san_sanare") // Heal
+	if !ok || !skill.Heals {
+		t.Fatal("heal skill not found")
+	}
+	healer.hp = healer.maxHP / 2 // a real heal, not overheal
+	h.applySkillTo(healer, healer, skill, protocol.CombatEventPayload{})
+
+	if n1.enmity[healer.ID] <= 0 || n2.enmity[healer.ID] <= 0 {
+		t.Fatalf("a heal should splash enmity on every engaged enemy: n1=%d n2=%d",
+			n1.enmity[healer.ID], n2.enmity[healer.ID])
+	}
+	if n3.enmity[healer.ID] != 0 {
+		t.Fatal("an unengaged enemy must not gain enmity from heals")
+	}
+}
+
+func TestEnmityClearsOnDisengage(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+20, py)
+	npcSetHome(h, n, px, py)
+	h.engage(n, pe)
+	h.applyDamage(pe, n, 15, protocol.CombatEventPayload{})
+	if n.enmity[pe.ID] <= 0 {
+		t.Fatal("expected enmity on the table")
+	}
+	h.disengage(n, true)
+	if n.enmity != nil {
+		t.Fatal("disengage must drop the enmity table")
+	}
+}
+
+func TestPlayerDisengageKeepsEnmity(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+20, py)
+	npcSetHome(h, n, px, py)
+	h.engage(n, pe)
+	h.applyDamage(pe, n, 15, protocol.CombatEventPayload{})
+	if n.enmity[pe.ID] <= 0 {
+		t.Fatal("expected enmity on the table")
+	}
+	// The player breaking off — dropping their target — must not touch the
+	// mob's enmity table. Only the NPC disengaging clears it.
+	raw, _ := json.Marshal(protocol.SetTargetPayload{TargetID: ""})
+	h.handleSetTarget(c, raw)
+	if n.enmity[pe.ID] <= 0 {
+		t.Fatal("player-side disengage must not clear the npc's enmity")
+	}
+	if !npcEngaged(n) {
+		t.Fatal("the mob should stay engaged on the player")
 	}
 }

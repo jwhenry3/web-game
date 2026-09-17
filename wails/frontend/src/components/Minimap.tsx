@@ -206,16 +206,31 @@ export function Minimap() {
         const p = toMini(camp.x, camp.y);
         dot(ctx, p.x, p.y, "#7ecf6a", 3.5 * scale, "#d8f5c8");
       }
+      const focusId = self.target_id;
       for (const npc of Object.values(state.entities)) {
         if (npc.kind !== "npc" || npc.engaged || !inView(npc.x, npc.y)) continue;
+        if (npc.id === focusId) continue; // drawn highlighted below
         const p = toMini(npc.x, npc.y);
         dot(ctx, p.x, p.y, "#e06060", 2 * scale);
       }
       for (const wp of Object.values(state.entities)) {
         if (wp.kind !== "player") continue;
         if (wp.id === selfId || wp.in_house || !inView(wp.x, wp.y)) continue;
+        if (wp.id === focusId) continue;
         const p = toMini(wp.x, wp.y);
         dot(ctx, p.x, p.y, wp.engaged ? "#ffe9a8" : "#f0f4f8", 2.5 * scale);
+      }
+      // Focus target: pulsing gold marker, drawn even when engaged.
+      const focus = focusId ? state.entities[focusId] : undefined;
+      if (focus && focus.alive && inView(focus.x, focus.y)) {
+        const p = toMini(focus.x, focus.y);
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 200);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (5 + 2 * pulse) * scale, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 215, 94, ${0.5 + 0.5 * pulse})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        dot(ctx, p.x, p.y, "#ffd75e", 2.5 * scale, "#1a1406");
       }
 
       const me = toMini(selfX, selfY);

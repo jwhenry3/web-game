@@ -1,6 +1,6 @@
 import type { AtlasMap, VisitedSavePoint } from "../types";
 
-export type MapMarkerKind = "save_point" | "player";
+export type MapMarkerKind = "save_point" | "player" | "target";
 
 export interface MapMarker {
   id: string;
@@ -17,6 +17,8 @@ export function markersForMap(opts: {
   atlas: AtlasMap;
   visited: VisitedSavePoint[];
   player?: { x: number; y: number } | null;
+  /** Focus target on this map — drawn as a highlighted marker. */
+  target?: { x: number; y: number; name: string } | null;
   showPlayer?: boolean;
   selectableVisited?: boolean;
 }): MapMarker[] {
@@ -47,6 +49,17 @@ export function markersForMap(opts: {
       discovered: true,
       selectable: false,
     });
+    if (opts.target) {
+      out.push({
+        id: "target",
+        kind: "target",
+        name: opts.target.name,
+        x: opts.target.x,
+        y: opts.target.y,
+        discovered: true,
+        selectable: false,
+      });
+    }
   }
   return out;
 }

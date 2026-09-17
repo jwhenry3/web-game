@@ -205,38 +205,59 @@ func TestKillClearsTargets(t *testing.T) {
 	}
 }
 
-func TestPetFollowDecel(t *testing.T) {
+func TestPetFollowLeashRadius(t *testing.T) {
 	px, py := wildernessXY()
 	h, _, pe := testHubWithPlayer(t, px, py)
 	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "Gob", Level: 1}, pe)
 	h.entities[pet.ID] = pet
-	var fo *followOwner
-	if !pet.plugin(&fo) {
-		t.Fatal("pet should carry a followOwner plugin")
+	fo := pet.components.followOwner
+	if fo == nil {
+		t.Fatal("pet should carry a followOwner component")
 	}
 	dt := combatTickInterval.Seconds()
-	full := petSpeed * dt
 
-	// Close to the rest point: the pet eases in below full speed.
-	gx, gy := followOffset(pe.X, pe.Y, pe.Facing)
-	pet.X, pet.Y = gx-petFollowDist/2, gy
+	// Inside the leash radius, the pet keeps its current position.
+	pet.X, pet.Y = pe.X-petFollowDist/2, pe.Y
 	bx, by := pet.X, pet.Y
 	fo.Tick(h, pet, time.Now(), dt)
-	moved := dist(bx, by, pet.X, pet.Y)
-	if moved <= 0 {
-		t.Fatal("pet should still creep toward the rest point")
-	}
-	if moved >= full {
-		t.Fatalf("close-in movement should decelerate below %v, got %v", full, moved)
+	if moved := dist(bx, by, pet.X, pet.Y); moved != 0 {
+		t.Fatalf("near pet should stay put, moved %v", moved)
 	}
 
-	// Far away: full speed, exactly one step.
-	pet.X, pet.Y = gx-petFollowDist*5, gy
-	bx, by = pet.X, pet.Y
+	// Just outside the radius, the pet stops at the threshold instead of
+	// converging on a fixed owner-relative destination.
+	pet.X, pet.Y = pe.X-petFollowDist-2, pe.Y
 	fo.Tick(h, pet, time.Now(), dt)
-	moved = dist(bx, by, pet.X, pet.Y)
-	if math.Abs(moved-full) > 1e-6 {
-		t.Fatalf("far pet should move a full %v step, got %v", full, moved)
+	if got := dist(pet.X, pet.Y, pe.X, pe.Y); math.Abs(got-petFollowDist) > 1e-6 {
+		t.Fatalf("pet should stop at leash radius %v, got %v", petFollowDist, got)
+	}
+
+	// Far away, the pet smoothly accelerates above its normal speed.
+	pet.X, pet.Y = pe.X-petFollowDist*5, pe.Y
+	bx, by = pet.X, pet.Y
+	before := dist(pet.X, pet.Y, pe.X, pe.Y)
+	fo.Tick(h, pet, time.Now(), dt)
+	moved := dist(bx, by, pet.X, pet.Y)
+	want := petFollowSpeed(before) * dt
+	if math.Abs(moved-want) > 1e-6 {
+		t.Fatalf("far pet should move a damped catch-up step of %v, got %v", want, moved)
+	}
+	if moved <= petSpeed*dt {
+		t.Fatalf("far pet should catch up faster than normal speed, got %v", moved)
+	}
+}
+
+func TestPetFollowSpeedDamping(t *testing.T) {
+	if got := petFollowSpeed(petFollowCatchupDist); got != petSpeed {
+		t.Fatalf("speed at catch-up threshold = %v, want %v", got, petSpeed)
+	}
+	midDist := (petFollowCatchupDist + petFollowCatchupMaxDist) / 2
+	midSpeed := (petSpeed + petFollowMaxSpeed) / 2
+	if got := petFollowSpeed(midDist); math.Abs(got-midSpeed) > 1e-6 {
+		t.Fatalf("speed midway through damping range = %v, want %v", got, midSpeed)
+	}
+	if got := petFollowSpeed(petFollowCatchupMaxDist * 2); got != petFollowMaxSpeed {
+		t.Fatalf("speed beyond catch-up range = %v, want cap %v", got, petFollowMaxSpeed)
 	}
 }
 

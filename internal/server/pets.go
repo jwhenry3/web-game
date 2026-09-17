@@ -10,12 +10,20 @@ import (
 	"clara-mundi/internal/store"
 )
 
-// petSpeed is the maximum speed pets move toward their goal (px/s).
+// petSpeed is the normal speed pets move toward their goal (px/s).
 const petSpeed = 120.0
 
-// petFollowDist is the resting distance behind the owner. When the pet is
-// closer than this it decelerates; when farther it moves at full speed.
+// petFollowDist is the leash radius around the owner. Idle pets keep their
+// current position inside it and move toward the owner only after crossing it.
 const petFollowDist = 40.0
+
+// Idle pets smoothly accelerate once they fall this far behind, reaching the
+// maximum catch-up speed at petFollowCatchupMaxDist.
+const (
+	petFollowCatchupDist    = 120.0
+	petFollowCatchupMaxDist = 320.0
+	petFollowMaxSpeed       = 240.0
+)
 
 // petStandoff is how close to the target a pet stands to attack (px).
 const petStandoff = 30.0
@@ -194,6 +202,14 @@ func (h *Hub) awardPetXP(c *Client, baseXP int) {
 			h.sendWelcome(c, updated)
 		}
 	}
+}
+
+func petFollowSpeed(distance float64) float64 {
+	if distance <= petFollowCatchupDist {
+		return petSpeed
+	}
+	t := math.Min(1, (distance-petFollowCatchupDist)/(petFollowCatchupMaxDist-petFollowCatchupDist))
+	return petSpeed + (petFollowMaxSpeed-petSpeed)*t
 }
 
 func followOffset(x, y float64, facing float64) (float64, float64) {

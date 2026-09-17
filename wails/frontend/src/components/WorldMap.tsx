@@ -406,11 +406,16 @@ export function MapWindow() {
   const selectedId = atlas.some((m) => m.id === mapId) ? mapId : (atlas[0]?.id ?? "");
   const current = atlas.find((m) => m.id === selectedId);
   const self = selfId ? entities[selfId] : undefined;
+  const focusTarget = self?.target_id ? entities[self.target_id] : undefined;
   const markers = current
     ? markersForMap({
         atlas: current,
         visited,
         player: self ? { x: self.x, y: self.y } : null,
+        target:
+          focusTarget && focusTarget.alive
+            ? { x: focusTarget.x, y: focusTarget.y, name: focusTarget.name }
+            : null,
         showPlayer: selectedId === mapInfo?.id,
         selectableVisited: true,
       })

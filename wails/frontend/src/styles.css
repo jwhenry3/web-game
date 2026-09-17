@@ -580,6 +580,31 @@ h3 {
   color: #ffffff;
 }
 
+/* Focus-target chevron: bobs above the nameplate, pointing down at it. */
+.cm-entity-overlays .cm-target-arrow {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+.cm-target-arrow {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 8px solid #ffd75e;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.9));
+  margin-top: -22px;
+  animation: cm-target-bob 0.9s ease-in-out infinite;
+}
+@keyframes cm-target-bob {
+  0%,
+  100% {
+    margin-top: -24px;
+  }
+  50% {
+    margin-top: -18px;
+  }
+}
+
 .cm-entity-cast {
   width: 52px;
   height: 7px;
@@ -615,6 +640,32 @@ h3 {
 
 .cm-entity-cast-fill.is-ready {
   background: #c4b5fd;
+}
+
+.cm-entity-hp {
+  width: 46px;
+  height: 6px;
+  padding: 1px;
+  box-sizing: border-box;
+  background: rgba(8, 8, 10, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.85);
+  border-radius: 2px;
+}
+
+.cm-entity-overlays .cm-entity-hp {
+  position: absolute;
+  transform: translate(-50%, -50%);
+}
+
+.cm-entity-hp-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 80ms linear;
+}
+
+.cm-entity-overlays .cm-entity-statuses {
+  position: absolute;
+  transform: translate(-50%, -50%);
 }
 
 .cm-poi-label {
@@ -1247,6 +1298,26 @@ h3 {
   background: #f4f0e0;
   border: 2px solid #c45c4a;
   box-shadow: 0 0 8px #c45c4a;
+}
+
+/* Focus target on the world map — pulsing gold diamond. */
+.world-map-poi.poi-target {
+  width: 14px;
+  height: 14px;
+  z-index: 4;
+}
+
+.world-map-poi.poi-target::after {
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  transform: rotate(45deg);
+  background: #ffd75e;
+  border: 2px solid #7a5c14;
+  box-shadow: 0 0 10px #ffd75e;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .world-map-caption {

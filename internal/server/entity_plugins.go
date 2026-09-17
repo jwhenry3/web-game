@@ -20,15 +20,16 @@ type clientControl struct {
 	skillLevels       map[string]int
 	pendingSkillUses  map[string]int
 
-	stamina      float64
-	staminaAt    time.Time
-	dodgeReadyAt time.Time
-	dodgedAt     time.Time
-	lastMoveAt   time.Time
-	lastMoveDX   float64
-	lastMoveDY   float64
-	inCombat     bool
-	regenAcc     float64
+	stamina          float64
+	staminaAt        time.Time
+	dodgeReadyAt     time.Time
+	dodgedAt         time.Time
+	lastMoveAt       time.Time
+	lastMoveDX       float64
+	lastMoveDY       float64
+	inCombat         bool
+	regenAcc         float64
+	lastResourceSync time.Time
 
 	// World presence details (formerly protocol.WorldPlayer fields).
 	weaponName  string
@@ -217,11 +218,10 @@ type npcEngage struct {
 }
 
 func npcEngageOf(e *entity) *npcEngage {
-	var ng *npcEngage
-	if e != nil && e.plugin(&ng) {
-		return ng
+	if e == nil {
+		return nil
 	}
-	return nil
+	return e.components.npcEngage
 }
 
 // engage pulls e (and nearby pack-mates) into a fight against target.
@@ -243,6 +243,7 @@ func (h *Hub) engage(e, target *entity) {
 		}
 		h.entityDirty = true
 	}
+	h.addEnmity(e, target, enmityEngagePull) // the pull itself is a threat seed
 	if owner := h.ownerOf(target); owner != nil {
 		h.markPlayerCombat(owner.ID)
 	} else if target.Kind == kindPlayer {
@@ -265,6 +266,7 @@ func (h *Hub) engage(e, target *entity) {
 			if mg.avoidSide == 0 {
 				mg.avoidSide = -1
 			}
+			h.addEnmity(m, target, enmityEngagePull)
 			h.entityDirty = true
 		}
 	})
@@ -280,15 +282,14 @@ func (h *Hub) disengage(e *entity, leashed bool) {
 	ng.engaged = false
 	e.targetID = ""
 	e.contributors = nil
+	e.enmity = nil
 	e.statuses = nil
-	var ch *chaseTarget
-	if e.plugin(&ch) {
+	if ch := e.components.chaseTarget; ch != nil {
 		ch.path = nil
 	}
 	if leashed {
 		e.hp = e.maxHP
-		var w *wander
-		if e.plugin(&w) {
+		if w := e.components.wander; w != nil {
 			if ng.leashSet {
 				e.X, e.Y = ng.leashX, ng.leashY
 				w.path = nil
@@ -324,8 +325,7 @@ func (ng *npcEngage) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	// Leash when dragged too far from where the fight began.
 	anchorX, anchorY := ng.leashX, ng.leashY
 	if !ng.leashSet {
-		var w *wander
-		if e.plugin(&w) {
+		if w := e.components.wander; w != nil {
 			home := game.TileCenter(w.patrol.Home)
 			anchorX, anchorY = home.X, home.Y
 		}
@@ -342,6 +342,13 @@ func (ng *npcEngage) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 			return
 		}
 		e.targetID = t.ID
+	} else if top := h.topEnmity(e); top != nil && top.ID != t.ID {
+		// A challenger that out-threatens the current victim by the margin
+		// pulls aggro; below the margin the NPC stays put (no thrash).
+		if float64(e.enmity[top.ID]) > float64(e.enmity[t.ID])*enmitySwitchMargin {
+			e.targetID = top.ID
+			t = top
+		}
 	}
 	if dist(e.X, e.Y, t.X, t.Y) > dropRange {
 		h.disengage(e, false)
@@ -362,9 +369,12 @@ func (ng *npcEngage) OnDamaged(h *Hub, e *entity, from *entity, dmg int) {
 	}
 }
 
-// retarget picks a new victim: the nearest contributor first, then the
-// nearest attackable entity within dropRange.
+// retarget picks a new victim when the current one is gone: the highest-
+// enmity survivor on the table, then the nearest attackable in dropRange.
 func (h *Hub) retarget(e *entity) *entity {
+	if top := h.topEnmity(e); top != nil {
+		return top
+	}
 	var best *entity
 	bestD := math.MaxFloat64
 	for id := range e.contributors {
@@ -513,11 +523,10 @@ type respawn struct {
 }
 
 func respawnOf(e *entity) *respawn {
-	var r *respawn
-	if e != nil && e.plugin(&r) {
-		return r
+	if e == nil {
+		return nil
 	}
-	return nil
+	return e.components.respawn
 }
 
 func (r *respawn) OnDeath(h *Hub, e *entity, killer *entity) {
@@ -525,8 +534,7 @@ func (r *respawn) OnDeath(h *Hub, e *entity, killer *entity) {
 		ng.engaged = false
 		ng.leashSet = false
 	}
-	var ch *chaseTarget
-	if e.plugin(&ch) {
+	if ch := e.components.chaseTarget; ch != nil {
 		ch.path = nil
 	}
 	if r.captured {
@@ -551,8 +559,7 @@ func (r *respawn) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	e.contributors = nil
 	e.statuses = nil
 	e.targetID = ""
-	var w *wander
-	if e.plugin(&w) {
+	if w := e.components.wander; w != nil {
 		w.begin(e)
 		log.Printf("%s respawned in %s", e.Name, w.region.ID)
 	}
@@ -562,7 +569,7 @@ func (r *respawn) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 // ---------------------------------------------------------------- pet
 
 // followOwner derives the pet's target from its owner each tick and, when it
-// has none, trails behind the owner with deceleration near the rest point.
+// has none, keeps the pet within its leash radius.
 type followOwner struct{}
 
 func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
@@ -605,20 +612,12 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	if e.targetID != "" {
 		return // chaseTarget/attackTarget take over
 	}
-	gx, gy := followOffset(owner.X, owner.Y, owner.Facing)
-	d := dist(e.X, e.Y, gx, gy)
-	step := petSpeed * dt
-	if d < petFollowDist {
-		step *= d / petFollowDist
-	}
-	if d < 1 {
-		if e.X != gx || e.Y != gy {
-			e.X, e.Y = gx, gy
-			h.entityDirty = true
-		}
+	d := dist(e.X, e.Y, owner.X, owner.Y)
+	if d <= petFollowDist {
 		return
 	}
-	if moveToward(e, gx, gy, step) > 0 {
+	step := math.Min(petFollowSpeed(d)*dt, d-petFollowDist)
+	if moveToward(e, owner.X, owner.Y, step) > 0 {
 		h.entityDirty = true
 	}
 	e.Facing = owner.Facing
@@ -688,11 +687,58 @@ func (p *petLevelSync) OnLeaveCombat(h *Hub, e *entity) {
 
 // ---------------------------------------------------------------- factories
 
-func newPlayerEntity(clientID string) *entity {
-	return &entity{
-		ID: clientID, Kind: kindPlayer, Faction: factionAlly, alive: true,
-		plugins: []entityPlugin{newClientControl()},
+// archetypeFactories is the static component registry. Each factory allocates
+// fresh typed components and records the archetype's legacy execution order.
+var archetypeFactories = map[entityKind]func() *entity{
+	kindPlayer: func() *entity {
+		cc := newClientControl()
+		return &entity{
+			Kind: kindPlayer, Faction: factionAlly, alive: true,
+			components: entityComponents{clientControl: cc},
+			pipeline:   []entitySystem{cc},
+		}
+	},
+	kindNPC: func() *entity {
+		w := &wander{}
+		ng := &npcEngage{}
+		ch := &chaseTarget{speed: enemySpeedWorld, stopDist: meleeStopDistW, pathfind: true}
+		at := &attackTarget{cooldown: enemyAttackCDW, damage: npcContactDamage}
+		r := &respawn{}
+		return &entity{
+			Kind: kindNPC, alive: true,
+			components: entityComponents{
+				wander: w, npcEngage: ng, chaseTarget: ch, attackTarget: at, respawn: r,
+			},
+			pipeline: []entitySystem{w, ng, ch, at, r},
+		}
+	},
+	kindPet: func() *entity {
+		fo := &followOwner{}
+		ls := &petLevelSync{}
+		ch := &chaseTarget{speed: petSpeed, stopDist: petStandoff, pathfind: false}
+		at := &attackTarget{cooldown: enemyAttackCDW, damage: petStr, inRange: meleeStopDistW + 30}
+		return &entity{
+			Kind: kindPet, Faction: factionAlly, alive: true,
+			components: entityComponents{
+				followOwner: fo, petLevelSync: ls, chaseTarget: ch, attackTarget: at,
+			},
+			pipeline: []entitySystem{fo, ls, ch, at},
+		}
+	},
+}
+
+func newArchetypeEntity(kind entityKind) *entity {
+	factory := archetypeFactories[kind]
+	if factory == nil {
+		panic("server: unregistered entity archetype " + string(kind))
 	}
+	return factory()
+}
+
+func newPlayerEntity(clientID string) *entity {
+	e := newArchetypeEntity(kindPlayer)
+	e.ID = clientID
+	return e
 }
 
 func newNPCEntity(p game.Patrol, reg game.Region, ow *game.Overworld) *entity {
@@ -702,33 +748,22 @@ func newNPCEntity(p game.Patrol, reg game.Region, ow *game.Overworld) *entity {
 	if maxHP <= 0 {
 		fac = factionNeutral
 	}
-	w := &wander{patrol: p, region: reg, ow: ow}
-	e := &entity{
-		ID: p.ID, Name: p.Name, Kind: kindNPC, Sprite: kind, Level: level,
-		X: start.X, Y: start.Y, Faction: fac,
-		hp: maxHP, maxHP: maxHP, alive: true,
-		plugins: []entityPlugin{
-			w,
-			&npcEngage{},
-			&chaseTarget{speed: enemySpeedWorld, stopDist: meleeStopDistW, pathfind: true},
-			&attackTarget{cooldown: enemyAttackCDW, damage: npcContactDamage},
-			&respawn{dropPoolID: dropPoolID, capturable: capturable},
-		},
-	}
+	e := newArchetypeEntity(kindNPC)
+	e.ID, e.Name, e.Sprite, e.Level = p.ID, p.Name, kind, level
+	e.X, e.Y, e.Faction = start.X, start.Y, fac
+	e.hp, e.maxHP = maxHP, maxHP
+	w := e.components.wander
+	w.patrol, w.region, w.ow = p, reg, ow
+	e.components.respawn.dropPoolID = dropPoolID
+	e.components.respawn.capturable = capturable
 	w.begin(e)
 	return e
 }
 
 func newPetEntity(rec game.PetRecord, owner *entity) *entity {
 	x, y := followOffset(owner.X, owner.Y, owner.Facing)
-	return &entity{
-		ID: rec.ID, Name: rec.Name, Kind: kindPet, Sprite: rec.Kind, Level: rec.Level,
-		X: x, Y: y, Facing: owner.Facing, Faction: factionAlly, OwnerID: owner.ID, alive: true,
-		plugins: []entityPlugin{
-			&followOwner{},
-			&petLevelSync{},
-			&chaseTarget{speed: petSpeed, stopDist: petStandoff, pathfind: false},
-			&attackTarget{cooldown: enemyAttackCDW, damage: petStr, inRange: meleeStopDistW + 30},
-		},
-	}
+	e := newArchetypeEntity(kindPet)
+	e.ID, e.Name, e.Sprite, e.Level = rec.ID, rec.Name, rec.Kind, rec.Level
+	e.X, e.Y, e.Facing, e.OwnerID = x, y, owner.Facing, owner.ID
+	return e
 }

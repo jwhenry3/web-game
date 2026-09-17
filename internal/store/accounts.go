@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -181,11 +180,5 @@ func (s *AccountStore) save() {
 		log.Printf("store: marshal accounts error: %v", err)
 		return
 	}
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
-		log.Printf("store: mkdir accounts error: %v", err)
-		return
-	}
-	if err := os.WriteFile(s.path, data, 0o644); err != nil {
-		log.Printf("store: write accounts error: %v", err)
-	}
+	writeFileAtomic(s.path, data)
 }

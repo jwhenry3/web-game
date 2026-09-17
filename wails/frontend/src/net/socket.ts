@@ -5,6 +5,7 @@ import { loadDraftAppearance, saveAppearance } from "../characters/appearanceSto
 import { appearanceFromWire } from "../characters/types";
 import type { CharacterAppearanceWire } from "../characters/heroes99";
 import { clearHousePlace } from "../world/housePlaceBridge";
+import { getWorldViewRect } from "../world/viewRect";
 import {
   getGameTransport,
   setTransportHandlers,
@@ -48,6 +49,14 @@ function combatEntityList(): WorldEntity[] {
   return Object.keys(combatIds)
     .map((id) => entities[id])
     .filter((e): e is WorldEntity => !!e);
+}
+
+/** True when the entity's world position sits inside the camera viewport.
+ *  No rect published (outside the world scene) → don't filter. */
+function onScreen(e: WorldEntity): boolean {
+  const v = getWorldViewRect();
+  if (!v) return true;
+  return e.x >= v.x && e.x <= v.x + v.w && e.y >= v.y && e.y <= v.y + v.h;
 }
 
 /** The local player's entity, if the server is tracking one. */
@@ -94,14 +103,18 @@ function nearestEnemy(self: WorldEntity, pool: Iterable<WorldEntity>): WorldEnti
   return best;
 }
 
-/** Focus target if still attackable, else the nearest foe — combat
- *  participants first so a dead focus stays inside the current fight. */
+/** Focus target if still attackable, else the nearest on-screen foe —
+ *  combat participants first so a dead focus stays inside the current
+ *  fight. */
 function closestEnemy(self: WorldEntity): WorldEntity | undefined {
   const { entities } = useGame.getState();
   const focusId = selfTargetId() ?? self.target_id;
   const focus = focusId ? entities[focusId] : undefined;
   if (focus && isTargetableEnemy(focus)) return focus;
-  return nearestEnemy(self, combatEntityList()) ?? nearestEnemy(self, Object.values(entities));
+  return (
+    nearestEnemy(self, combatEntityList().filter(onScreen)) ??
+    nearestEnemy(self, Object.values(entities).filter(onScreen))
+  );
 }
 
 function livingEnemyTarget(self: WorldEntity): WorldEntity | undefined {
@@ -323,7 +336,7 @@ export const net = {
   cycleTarget(axis: "horizontal" | "vertical", dir: 1 | -1) {
     const self = selfCombatEntity();
     if (!self) return;
-    const entities = combatEntityList();
+    const entities = combatEntityList().filter(onScreen);
     const focusId = selfTargetId() ?? self.target_id;
     const pool =
       axis === "horizontal"
@@ -342,12 +355,12 @@ export const net = {
   tabTarget(dir: 1 | -1) {
     const self = selfCombatEntity();
     if (!self) return;
-    const inCombat = combatEntityList().filter(isTargetableEnemy);
+    const inCombat = combatEntityList().filter((e) => onScreen(e) && isTargetableEnemy(e));
     const pool =
       inCombat.length > 0
         ? inCombat
         : Object.values(useGame.getState().entities)
-            .filter(isTargetableEnemy)
+            .filter((e) => onScreen(e) && isTargetableEnemy(e))
             .sort(
               (a, b) =>
                 Math.hypot(a.x - self.x, a.y - self.y) - Math.hypot(b.x - self.x, b.y - self.y),

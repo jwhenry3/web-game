@@ -15,7 +15,7 @@ import (
 const (
 	npcCount    = 12
 	npcTickSec  = 0.25
-	maxMoveStep = 80.0 // ~240 px/s plus slack; rejects teleports
+	maxMoveStep = 80.0 // ~180 px/s plus slack; rejects teleports
 )
 
 func dist(ax, ay, bx, by float64) float64 {
@@ -30,7 +30,7 @@ func (h *Hub) serverEntitySnapshots() []protocol.WorldEntity {
 		if e.Kind == kindPlayer || e.hidden {
 			continue
 		}
-		out = append(out, h.entitySnapshot(e, time.Now()))
+		out = append(out, h.projector.project(e, time.Now()))
 	}
 	return out
 }
@@ -155,19 +155,33 @@ func (h *Hub) reseedNPCsPreservingCombat(count int) {
 		if _, ok := h.entities[id]; ok {
 			continue
 		}
-		var w *wander
-		if old.plugin(&w) {
+		if w := old.components.wander; w != nil {
 			w.ow = h.overworld
 		}
 		h.entities[id] = old
 	}
 }
 
-// broadcastEntityState streams NPC+pet snapshots to everyone when any moved.
+// broadcastEntityState streams NPC+pet snapshots in real time to clients that
+// have any server entity within nearSyncDist; everyone else is folded into
+// the once-a-second far-sync digest instead.
 func (h *Hub) broadcastEntityState() {
-	h.broadcastAll(protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
+	msg := protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
 		Entities: h.serverEntitySnapshots(),
-	}))
+	})
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, c := range h.clients {
+		if !c.Joined {
+			continue
+		}
+		p := h.entities[c.ID]
+		if p != nil && h.nearServerEntity(p) {
+			h.sendRaw(c, msg)
+		} else {
+			h.farEntityClients[c.ID] = true
+		}
+	}
 }
 
 func (h *Hub) worldSize() (w, hgt float64) {

@@ -26,6 +26,11 @@ const (
 
 	worldPosSaveInterval = 5 * time.Second
 	worldSkillCooldown   = 2 * time.Second
+
+	// nearSyncDist is the radius (px) at which movement streams in real time;
+	// entities beyond it are batched into the far-sync digest.
+	nearSyncDist    = 900.0
+	farSyncInterval = time.Second
 )
 
 type Event struct {
@@ -46,22 +51,29 @@ type Hub struct {
 	unregister chan *Client
 	events     chan Event
 	tasks      chan func()
+	routes     *routeRegistry
 
 	store    *store.Store
 	accounts *store.AccountStore
 	tokens   *auth.TokenIssuer
 
 	// Run-goroutine owned:
-	entities     map[string]*entity // unified world entities (players, NPCs, pets)
-	entityDirty  bool               // set when a server-driven entity moved/changed; broadcasts entity_state
-	aoi          map[string]bool    // clientIDs currently receiving combat ticks
-	rng          *rand.Rand
-	parties      map[string]*hubParty
-	clientParty  map[string]string
-	partyInvites map[string]*partyInvite
-	partySeq     int
-	camps        map[string]*worldCamp // owner character name -> camp
-	houses       map[string]*houseRoom // owner character name -> instance
+	entities    map[string]*entity // unified world entities (players, NPCs, pets)
+	entityDirty bool               // set when a server-driven entity moved/changed; broadcasts entity_state
+	aoi         map[string]bool    // clientIDs currently receiving combat ticks
+	projector   *projector         // canonical entity -> protocol.WorldEntity projection
+
+	// Far-sync: clients with no nearby entity activity get position updates on
+	// a 1s digest instead of the real-time stream.
+	farEntityClients map[string]bool // joined clientIDs owed a digest entity_state
+	movedPlayers     map[string]bool // player entity IDs moved since last digest
+	rng              *rand.Rand
+	parties          map[string]*hubParty
+	clientParty      map[string]string
+	partyInvites     map[string]*partyInvite
+	partySeq         int
+	camps            map[string]*worldCamp // owner character name -> camp
+	houses           map[string]*houseRoom // owner character name -> instance
 
 	overworld  *game.Overworld
 	mapID      string
@@ -98,24 +110,31 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		log.Printf("warning: loot catalogs: %v", err)
 	}
 	h := &Hub{
-		clients:      make(map[string]*Client),
-		register:     make(chan *Client, 16),
-		unregister:   make(chan *Client, 16),
-		events:       make(chan Event, 256),
-		tasks:        make(chan func(), 256),
-		store:        profiles,
-		accounts:     accounts,
-		tokens:       tokens,
-		entities:     make(map[string]*entity),
-		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
-		parties:      make(map[string]*hubParty),
-		clientParty:  make(map[string]string),
-		partyInvites: make(map[string]*partyInvite),
-		camps:        make(map[string]*worldCamp),
-		houses:       make(map[string]*houseRoom),
-		overworld:    game.Loaded(),
-		quit:         make(chan struct{}),
-		done:         make(chan struct{}),
+		clients:          make(map[string]*Client),
+		register:         make(chan *Client, 16),
+		unregister:       make(chan *Client, 16),
+		events:           make(chan Event, 256),
+		tasks:            make(chan func(), 256),
+		routes:           newRouteRegistry(),
+		store:            profiles,
+		accounts:         accounts,
+		tokens:           tokens,
+		entities:         make(map[string]*entity),
+		rng:              rand.New(rand.NewSource(time.Now().UnixNano())),
+		parties:          make(map[string]*hubParty),
+		clientParty:      make(map[string]string),
+		partyInvites:     make(map[string]*partyInvite),
+		camps:            make(map[string]*worldCamp),
+		houses:           make(map[string]*houseRoom),
+		farEntityClients: make(map[string]bool),
+		movedPlayers:     make(map[string]bool),
+		overworld:        game.Loaded(),
+		projector:        newProjector(),
+		quit:             make(chan struct{}),
+		done:             make(chan struct{}),
+	}
+	if err := h.registerSocialModule(); err != nil {
+		return nil, err
 	}
 	return h, nil
 }
@@ -311,6 +330,8 @@ func (h *Hub) Run() {
 	defer ticker.Stop()
 	castTicker := time.NewTicker(50 * time.Millisecond)
 	defer castTicker.Stop()
+	farTicker := time.NewTicker(farSyncInterval)
+	defer farTicker.Stop()
 	for {
 		select {
 		case <-h.quit:
@@ -337,6 +358,9 @@ func (h *Hub) Run() {
 		case <-castTicker.C:
 			h.finishDueWorldCasts(time.Now())
 			h.tickEntities(time.Now())
+
+		case <-farTicker.C:
+			h.flushFarSync()
 		}
 	}
 }
@@ -399,14 +423,14 @@ func (h *Hub) handleDisconnect(client *Client) {
 		h.eachEntity(kindNPC, func(n *entity) { delete(n.contributors, client.ID) })
 	}
 	delete(h.aoi, client.ID)
+	delete(h.farEntityClients, client.ID)
 	h.onHousingDisconnect(client)
 	if joined {
 		delete(h.entities, client.ID)
 		h.syncPetEntities()
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerLeft, protocol.PlayerLeftPayload{ID: client.ID}))
 	}
-	h.onClientDisconnectSocial(client.ID)
-	h.refreshFriendsSocial(client.Name)
+	h.routes.disconnect(client)
 	log.Printf("client %s disconnected", client.ID)
 }
 
@@ -419,6 +443,9 @@ func (h *Hub) handleEvent(ev Event) {
 	}
 	if !c.Joined {
 		h.sendError(c, "Join the world first.")
+		return
+	}
+	if h.routes.handle(c, ev.Type, ev.Payload) {
 		return
 	}
 
@@ -437,24 +464,6 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handleSetHotbar(c, ev.Payload)
 	case protocol.TypeSetKeybinds:
 		h.handleSetKeybinds(c, ev.Payload)
-	case protocol.TypeAddFriend:
-		h.handleAddFriend(c, ev.Payload)
-	case protocol.TypeAcceptFriend:
-		h.handleAcceptFriend(c, ev.Payload)
-	case protocol.TypeDeclineFriend:
-		h.handleDeclineFriend(c, ev.Payload)
-	case protocol.TypeRemoveFriend:
-		h.handleRemoveFriend(c, ev.Payload)
-	case protocol.TypePartyInvite:
-		h.handlePartyInvite(c, ev.Payload)
-	case protocol.TypePartyAccept:
-		h.handlePartyAccept(c)
-	case protocol.TypePartyDecline:
-		h.handlePartyDecline(c)
-	case protocol.TypePartyLeave:
-		h.handlePartyLeave(c)
-	case protocol.TypePartyKick:
-		h.handlePartyKick(c, ev.Payload)
 	case protocol.TypeAction:
 		h.handleAction(c, ev.Payload)
 	case protocol.TypeSetTarget:
@@ -700,10 +709,96 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 			return
 		}
 	}
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
-	}))
+	h.broadcastPlayerMoved(c.ID, e)
 	h.checkAggroAt(c.ID, e.X, e.Y)
+}
+
+// broadcastPlayerMoved streams a move update to the mover and clients within
+// nearSyncDist immediately; distant clients pick the position up on the
+// once-a-second far-sync digest instead.
+func (h *Hub) broadcastPlayerMoved(moverID string, e *entity) {
+	msg := protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
+		ID: moverID, X: e.X, Y: e.Y, Facing: e.Facing,
+	})
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, c := range h.clients {
+		if !c.Joined {
+			continue
+		}
+		p := h.entities[c.ID]
+		if c.ID == moverID || (p != nil && dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist) {
+			h.sendRaw(c, msg)
+		} else {
+			h.movedPlayers[moverID] = true
+		}
+	}
+}
+
+// nearServerEntity reports whether any server-driven entity (NPC/pet) is
+// within nearSyncDist of the player entity.
+func (h *Hub) nearServerEntity(p *entity) bool {
+	for _, e := range h.entities {
+		if e.Kind == kindPlayer || e.hidden {
+			continue
+		}
+		if dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist {
+			return true
+		}
+	}
+	return false
+}
+
+// flushFarSync runs on farSyncInterval: clients with no nearby server entity
+// get a full entity_state digest, and players that moved while out of a
+// client's near range get their latest position pushed as player_moved.
+func (h *Hub) flushFarSync() {
+	if len(h.farEntityClients) == 0 && len(h.movedPlayers) == 0 {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if len(h.farEntityClients) > 0 {
+		var msg []byte
+		for id := range h.farEntityClients {
+			c := h.clients[id]
+			if c == nil || !c.Joined {
+				continue
+			}
+			if msg == nil {
+				msg = protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
+					Entities: h.serverEntitySnapshots(),
+				})
+			}
+			h.sendRaw(c, msg)
+		}
+		clear(h.farEntityClients)
+	}
+	if len(h.movedPlayers) == 0 {
+		return
+	}
+	for _, c := range h.clients {
+		if !c.Joined {
+			continue
+		}
+		p := h.entities[c.ID]
+		for id := range h.movedPlayers {
+			if id == c.ID {
+				continue
+			}
+			e := h.entities[id]
+			if e == nil || e.hidden {
+				continue
+			}
+			if p != nil && dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist {
+				continue // near clients already stream these in real time
+			}
+			h.sendRaw(c, protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
+				ID: id, X: e.X, Y: e.Y, Facing: e.Facing,
+			}))
+		}
+	}
+	clear(h.movedPlayers)
 }
 
 func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
@@ -830,7 +925,7 @@ func (h *Hub) worldEntities(now time.Time) []protocol.WorldEntity {
 		if e.Kind != kindPlayer && e.hidden {
 			continue
 		}
-		out = append(out, h.entitySnapshot(e, now))
+		out = append(out, h.projector.project(e, now))
 	}
 	return out
 }

@@ -1,9 +1,9 @@
 import Phaser from "phaser";
 import { net } from "../net/socket";
-import { uiOwnsKeyboard, useGame, type CombatEvent } from "../state/store";
+import { useGame, type CombatEvent } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
-import { appearanceKey, facingFromDelta, H99_FACING_DEFAULT, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS, H99_WORLD_RING_Y, type CharacterFacing } from "../characters/types";
-import { applyPlayerSlide, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "./movementBridge";
+import { appearanceKey, H99_NAME_LABEL_Y, H99_WORLD_RING_RADIUS, H99_WORLD_RING_Y } from "../characters/types";
+import { facingOf, getLastWorldFacing, setLastWorldFacing, WorldMovement } from "./movement";
 import { FILL, tileAt, WALKABLE } from "../world/overworld";
 import { VisibilityFX } from "./visibility";
 import { rasterizeTerrainLayers, terrainLayerKey, terrainLayersFromSnapshot, type TerrainLayerData } from "../world/terrainRaster";
@@ -16,9 +16,11 @@ import {
 } from "../world/worldTerrainSync";
 import type { MapSnapshot, MapTerrainLayers, OverworldMap, WorldEntity, CharacterAppearanceWire, SavePoint, JobChanger, WorldCamp, StatusSnapshot, ActionResult } from "../types";
 import { isAllyEntity } from "../types";
-import { bindingToPhaserKeyCode, mergeKeybinds, resolveHotbarSlot } from "../input/keybinds";
+
 import { CharacterSprite } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
+import type { IEntitySprite } from "./entitySprite";
+import { createSpriteForEntity, ENTITY_PRESENTATION } from "./spriteFactory";
 import { trackContentZoom } from "./contentZoom";
 import { enemyKindFromName } from "../characters/enemies";
 import { pushChat } from "../state/store";
@@ -42,8 +44,8 @@ import {
 } from "./battleVfx";
 import { battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
 import { entityShadow } from "./entityShadow";
-import { findPath, type PathPoint } from "../world/pathfind";
 import { clearWorldLocalPos, setWorldLocalPos } from "../world/worldLocalPos";
+import { clearWorldViewRect, setWorldViewRect } from "../world/viewRect";
 import { campSkinById, drawCampTent } from "../housing/campSkins";
 import {
   clearEntityOverlays,
@@ -58,7 +60,6 @@ import {
   type StageTransform,
 } from "../world/entityOverlayBridge";
 
-const SPEED = 240;
 /** Tiles of a neighboring map rendered past the shared border — deep enough
  *  that the seam stays hidden at min zoom on wide windows. */
 const NEIGHBOR_SLAB_TILES = 64;
@@ -106,7 +107,6 @@ function slabForNeighbor(data: TerrainLayerData, dir: NeighborDir) {
     offY: r0 * data.tileSize,
   };
 }
-const SEND_INTERVAL = 100;
 const POI_INTERACT_PROMPT_Y = -36;
 const CAST_BAR_Y = 10;
 const POI_LABEL_Y = -28;
@@ -117,22 +117,6 @@ const PET_FOLLOW_SCALE = 0.55;
 const PET_LERP = 0.2;
 /** Distance beyond which the pet snaps instead of interpolating. */
 const PET_SNAP_DIST = 120;
-
-/** Dodge dash distance — two 32px squares (matches the old realtime battle dash). */
-const DODGE_DIST = 64;
-/** Local dodge cooldown mirror — the server enforces the authoritative 500ms. */
-const DODGE_COOLDOWN_MS = 500;
-/** Local stamina check mirror (server: staminaMax 100, dodge cost 25). */
-const DODGE_STAMINA_COST = 25;
-/** Melee reach drawn around self while fighting (server: attackRangeW 70). */
-const MELEE_RANGE = 70;
-
-/** Survives Phaser remounts when crossing maps. */
-let lastWorldFacing: CharacterFacing = H99_FACING_DEFAULT;
-
-function facingOf(wp: Pick<WorldEntity, "facing">, fallback: CharacterFacing): CharacterFacing {
-  return wp.facing === "left" || wp.facing === "right" ? wp.facing : fallback;
-}
 
 interface Avatar {
   wrapper: Phaser.GameObjects.Container;
@@ -159,7 +143,7 @@ interface PetMarker {
 /** Avatar for a combat entity with no world replica (battle pets, summons). */
 interface CombatExtra {
   wrapper: Phaser.GameObjects.Container;
-  sprite: CharacterSprite | EnemySprite;
+  sprite: IEntitySprite;
   lastX: number;
   lastY: number;
 }
@@ -193,12 +177,6 @@ export class WorldScene extends Phaser.Scene {
   private jobChangers = new Map<string, JobChangerMarker>();
   private camps = new Map<string, CampMarker>();
   private pets = new Map<string, PetMarker>();
-  private moveKeys: Partial<Record<"move_up" | "move_down" | "move_left" | "move_right", Phaser.Input.Keyboard.Key>> = {};
-  private moveKeysSig = "";
-  private lastSent = 0;
-  private lastSentX = -1;
-  private lastSentY = -1;
-  private wasMoving = false;
   private selfSpawned = false;
   private terrain?: Phaser.GameObjects.Graphics;
   private terrainImage?: Phaser.GameObjects.Image;
@@ -230,168 +208,12 @@ export class WorldScene extends Phaser.Scene {
   private jumping = new Set<string>();
   /** Focus-target ring under the current target's feet. */
   private targetRing?: Phaser.GameObjects.Ellipse;
-  /** Faint circle showing melee reach around self while fighting. */
-  private meleeRing?: Phaser.GameObjects.Arc;
-  /** Current normalized movement direction — the dodge dash direction. */
-  private moveDir = { x: 0, y: 0 };
-  /** Bumped when a dodge/jump resets the local movement timeline; stale
-   * pending slide callbacks must not overwrite the wrapper. */
-  private moveEpoch = 0;
-  /** Click-to-move waypoint queue (world coords); cancelled by key input. */
-  private clickPath: PathPoint[] | null = null;
-  /** Breadcrumb dots along the active click path — eaten as the player passes. */
-  private pathDots: { dot: Phaser.GameObjects.Arc; x: number; y: number }[] = [];
-  /** Shift was consumed as a hotbar chord (Shift+1–8) — release does not dodge. */
-  private shiftComboUsed = false;
-  private dodging = false;
-  private dodgeReadyAt = 0;
-  /** Sweep ring under self showing the dodge cooldown. */
-  private dodgeCdGfx?: Phaser.GameObjects.Graphics;
-  private readonly onCombatKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Shift") {
-      this.shiftComboUsed = false;
-      return;
-    }
-    if (!e.shiftKey) return;
-    // Shift+digit is a hotbar row — releasing Shift afterward must not dodge.
-    const binds = mergeKeybinds(useGame.getState().profile?.keybinds);
-    if (resolveHotbarSlot(e, binds)?.startsWith("shift+")) this.shiftComboUsed = true;
-  };
-  private readonly onCombatKeyUp = (e: KeyboardEvent) => {
-    if (e.key !== "Shift") return;
-    if (!uiOwnsKeyboard() && !this.shiftComboUsed) this.performDodge();
-    this.shiftComboUsed = false;
-  };
-  /** Last position/time while following a click path — detects wall-stuck. */
-  private clickStuck = { x: 0, y: 0, t: 0 };
-  private readonly onGroundPointerDown = (
-    pointer: Phaser.Input.Pointer,
-    over: Phaser.GameObjects.GameObject[],
-  ) => {
-    // Right-click anywhere in the world deselects the current target and
-    // cancels any armed hotbar action (entity/POI zones only handle left).
-    if (pointer.button === 2) {
-      this.clearTargetSelection();
-      return;
-    }
-    if (pointer.button !== 0 || (over && over.length > 0)) return;
-    const tag = document.activeElement?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
-    this.startClickMove(pointer.worldX, pointer.worldY);
-  };
-
-  private clearTargetSelection() {
-    const s = useGame.getState();
-    if (s.selectedAction || s.commandPetId) {
-      useGame.setState({ selectedAction: null, commandPetId: null });
-    }
-    const self = s.selfId ? s.entities[s.selfId] : undefined;
-    if (self?.target_id) net.setTarget("");
-  }
-
-  /** Path the local player to a world point and flash the destination. */
-  private startClickMove(wx: number, wy: number) {
-    const selfId = useGame.getState().selfId;
-    const av = selfId ? this.avatars.get(selfId) : undefined;
-    const map = useGame.getState().overworld;
-    if (!av || !map || this.dodging) return;
-    const path = findPath(map, av.wrapper.x, av.wrapper.y, wx, wy);
-    if (!path?.length) return;
-    this.clickPath = path;
-    this.clickStuck = { x: av.wrapper.x, y: av.wrapper.y, t: this.time.now };
-    this.layPathDots(av.wrapper.x, av.wrapper.y, path);
-    const last = path[path.length - 1];
-    const ring = this.add
-      .circle(last.x, last.y, 11)
-      .setStrokeStyle(2, 0xe8c96a)
-      .setDepth(6);
-    this.tweens.add({
-      targets: ring,
-      scale: 0.4,
-      alpha: 0,
-      duration: 450,
-      onComplete: () => ring.destroy(),
-    });
-  }
-
-  /**
-   * Sprinkle breadcrumb dots along the path the player is about to walk.
-   * They ripple in from near→far on click and are eaten as the player passes.
-   */
-  private layPathDots(fromX: number, fromY: number, path: PathPoint[]) {
-    this.clearPathDots();
-    const pts = [{ x: fromX, y: fromY }, ...path];
-    let total = 0;
-    for (let i = 1; i < pts.length; i++) {
-      total += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y);
-    }
-    if (total < 24) return; // too short to breadcrumb
-    const spacing = Math.max(16, total / 60); // cap ~60 dots on long paths
-    let at = spacing;
-    let segStart = 0;
-    let segIdx = 0;
-    let i = 0;
-    // Stop ~10px short of the end — the shrinking ring marks the destination.
-    while (at <= total - 10) {
-      let segLen = Math.hypot(pts[segIdx + 1].x - pts[segIdx].x, pts[segIdx + 1].y - pts[segIdx].y);
-      while (segStart + segLen < at && segIdx < pts.length - 2) {
-        segStart += segLen;
-        segIdx++;
-        segLen = Math.hypot(pts[segIdx + 1].x - pts[segIdx].x, pts[segIdx + 1].y - pts[segIdx].y);
-      }
-      const a = pts[segIdx];
-      const b = pts[segIdx + 1];
-      const t = segLen > 0 ? (at - segStart) / segLen : 0;
-      const x = a.x + (b.x - a.x) * t;
-      const y = a.y + (b.y - a.y) * t;
-      const dot = this.add
-        .circle(x, y, 2.5, 0xe8c96a, 0)
-        .setDepth(6)
-        .setScale(0.4);
-      this.tweens.add({
-        targets: dot,
-        alpha: 0.55,
-        scale: 1,
-        duration: 160,
-        delay: i * 35,
-      });
-      this.pathDots.push({ dot, x, y });
-      i++;
-      at += spacing;
-    }
-  }
-
-  private clearPathDots() {
-    for (const p of this.pathDots) p.dot.destroy();
-    this.pathDots = [];
-  }
-
-  /** Cancel click-to-move and remove its breadcrumbs. */
-  private clearClickPath() {
-    this.clickPath = null;
-    this.clearPathDots();
-  }
-
-  /** Fade out breadcrumbs the player has reached. Called each move frame. */
-  private eatPathDots(x: number, y: number) {
-    if (!this.pathDots.length) return;
-    const eaten: typeof this.pathDots = [];
-    this.pathDots = this.pathDots.filter((p) => {
-      if (Math.hypot(x - p.x, y - p.y) > 16) return true;
-      eaten.push(p);
-      return false;
-    });
-    for (const p of eaten) {
-      const d = p.dot;
-      this.tweens.add({
-        targets: d,
-        alpha: 0,
-        scale: 0.3,
-        duration: 140,
-        onComplete: () => d.destroy(),
-      });
-    }
-  }
+  /** Local-player movement: key input, click-to-move, dodge dash, sends. */
+  private movement = new WorldMovement(this, {
+    avatar: (id) => this.avatars.get(id),
+    jumping: this.jumping,
+    worldBounds: () => ({ w: this.worldW, h: this.worldH }),
+  });
 
   constructor() {
     super("world");
@@ -430,17 +252,17 @@ export class WorldScene extends Phaser.Scene {
       });
 
     const kb = this.input.keyboard!;
-    this.syncMoveKeys();
+    this.movement.syncMoveKeys();
     kb.disableGlobalCapture();
     // Combat input: Shift keyup dodges unless it was a Shift+hotbar chord.
-    kb.off("keydown", this.onCombatKeyDown);
-    kb.off("keyup", this.onCombatKeyUp);
-    kb.on("keydown", this.onCombatKeyDown);
-    kb.on("keyup", this.onCombatKeyUp);
+    kb.off("keydown", this.movement.onCombatKeyDown);
+    kb.off("keyup", this.movement.onCombatKeyUp);
+    kb.on("keydown", this.movement.onCombatKeyDown);
+    kb.on("keyup", this.movement.onCombatKeyUp);
     // Click-to-move: left-click on open ground paths to the point. Entity and
     // POI hit zones consume their own clicks (non-empty `over`), so this only
     // fires on bare terrain.
-    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onGroundPointerDown);
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.movement.onGroundPointerDown);
     // Don't replay combat events that fired while the scene was away.
     this.combatSeenSeq = useGame.getState().combatEvents.reduce((m, e) => Math.max(m, e.seq), 0);
 
@@ -454,14 +276,8 @@ export class WorldScene extends Phaser.Scene {
       this.jumping.clear();
       this.targetRing?.destroy();
       this.targetRing = undefined;
-      this.meleeRing?.destroy();
-      this.meleeRing = undefined;
-      this.dodgeCdGfx?.destroy();
-      this.dodgeCdGfx = undefined;
-      this.dodging = false;
-      this.shiftComboUsed = false;
-      this.clearClickPath();
-      this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onGroundPointerDown);
+      this.movement.reset();
+      this.input.off(Phaser.Input.Events.POINTER_DOWN, this.movement.onGroundPointerDown);
       for (const [, r] of this.neighborImgs) {
         r.base.destroy();
         r.canopy?.destroy();
@@ -471,9 +287,11 @@ export class WorldScene extends Phaser.Scene {
       this.neighborPortalsGfx = undefined;
       this.neighborPortalSig = "";
       clearEntityOverlays();
+      clearWorldViewRect();
     });
     this.events.on(Phaser.Scenes.Events.SLEEP, () => {
       clearEntityOverlays();
+      clearWorldViewRect();
     });
     this.events.on(Phaser.Scenes.Events.WAKE, () => {
       // Returning from the house scene: force the self avatar to re-snap so
@@ -653,31 +471,6 @@ export class WorldScene extends Phaser.Scene {
         g.strokeRect(rel.x + p.x + 2, rel.y + p.y + 2, p.w - 4, p.h - 4);
       }
     }
-  }
-
-  private syncMoveKeys() {
-    const binds = mergeKeybinds(useGame.getState().profile?.keybinds);
-    const sig = `${binds.move_up}|${binds.move_down}|${binds.move_left}|${binds.move_right}`;
-    const missing = !this.moveKeys.move_up || !this.moveKeys.move_down || !this.moveKeys.move_left || !this.moveKeys.move_right;
-    if (!missing && sig === this.moveKeysSig) return;
-    const kb = this.input.keyboard;
-    if (!kb) {
-      this.moveKeysSig = "";
-      return;
-    }
-    const bindKey = (action: "move_up" | "move_down" | "move_left" | "move_right") => {
-      const code = bindingToPhaserKeyCode(binds[action] ?? "");
-      this.moveKeys[action] = code != null ? kb.addKey(code) : undefined;
-    };
-    bindKey("move_up");
-    bindKey("move_down");
-    bindKey("move_left");
-    bindKey("move_right");
-    this.moveKeysSig = sig;
-  }
-
-  private isMoveDown(action: "move_up" | "move_down" | "move_left" | "move_right"): boolean {
-    return !!this.moveKeys[action]?.isDown;
   }
 
   private resolveAppearance(
@@ -1194,7 +987,7 @@ export class WorldScene extends Phaser.Scene {
   /** Scene position + sprite for any combat id: player, NPC, pet, or combat-only extra. */
   private combatAvatarFor(
     id: string,
-  ): { wrapper: Phaser.GameObjects.Container; sprite: CharacterSprite | EnemySprite } | undefined {
+  ): { wrapper: Phaser.GameObjects.Container; sprite: IEntitySprite } | undefined {
     const av = this.avatars.get(id);
     if (av) return { wrapper: av.wrapper, sprite: av.sprite };
     const fo = this.foes.get(id);
@@ -1292,6 +1085,8 @@ export class WorldScene extends Phaser.Scene {
     const feet = worldToStagePoint(this, worldX, worldY, transform);
     const nameOff = localOffsetToStage(0, nameLocalY, transform);
     const castOff = localOffsetToStage(0, CAST_BAR_Y, transform);
+    const st = useGame.getState();
+    const focused = st.selfId != null && st.entities[st.selfId]?.target_id === id;
     return {
       id,
       label,
@@ -1305,6 +1100,7 @@ export class WorldScene extends Phaser.Scene {
       castPct,
       hp,
       statuses,
+      targeted: focused,
     };
   }
 
@@ -1313,9 +1109,14 @@ export class WorldScene extends Phaser.Scene {
     if (state.screen !== "world") {
       clearEntityOverlays();
       clearWorldLocalPos();
+      clearWorldViewRect();
       return;
     }
-    this.syncMoveKeys();
+    {
+      const v = this.cameras.main.worldView;
+      setWorldViewRect(v.x, v.y, v.width, v.height);
+    }
+    this.movement.syncMoveKeys();
     const mapId = state.mapInfo?.id ?? "";
     if (mapId !== this.lastMapId) {
       this.lastMapId = mapId;
@@ -1404,18 +1205,18 @@ export class WorldScene extends Phaser.Scene {
       if (isSelf) {
         if (!this.selfSpawned) {
           av.wrapper.setPosition(wp.x, wp.y);
-          lastWorldFacing = facingOf(wp, lastWorldFacing);
-          av.sprite.setFacing(lastWorldFacing);
+          setLastWorldFacing(facingOf(wp, getLastWorldFacing()));
+          av.sprite.setFacing(getLastWorldFacing());
           this.cameras.main.startFollow(av.wrapper, true, 0.15, 0.15);
           this.selfSpawned = true;
         } else if (
-          !this.dodging &&
+          !this.movement.dodging &&
           !this.jumping.has(wp.id) &&
           Math.hypot(av.wrapper.x - wp.x, av.wrapper.y - wp.y) > 80
         ) {
           av.wrapper.setPosition(wp.x, wp.y);
-          lastWorldFacing = facingOf(wp, lastWorldFacing);
-          av.sprite.setFacing(lastWorldFacing);
+          setLastWorldFacing(facingOf(wp, getLastWorldFacing()));
+          av.sprite.setFacing(getLastWorldFacing());
         }
         setWorldLocalPos(av.wrapper.x, av.wrapper.y);
       }
@@ -1440,9 +1241,8 @@ export class WorldScene extends Phaser.Scene {
     this.syncFoes(state.entities, delta, overlayMarks, stageXf);
     this.syncCombatEntities(state, delta, overlayMarks, stageXf);
     this.updateTargetRing(state);
-    this.updateMeleeRing(state);
-    this.updateDodgeCooldown();
-    this.moveSelf(time, selfId, state.overworld);
+    this.movement.updateDodgeCooldown();
+    this.movement.update(time, selfId, state.overworld);
     this.syncPets(state.entities, delta, overlayMarks, stageXf);
 
     // POIs are world-fixed; project with the camera scroll Phaser will use this frame
@@ -1654,19 +1454,9 @@ export class WorldScene extends Phaser.Scene {
   private ensureCombatExtra(ce: WorldEntity): CombatExtra {
     let ex = this.combatExtras.get(ce.id);
     if (ex) return ex;
-    const wrapper = this.add.container(ce.x, ce.y).setDepth(10);
-    let sprite: CharacterSprite | EnemySprite;
-    if (ce.kind === "player") {
-      sprite = new CharacterSprite(
-        this,
-        0,
-        0,
-        this.resolveAppearance(ce.id, ce.sprite, ce.weapon, ce.appearance),
-      );
-    } else {
-      sprite = new EnemySprite(this, 0, 0, enemyKindFromName(ce.name, ce.sprite));
-    }
-    wrapper.add([entityShadow(this), sprite.container]);
+    const wrapper = this.add.container(ce.x, ce.y).setDepth(ENTITY_PRESENTATION.combatExtraDepth);
+    const sprite = createSpriteForEntity(this, ce);
+    wrapper.add([entityShadow(this, ENTITY_PRESENTATION.defaultShadowScale), sprite.container]);
     wrapper.setSize(44, 60);
     wrapper.setInteractive({ useHandCursor: true, cursor: "pointer" });
     wrapper.on("pointerdown", () => this.onEntityClicked(ce.id));
@@ -1700,136 +1490,6 @@ export class WorldScene extends Phaser.Scene {
     const sel = state.selectedAction;
     const friendly = focusE != null && (isAllyEntity(focusE) || focusE.kind === "pet");
     this.targetRing.setStrokeStyle(2.5, sel && sel.heals === friendly ? 0xffe9a8 : 0xe05545, 0.9);
-  }
-
-  /** Faint melee reach circle under self while fighting or targeting. */
-  private updateMeleeRing(state: ReturnType<typeof useGame.getState>) {
-    const selfId = state.selfId;
-    const selfAv = selfId ? this.avatars.get(selfId) : undefined;
-    const selfE = selfId ? state.entities[selfId] : undefined;
-    const fighting =
-      !!(selfId && state.combatIds[selfId]) ||
-      !!selfE?.engaged ||
-      !!selfE?.target_id ||
-      !!state.selectedAction;
-    if (selfAv && fighting) {
-      if (!this.meleeRing) {
-        this.meleeRing = this.add
-          .circle(0, 0, MELEE_RANGE)
-          .setDepth(9)
-          .setStrokeStyle(1.5, 0x8fd0ff, 0.3);
-      }
-      this.meleeRing.setVisible(true);
-      this.meleeRing.setPosition(selfAv.wrapper.x, selfAv.wrapper.y);
-    } else {
-      this.meleeRing?.setVisible(false);
-    }
-  }
-
-  /** Sweeping ring under self that refills over the dodge cooldown. */
-  private updateDodgeCooldown() {
-    const remaining = this.dodgeReadyAt - this.time.now;
-    const selfId = useGame.getState().selfId;
-    const av = selfId ? this.avatars.get(selfId) : undefined;
-    if (remaining <= 0 || !av) {
-      if (this.dodgeCdGfx) this.dodgeCdGfx.clear();
-      return;
-    }
-    if (!this.dodgeCdGfx) this.dodgeCdGfx = this.add.graphics().setDepth(11);
-    const pct = 1 - remaining / DODGE_COOLDOWN_MS;
-    const g = this.dodgeCdGfx;
-    g.clear();
-    g.setPosition(av.wrapper.x, av.wrapper.y + H99_WORLD_RING_Y);
-    g.lineStyle(3, 0x9fb6c9, 0.55);
-    g.beginPath();
-    g.arc(0, 0, H99_WORLD_RING_RADIUS * 0.8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
-    g.strokePath();
-  }
-
-  /**
-   * Dash two squares along the current movement input — works in and out of
-   * combat (the dash interrupts a cast). Does nothing standing still so it
-   * never wastes stamina without moving the player. The server applies the
-   * authoritative cooldown/stamina cost and broadcasts the dodge event.
-   */
-  private performDodge() {
-    const state = useGame.getState();
-    const selfId = state.selfId;
-    const av = selfId ? this.avatars.get(selfId) : undefined;
-    const wp = selfId ? state.entities[selfId] : undefined;
-    if (!selfId || !av || !wp || this.dodging || this.jumping.has(selfId)) return;
-    if (state.screen !== "world" || wp.in_house) return;
-    const selfCe = state.combatIds[selfId] ? wp : undefined;
-    if (selfCe && !selfCe.alive) return;
-    const { x: dx, y: dy } = this.moveDir;
-    if (dx === 0 && dy === 0) return;
-    if (this.time.now < this.dodgeReadyAt) return;
-    if ((wp.stamina ?? 100) < DODGE_STAMINA_COST) return;
-    this.dodgeReadyAt = this.time.now + DODGE_COOLDOWN_MS;
-    this.moveEpoch++; // invalidate any pre-dash slide callbacks
-    this.clearClickPath(); // the dash overrides click-to-move
-    net.dodge();
-    const casting = !!selfCe?.casting_skill_id || !!wp.casting_skill_id;
-    if (casting) this.clearSelfCastLocal();
-
-    const rawX = Phaser.Math.Clamp(
-      av.wrapper.x + dx * DODGE_DIST,
-      H99_COLLISION_HALF_W,
-      this.worldW - H99_COLLISION_HALF_W,
-    );
-    const rawY = Phaser.Math.Clamp(
-      av.wrapper.y + dy * DODGE_DIST,
-      H99_COLLISION_HALF_H,
-      this.worldH,
-    );
-    const ox = av.wrapper.x;
-    const oy = av.wrapper.y;
-    playDodgeVfx(this, ox, oy - 8, DEFAULT_BATTLE_SPEED);
-    this.dodging = true;
-    void applyPlayerSlide(state.overworld, ox, oy, rawX, rawY).then((slid) => {
-      const cur = this.avatars.get(selfId);
-      if (!cur) {
-        this.dodging = false;
-        return;
-      }
-      this.tweens.add({
-        targets: cur.wrapper,
-        x: slid.x,
-        y: slid.y,
-        duration: battleDuration(130, DEFAULT_BATTLE_SPEED),
-        ease: "Power2",
-        onComplete: () => {
-          this.dodging = false;
-          playDodgeVfx(this, cur.wrapper.x, cur.wrapper.y - 8, DEFAULT_BATTLE_SPEED);
-          setWorldLocalPos(cur.wrapper.x, cur.wrapper.y);
-          // The server applies the authoritative dash on the 'dodge' message,
-          // so the client does not need to send a follow-up move.
-        },
-      });
-    });
-  }
-
-  /** Locally clear our own cast — the server's cast_cancelled event confirms. */
-  private clearSelfCastLocal() {
-    const selfId = useGame.getState().selfId;
-    if (!selfId) return;
-    useGame.setState((s) => {
-      const e = s.entities[selfId];
-      if (!e?.casting_skill_id) return s;
-      return {
-        entities: {
-          ...s.entities,
-          [selfId]: {
-            ...e,
-            casting_skill_id: undefined,
-            cast_target_id: undefined,
-            cast_progress: undefined,
-            cast_time_ms: undefined,
-            cast_ends_at: undefined,
-          },
-        },
-      };
-    });
   }
 
   /** Animate every unseen combat_event (VFX, lunge, float text, hit flash). */
@@ -1915,7 +1575,7 @@ export class WorldScene extends Phaser.Scene {
     };
 
     if (actor && target && isJumpAction(result.action_id)) {
-      if (ev.attacker_id === useGame.getState().selfId) this.moveEpoch++;
+      if (ev.attacker_id === useGame.getState().selfId) this.movement.invalidateSlides();
       this.jumping.add(ev.attacker_id);
       const inner = actor.sprite.container;
       this.tweens.killTweensOf(inner);
@@ -2007,132 +1667,4 @@ export class WorldScene extends Phaser.Scene {
     });
   }
 
-  private pendingSlide = Promise.resolve();
-
-  private moveSelf(time: number, selfId: string, overworld: OverworldMap | null) {
-    const av = this.avatars.get(selfId);
-    const wp = useGame.getState().entities[selfId];
-    if (!av || !wp || !overworld) return;
-    // The dodge dash tween owns the wrapper until it lands.
-    if (this.dodging || this.jumping.has(selfId)) return;
-
-    if (uiOwnsKeyboard()) {
-      av.sprite.setMoving(false);
-      this.moveDir.x = 0;
-      this.moveDir.y = 0;
-      return;
-    }
-
-    const dt = this.game.loop.delta / 1000;
-    let dx = 0;
-    let dy = 0;
-    if (this.isMoveDown("move_left")) dx -= 1;
-    if (this.isMoveDown("move_right")) dx += 1;
-    if (this.isMoveDown("move_up")) dy -= 1;
-    if (this.isMoveDown("move_down")) dy += 1;
-
-    // Manual input cancels click-to-move; otherwise steer along the path.
-    let faceDx: number | null = null;
-    if (dx !== 0 || dy !== 0) {
-      this.clearClickPath();
-    } else if (this.clickPath?.length) {
-      // Pop every reached waypoint in the same frame — pausing for one frame
-      // drops to idle and restarts the run cycle at every waypoint.
-      while (this.clickPath.length) {
-        const wp0 = this.clickPath[0];
-        const ddx = wp0.x - av.wrapper.x;
-        const ddy = wp0.y - av.wrapper.y;
-        const dd = Math.hypot(ddx, ddy);
-        if (dd > 6) {
-          dx = ddx / dd;
-          dy = ddy / dd;
-          // Facing deadzone: while the waypoint sits nearly overhead, keep
-          // the current facing instead of flapping left/right each frame.
-          faceDx = Math.abs(ddx) > 10 ? dx : 0;
-          break;
-        }
-        this.clickPath.shift();
-      }
-      if (!this.clickPath.length) this.clearClickPath();
-      // Give up if the slide has kept us stuck against something ~0.6s.
-      if ((dx !== 0 || dy !== 0) && time - this.clickStuck.t > 600) {
-        if (Math.hypot(av.wrapper.x - this.clickStuck.x, av.wrapper.y - this.clickStuck.y) < 4) {
-          this.clearClickPath();
-          dx = 0;
-          dy = 0;
-        } else {
-          this.clickStuck = { x: av.wrapper.x, y: av.wrapper.y, t: time };
-        }
-      }
-    }
-
-    // The dodge dash follows the current movement direction.
-    const dLen = Math.hypot(dx, dy);
-    this.moveDir.x = dLen ? dx / dLen : 0;
-    this.moveDir.y = dLen ? dy / dLen : 0;
-
-    if (dx === 0 && dy === 0) {
-      av.sprite.setMoving(false);
-      if (this.wasMoving) {
-        this.sendPosition(time, av.wrapper.x, av.wrapper.y, true);
-        this.wasMoving = false;
-      }
-      return;
-    }
-
-    this.wasMoving = true;
-
-    av.sprite.setMoving(true, faceDx ?? dx, dy);
-    lastWorldFacing = facingFromDelta(faceDx ?? dx, lastWorldFacing);
-
-    const len = Math.hypot(dx, dy);
-    const nx = Phaser.Math.Clamp(
-      av.wrapper.x + (dx / len) * SPEED * dt,
-      H99_COLLISION_HALF_W,
-      this.worldW - H99_COLLISION_HALF_W,
-    );
-    const ny = Phaser.Math.Clamp(
-      av.wrapper.y + (dy / len) * SPEED * dt,
-      H99_COLLISION_HALF_H,
-      this.worldH,
-    );
-    const ox = av.wrapper.x;
-    const oy = av.wrapper.y;
-    // Place optimistically this frame so camera follow + React POIs share one pose.
-    // Collision slide (possibly async via Wails) corrects afterward.
-    av.wrapper.x = nx;
-    av.wrapper.y = ny;
-    this.eatPathDots(nx, ny);
-    setWorldLocalPos(nx, ny);
-    const epoch = this.moveEpoch;
-    this.pendingSlide = this.pendingSlide.then(async () => {
-      const slid = await applyPlayerSlide(overworld, ox, oy, nx, ny);
-      if (!this.avatars.has(selfId)) return;
-      // A dodge or jump reset the movement timeline after this slide was
-      // scheduled; its result is stale and would snap the player back.
-      if (epoch !== this.moveEpoch) return;
-      // The dodge dash tween owns the wrapper while it runs.
-      if (this.dodging || this.jumping.has(selfId)) return;
-      const cur = this.avatars.get(selfId)!;
-      cur.wrapper.x = slid.x;
-      cur.wrapper.y = slid.y;
-      setWorldLocalPos(slid.x, slid.y);
-      const moved = Math.hypot(slid.x - ox, slid.y - oy) > 0.5;
-      const st = useGame.getState();
-      const interruptCast = !!st.entities[selfId]?.casting_skill_id && moved;
-      if (interruptCast) this.clearSelfCastLocal();
-      this.sendPosition(time, slid.x, slid.y, interruptCast);
-    });
-  }
-
-  private sendPosition(time: number, x: number, y: number, force: boolean) {
-    const rx = Math.round(x);
-    const ry = Math.round(y);
-    if (!force && time - this.lastSent <= SEND_INTERVAL) return;
-    if (rx === this.lastSentX && ry === this.lastSentY) return;
-    net.move(rx, ry);
-    this.lastSent = time;
-    this.lastSentX = rx;
-    this.lastSentY = ry;
-  }
 }

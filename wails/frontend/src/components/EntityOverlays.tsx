@@ -39,23 +39,29 @@ function EntityCastBar({ mark }: { mark: EntityOverlayMark }) {
   );
 }
 
-/** Compact combat HP bar under the nameplate for engaged/damaged entities. */
+/** Down-pointing chevron over the focus target's nameplate. */
+function TargetArrow({ mark }: { mark: EntityOverlayMark }) {
+  if (!mark.targeted) return null;
+  return <div className="cm-target-arrow" style={{ left: mark.nameX, top: mark.nameY }} />;
+}
+
+/** Compact combat HP bar over the nameplate for engaged/damaged entities. */
 function EntityHpBar({ mark }: { mark: EntityOverlayMark }) {
   if (!mark.hp || mark.hp.max <= 0) return null;
   const ratio = Math.max(0, Math.min(1, mark.hp.value / mark.hp.max));
   const color = ratio > 0.5 ? "#3dcc6e" : ratio > 0.25 ? "#facc15" : "#ef4444";
   return (
-    <div className="cm-entity-hp" style={{ left: mark.nameX, top: mark.nameY + 9 }}>
+    <div className="cm-entity-hp" style={{ left: mark.nameX, top: mark.nameY - 11 }}>
       <div className="cm-entity-hp-fill" style={{ width: `${ratio * 100}%`, background: color }} />
     </div>
   );
 }
 
-/** Status icon chips under the nameplate (below the HP bar when present). */
+/** Status icon chips under the nameplate. */
 function EntityStatuses({ mark }: { mark: EntityOverlayMark }) {
   if (!mark.statuses?.length) return null;
   return (
-    <div className="cm-entity-statuses" style={{ left: mark.nameX, top: mark.nameY + (mark.hp ? 17 : 9) }}>
+    <div className="cm-entity-statuses" style={{ left: mark.nameX, top: mark.nameY + 9 }}>
       <StatusIcons statuses={mark.statuses} className="status-icons--compact" />
     </div>
   );
@@ -92,6 +98,9 @@ export function EntityOverlays() {
       {entities.map((mark) => (
         <Nameplate key={`name-${mark.id}`} mark={mark} />
       ))}
+      {entities.map((mark) =>
+        mark.targeted ? <TargetArrow key={`ta-${mark.id}`} mark={mark} /> : null,
+      )}
       {entities.map((mark) =>
         mark.castPct != null ? <EntityCastBar key={`cast-${mark.id}`} mark={mark} /> : null,
       )}

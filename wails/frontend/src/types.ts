@@ -1,451 +1,17 @@
-// Mirrors the Go protocol package (internal/protocol/messages.go).
+// Wire protocol types are generated from the Go protocol package.
+// Source of truth: internal/protocol/messages.go — regenerate with `npm run wire:gen`.
+import type {
+  CharacterAppearance,
+  Item,
+  ProfileInfo,
+  SkillInfo,
+  WorldEntity,
+} from "./net/wire.gen";
 
-export type MessageType =
-  | "join_world"
-  | "move"
-  | "chat"
-  | "equip"
-  | "unequip"
-  | "set_jobs"
-  | "set_hotbar"
-  | "set_keybinds"
-  | "add_friend"
-  | "accept_friend"
-  | "decline_friend"
-  | "remove_friend"
-  | "party_invite"
-  | "party_accept"
-  | "party_decline"
-  | "party_leave"
-  | "party_kick"
-  | "action"
-  | "set_target"
-  | "dodge"
-  | "set_save_point"
-  | "use_world_skill"
-  | "enter_house"
-  | "leave_house"
-  | "house_interact"
-  | "house_storage_deposit"
-  | "house_storage_withdraw"
-  | "house_place_furniture"
-  | "house_pick_furniture"
-  | "set_camp_skin"
-  | "pet_set_follow"
-  | "pet_set_battle"
-  | "pet_release"
-  | "pet_command"
-  | "welcome"
-  | "map_config"
-  | "world_state"
-  | "player_joined"
-  | "player_left"
-  | "player_moved"
-  | "player_sync"
-  | "entity_state"
-  | "camp_state"
-  | "house_state"
-  | "house_return"
-  | "social_state"
-  | "party_invite_received"
-  | "friend_request_received"
-  | "reward_notice"
-  | "combat_tick"
-  | "combat_event"
-  | "chat_message"
-  | "error";
+export * from "./net/wire.gen";
 
-export interface Envelope {
-  type: MessageType;
-  payload?: unknown;
-}
-
-export interface Item {
-  id: string;
-  name: string;
-  kind: "equipment" | "consumable" | "decoration" | "crafting" | string;
-  slot?: string;
-  type?: string;
-  consumable?: string;
-  rarity: "common" | "rare" | "epic" | "legendary";
-  level: number;
-  qty?: number;
-  stats?: Record<string, number>;
-}
-
-export interface SkillInfo {
-  id: string;
-  name: string;
-  mp_cost: number;
-  heals: boolean;
-  buffs?: boolean;
-  description: string;
-  category?: string;
-  job?: string;
-  prereq?: string;
-  weapon_req?: string;
-  unlocked: boolean;
-  level: number;
-  max_level: number;
-  unlock_level: number;
-  usage?: number;
-  usage_to_next?: number;
-  cast_time_ms?: number;
-  world_only?: boolean;
-}
-
-export interface JobProgressInfo {
-  id: string;
-  name: string;
-  abbr: string;
-  category: string;
-  level: number;
-  xp: number;
-  max_xp: number;
-}
-
-export interface StatBlock {
-  hp: number;
-  mp: number;
-  str: number;
-  mag: number;
-  agi: number;
-}
-
-export interface HotbarBinding {
-  kind: "skill" | "item" | string;
-  id: string;
-}
-
-export interface CharacterAppearanceWire {
-  skin: string;
-  face: string;
-  hair: string;
-  hair_color: string;
-  cloth: string;
-  cloth_color: string;
-  weapon: string;
-  weapon_color: string;
-}
-
-export interface ProfileInfo {
-  name: string;
-  level: number;
-  xp: number;
-  max_xp: number;
-  race?: string;
-  main_job: string;
-  sub_job: string;
-  subjob_unlock_level: number;
-  unlocked_jobs: string[];
-  appearance?: CharacterAppearanceWire;
-  jobs: JobProgressInfo[];
-  stats: StatBlock;
-  inventory: Item[];
-  house_storage?: Item[];
-  house_storage_capacity?: number;
-  camp_skin?: string;
-  equipped: Record<string, string>;
-  hotbar: Record<string, HotbarBinding>;
-  keybinds?: Record<string, string>;
-  skills: SkillInfo[];
-  friends?: string[];
-  save_point_id?: string;
-  save_point_name?: string;
-  visited_save_points?: VisitedSavePoint[];
-  pets?: PetRecord[];
-  follow_pet_id?: string;
-  battle_pet_id?: string;
-}
-
-export interface PetRecord {
-  id: string;
-  kind: string;
-  name: string;
-  level: number;
-  caught_at?: number;
-}
-
-export interface VisitedSavePoint {
-  id: string;
-  name: string;
-  map_name?: string;
-  home?: boolean;
-}
-
-export interface FriendInfo {
-  name: string;
-  online: boolean;
-  level?: number;
-  weapon?: string;
-  in_combat?: boolean;
-}
-
-export interface PartyMember {
-  id: string;
-  name: string;
-  level: number;
-  weapon: string;
-  leader: boolean;
-  in_combat: boolean;
-}
-
-export interface PartyInfo {
-  id: string;
-  leader_id: string;
-  members: PartyMember[];
-}
-
-export interface PartyInvitePayload {
-  from_id: string;
-  from_name: string;
-  party_id: string;
-}
-
-export interface FriendRequestPayload {
-  from_id?: string;
-  from_name: string;
-}
-
-export interface SocialStatePayload {
-  friends: FriendInfo[];
-  party?: PartyInfo | null;
-  pending_invite?: PartyInvitePayload | null;
-  pending_friend_requests?: FriendRequestPayload[];
-  outgoing_friend_requests?: string[];
-}
-
-export interface WelcomePayload {
-  player_id: string;
-  profile: ProfileInfo;
-  map?: MapSnapshot;
-}
-
-export interface MapNeighbor {
-  id: string;
-  x: number;
-  y: number;
-}
-
-export interface MapSnapshot {
-  id: string;
-  name: string;
-  overworld: OverworldMap;
-  tiled_map?: string;
-  portals?: MapPortal[];
-  tile_overrides?: MapTileOverrides;
-  terrain_layers?: MapTerrainLayers;
-  /** This map's top-left corner in world pixels (border-graph layout). */
-  origin_x?: number;
-  origin_y?: number;
-  /** Border-adjacent maps' world-space origins, for scene overlay. */
-  neighbors?: MapNeighbor[];
-}
-
-export interface MapTerrainLayers {
-  ground: number[];
-  collision: number[];
-}
-
-export interface MapConfigPayload {
-  map?: MapSnapshot;
-}
-
-export interface MapTileOverrides {
-  map_id: string;
-  layers: Record<string, Record<string, number>>;
-  objects?: Array<{
-    id?: number;
-    name: string;
-    type: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    point?: boolean;
-    properties?: Array<{ name: string; type: string; value: string | number | boolean }>;
-  }>;
-  updated_at?: string;
-}
-
-export interface MapPortal {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-/** Entity classes carried in WorldEntity.kind. */
-export type EntityKind = "player" | "npc" | "pet";
-
-/**
- * Unified world entity: players, NPCs, and pets share one snapshot shape.
- * `kind` selects the class; `sprite` is the enemy key / pet kind / player race.
- * Fields that don't apply to a kind are absent on the wire.
- */
-export interface WorldEntity {
-  id: string;
-  name: string;
-  kind: EntityKind;
-  sprite?: string;
-  owner_id?: string;
-  level?: number;
-  x: number;
-  y: number;
-  facing?: number | string;
-  hp: number;
-  max_hp: number;
-  mp?: number;
-  max_mp?: number;
-  stamina?: number;
-  alive: boolean;
-  engaged?: boolean; // in combat
-  is_ally?: boolean;
-  target_id?: string;
-  statuses?: StatusSnapshot[];
-  capturable?: boolean;
-  skill_atb?: number;
-  has_queued_action?: boolean;
-  casting_skill_id?: string;
-  cast_target_id?: string;
-  cast_progress?: number;
-  cast_time_ms?: number;
-  cast_ends_at?: number;
-  // Player presence extras.
-  weapon?: string;
-  main_job?: string;
-  sub_job?: string;
-  appearance?: CharacterAppearanceWire;
-  immune_until?: number;
-  in_house?: boolean;
-  house_owner?: string;
-}
-
-/** Convenience predicates over the unified entity record. */
-export const isPlayerEntity = (e: WorldEntity) => e.kind === "player";
-export const isNpcEntity = (e: WorldEntity) => e.kind === "npc";
-export const isPetEntity = (e: WorldEntity) => e.kind === "pet";
-export const isAllyEntity = (e: WorldEntity) => e.kind === "player" || !!e.is_ally;
-
-export interface SavePoint {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-}
-
-export interface JobChanger {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-}
-
-export interface OverworldMap {
-  tile: number;
-  cols: number;
-  rows: number;
-  cells: string;
-}
-
-export type AtlasPOIKind = "save_point";
-
-export interface AtlasPOI {
-  id: string;
-  kind: AtlasPOIKind | string;
-  name: string;
-  x: number;
-  y: number;
-}
-
-export interface AtlasMap {
-  id: string;
-  name: string;
-  overworld: OverworldMap;
-  pois: AtlasPOI[];
-  /** World-space pixel origin in the border-graph layout. */
-  origin_x?: number;
-  origin_y?: number;
-}
-
-export interface AtlasPayload {
-  maps: AtlasMap[];
-}
-
-export interface WorldCamp {
-  owner_name: string;
-  owner_id: string;
-  x: number;
-  y: number;
-  skin: string;
-}
-
-export interface HouseFurniture {
-  id: string;
-  col: number;
-  row: number;
-  owner?: string;
-  item: Item;
-}
-
-export interface HousePlayer {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  facing?: number | string;
-  owner?: boolean;
-  pets?: HousePet[];
-}
-
-/** A pet that followed its owner into the house. */
-export interface HousePet {
-  id: string;
-  name: string;
-  sprite?: string;
-  x: number;
-  y: number;
-  facing?: number;
-}
-
-export interface HousePOI {
-  id: string;
-  kind: "door" | "storage" | string;
-  name: string;
-  x: number;
-  y: number;
-}
-
-export interface HouseStatePayload {
-  owner_name: string;
-  skin: string;
-  map_cols: number;
-  map_rows: number;
-  walk_cols: number;
-  walk_rows: number;
-  walk_origin_col: number;
-  walk_origin_row: number;
-  tile_size: number;
-  players: HousePlayer[];
-  furniture: HouseFurniture[];
-  pois: HousePOI[];
-  storage?: Item[];
-  storage_capacity?: number;
-  is_owner: boolean;
-}
-
-export interface WorldStatePayload {
-  entities: WorldEntity[];
-  camps?: WorldCamp[];
-  save_points?: SavePoint[];
-  job_changers?: JobChanger[];
-  map?: OverworldMap;
-}
-
-/** Incremental entity updates (movement, engagement, spawns) for NPCs/pets. */
-export interface EntityStatePayload {
-  entities: WorldEntity[];
-}
+/** Legacy name kept for existing call sites. */
+export type CharacterAppearanceWire = CharacterAppearance;
 
 export type ChatChannel = "general" | "social" | "system" | "battle";
 
@@ -469,6 +35,11 @@ export const CHAT_TABS: { id: ChatChannel; label: string }[] = [
   { id: "battle", label: "Battle" },
 ];
 
+/**
+ * Wire ChatMessagePayload plus the client-side channel hint set when routing
+ * inbound chat. The Go server does not send `channel` today; this shadows the
+ * generated interface for the richer local type.
+ */
 export interface ChatMessagePayload {
   from_id: string;
   from_name: string;
@@ -484,66 +55,35 @@ export interface ChatLine {
   tone?: ChatTone;
 }
 
-export interface StatusSnapshot {
-  kind: string;
-  potency: number;
-  remaining: number;
-  shield_hp?: number;
+/**
+ * Sparse tile patches per layer. The generated wire shape only models what the
+ * Go server serializes; the map editor also round-trips Tiled object patches
+ * in the same document, so the richer local interface shadows it.
+ */
+export interface MapTileOverrides {
+  map_id: string;
+  layers: Record<string, Record<string, number>>;
+  objects?: Array<{
+    id?: number;
+    name: string;
+    type: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    point?: boolean;
+    properties?: Array<{ name: string; type: string; value: string | number | boolean }>;
+  }>;
+  updated_at?: string;
 }
 
-export interface CombatTickPayload {
-  entities: WorldEntity[];
-}
+export type AtlasPOIKind = "save_point";
 
-export interface CombatEventPayload {
-  attacker_id: string;
-  target_id: string;
-  damage: number;
-  heal?: number;
-  mp_restored?: number;
-  hit: boolean;
-  message?: string;
-  action_id?: string;
-  action_name?: string;
-  success?: boolean;
-  cast_started?: boolean;
-  cast_cancelled?: boolean;
-  entities: WorldEntity[];
-}
-
-export interface RewardNoticePayload {
-  xp: number;
-  passive?: boolean;
-  victory: boolean;
-  message: string;
-}
-
-export interface ActionResult {
-  actor_id: string;
-  action_id: string;
-  action_name: string;
-  target_id: string;
-  item_id?: string;
-  success: boolean;
-  damage?: number;
-  heal?: number;
-  mp_restored?: number;
-  message?: string;
-  status_applied?: StatusSnapshot[];
-  cast_started?: boolean;
-}
-
-export interface PlayerReward {
-  player_id: string;
-  xp: number;
-  levels_gained: number;
-  new_level: number;
-  new_xp: number;
-  max_xp: number;
-  loot: Item[];
-  passive?: boolean;
-  party_bonus?: boolean;
-}
+/** Convenience predicates over the unified entity record. */
+export const isPlayerEntity = (e: WorldEntity) => e.kind === "player";
+export const isNpcEntity = (e: WorldEntity) => e.kind === "npc";
+export const isPetEntity = (e: WorldEntity) => e.kind === "pet";
+export const isAllyEntity = (e: WorldEntity) => e.kind === "player" || !!e.is_ally;
 
 /** A pending combat action waiting for a target click. */
 export interface SelectedAction {

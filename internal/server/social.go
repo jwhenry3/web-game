@@ -21,6 +21,33 @@ type partyInvite struct {
 	PartyID  string // empty until party exists; filled when inviter already leads one
 }
 
+func (h *Hub) registerSocialModule() error {
+	routes := []struct {
+		messageType protocol.MessageType
+		handler     clientRoute
+	}{
+		{protocol.TypeAddFriend, h.handleAddFriend},
+		{protocol.TypeAcceptFriend, h.handleAcceptFriend},
+		{protocol.TypeDeclineFriend, h.handleDeclineFriend},
+		{protocol.TypeRemoveFriend, h.handleRemoveFriend},
+		{protocol.TypePartyInvite, h.handlePartyInvite},
+		{protocol.TypePartyAccept, func(c *Client, _ json.RawMessage) { h.handlePartyAccept(c) }},
+		{protocol.TypePartyDecline, func(c *Client, _ json.RawMessage) { h.handlePartyDecline(c) }},
+		{protocol.TypePartyLeave, func(c *Client, _ json.RawMessage) { h.handlePartyLeave(c) }},
+		{protocol.TypePartyKick, h.handlePartyKick},
+	}
+	for _, route := range routes {
+		if err := h.routes.register(route.messageType, route.handler); err != nil {
+			return fmt.Errorf("register social module: %w", err)
+		}
+	}
+	h.routes.onDisconnect(func(c *Client) {
+		h.onClientDisconnectSocial(c.ID)
+		h.refreshFriendsSocial(c.Name)
+	})
+	return nil
+}
+
 func (h *Hub) initSocial() {
 	if h.parties == nil {
 		h.parties = map[string]*hubParty{}

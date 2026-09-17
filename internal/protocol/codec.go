@@ -42,94 +42,71 @@ var (
 	}
 )
 
+// payloadRegistry is the single message-type table: each entry maps a
+// MessageType to a constructor for its protobuf payload. Adding a wire type is
+// a one-line change here; KnownMessageTypes and payload decoding derive from
+// it. Types absent from the map decode as EmptyPayload.
+var payloadRegistry = map[MessageType]func() proto.Message{
+	TypeJoinWorld:            func() proto.Message { return &pb.JoinWorldPayload{} },
+	TypeMove:                 func() proto.Message { return &pb.MovePayload{} },
+	TypeChat:                 func() proto.Message { return &pb.ChatPayload{} },
+	TypeEquip:                func() proto.Message { return &pb.EquipPayload{} },
+	TypeUnequip:              func() proto.Message { return &pb.UnequipPayload{} },
+	TypeSetJobs:              func() proto.Message { return &pb.SetJobsPayload{} },
+	TypeSetHotbar:            func() proto.Message { return &pb.SetHotbarPayload{} },
+	TypeSetKeybinds:          func() proto.Message { return &pb.SetKeybindsPayload{} },
+	TypeAddFriend:            func() proto.Message { return &pb.PlayerNamePayload{} },
+	TypeAcceptFriend:         func() proto.Message { return &pb.PlayerNamePayload{} },
+	TypeDeclineFriend:        func() proto.Message { return &pb.PlayerNamePayload{} },
+	TypeRemoveFriend:         func() proto.Message { return &pb.PlayerNamePayload{} },
+	TypePartyInvite:          func() proto.Message { return &pb.PlayerNamePayload{} },
+	TypePartyKick:            func() proto.Message { return &pb.PartyKickPayload{} },
+	TypePartyAccept:          func() proto.Message { return &pb.EmptyPayload{} },
+	TypePartyDecline:         func() proto.Message { return &pb.EmptyPayload{} },
+	TypePartyLeave:           func() proto.Message { return &pb.EmptyPayload{} },
+	TypeLeaveHouse:           func() proto.Message { return &pb.EmptyPayload{} },
+	TypeDodge:                func() proto.Message { return &pb.EmptyPayload{} },
+	TypeEnterHouse:           func() proto.Message { return &pb.EnterHousePayload{} },
+	TypeHouseInteract:        func() proto.Message { return &pb.HouseInteractPayload{} },
+	TypeHouseStorageDeposit:  func() proto.Message { return &pb.HouseStorageMovePayload{} },
+	TypeHouseStorageWithdraw: func() proto.Message { return &pb.HouseStorageMovePayload{} },
+	TypeHousePlaceFurniture:  func() proto.Message { return &pb.HousePlaceFurniturePayload{} },
+	TypeHousePickFurniture:   func() proto.Message { return &pb.HousePickFurniturePayload{} },
+	TypeSetCampSkin:          func() proto.Message { return &pb.SetCampSkinPayload{} },
+	TypePetSetFollow:         func() proto.Message { return &pb.PetIDPayload{} },
+	TypePetSetBattle:         func() proto.Message { return &pb.PetIDPayload{} },
+	TypePetRelease:           func() proto.Message { return &pb.PetIDPayload{} },
+	TypePetCommand:           func() proto.Message { return &pb.PetCommandPayload{} },
+	TypeCampState:            func() proto.Message { return &pb.CampStatePayload{} },
+	TypeHouseState:           func() proto.Message { return &pb.HouseStatePayload{} },
+	TypeHouseReturn:          func() proto.Message { return &pb.HouseReturnPayload{} },
+	TypeAction:               func() proto.Message { return &pb.ActionPayload{} },
+	TypeSetTarget:            func() proto.Message { return &pb.SetTargetPayload{} },
+	TypeSetSavePoint:         func() proto.Message { return &pb.SetSavePointPayload{} },
+	TypeUseWorldSkill:        func() proto.Message { return &pb.UseWorldSkillPayload{} },
+	TypeWelcome:              func() proto.Message { return &pb.WelcomePayload{} },
+	TypeMapConfig:            func() proto.Message { return &pb.MapConfigPayload{} },
+	TypeWorldState:           func() proto.Message { return &pb.WorldStatePayload{} },
+	TypePlayerJoin:           func() proto.Message { return &pb.WorldEntity{} },
+	TypePlayerSync:           func() proto.Message { return &pb.WorldEntity{} },
+	TypePlayerLeft:           func() proto.Message { return &pb.PlayerLeftPayload{} },
+	TypePlayerMoved:          func() proto.Message { return &pb.PlayerMovedPayload{} },
+	TypeChatMsg:              func() proto.Message { return &pb.ChatMessagePayload{} },
+	TypeEntityState:          func() proto.Message { return &pb.EntityStatePayload{} },
+	TypeSocialState:          func() proto.Message { return &pb.SocialStatePayload{} },
+	TypePartyInviteMsg:       func() proto.Message { return &pb.PartyInvitePayload{} },
+	TypeFriendRequestMsg:     func() proto.Message { return &pb.FriendRequestPayload{} },
+	TypeRewardNotice:         func() proto.Message { return &pb.RewardNoticePayload{} },
+	TypeCombatTick:           func() proto.Message { return &pb.CombatTickPayload{} },
+	TypeCombatEvent:          func() proto.Message { return &pb.CombatEventPayload{} },
+	TypeError:                func() proto.Message { return &pb.ErrorPayload{} },
+}
+
 func newPayloadMessage(t MessageType) proto.Message {
-	switch t {
-	case TypeJoinWorld:
-		return &pb.JoinWorldPayload{}
-	case TypeMove:
-		return &pb.MovePayload{}
-	case TypeChat:
-		return &pb.ChatPayload{}
-	case TypeEquip:
-		return &pb.EquipPayload{}
-	case TypeUnequip:
-		return &pb.UnequipPayload{}
-	case TypeSetJobs:
-		return &pb.SetJobsPayload{}
-	case TypeSetHotbar:
-		return &pb.SetHotbarPayload{}
-	case TypeSetKeybinds:
-		return &pb.SetKeybindsPayload{}
-	case TypeAddFriend, TypeAcceptFriend, TypeDeclineFriend, TypeRemoveFriend, TypePartyInvite:
-		return &pb.PlayerNamePayload{}
-	case TypePartyKick:
-		return &pb.PartyKickPayload{}
-	case TypePartyAccept, TypePartyDecline, TypePartyLeave,
-		TypeLeaveHouse, TypeDodge:
-		return &pb.EmptyPayload{}
-	case TypeEnterHouse:
-		return &pb.EnterHousePayload{}
-	case TypeHouseInteract:
-		return &pb.HouseInteractPayload{}
-	case TypeHouseStorageDeposit, TypeHouseStorageWithdraw:
-		return &pb.HouseStorageMovePayload{}
-	case TypeHousePlaceFurniture:
-		return &pb.HousePlaceFurniturePayload{}
-	case TypeHousePickFurniture:
-		return &pb.HousePickFurniturePayload{}
-	case TypeSetCampSkin:
-		return &pb.SetCampSkinPayload{}
-	case TypePetSetFollow, TypePetSetBattle, TypePetRelease:
-		return &pb.PetIDPayload{}
-	case TypePetCommand:
-		return &pb.PetCommandPayload{}
-	case TypeCampState:
-		return &pb.CampStatePayload{}
-	case TypeHouseState:
-		return &pb.HouseStatePayload{}
-	case TypeHouseReturn:
-		return &pb.HouseReturnPayload{}
-	case TypeAction:
-		return &pb.ActionPayload{}
-	case TypeSetTarget:
-		return &pb.SetTargetPayload{}
-	case TypeSetSavePoint:
-		return &pb.SetSavePointPayload{}
-	case TypeUseWorldSkill:
-		return &pb.UseWorldSkillPayload{}
-	case TypeWelcome:
-		return &pb.WelcomePayload{}
-	case TypeMapConfig:
-		return &pb.MapConfigPayload{}
-	case TypeWorldState:
-		return &pb.WorldStatePayload{}
-	case TypePlayerJoin, TypePlayerSync:
-		return &pb.WorldEntity{}
-	case TypePlayerLeft:
-		return &pb.PlayerLeftPayload{}
-	case TypePlayerMoved:
-		return &pb.PlayerMovedPayload{}
-	case TypeChatMsg:
-		return &pb.ChatMessagePayload{}
-	case TypeEntityState:
-		return &pb.EntityStatePayload{}
-	case TypeSocialState:
-		return &pb.SocialStatePayload{}
-	case TypePartyInviteMsg:
-		return &pb.PartyInvitePayload{}
-	case TypeFriendRequestMsg:
-		return &pb.FriendRequestPayload{}
-	case TypeRewardNotice:
-		return &pb.RewardNoticePayload{}
-	case TypeCombatTick:
-		return &pb.CombatTickPayload{}
-	case TypeCombatEvent:
-		return &pb.CombatEventPayload{}
-	case TypeError:
-		return &pb.ErrorPayload{}
-	default:
-		return &pb.EmptyPayload{}
+	if make, ok := payloadRegistry[t]; ok {
+		return make()
 	}
+	return &pb.EmptyPayload{}
 }
 
 // DecodeFrame parses a WebSocket frame into an Envelope for the hub.
@@ -215,30 +192,11 @@ func EncodeProtobuf(t MessageType, payload any) ([]byte, error) {
 
 // KnownMessageTypes lists every MessageType for contract tests / docs.
 func KnownMessageTypes() []MessageType {
-	out := make([]MessageType, 0, 64)
-	for t := range messageTypeSet {
+	out := make([]MessageType, 0, len(payloadRegistry))
+	for t := range payloadRegistry {
 		out = append(out, t)
 	}
 	return out
-}
-
-var messageTypeSet = map[MessageType]struct{}{
-	TypeJoinWorld: {}, TypeMove: {}, TypeChat: {}, TypeEquip: {}, TypeUnequip: {},
-	TypeSetJobs: {}, TypeSetHotbar: {}, TypeSetKeybinds: {},
-	TypeAddFriend: {}, TypeAcceptFriend: {}, TypeDeclineFriend: {}, TypeRemoveFriend: {},
-	TypePartyInvite: {}, TypePartyAccept: {}, TypePartyDecline: {}, TypePartyLeave: {}, TypePartyKick: {},
-	TypeAction: {}, TypeSetTarget: {}, TypeSetSavePoint: {}, TypeUseWorldSkill: {},
-	TypeDodge:      {},
-	TypeEnterHouse: {}, TypeLeaveHouse: {}, TypeHouseInteract: {},
-	TypeHouseStorageDeposit: {}, TypeHouseStorageWithdraw: {},
-	TypeHousePlaceFurniture: {}, TypeHousePickFurniture: {}, TypeSetCampSkin: {},
-	TypePetSetFollow: {}, TypePetSetBattle: {}, TypePetRelease: {}, TypePetCommand: {},
-	TypeWelcome: {}, TypeWorldState: {}, TypePlayerJoin: {}, TypePlayerLeft: {}, TypePlayerMoved: {},
-	TypePlayerSync: {}, TypeChatMsg: {}, TypeEntityState: {}, TypeSocialState: {},
-	TypePartyInviteMsg: {}, TypeFriendRequestMsg: {}, TypeRewardNotice: {},
-	TypeCombatTick: {}, TypeCombatEvent: {},
-	TypeCampState: {}, TypeHouseState: {}, TypeHouseReturn: {},
-	TypeError: {}, TypeMapConfig: {},
 }
 
 // AssertPayloadType ensures the registry can construct a message for t.

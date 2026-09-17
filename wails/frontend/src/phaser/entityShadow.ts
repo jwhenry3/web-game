@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 const SHADOW_KEY = "entity-shadow";
 const SHADOW_W = 48;
-const SHADOW_H = 18;
+const SHADOW_H = 16;
 
 /**
  * One shared soft-ellipse texture for every entity shadow. Generated once as
@@ -41,5 +41,5 @@ function ensureShadowTexture(scene: Phaser.Scene): string {
  * sprite container, not the wrapper).
  */
 export function entityShadow(scene: Phaser.Scene, scale = 1): Phaser.GameObjects.Image {
-  return scene.add.image(0, -2, ensureShadowTexture(scene)).setScale(scale);
+  return scene.add.image(0, 0, ensureShadowTexture(scene)).setScale(scale);
 }

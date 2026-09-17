@@ -18,6 +18,7 @@ import {
   type CharacterFacing,
 } from "../characters/heroes99";
 import { playHitFlash } from "./battleAnim";
+import type { IEntitySprite } from "./entitySprite";
 
 const LAYER_DEPTH: Record<string, number> = {
   skin: 0,
@@ -30,7 +31,7 @@ const LAYER_DEPTH: Record<string, number> = {
   weapon_top: 7,
 };
 
-export class CharacterSprite {
+export class CharacterSprite implements IEntitySprite {
   readonly container: Phaser.GameObjects.Container;
   private layers = new Map<string, Phaser.GameObjects.Sprite>();
   private appearance: CharacterAppearance;
