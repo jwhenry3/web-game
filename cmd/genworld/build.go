@@ -251,7 +251,16 @@ func buildMap(def mapDef, exits []exitRec) (*game.MapConfig, error) {
 		}
 	}
 
+	// Edge links become borders (mirrored landings); only ferry portals stay
+	// as explicit exits.
+	borders := map[string]string{}
+	edgeName := map[edge]string{edgeN: "north", edgeS: "south", edgeW: "west", edgeE: "east"}
 	for _, e := range exits {
+		if !e.Ferry {
+			side, _ := sideFromTiles(def.cols, def.rows, e.Tiles)
+			borders[edgeName[side]] = e.DestMap
+			continue
+		}
 		exitOut = append(exitOut, exitJSON{DestMap: e.DestMap, Tiles: e.Tiles, Dest: e.Dest})
 		ts := float64(tileSize)
 		minC, minR, maxC, maxR := e.Tiles[0], e.Tiles[1], e.Tiles[2], e.Tiles[3]
@@ -317,6 +326,7 @@ func buildMap(def mapDef, exits []exitRec) (*game.MapConfig, error) {
 		"save_points":  saves,
 		"job_changers": jobs,
 		"npcs":         npcs,
+		"borders":      borders,
 		"exits":        exitOut,
 		"objects":      objects,
 	}

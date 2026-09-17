@@ -6,14 +6,15 @@ import { appearanceKey, facingFromDelta, H99_FACING_DEFAULT, H99_NAME_LABEL_Y, H
 import { applyPlayerSlide, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "./movementBridge";
 import { FILL, tileAt, WALKABLE } from "../world/overworld";
 import { VisibilityFX } from "./visibility";
-import { rasterizeTerrainLayers, terrainLayerKey, terrainLayersFromSnapshot } from "../world/terrainRaster";
+import { rasterizeTerrainLayers, terrainLayerKey, terrainLayersFromSnapshot, type TerrainLayerData } from "../world/terrainRaster";
+import { fetchMapConfig } from "../net/mapConfig";
 import { getLoadedPipoyaSheets, loadPipoyaSheets } from "../world/pipoyaTilesets";
 import {
   portalKey,
   terrainInputsChanged,
   type TerrainSyncInputs,
 } from "../world/worldTerrainSync";
-import type { MapTerrainLayers, OverworldMap, WorldEntity, CharacterAppearanceWire, SavePoint, JobChanger, WorldCamp, StatusSnapshot, ActionResult } from "../types";
+import type { MapSnapshot, MapTerrainLayers, OverworldMap, WorldEntity, CharacterAppearanceWire, SavePoint, JobChanger, WorldCamp, StatusSnapshot, ActionResult } from "../types";
 import { isAllyEntity } from "../types";
 import { bindingToPhaserKeyCode, mergeKeybinds, resolveHotbarSlot } from "../input/keybinds";
 import { CharacterSprite } from "./CharacterSprite";
@@ -58,6 +59,53 @@ import {
 } from "../world/entityOverlayBridge";
 
 const SPEED = 240;
+/** Tiles of a neighboring map rendered past the shared border — deep enough
+ *  that the seam stays hidden at min zoom on wide windows. */
+const NEIGHBOR_SLAB_TILES = 64;
+/** Max baked neighbor terrain textures retained across map transfers. */
+const NEIGHBOR_TEX_CACHE = 8;
+
+/** A rendered neighbor map: a slab of terrain cropped to the shared border. */
+interface NeighborRender {
+  base: Phaser.GameObjects.Image;
+  canopy?: Phaser.GameObjects.Image;
+  /** Slab crop offset inside the neighbor's local space (px). */
+  offX: number;
+  offY: number;
+  portals?: { x: number; y: number; w: number; h: number }[];
+}
+
+type NeighborDir = "east" | "west" | "south" | "north";
+
+/** Crop terrain to the slab facing the active map; returns the crop offset. */
+function slabForNeighbor(data: TerrainLayerData, dir: NeighborDir) {
+  const n = NEIGHBOR_SLAB_TILES;
+  let c0 = 0,
+    r0 = 0,
+    cols = data.cols,
+    rows = data.rows;
+  if (dir === "east") cols = Math.min(n, cols); // neighbor east of us: keep its west cols
+  else if (dir === "west") {
+    c0 = Math.max(0, cols - n);
+    cols -= c0;
+  } else if (dir === "south") rows = Math.min(n, rows);
+  else {
+    r0 = Math.max(0, rows - n);
+    rows -= r0;
+  }
+  const slice = (src: number[]) => {
+    const out = new Array<number>(cols * rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) out[r * cols + c] = src[(r0 + r) * data.cols + c0 + c];
+    }
+    return out;
+  };
+  return {
+    data: { ground: slice(data.ground), collision: slice(data.collision), cols, rows, tileSize: data.tileSize },
+    offX: c0 * data.tileSize,
+    offY: r0 * data.tileSize,
+  };
+}
 const SEND_INTERVAL = 100;
 const POI_INTERACT_PROMPT_Y = -36;
 const CAST_BAR_Y = 10;
@@ -161,6 +209,14 @@ export class WorldScene extends Phaser.Scene {
   private terrainTextureKey = "";
   private canopyTextureKey = "";
   private terrainUnsub?: () => void;
+  /** Border-adjacent maps rendered in-scene at their world-space offsets. */
+  private neighborImgs = new Map<string, NeighborRender>();
+  /** mapId → in-flight/resolved snapshot fetch (avoids refetch on transfers). */
+  private neighborSnaps = new Map<string, Promise<MapSnapshot | null>>();
+  /** mapId → baked texture keys, LRU-capped so transfers don't leak canvases. */
+  private neighborTex = new Map<string, { baseKey: string; canopyKey: string }>();
+  private neighborPortalsGfx?: Phaser.GameObjects.Graphics;
+  private neighborPortalSig = "";
   private visibility?: VisibilityFX;
   private worldW = 5120;
   private worldH = 3840;
@@ -355,6 +411,18 @@ export class WorldScene extends Phaser.Scene {
         // Force a redraw now that real tile sheets are available.
         this.terrainInputs = null;
         this.terrainTextureKey = "";
+        // Neighbors baked with flat colors need a pipoya rebake too.
+        for (const [, r] of this.neighborImgs) {
+          r.base.destroy();
+          r.canopy?.destroy();
+        }
+        this.neighborImgs.clear();
+        for (const [, keys] of this.neighborTex) {
+          if (this.textures.exists(keys.baseKey)) this.textures.remove(keys.baseKey);
+          if (this.textures.exists(keys.canopyKey)) this.textures.remove(keys.canopyKey);
+        }
+        this.neighborTex.clear();
+        this.neighborPortalSig = "";
         this.syncTerrainFromStore();
       })
       .catch((err) => {
@@ -394,6 +462,14 @@ export class WorldScene extends Phaser.Scene {
       this.shiftComboUsed = false;
       this.clearClickPath();
       this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onGroundPointerDown);
+      for (const [, r] of this.neighborImgs) {
+        r.base.destroy();
+        r.canopy?.destroy();
+      }
+      this.neighborImgs.clear();
+      this.neighborPortalsGfx?.destroy();
+      this.neighborPortalsGfx = undefined;
+      this.neighborPortalSig = "";
       clearEntityOverlays();
     });
     this.events.on(Phaser.Scenes.Events.SLEEP, () => {
@@ -428,6 +504,155 @@ export class WorldScene extends Phaser.Scene {
   private syncTerrainFromStore() {
     const state = useGame.getState();
     this.syncTerrain(state.overworld, state.mapInfo?.portals, state.mapInfo?.terrainLayers);
+    this.syncNeighbors();
+  }
+
+  /**
+   * Overlay border-adjacent maps in this scene. The active map still renders
+   * at local (0,0); each neighbor is baked once into a slab texture and drawn
+   * at (neighborWorldOrigin − selfWorldOrigin). On a border transfer the
+   * whole set re-anchors, so the world stays visually continuous while all
+   * entity/pointer/collision math remains in active-map local space.
+   */
+  private syncNeighbors() {
+    const mi = useGame.getState().mapInfo;
+    const want = new Map<string, { x: number; y: number }>();
+    if (mi) {
+      for (const n of mi.neighbors ?? []) {
+        if (!n.id || n.id === mi.id) continue;
+        want.set(n.id, { x: n.x - mi.originX, y: n.y - mi.originY });
+      }
+    }
+    let changed = false;
+    for (const [id, r] of this.neighborImgs) {
+      if (!want.has(id)) {
+        r.base.destroy();
+        r.canopy?.destroy();
+        this.neighborImgs.delete(id);
+        changed = true;
+      }
+    }
+    for (const [id, rel] of want) {
+      const r = this.neighborImgs.get(id);
+      if (r) {
+        if (r.base.x !== rel.x + r.offX || r.base.y !== rel.y + r.offY) {
+          r.base.setPosition(rel.x + r.offX, rel.y + r.offY);
+          r.canopy?.setPosition(rel.x + r.offX, rel.y + r.offY);
+          changed = true;
+        }
+        continue;
+      }
+      this.loadNeighbor(id);
+    }
+    this.applyWorldBounds(useGame.getState().overworld);
+    this.drawNeighborPortals(want, changed);
+  }
+
+  private loadNeighbor(id: string) {
+    let p = this.neighborSnaps.get(id);
+    if (!p) {
+      p = fetchMapConfig(id).catch((err) => {
+        console.warn(`neighbor map ${id} fetch failed`, err);
+        return null;
+      });
+      this.neighborSnaps.set(id, p);
+    }
+    void p.then((snap) => {
+      if (!snap || !this.sys.isActive() || this.neighborImgs.has(id)) return;
+      const mi = useGame.getState().mapInfo;
+      const n = mi?.neighbors?.find((x) => x.id === id);
+      if (!mi || !n) return; // transferred away mid-fetch
+      const layers = terrainLayersFromSnapshot(snap.overworld, snap.terrain_layers);
+      if (!layers) return;
+      const rel = { x: n.x - mi.originX, y: n.y - mi.originY };
+      const dir: NeighborDir | null =
+        rel.x > 0 ? "east" : rel.x < 0 ? "west" : rel.y > 0 ? "south" : rel.y < 0 ? "north" : null;
+      if (!dir) return;
+      const slab = slabForNeighbor(layers, dir);
+      const sheets = getLoadedPipoyaSheets();
+      const baseKey = `nb-${id}-${terrainLayerKey(slab.data, !!sheets?.length)}`;
+      const canopyKey = `${baseKey}-canopy`;
+      if (!this.textures.exists(baseKey)) {
+        const { base, overhead } = rasterizeTerrainLayers(slab.data, 1, null, sheets);
+        this.textures.addCanvas(baseKey, base);
+        if (overhead) this.textures.addCanvas(canopyKey, overhead);
+      }
+      const prev = this.neighborTex.get(id);
+      if (prev && prev.baseKey !== baseKey) {
+        // Terrain changed since last bake (editor reload) — drop the old one.
+        if (this.textures.exists(prev.baseKey)) this.textures.remove(prev.baseKey);
+        if (this.textures.exists(prev.canopyKey)) this.textures.remove(prev.canopyKey);
+      }
+      this.neighborTex.delete(id);
+      this.neighborTex.set(id, { baseKey, canopyKey });
+      this.evictNeighborTextures();
+      const img = this.add
+        .image(rel.x + slab.offX, rel.y + slab.offY, baseKey)
+        .setOrigin(0, 0)
+        .setDepth(0);
+      const render: NeighborRender = {
+        base: img,
+        offX: slab.offX,
+        offY: slab.offY,
+        portals: snap.portals,
+      };
+      if (this.textures.exists(canopyKey)) {
+        render.canopy = this.add
+          .image(rel.x + slab.offX, rel.y + slab.offY, canopyKey)
+          .setOrigin(0, 0)
+          .setDepth(20);
+      }
+      this.neighborImgs.set(id, render);
+      this.neighborPortalSig = ""; // force portal redraw
+      this.syncNeighbors();
+    });
+  }
+
+  /** Bound baked neighbor canvases — each is tens of MB. */
+  private evictNeighborTextures() {
+    while (this.neighborTex.size > NEIGHBOR_TEX_CACHE) {
+      const oldest = this.neighborTex.keys().next().value;
+      if (oldest === undefined) return;
+      if (this.neighborImgs.has(oldest)) {
+        // Never evict a live image; move it to the back and try the next.
+        const v = this.neighborTex.get(oldest)!;
+        this.neighborTex.delete(oldest);
+        this.neighborTex.set(oldest, v);
+        if (this.neighborTex.keys().next().value === oldest) return;
+        continue;
+      }
+      const keys = this.neighborTex.get(oldest)!;
+      if (this.textures.exists(keys.baseKey)) this.textures.remove(keys.baseKey);
+      if (this.textures.exists(keys.canopyKey)) this.textures.remove(keys.canopyKey);
+      this.neighborTex.delete(oldest);
+    }
+  }
+
+  /** Neighbor portal/border strips, offset into this scene's local space. */
+  private drawNeighborPortals(want: Map<string, { x: number; y: number }>, force: boolean) {
+    let sig = "";
+    for (const [id, rel] of [...want.entries()].sort()) {
+      const r = this.neighborImgs.get(id);
+      if (r?.portals?.length) {
+        sig += `${id}@${rel.x},${rel.y}:${r.portals.map((p) => `${p.x},${p.y},${p.w},${p.h}`).join(";")}`;
+      }
+    }
+    if (!force && sig === this.neighborPortalSig) return;
+    this.neighborPortalSig = sig;
+    if (!this.neighborPortalsGfx) {
+      this.neighborPortalsGfx = this.add.graphics().setDepth(1);
+    }
+    const g = this.neighborPortalsGfx;
+    g.clear();
+    for (const [id, rel] of want) {
+      const r = this.neighborImgs.get(id);
+      for (const p of r?.portals ?? []) {
+        g.fillStyle(0x7dd3fc, 0.28);
+        g.fillRect(rel.x + p.x, rel.y + p.y, p.w, p.h);
+        g.lineStyle(2, 0xe0f2fe, 0.7);
+        g.strokeRect(rel.x + p.x + 2, rel.y + p.y + 2, p.w - 4, p.h - 4);
+      }
+    }
   }
 
   private syncMoveKeys() {
@@ -476,7 +701,25 @@ export class WorldScene extends Phaser.Scene {
     const t = map?.tile ?? 32;
     this.worldW = (map?.cols ?? 160) * t;
     this.worldH = (map?.rows ?? 120) * t;
-    this.cameras.main.setBounds(0, 0, this.worldW, this.worldH);
+    // Camera may scroll past the active map's rim into rendered neighbor
+    // slabs — but no farther: bounds union the active rect with each
+    // neighbor's cropped slab rect (world-size-uniform assumption).
+    const slabPx = NEIGHBOR_SLAB_TILES * t;
+    let minX = 0,
+      minY = 0,
+      maxX = this.worldW,
+      maxY = this.worldH;
+    const mi = useGame.getState().mapInfo;
+    for (const n of mi?.neighbors ?? []) {
+      if (!n.id || n.id === mi?.id) continue;
+      const rx = n.x - (mi?.originX ?? 0);
+      const ry = n.y - (mi?.originY ?? 0);
+      if (rx > 0) maxX = Math.max(maxX, rx + Math.min(this.worldW, slabPx));
+      else if (rx < 0) minX = Math.min(minX, rx + this.worldW - Math.min(this.worldW, slabPx));
+      if (ry > 0) maxY = Math.max(maxY, ry + Math.min(this.worldH, slabPx));
+      else if (ry < 0) minY = Math.min(minY, ry + this.worldH - Math.min(this.worldH, slabPx));
+    }
+    this.cameras.main.setBounds(minX, minY, maxX - minX, maxY - minY);
   }
 
   private syncTerrain(

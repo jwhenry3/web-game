@@ -75,31 +75,53 @@ function patchSelfTargetId(targetId: string) {
 
 const isEnemy = (e: WorldEntity) => e.kind === "npc" && !e.is_ally;
 
-function livingEnemyTarget(self: WorldEntity): WorldEntity | undefined {
-  const entities = combatEntityList();
+/** Enemy the server will accept: a living NPC with HP (neutral NPCs carry
+ *  max_hp 0 and are never attackable). */
+const isTargetableEnemy = (e: WorldEntity) => isEnemy(e) && e.alive && e.max_hp > 0;
+
+/** Closest targetable enemy to `self` in `pool`. */
+function nearestEnemy(self: WorldEntity, pool: Iterable<WorldEntity>): WorldEntity | undefined {
+  let best: WorldEntity | undefined;
+  let bestD = Infinity;
+  for (const e of pool) {
+    if (!isTargetableEnemy(e)) continue;
+    const d = Math.hypot(e.x - self.x, e.y - self.y);
+    if (d < bestD) {
+      bestD = d;
+      best = e;
+    }
+  }
+  return best;
+}
+
+/** Focus target if still attackable, else the nearest foe — combat
+ *  participants first so a dead focus stays inside the current fight. */
+function closestEnemy(self: WorldEntity): WorldEntity | undefined {
+  const { entities } = useGame.getState();
   const focusId = selfTargetId() ?? self.target_id;
-  const focus =
-    focusId && entities.find((e) => e.id === focusId && e.alive && isEnemy(e));
-  if (focus) return focus;
-  return entities.find((e) => isEnemy(e) && e.alive);
+  const focus = focusId ? entities[focusId] : undefined;
+  if (focus && isTargetableEnemy(focus)) return focus;
+  return nearestEnemy(self, combatEntityList()) ?? nearestEnemy(self, Object.values(entities));
+}
+
+function livingEnemyTarget(self: WorldEntity): WorldEntity | undefined {
+  return closestEnemy(self);
 }
 
 /** Enemy to focus when the current focus is missing, dead, or not an enemy; undefined if focus is already viable. */
 function nextViableEnemy(self: WorldEntity): WorldEntity | undefined {
-  const entities = combatEntityList();
+  const { entities } = useGame.getState();
   const focusId = selfTargetId() ?? self.target_id;
-  const focus =
-    focusId && entities.find((e) => e.id === focusId && e.alive && isEnemy(e));
-  if (focus) return undefined;
-  return entities.find((e) => isEnemy(e) && e.alive);
+  const focus = focusId ? entities[focusId] : undefined;
+  if (focus && isTargetableEnemy(focus)) return undefined;
+  return closestEnemy(self);
 }
 
 function castEnemySkill(actionId: string, self: WorldEntity | undefined) {
   const target = self ? livingEnemyTarget(self) : undefined;
-  // If we have a combat-entity target, use it; otherwise fall back to the
-  // world-level target (e.g. an NPC we clicked on that isn't engaged yet).
-  // If neither exists, send with no target — the server's autoTargetNPC
-  // picks the nearest hostile NPC.
+  // Send the focus target if it still works, otherwise the nearest visible
+  // enemy. If none exists at all, send with no target — the server picks the
+  // nearest attackable entity on its side.
   const targetId = target?.id ?? selfTargetId() ?? "";
   send("action", { action_id: actionId, target_id: targetId });
   if (targetId && (selfTargetId() ?? self?.target_id) !== targetId) {
@@ -305,7 +327,7 @@ export const net = {
     const focusId = selfTargetId() ?? self.target_id;
     const pool =
       axis === "horizontal"
-        ? entities.filter((e) => isEnemy(e) && e.alive)
+        ? entities.filter(isTargetableEnemy)
         : entities.filter((e) => !isEnemy(e) && e.alive);
     if (pool.length === 0) return;
     let idx = pool.findIndex((e) => e.id === focusId);
@@ -320,12 +342,12 @@ export const net = {
   tabTarget(dir: 1 | -1) {
     const self = selfCombatEntity();
     if (!self) return;
-    const inCombat = combatEntityList().filter((e) => isEnemy(e) && e.alive);
+    const inCombat = combatEntityList().filter(isTargetableEnemy);
     const pool =
       inCombat.length > 0
         ? inCombat
         : Object.values(useGame.getState().entities)
-            .filter((e) => isEnemy(e) && e.alive)
+            .filter(isTargetableEnemy)
             .sort(
               (a, b) =>
                 Math.hypot(a.x - self.x, a.y - self.y) - Math.hypot(b.x - self.x, b.y - self.y),

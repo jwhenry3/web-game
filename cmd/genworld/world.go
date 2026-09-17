@@ -126,7 +126,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "willowford", name: "Willowford", region: regionVerdant, cols: 112, rows: 88,
+			id: "willowford", name: "Willowford", region: regionVerdant, cols: 128, rows: 96,
 			seed: 0x91770f,
 			settlements: []settlement{{
 				id: "willowford_town", name: "Willowford",
@@ -139,7 +139,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "sanctuarygrove", name: "Sanctuary Grove", region: regionVerdant, cols: 112, rows: 88,
+			id: "sanctuarygrove", name: "Sanctuary Grove", region: regionVerdant, cols: 128, rows: 96,
 			seed: 0x5a7c70,
 			settlements: []settlement{{
 				id: "covenant_temple", name: "Covenant Temple",
@@ -152,7 +152,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "northwatch", name: "Northwatch March", region: regionVerdant, cols: 128, rows: 80,
+			id: "northwatch", name: "Northwatch March", region: regionVerdant, cols: 128, rows: 96,
 			seed: 0x70b7c4,
 			settlements: []settlement{{
 				id: "northwatch_fort", name: "Northwatch Fort",
@@ -199,7 +199,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "icehollow", name: "Icehollow Crags", region: regionFrost, cols: 112, rows: 88,
+			id: "icehollow", name: "Icehollow Crags", region: regionFrost, cols: 128, rows: 96,
 			seed: 0x1ce401,
 			settlements: []settlement{{
 				id: "hollow_refuge", name: "Hollow Refuge",
@@ -215,7 +215,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "stillstone", name: "Stillstone Monastery", region: regionFrost, cols: 112, rows: 88,
+			id: "stillstone", name: "Stillstone Monastery", region: regionFrost, cols: 128, rows: 96,
 			seed: 0x57111,
 			settlements: []settlement{{
 				id: "stillstone_abbey", name: "Stillstone Abbey",
@@ -228,7 +228,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "cairnwatch", name: "Cairnwatch", region: regionFrost, cols: 112, rows: 88,
+			id: "cairnwatch", name: "Cairnwatch", region: regionFrost, cols: 128, rows: 96,
 			seed: 0xca12a,
 			settlements: []settlement{{
 				id: "cairnwatch_outpost", name: "Cairnwatch Outpost",
@@ -241,7 +241,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "frostmarch", name: "Frostmarch Gate", region: regionFrost, cols: 128, rows: 80,
+			id: "frostmarch", name: "Frostmarch Gate", region: regionFrost, cols: 128, rows: 96,
 			seed: 0xf204c4,
 			settlements: []settlement{{
 				id: "frostmarch_gate", name: "Frostmarch Gate",
@@ -304,7 +304,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "redsash", name: "Red Sash Quay", region: regionTide, cols: 112, rows: 88,
+			id: "redsash", name: "Red Sash Quay", region: regionTide, cols: 128, rows: 96,
 			seed: 0x2ed5a5,
 			settlements: []settlement{{
 				id: "academy_quay", name: "Academy Quay",
@@ -317,7 +317,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "cliffhaven", name: "Cliffhaven", region: regionTide, cols: 112, rows: 88,
+			id: "cliffhaven", name: "Cliffhaven", region: regionTide, cols: 128, rows: 96,
 			seed: 0xc11ff,
 			settlements: []settlement{{
 				id: "cliffhaven_town", name: "Cliffhaven",
@@ -330,7 +330,7 @@ func allMapDefs() []mapDef {
 			}},
 		},
 		{
-			id: "westwharf", name: "West Wharf Road", region: regionTide, cols: 128, rows: 80,
+			id: "westwharf", name: "West Wharf Road", region: regionTide, cols: 128, rows: 96,
 			seed: 0x4e57,
 			settlements: []settlement{{
 				id: "wharf_toll", name: "Wharf Tollhouse",

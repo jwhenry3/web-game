@@ -19,6 +19,7 @@ import type {
   JobChanger,
   MapTileOverrides,
   MapTerrainLayers,
+  MapNeighbor,
   WorldCamp,
   HouseStatePayload,
 } from "../types";
@@ -77,6 +78,11 @@ interface GameState {
     portals: { x: number; y: number; w: number; h: number }[];
     tileOverrides?: MapTileOverrides;
     terrainLayers?: MapTerrainLayers;
+    /** This map's top-left corner in world pixels (border-graph layout). */
+    originX: number;
+    originY: number;
+    /** Border-adjacent maps' world-space origins, for scene overlay. */
+    neighbors: MapNeighbor[];
   } | null;
   chat: ChatLine[];
   chatTab: ChatChannel;

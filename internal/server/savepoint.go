@@ -51,7 +51,9 @@ func (h *Hub) AtlasMap() protocol.AtlasMap {
 		Overworld: protocol.OverworldMap{
 			Tile: tile, Cols: cols, Rows: rows, Cells: cells,
 		},
-		POIs: pois,
+		POIs:    pois,
+		OriginX: h.worldOriginX,
+		OriginY: h.worldOriginY,
 	}
 }
 

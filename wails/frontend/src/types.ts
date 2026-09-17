@@ -221,6 +221,12 @@ export interface WelcomePayload {
   map?: MapSnapshot;
 }
 
+export interface MapNeighbor {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface MapSnapshot {
   id: string;
   name: string;
@@ -229,6 +235,11 @@ export interface MapSnapshot {
   portals?: MapPortal[];
   tile_overrides?: MapTileOverrides;
   terrain_layers?: MapTerrainLayers;
+  /** This map's top-left corner in world pixels (border-graph layout). */
+  origin_x?: number;
+  origin_y?: number;
+  /** Border-adjacent maps' world-space origins, for scene overlay. */
+  neighbors?: MapNeighbor[];
 }
 
 export interface MapTerrainLayers {
@@ -352,6 +363,9 @@ export interface AtlasMap {
   name: string;
   overworld: OverworldMap;
   pois: AtlasPOI[];
+  /** World-space pixel origin in the border-graph layout. */
+  origin_x?: number;
+  origin_y?: number;
 }
 
 export interface AtlasPayload {

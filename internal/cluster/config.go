@@ -17,6 +17,9 @@ type Config struct {
 	Proxy ProxyConfig   `json:"proxy"`
 	Exp   game.ExpRates `json:"exp"`
 	Maps  []MapSpec     `json:"maps"`
+	// WorldLayout maps map id → world-space pixel origin, computed from the
+	// border graph at Validate time. Not persisted.
+	WorldLayout map[string][2]int `json:"-"`
 }
 
 type ProxyConfig struct {
@@ -167,7 +170,7 @@ func (c *Config) applyDefaults() {
 	}
 }
 
-func (c Config) Validate() error {
+func (c *Config) Validate() error {
 	if len(c.Maps) == 0 {
 		return fmt.Errorf("cluster: at least one map is required")
 	}
@@ -214,7 +217,7 @@ func (c Config) Validate() error {
 // symmetric opposite-edge relationships, real destinations, and reachable
 // edge tiles. Broken relationships are boot-fatal; suspicious states log
 // warnings. Maps whose overworld is not a .map.json have no border graph.
-func (c Config) validateBorders() error {
+func (c *Config) validateBorders() error {
 	cfgs := map[string]*game.MapConfig{}
 	enabled := map[string]bool{}
 	for _, m := range c.Maps {
@@ -244,8 +247,25 @@ func (c Config) validateBorders() error {
 			}
 		}
 	}
+	// World layout: BFS the border graph onto a uniform cell grid. The stride
+	// is the largest map's pixel size so smaller maps never overlap.
+	layout, lerrs := game.ComputeWorldLayout(cfgs)
+	rep.Errors = append(rep.Errors, lerrs...)
 	if len(rep.Errors) > 0 {
 		return fmt.Errorf("cluster: broken map border graph:\n  %s", strings.Join(rep.Errors, "\n  "))
+	}
+	strideX, strideY := 0, 0
+	for _, mc := range cfgs {
+		if w := mc.Cols * mc.TileSize; w > strideX {
+			strideX = w
+		}
+		if h := mc.Rows * mc.TileSize; h > strideY {
+			strideY = h
+		}
+	}
+	c.WorldLayout = make(map[string][2]int, len(layout))
+	for id, cell := range layout {
+		c.WorldLayout[id] = [2]int{cell[0] * strideX, cell[1] * strideY}
 	}
 	return nil
 }

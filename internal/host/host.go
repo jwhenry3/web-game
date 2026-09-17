@@ -136,7 +136,7 @@ func Start(opts Options) (*Runtime, error) {
 			}
 			continue
 		}
-		n, err := mapnode.Start(spec, profiles, accounts)
+		n, err := mapnode.Start(spec, profiles, accounts, cfg.WorldLayout)
 		if err != nil {
 			rt.Close()
 			return nil, fmt.Errorf("map %s: %w", spec.ID, err)

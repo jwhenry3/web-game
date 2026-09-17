@@ -92,6 +92,94 @@ func ValidateMapBorders(cfgs map[string]*MapConfig) BorderReport {
 	return rep
 }
 
+// ComputeWorldLayout assigns every map a grid cell via BFS over its borders:
+// A's east neighbor sits at cell A+(1,0), south at A+(0,1), etc. The result is
+// normalized so the minimum cell is (0,0). Conflicts — two maps claiming the
+// same cell, or a placed map contradicting an implied position — are errors.
+// Maps unreachable through borders (e.g. linked only by an interior exit)
+// are errors too: they cannot be placed on the shared world scene.
+func ComputeWorldLayout(cfgs map[string]*MapConfig) (map[string][2]int, []string) {
+	// Deterministic root: lexically first map id.
+	ids := make([]string, 0, len(cfgs))
+	for id := range cfgs {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return map[string][2]int{}, nil
+	}
+
+	pos := map[string][2]int{ids[0]: {0, 0}}
+	var errs []string
+	queue := []string{ids[0]}
+	for len(queue) > 0 {
+		id := queue[0]
+		queue = queue[1:]
+		p := pos[id]
+		edges := make([]string, 0, len(cfgs[id].Borders))
+		for edgeName := range cfgs[id].Borders {
+			edges = append(edges, edgeName)
+		}
+		sort.Strings(edges)
+		for _, edgeName := range edges {
+			dest := cfgs[id].Borders[edgeName]
+			edge := BorderEdge(edgeName)
+			if !edge.Valid() {
+				continue // reported by ValidateMapBorders
+			}
+			if _, known := cfgs[dest]; !known {
+				continue // unknown dest — reported by ValidateMapBorders
+			}
+			var want [2]int
+			switch edge {
+			case EdgeNorth:
+				want = [2]int{p[0], p[1] - 1}
+			case EdgeSouth:
+				want = [2]int{p[0], p[1] + 1}
+			case EdgeWest:
+				want = [2]int{p[0] - 1, p[1]}
+			case EdgeEast:
+				want = [2]int{p[0] + 1, p[1]}
+			}
+			if got, placed := pos[dest]; placed {
+				if got != want {
+					errs = append(errs, fmt.Sprintf(
+						"layout conflict: %s's %s border implies %s at cell %v, but it is already at %v",
+						id, edgeName, dest, want, got))
+				}
+				continue
+			}
+			pos[dest] = want
+			queue = append(queue, dest)
+		}
+	}
+	for _, id := range ids {
+		if _, ok := pos[id]; !ok {
+			errs = append(errs, fmt.Sprintf(
+				"%s: unreachable through borders — cannot be placed on the world map", id))
+		}
+	}
+	if len(errs) > 0 {
+		return nil, errs
+	}
+
+	// Normalize so the top-left cell is (0,0).
+	minX, minY := pos[ids[0]][0], pos[ids[0]][1]
+	for _, p := range pos {
+		if p[0] < minX {
+			minX = p[0]
+		}
+		if p[1] < minY {
+			minY = p[1]
+		}
+	}
+	out := make(map[string][2]int, len(pos))
+	for id, p := range pos {
+		out[id] = [2]int{p[0] - minX, p[1] - minY}
+	}
+	return out, nil
+}
+
 // edgeHasWalkableBand reports whether any tile inside the edge's trigger band
 // is walkable, using the config's own collision/ground grids.
 func edgeHasWalkableBand(cfg *MapConfig, edge BorderEdge) bool {

@@ -10,6 +10,9 @@ export function applyMapSnapshotToGame(map: MapSnapshot) {
       portals: map.portals ?? [],
       tileOverrides: map.tile_overrides,
       terrainLayers: map.terrain_layers,
+      originX: map.origin_x ?? 0,
+      originY: map.origin_y ?? 0,
+      neighbors: map.neighbors ?? [],
     },
     overworld: map.overworld,
   });
@@ -64,6 +67,9 @@ export async function ensureMapConfigLoaded(mapId?: string): Promise<MapSnapshot
       portals: cur.mapInfo.portals,
       tile_overrides: cur.mapInfo.tileOverrides,
       terrain_layers: cur.mapInfo.terrainLayers,
+      origin_x: cur.mapInfo.originX,
+      origin_y: cur.mapInfo.originY,
+      neighbors: cur.mapInfo.neighbors,
     };
   }
   return prefetchMapConfig(id);

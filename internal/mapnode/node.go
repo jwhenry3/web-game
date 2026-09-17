@@ -25,7 +25,7 @@ type Node struct {
 	Transfer func(req cluster.TransferRequest)
 }
 
-func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountStore) (*Node, error) {
+func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountStore, layout map[string][2]int) (*Node, error) {
 	cfg, err := servercfg.Load(spec.Config)
 	if err != nil {
 		return nil, err
@@ -39,6 +39,18 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 		return nil, err
 	}
 	hub.SetMap(spec.ID, spec.Name, ow)
+	// World-space placement for map_snapshot: own origin + each bordered
+	// neighbor's origin so clients can overlay adjacent terrain.
+	origin := layout[spec.ID]
+	neighbors := make([]protocol.MapNeighbor, 0, len(ow.Borders))
+	for _, b := range ow.Borders {
+		if p, ok := layout[b.Map]; ok {
+			neighbors = append(neighbors, protocol.MapNeighbor{
+				ID: b.Map, X: float64(p[0]), Y: float64(p[1]),
+			})
+		}
+	}
+	hub.SetWorldOrigin(float64(origin[0]), float64(origin[1]), neighbors)
 	n := &Node{
 		Spec:     spec,
 		Hub:      hub,

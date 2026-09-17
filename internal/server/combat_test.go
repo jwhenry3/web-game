@@ -732,3 +732,53 @@ func TestCaptureIneligibleKeepsGCD(t *testing.T) {
 		t.Fatal("an eligible capture attempt should trigger the GCD")
 	}
 }
+
+func TestSkillWithoutTargetPicksNearestEnemy(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	near := hostileNPC(h, "npc-near", px+30, py)
+	npcSetHome(h, near, px, py)
+	far := hostileNPC(h, "npc-far", px+60, py) // in range, but not the closest
+	npcSetHome(h, far, px, py)
+
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID})
+	h.handleAction(c, raw)
+	if near.hp >= near.maxHP {
+		t.Fatal("a targetless attack should hit the nearest enemy")
+	}
+	if far.hp != far.maxHP {
+		t.Fatal("a targetless attack must not hit a farther enemy")
+	}
+	if pe.targetID != near.ID {
+		t.Fatalf("a targetless attack should focus the nearest enemy, got %q", pe.targetID)
+	}
+	if pe.engageID != near.ID {
+		t.Fatalf("a targetless attack should record the engage target, got %q", pe.engageID)
+	}
+}
+
+func TestCaptureWithoutTargetPicksNearestEnemy(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	near := hostileNPC(h, "npc-near", px+30, py) // healthy — ineligible
+	npcSetHome(h, near, px, py)
+	far := hostileNPC(h, "npc-far", px+60, py) // weakened, capturable
+	npcSetHome(h, far, px, py)
+	respawnOf(near).capturable = true
+	respawnOf(far).capturable = true
+	far.hp = int(float64(far.maxHP)*game.CaptureHPThreshold) - 1
+
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.ActionIDCapture})
+	h.handleAction(c, raw)
+	// Capture must pick the NEAR enemy — ineligible there, so no GCD.
+	if !pe.gcdReady(time.Now()) {
+		t.Fatal("capture on the nearest (ineligible) enemy must not trigger the GCD")
+	}
+	evs := combatEvents(drainClient(c))
+	if len(evs) == 0 {
+		t.Fatal("expected a combat event for the capture attempt")
+	}
+	if got := evs[len(evs)-1].TargetID; got != near.ID {
+		t.Fatalf("capture should target the nearest enemy %q, got %q", near.ID, got)
+	}
+}

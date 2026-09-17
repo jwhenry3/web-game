@@ -68,6 +68,12 @@ type Hub struct {
 	mapName    string
 	OnTransfer func(clientID string, dest TransferDest)
 
+	// World-space placement of this map inside the border-graph layout, sent
+	// in map_snapshot so clients can overlay neighbors in one scene.
+	worldOriginX float64
+	worldOriginY float64
+	neighbors    []protocol.MapNeighbor
+
 	quit     chan struct{}
 	done     chan struct{}
 	stopOnce sync.Once
@@ -186,6 +192,13 @@ func (h *Hub) broadcastWorldState() {
 
 func (h *Hub) MapID() string { return h.mapID }
 
+// SetWorldOrigin records this map's position in the world layout plus the
+// border-adjacent maps' origins. Called once at node startup.
+func (h *Hub) SetWorldOrigin(x, y float64, neighbors []protocol.MapNeighbor) {
+	h.worldOriginX, h.worldOriginY = x, y
+	h.neighbors = append([]protocol.MapNeighbor(nil), neighbors...)
+}
+
 // MapSnapshot returns the current map configuration for clients (REST + welcome).
 func (h *Hub) MapSnapshot() *protocol.MapSnapshot {
 	return h.mapSnapshot()
@@ -223,6 +236,9 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		Portals:       portals,
 		TileOverrides: tileOverridesPayload(h.overworld.TileOverrides),
 		TerrainLayers: terrainLayersPayload(h.overworld),
+		OriginX:       h.worldOriginX,
+		OriginY:       h.worldOriginY,
+		Neighbors:     append([]protocol.MapNeighbor(nil), h.neighbors...),
 	}
 }
 

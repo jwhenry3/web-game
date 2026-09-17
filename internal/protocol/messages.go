@@ -281,7 +281,8 @@ type WelcomePayload struct {
 }
 
 // MapSnapshot is what the current map server is responsible for. Cluster
-// topology and transfer rules are omitted.
+// topology and transfer rules are omitted, except the world-space origin +
+// border neighbors so clients can overlay adjacent maps in one scene.
 type MapSnapshot struct {
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
@@ -290,6 +291,19 @@ type MapSnapshot struct {
 	Portals       []MapPortal       `json:"portals,omitempty"`
 	TileOverrides *MapTileOverrides `json:"tile_overrides,omitempty"`
 	TerrainLayers *MapTerrainLayers `json:"terrain_layers,omitempty"`
+	// OriginX/OriginY: this map's top-left corner in world pixels, derived
+	// from the border graph. Neighbors carries each bordered map's origin so
+	// the client can draw them at their world offsets.
+	OriginX   float64       `json:"origin_x"`
+	OriginY   float64       `json:"origin_y"`
+	Neighbors []MapNeighbor `json:"neighbors,omitempty"`
+}
+
+// MapNeighbor is a border-adjacent map's world-space origin.
+type MapNeighbor struct {
+	ID string  `json:"id"`
+	X  float64 `json:"x"`
+	Y  float64 `json:"y"`
 }
 
 // MapTerrainLayers is the composed ground/collision grid from the map editor config.
@@ -378,6 +392,8 @@ type AtlasMap struct {
 	Name      string       `json:"name"`
 	Overworld OverworldMap `json:"overworld"`
 	POIs      []AtlasPOI   `json:"pois"`
+	OriginX   float64      `json:"origin_x,omitempty"`
+	OriginY   float64      `json:"origin_y,omitempty"`
 }
 
 type AtlasPOI struct {

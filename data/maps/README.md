@@ -20,7 +20,7 @@ Loader order (`game.LoadOverworldData`): `.map.json` → else `.tmj` → else le
 
 ## Stock world (18 maps)
 
-Three regions × 6 maps. Hubs are mother cities; each region also has ≥2 minor settlement maps.
+Three regions × 6 maps. Hubs are mother cities; each region also has ≥2 minor settlement maps. All maps are a uniform **128×96** tiles — smaller legacy maps were padded east/south with rock, keeping all tile coordinates stable.
 
 | Region | Hub | Settlements | Fields / borders |
 |--------|-----|-------------|------------------|

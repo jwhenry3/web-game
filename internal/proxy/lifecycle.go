@@ -48,7 +48,7 @@ func (p *Proxy) startMapLocked(spec cluster.MapSpec) error {
 	if p.maps[spec.ID] != nil {
 		return nil
 	}
-	n, err := mapnode.Start(spec, p.profiles, p.accounts)
+	n, err := mapnode.Start(spec, p.profiles, p.accounts, p.cfg.WorldLayout)
 	if err != nil {
 		return err
 	}

@@ -892,12 +892,18 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 		AttackerID: c.ID, ActionID: game.ActionIDCapture, ActionName: "Capture", TargetID: action.TargetID,
 	}
 	n := h.ent(action.TargetID)
+	if n == nil || n.Kind != kindNPC || !h.canAttack(e, n) {
+		// No usable target in the payload — pick the closest attackable foe,
+		// same as every other enemy-targeted skill.
+		n = h.autoTarget(e)
+	}
 	r := respawnOf(n)
-	if n == nil || n.Kind != kindNPC || r == nil || !h.canAttack(e, n) {
+	if n == nil || n.Kind != kindNPC || r == nil {
 		res.Message = "Invalid target."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
+	res.TargetID = n.ID
 	if dist(e.X, e.Y, n.X, n.Y) > allySkillRangeW {
 		res.Message = "Target out of range."
 		h.sendCombatEvent(res, e.X, e.Y)

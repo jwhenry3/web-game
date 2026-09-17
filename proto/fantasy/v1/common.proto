@@ -154,6 +154,12 @@ message MapPortal {
   double h = 4;
 }
 
+message MapNeighbor {
+  string id = 1;
+  double x = 2;
+  double y = 3;
+}
+
 message MapSnapshot {
   string id = 1;
   string name = 2;
@@ -162,6 +168,12 @@ message MapSnapshot {
   repeated MapPortal portals = 8;
   MapTileOverrides tile_overrides = 9;
   MapTerrainLayers terrain_layers = 10;
+  // World-space placement from the border-graph layout: this map's origin
+  // plus every bordered map's origin, so clients can overlay neighbors in
+  // one scene.
+  double origin_x = 11;
+  double origin_y = 12;
+  repeated MapNeighbor neighbors = 13;
 }
 
 // WorldEntity is the unified snapshot for every world inhabitant: players,
