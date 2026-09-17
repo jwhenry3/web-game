@@ -207,6 +207,82 @@ func TestValidateMapBordersWarnsOnDeadAndOpenEdges(t *testing.T) {
 	}
 }
 
+func TestComputeWorldLayout(t *testing.T) {
+	mk := func(borders map[string]string) *MapConfig {
+		c := syntheticConfig(8, 8)
+		c.Borders = borders
+		return c
+	}
+
+	// Linear chain west→east: cells normalize so the westmost is (0,0).
+	layout, errs := ComputeWorldLayout(map[string]*MapConfig{
+		"a": mk(map[string]string{"east": "b"}),
+		"b": mk(map[string]string{"west": "a", "east": "c"}),
+		"c": mk(map[string]string{"west": "b"}),
+	})
+	if len(errs) != 0 {
+		t.Fatalf("chain layout errors: %v", errs)
+	}
+	if layout["a"] != [2]int{0, 0} || layout["b"] != [2]int{1, 0} || layout["c"] != [2]int{2, 0} {
+		t.Fatalf("chain layout = %v", layout)
+	}
+
+	// 2-D: north neighbor lands one row up, normalized to y=0.
+	layout, errs = ComputeWorldLayout(map[string]*MapConfig{
+		"south-map": mk(map[string]string{"north": "north-map"}),
+		"north-map": mk(map[string]string{"south": "south-map"}),
+	})
+	if len(errs) != 0 {
+		t.Fatalf("2-d layout errors: %v", errs)
+	}
+	if layout["north-map"] != [2]int{0, 0} || layout["south-map"] != [2]int{0, 1} {
+		t.Fatalf("2-d layout = %v", layout)
+	}
+
+	// Consistent cycle: a→b (east), b→c (south), c→a via west+north is
+	// impossible on a grid — c's west neighbor must sit at a's cell... use a
+	// consistent 2x2 square instead: a-b / c-d with a.north=c, b.north=d.
+	layout, errs = ComputeWorldLayout(map[string]*MapConfig{
+		"a": mk(map[string]string{"east": "b", "south": "c"}),
+		"b": mk(map[string]string{"west": "a", "south": "d"}),
+		"c": mk(map[string]string{"north": "a", "east": "d"}),
+		"d": mk(map[string]string{"north": "b", "west": "c"}),
+	})
+	if len(errs) != 0 {
+		t.Fatalf("square layout errors: %v", errs)
+	}
+	if layout["a"] != [2]int{0, 0} || layout["b"] != [2]int{1, 0} ||
+		layout["c"] != [2]int{0, 1} || layout["d"] != [2]int{1, 1} {
+		t.Fatalf("square layout = %v", layout)
+	}
+
+	// Conflict: a says b is east, but c already claimed that cell for b's
+	// implied position — b can't be both east of a and east of c.
+	_, errs = ComputeWorldLayout(map[string]*MapConfig{
+		"a": mk(map[string]string{"east": "b"}),
+		"b": mk(map[string]string{"west": "a", "east": "c"}),
+		"c": mk(map[string]string{"west": "b", "east": "b"}), // nonsense: two edges to b
+	})
+	// c can't border b on west AND east without b being in two cells.
+	if len(errs) == 0 {
+		t.Fatal("expected layout conflict for double-edge claim")
+	}
+
+	// Unreachable map (isolated, no borders) is not an error — it's simply
+	// absent from the layout.
+	layout, errs = ComputeWorldLayout(map[string]*MapConfig{
+		"a":    mk(map[string]string{"east": "b"}),
+		"b":    mk(map[string]string{"west": "a"}),
+		"lone": mk(nil),
+	})
+	if len(errs) != 0 {
+		t.Fatalf("isolated map should not error: %v", errs)
+	}
+	if _, ok := layout["lone"]; ok {
+		t.Fatal("isolated map should have no layout cell")
+	}
+}
+
 // TestRealMapBorderGraph validates the shipped map configs end-to-end.
 func TestRealMapBorderGraph(t *testing.T) {
 	dir := filepath.Dir(defaultOverworldPath())

@@ -267,6 +267,11 @@ func (c *Config) validateBorders() error {
 	for id, cell := range layout {
 		c.WorldLayout[id] = [2]int{cell[0] * strideX, cell[1] * strideY}
 	}
+	for id := range cfgs {
+		if _, ok := c.WorldLayout[id]; !ok {
+			log.Printf("cluster: border warning: %s has no border path to the world graph — it won't appear in the map overlay", id)
+		}
+	}
 	return nil
 }
 

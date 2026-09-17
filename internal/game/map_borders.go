@@ -153,15 +153,12 @@ func ComputeWorldLayout(cfgs map[string]*MapConfig) (map[string][2]int, []string
 			queue = append(queue, dest)
 		}
 	}
-	for _, id := range ids {
-		if _, ok := pos[id]; !ok {
-			errs = append(errs, fmt.Sprintf(
-				"%s: unreachable through borders — cannot be placed on the world map", id))
-		}
-	}
 	if len(errs) > 0 {
 		return nil, errs
 	}
+	// Maps with no border path back to the root component (ferry/teleport-only
+	// islands) simply have no world position — callers may warn, but they
+	// aren't graph errors.
 
 	// Normalize so the top-left cell is (0,0).
 	minX, minY := pos[ids[0]][0], pos[ids[0]][1]
