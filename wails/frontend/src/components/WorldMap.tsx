@@ -389,7 +389,7 @@ export function MapWindow() {
   const atlas = useGame((s) => s.atlas);
   const mapInfo = useGame((s) => s.mapInfo);
   const selfId = useGame((s) => s.selfId);
-  const players = useGame((s) => s.players);
+  const entities = useGame((s) => s.entities);
   const visited = useGame((s) => s.profile?.visited_save_points ?? EMPTY_VISITED);
   const [mapId, setMapId] = useState(mapInfo?.id ?? "");
 
@@ -403,7 +403,7 @@ export function MapWindow() {
 
   const selectedId = atlas.some((m) => m.id === mapId) ? mapId : (atlas[0]?.id ?? "");
   const current = atlas.find((m) => m.id === selectedId);
-  const self = selfId ? players[selfId] : undefined;
+  const self = selfId ? entities[selfId] : undefined;
   const markers = current
     ? markersForMap({
         atlas: current,

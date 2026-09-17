@@ -136,7 +136,7 @@ export function Minimap() {
       if (state.screen !== "world") return;
       const map = state.overworld;
       const selfId = state.selfId;
-      const self = selfId ? state.players[selfId] : undefined;
+      const self = selfId ? state.entities[selfId] : undefined;
       if (!map || !self || self.in_house) {
         ctx.clearRect(0, 0, sizePx, sizePx);
         return;
@@ -206,15 +206,16 @@ export function Minimap() {
         const p = toMini(camp.x, camp.y);
         dot(ctx, p.x, p.y, "#7ecf6a", 3.5 * scale, "#d8f5c8");
       }
-      for (const npc of Object.values(state.npcs)) {
-        if (npc.engaged || !inView(npc.x, npc.y)) continue;
+      for (const npc of Object.values(state.entities)) {
+        if (npc.kind !== "npc" || npc.engaged || !inView(npc.x, npc.y)) continue;
         const p = toMini(npc.x, npc.y);
         dot(ctx, p.x, p.y, "#e06060", 2 * scale);
       }
-      for (const wp of Object.values(state.players)) {
+      for (const wp of Object.values(state.entities)) {
+        if (wp.kind !== "player") continue;
         if (wp.id === selfId || wp.in_house || !inView(wp.x, wp.y)) continue;
         const p = toMini(wp.x, wp.y);
-        dot(ctx, p.x, p.y, wp.in_combat ? "#ffe9a8" : "#f0f4f8", 2.5 * scale);
+        dot(ctx, p.x, p.y, wp.engaged ? "#ffe9a8" : "#f0f4f8", 2.5 * scale);
       }
 
       const me = toMini(selfX, selfY);

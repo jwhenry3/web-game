@@ -96,6 +96,23 @@ func (s *Store) SetBattlePet(name, petID string) (Profile, string) {
 	return *p, ""
 }
 
+// UpdatePet replaces the stored PetRecord with the same ID (used for XP/level).
+func (s *Store) UpdatePet(name string, pet game.PetRecord) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.profiles[name]
+	if !ok {
+		return
+	}
+	for i, existing := range p.Pets {
+		if existing.ID == pet.ID {
+			p.Pets[i] = pet
+			s.save()
+			return
+		}
+	}
+}
+
 func (p *Profile) hasPet(petID string) bool {
 	for _, pet := range p.Pets {
 		if pet.ID == petID {

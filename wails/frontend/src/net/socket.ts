@@ -15,10 +15,10 @@ import {
 } from "./transport";
 import type {
   ChatMessagePayload,
-  CombatEntity,
   CombatEventPayload,
   CombatTickPayload,
   Envelope,
+  EntityStatePayload,
   MessageType,
   PartyInvitePayload,
   FriendRequestPayload,
@@ -28,11 +28,9 @@ import type {
   MapConfigPayload,
   SavePoint,
   JobChanger,
-  WorldNPC,
-  WorldPlayer,
+  WorldEntity,
   WorldStatePayload,
   WorldCamp,
-  WorldPet,
   HouseStatePayload,
   SelectedAction,
 } from "../types";
@@ -44,59 +42,59 @@ import {
   skillTargetsAlly,
   skillWeaponMatches,
 } from "../types";
-/** All combat entities currently visible to this client (AoI-scoped). */
-function combatEntityList(): CombatEntity[] {
-  return Object.values(useGame.getState().combatEntities);
+/** Combat participants currently visible to this client (AoI-scoped ids → entities). */
+function combatEntityList(): WorldEntity[] {
+  const { entities, combatIds } = useGame.getState();
+  return Object.keys(combatIds)
+    .map((id) => entities[id])
+    .filter((e): e is WorldEntity => !!e);
 }
 
-/** The local player's combat entity, if the server is tracking one. */
-function selfCombatEntity(): CombatEntity | undefined {
-  const { combatEntities, selfId } = useGame.getState();
-  return selfId ? combatEntities[selfId] : undefined;
+/** The local player's entity, if the server is tracking one. */
+function selfCombatEntity(): WorldEntity | undefined {
+  const { entities, selfId } = useGame.getState();
+  return selfId ? entities[selfId] : undefined;
 }
 
-/** The local player's current focus target (combat entity, else world player sync). */
+/** The local player's current focus target. */
 function selfTargetId(): string | undefined {
-  const { combatEntities, players, selfId } = useGame.getState();
+  const { entities, selfId } = useGame.getState();
   if (!selfId) return undefined;
-  return combatEntities[selfId]?.target_id ?? players[selfId]?.target_id;
+  return entities[selfId]?.target_id;
 }
 
-/** Optimistically reflect a new focus target on the local player replicas. */
+/** Optimistically reflect a new focus target on the local player replica. */
 function patchSelfTargetId(targetId: string) {
   useGame.setState((s) => {
     if (!s.selfId) return s;
-    const wp = s.players[s.selfId];
-    const ce = s.combatEntities[s.selfId];
-    return {
-      ...(wp ? { players: { ...s.players, [s.selfId]: { ...wp, target_id: targetId } } } : {}),
-      ...(ce
-        ? { combatEntities: { ...s.combatEntities, [s.selfId]: { ...ce, target_id: targetId } } }
-        : {}),
-    };
+    const e = s.entities[s.selfId];
+    if (!e) return s;
+    return { entities: { ...s.entities, [s.selfId]: { ...e, target_id: targetId } } };
   });
 }
 
-function livingEnemyTarget(self: CombatEntity): CombatEntity | undefined {
+const isEnemy = (e: WorldEntity) => e.kind === "npc" && !e.is_ally;
+
+function livingEnemyTarget(self: WorldEntity): WorldEntity | undefined {
   const entities = combatEntityList();
   const focusId = selfTargetId() ?? self.target_id;
   const focus =
-    focusId && entities.find((e) => e.id === focusId && e.alive && !e.is_player && !e.is_ally);
+    focusId && entities.find((e) => e.id === focusId && e.alive && isEnemy(e));
   if (focus) return focus;
-  return entities.find((e) => !e.is_player && !e.is_ally && e.alive);
+  return entities.find((e) => isEnemy(e) && e.alive);
 }
 
 /** Enemy to focus when the current focus is missing, dead, or not an enemy; undefined if focus is already viable. */
-function nextViableEnemy(self: CombatEntity): CombatEntity | undefined {
+function nextViableEnemy(self: WorldEntity): WorldEntity | undefined {
   const entities = combatEntityList();
   const focusId = selfTargetId() ?? self.target_id;
   const focus =
-    focusId && entities.find((e) => e.id === focusId && e.alive && !e.is_player && !e.is_ally);
+    focusId && entities.find((e) => e.id === focusId && e.alive && isEnemy(e));
   if (focus) return undefined;
-  return entities.find((e) => !e.is_player && !e.is_ally && e.alive);
+  return entities.find((e) => isEnemy(e) && e.alive);
 }
 
-function castEnemySkill(actionId: string, self: CombatEntity | undefined) {
+function castEnemySkill(actionId: string, self: WorldEntity | undefined) {
   const target = self ? livingEnemyTarget(self) : undefined;
   // If we have a combat-entity target, use it; otherwise fall back to the
   // world-level target (e.g. an NPC we clicked on that isn't engaged yet).
@@ -307,8 +305,8 @@ export const net = {
     const focusId = selfTargetId() ?? self.target_id;
     const pool =
       axis === "horizontal"
-        ? entities.filter((e) => !e.is_player && !e.is_ally && e.alive)
-        : entities.filter((e) => (e.is_player || e.is_ally) && e.alive);
+        ? entities.filter((e) => isEnemy(e) && e.alive)
+        : entities.filter((e) => !isEnemy(e) && e.alive);
     if (pool.length === 0) return;
     let idx = pool.findIndex((e) => e.id === focusId);
     if (idx < 0) {
@@ -389,22 +387,22 @@ export const net = {
     send("action", { action_id: actionId, target_id: targetId, item_id: itemId, actor_id: petId });
   },
 
-  clickEntity(target: { id: string; alive: boolean; is_player: boolean; is_ally?: boolean }) {
+  clickEntity(target: WorldEntity) {
     if (!target.alive) return;
     const { selectedAction } = useGame.getState();
     if (selectedAction) {
       this.castSelectedOn(target);
       return;
     }
-    if (!target.is_player && !target.is_ally) this.setTarget(target.id);
+    if (isEnemy(target)) this.setTarget(target.id);
   },
 
-  castSelectedOn(target: { id: string; alive: boolean; is_player: boolean; is_ally?: boolean }): boolean {
+  castSelectedOn(target: WorldEntity): boolean {
     const { selectedAction, commandPetId } = useGame.getState();
     if (!selectedAction || !target.alive) return false;
     const self = selfCombatEntity();
     if (!commandPetId && self && !isGcdReady(self)) return false;
-    const friendly = !!target.is_player || !!target.is_ally;
+    const friendly = !isEnemy(target);
     if (selectedAction.heals ? !friendly : friendly) return false;
     if (commandPetId) {
       send("action", {
@@ -585,11 +583,11 @@ export function handleMessage(env: Envelope) {
           const exists = s.characters.some((c) => c.name === summary.name);
           const characters = exists ? s.characters : [...s.characters, summary];
           const selfWeapon = mainWeaponTypeFromProfile(p.profile);
-          const selfWp = s.players[p.player_id];
-          const players =
-            selfWp && selfWeapon
-              ? { ...s.players, [p.player_id]: { ...selfWp, weapon: selfWeapon } }
-              : s.players;
+          const selfEnt = s.entities[p.player_id];
+          const entities =
+            selfEnt && selfWeapon
+              ? { ...s.entities, [p.player_id]: { ...selfEnt, weapon: selfWeapon } }
+              : s.entities;
           // Profile refreshes (equip, house furniture, storage) also send welcome.
           // Do not yank the player out of house/world mid-session.
           const screen =
@@ -604,7 +602,7 @@ export function handleMessage(env: Envelope) {
             character: summary,
             screen,
             loginError: null,
-            players,
+            entities,
           };
         });
         if (p.map) applyMapSnapshotToGame(p.map);
@@ -621,25 +619,19 @@ export function handleMessage(env: Envelope) {
     }
     case "world_state": {
       const p = env.payload as WorldStatePayload;
-      const players: Record<string, WorldPlayer> = {};
-      for (const wp of p.players ?? []) players[wp.id] = wp;
-      const npcs: Record<string, WorldNPC> = {};
-      for (const n of p.npcs ?? []) npcs[n.id] = n;
+      const entities: Record<string, WorldEntity> = {};
+      for (const e of p.entities ?? []) entities[e.id] = e;
       const savePoints: Record<string, SavePoint> = {};
       for (const sp of p.save_points ?? []) savePoints[sp.id] = sp;
       const jobChangers: Record<string, JobChanger> = {};
       for (const jc of p.job_changers ?? []) jobChangers[jc.id] = jc;
       const camps: Record<string, WorldCamp> = {};
       for (const camp of p.camps ?? []) camps[camp.owner_name] = camp;
-      const pets: Record<string, WorldPet> = {};
-      for (const pet of p.pets ?? []) pets[pet.id] = pet;
       g.setState({
-        players,
-        npcs,
+        entities,
         savePoints,
         jobChangers,
         camps,
-        pets,
         overworld: p.map ?? g.getState().overworld,
       });
       break;
@@ -668,9 +660,8 @@ export function handleMessage(env: Envelope) {
       break;
     }
     case "player_sync": {
-      const wp = env.payload as WorldPlayer;
-      // WorldPlayer now carries combat fields (hp/mp/stamina/target/in_combat).
-      g.setState((s) => ({ players: { ...s.players, [wp.id]: wp } }));
+      const we = env.payload as WorldEntity;
+      g.setState((s) => ({ entities: { ...s.entities, [we.id]: we } }));
       break;
     }
     case "combat_tick": {
@@ -683,29 +674,29 @@ export function handleMessage(env: Envelope) {
       applyCombatEvent(p);
       break;
     }
-    case "pet_state": {
-      const p = env.payload as { pets?: WorldPet[] };
-      const pets: Record<string, WorldPet> = {};
-      for (const pet of p.pets ?? []) pets[pet.id] = pet;
-      g.setState({ pets });
+    case "set_target": {
+      const p = (env.payload ?? {}) as { target_id?: string };
+      patchSelfTargetId(p.target_id ?? "");
       break;
     }
     case "player_joined": {
-      const wp = env.payload as WorldPlayer;
-      const already = !!g.getState().players[wp.id];
-      g.setState((s) => ({ players: { ...s.players, [wp.id]: wp } }));
-      if (wp.id !== g.getState().selfId && !already) {
-        pushChat("social", `${wp.name} has joined the world.`);
+      const we = env.payload as WorldEntity;
+      const already = !!g.getState().entities[we.id];
+      g.setState((s) => ({ entities: { ...s.entities, [we.id]: we } }));
+      if (we.id !== g.getState().selfId && !already) {
+        pushChat("social", `${we.name} has joined the world.`);
       }
       break;
     }
     case "player_left": {
       const { id } = env.payload as { id: string };
-      const left = g.getState().players[id];
+      const left = g.getState().entities[id];
       g.setState((s) => {
-        const players = { ...s.players };
-        delete players[id];
-        return { players };
+        const entities = { ...s.entities };
+        delete entities[id];
+        const combatIds = { ...s.combatIds };
+        delete combatIds[id];
+        return { entities, combatIds };
       });
       if (left && id !== g.getState().selfId) {
         pushChat("social", `${left.name} has left the world.`);
@@ -715,13 +706,13 @@ export function handleMessage(env: Envelope) {
     case "player_moved": {
       const p = env.payload as { id: string; x: number; y: number; facing?: number | string };
       g.setState((s) => {
-        const wp = s.players[p.id];
-        if (!wp) return s;
+        const e = s.entities[p.id];
+        if (!e) return s;
         return {
-          players: {
-            ...s.players,
+          entities: {
+            ...s.entities,
             [p.id]: {
-              ...wp,
+              ...e,
               x: p.x,
               y: p.y,
               ...(p.facing !== undefined ? { facing: p.facing } : {}),
@@ -731,11 +722,17 @@ export function handleMessage(env: Envelope) {
       });
       break;
     }
-    case "npc_state": {
-      const p = env.payload as { npcs: WorldNPC[] };
-      const npcs: Record<string, WorldNPC> = {};
-      for (const n of p.npcs ?? []) npcs[n.id] = n;
-      g.setState({ npcs });
+    case "entity_state": {
+      // Authoritative set of server-driven entities (NPCs + pets); players merge.
+      const p = env.payload as EntityStatePayload;
+      g.setState((s) => {
+        const entities: Record<string, WorldEntity> = {};
+        for (const [id, e] of Object.entries(s.entities)) {
+          if (e.kind === "player") entities[id] = e;
+        }
+        for (const e of p.entities ?? []) entities[e.id] = e;
+        return { entities };
+      });
       break;
     }
     case "social_state": {

@@ -10,73 +10,29 @@ import (
 	"clara-mundi/internal/protocol"
 )
 
-// Overworld foes are owned by the hub: they wander, get engaged in place by
-// proximity or player attacks, chase, and despawn on death until respawn.
+// Overworld foes are hub-owned entities (kindNPC) driven by the wander,
+// npcEngage, chaseTarget, attackTarget and respawn plugins.
 const (
 	npcCount    = 12
 	npcTickSec  = 0.25
 	maxMoveStep = 80.0 // ~240 px/s plus slack; rejects teleports
 )
 
-type worldNPC struct {
-	ID    string
-	Name  string
-	Kind  string
-	Level int
-	X, Y  float64
-
-	// Combat state (overworld realtime combat).
-	Engaged      bool
-	hp, maxHP    int
-	targetID     string
-	attackCD     time.Time
-	statuses     []game.ActiveStatus
-	contributors map[string]int // clientID -> damage dealt
-	avoidSide    float64        // -1 or +1, stable detour around pack-mates
-	statusTick   int
-	dropPoolID   string
-	capturable   bool
-
-	patrol     game.Patrol
-	region     game.Region
-	path       []game.Vec2
-	pathI      int
-	idleUntil  time.Time
-	wanderStep int
-
-	// Chase pathfinding: A* waypoints when straight-line pursuit hits terrain.
-	chasePath []game.Vec2
-	chaseI    int
-	chaseGoal game.Tile
-	repathAt  time.Time
-
-	// Leash anchor: where the NPC stood when combat began. Wandering ranges
-	// region-wide, so distance to patrol.Home says nothing about the fight —
-	// the leash measures how far the battle was dragged from its origin.
-	leashX, leashY float64
-	leashSet       bool
-
-	ow *game.Overworld
-
-	// Hidden from the world while dead and waiting on respawn.
-	despawned bool
-	respawnAt time.Time
-}
-
-func (n *worldNPC) onWorld() bool {
-	return n != nil && !n.despawned
-}
-
 func dist(ax, ay, bx, by float64) float64 {
 	return math.Hypot(ax-bx, ay-by)
 }
 
-func (n *worldNPC) snapshot() protocol.WorldNPC {
-	return protocol.WorldNPC{
-		ID: n.ID, Name: n.Name, Kind: n.Kind, Level: n.Level,
-		X: n.X, Y: n.Y, Engaged: n.Engaged,
-		HP: n.hp, MaxHP: n.maxHP, TargetID: n.targetID,
+// serverEntitySnapshots lists entities the server drives (NPCs and pets) for
+// entity_state deltas.
+func (h *Hub) serverEntitySnapshots() []protocol.WorldEntity {
+	out := make([]protocol.WorldEntity, 0)
+	for _, e := range h.entities {
+		if e.Kind == kindPlayer || e.hidden {
+			continue
+		}
+		out = append(out, h.entitySnapshot(e, time.Now()))
 	}
+	return out
 }
 
 // npcCombatProfile derives the world NPC's identity from the patrol's
@@ -98,8 +54,17 @@ func npcCombatProfile(p game.Patrol) (kind string, level, maxHP int, dropPoolID 
 	return kind, level, maxHP, entry.DropPoolID, entry.Capturable
 }
 
+// removeNPCs drops every NPC entity from the world.
+func (h *Hub) removeNPCs() {
+	for id, e := range h.entities {
+		if e.Kind == kindNPC {
+			delete(h.entities, id)
+		}
+	}
+}
+
 func (h *Hub) seedNPCs(count int) {
-	h.npcs = map[string]*worldNPC{}
+	h.removeNPCs()
 	if count <= 0 {
 		return
 	}
@@ -118,25 +83,8 @@ func (h *Hub) seedNPCs(count int) {
 			reg, _ = game.RegionByID(p.Region)
 		}
 		p.Home = h.nudgePatrolHome(p.Home, reg)
-		start := game.TileCenter(p.Home)
-		kind, level, maxHP, dropPoolID, capturable := npcCombatProfile(p)
-		n := &worldNPC{
-			ID:         p.ID,
-			Name:       p.Name,
-			Kind:       kind,
-			Level:      level,
-			X:          start.X,
-			Y:          start.Y,
-			hp:         maxHP,
-			maxHP:      maxHP,
-			dropPoolID: dropPoolID,
-			capturable: capturable,
-			patrol:     p,
-			region:     reg,
-			ow:         h.overworld,
-		}
-		n.beginWander()
-		h.npcs[n.ID] = n
+		n := newNPCEntity(p, reg, h.overworld)
+		h.entities[n.ID] = n
 	}
 }
 
@@ -179,168 +127,47 @@ func absInt(v int) int {
 // reseedNPCsPreservingCombat rebuilds overworld foes from the current map
 // config while keeping NPCs that are mid-fight (position/hp/aggro preserved).
 func (h *Hub) reseedNPCsPreservingCombat(count int) {
-	prev := h.npcs
+	prev := map[string]*entity{}
+	h.eachEntity(kindNPC, func(e *entity) { prev[e.ID] = e })
 	h.seedNPCs(count)
-	for id, n := range h.npcs {
-		old, ok := prev[id]
-		if !ok || !old.Engaged {
-			continue
+	h.eachEntity(kindNPC, func(n *entity) {
+		old, ok := prev[n.ID]
+		if !ok || !engagedNPC(old) {
+			return
 		}
-		n.Engaged = true
+		ng, og := npcEngageOf(n), npcEngageOf(old)
+		ng.engaged = true
 		n.targetID = old.targetID
 		n.contributors = old.contributors
 		n.hp = old.hp
 		n.X, n.Y = old.X, old.Y
-		n.leashX, n.leashY, n.leashSet = old.leashX, old.leashY, old.leashSet
-		n.despawned = old.despawned
-		n.respawnAt = old.respawnAt
-	}
+		ng.leashX, ng.leashY, ng.leashSet = og.leashX, og.leashY, og.leashSet
+		n.hidden = old.hidden
+		n.alive = old.alive
+		if nr, or := respawnOf(n), respawnOf(old); nr != nil && or != nil {
+			nr.respawnAt = or.respawnAt
+		}
+	})
 	for id, old := range prev {
-		if !old.Engaged && !old.despawned {
+		if !engagedNPC(old) && !old.hidden {
 			continue
 		}
-		if _, ok := h.npcs[id]; ok {
+		if _, ok := h.entities[id]; ok {
 			continue
 		}
-		old.ow = h.overworld
-		h.npcs[id] = old
-	}
-}
-
-func (n *worldNPC) beginWander() {
-	home := game.TileCenter(n.patrol.Home)
-	n.X, n.Y = home.X, home.Y
-	n.path = nil
-	n.pathI = 0
-	n.wanderStep = 0
-	n.idleUntil = time.Now().Add(n.wanderIdle())
-}
-
-func (n *worldNPC) wanderIdle() time.Duration {
-	if n.ow != nil {
-		return n.ow.WanderIdleDuration()
-	}
-	return game.WanderIdleDuration()
-}
-
-func (n *worldNPC) pickNextPath() bool {
-	from := game.WorldToTile(n.X, n.Y)
-	walkable := game.WalkableTile
-	if n.ow != nil {
-		walkable = n.ow.WalkableTile
-	}
-	if !walkable(from.C, from.R) {
-		home := game.TileCenter(n.patrol.Home)
-		n.X, n.Y = home.X, home.Y
-		from = n.patrol.Home
-	}
-	if n.ow != nil {
-		n.path = n.ow.PickRandomWanderPath(n.ID, n.region, from, n.wanderStep)
-	} else {
-		n.path = game.PickRandomWanderPath(n.ID, n.region, from, n.wanderStep)
-	}
-	n.pathI = 0
-	n.wanderStep++
-	return len(n.path) > 0
-}
-
-func (n *worldNPC) arriveAtDest() {
-	n.path = nil
-	n.pathI = 0
-	n.idleUntil = time.Now().Add(n.wanderIdle())
-}
-
-func (n *worldNPC) step(distStep float64) bool {
-	if !n.idleUntil.IsZero() && time.Now().Before(n.idleUntil) {
-		return false
-	}
-	if !n.idleUntil.IsZero() {
-		n.idleUntil = time.Time{}
-		if !n.pickNextPath() {
-			n.idleUntil = time.Now().Add(time.Second)
+		var w *wander
+		if old.plugin(&w) {
+			w.ow = h.overworld
 		}
-		return len(n.path) > 0
+		h.entities[id] = old
 	}
-
-	if len(n.path) == 0 {
-		if !n.pickNextPath() {
-			n.idleUntil = time.Now().Add(time.Second)
-			return false
-		}
-	}
-	if n.pathI >= len(n.path) {
-		n.arriveAtDest()
-		return true
-	}
-
-	dest := n.path[n.pathI]
-	dx, dy := dest.X-n.X, dest.Y-n.Y
-	d := math.Hypot(dx, dy)
-	if d < 6 {
-		n.pathI++
-		if n.pathI >= len(n.path) {
-			n.arriveAtDest()
-		}
-		return true
-	}
-	n.X += dx / d * distStep
-	n.Y += dy / d * distStep
-	ok := false
-	if n.ow != nil {
-		ok = n.ow.WalkableAt(n.X, n.Y)
-	} else {
-		ok = game.WalkableAt(n.X, n.Y)
-	}
-	if !ok {
-		n.X, n.Y = dest.X, dest.Y
-	}
-	return true
 }
 
-func (h *Hub) worldNPCs() []protocol.WorldNPC {
-	out := make([]protocol.WorldNPC, 0, len(h.npcs))
-	for _, n := range h.npcs {
-		if !n.onWorld() {
-			continue
-		}
-		out = append(out, n.snapshot())
-	}
-	return out
-}
-
-func (h *Hub) broadcastNPCs() {
-	h.broadcastAll(protocol.Encode(protocol.TypeNPCState, protocol.NPCStatePayload{
-		NPCs: h.worldNPCs(),
+// broadcastEntityState streams NPC+pet snapshots to everyone when any moved.
+func (h *Hub) broadcastEntityState() {
+	h.broadcastAll(protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
+		Entities: h.serverEntitySnapshots(),
 	}))
-}
-
-func (h *Hub) tickNPCs() {
-	if len(h.npcs) == 0 {
-		return
-	}
-	step := game.WanderSpeed() * npcTickSec
-	if h.overworld != nil {
-		step = h.overworld.WanderSpeed() * npcTickSec
-	}
-	changed := false
-	for _, n := range h.npcs {
-		if n.despawned {
-			if h.maybeRespawn(n) {
-				changed = true
-			}
-			continue
-		}
-		if n.Engaged {
-			continue // combat tick drives engaged NPCs
-		}
-		if n.step(step) {
-			changed = true
-		}
-	}
-	h.checkProximityAggro()
-	if changed {
-		h.broadcastNPCs()
-	}
 }
 
 func (h *Hub) worldSize() (w, hgt float64) {
@@ -370,27 +197,4 @@ func (h *Hub) clampMoveStep(fromX, fromY, toX, toY, maxStep float64) (float64, f
 		return h.overworld.SlideMovePlayer(fromX, fromY, toX, toY)
 	}
 	return game.SlideMovePlayer(fromX, fromY, toX, toY)
-}
-
-// battleImmune blocks aggro briefly after join/respawn/transfer.
-func battleImmune(wp *protocol.WorldPlayer) bool {
-	return wp != nil && wp.ImmuneUntil > time.Now().UnixMilli()
-}
-
-func (h *Hub) maybeRespawn(n *worldNPC) bool {
-	if n == nil || !n.despawned || n.Engaged || n.respawnAt.IsZero() {
-		return false
-	}
-	if time.Now().Before(n.respawnAt) {
-		return false
-	}
-	n.despawned = false
-	n.respawnAt = time.Time{}
-	n.hp = n.maxHP
-	n.contributors = nil
-	n.statuses = nil
-	n.targetID = ""
-	n.beginWander()
-	log.Printf("%s respawned in %s", n.Name, n.region.ID)
-	return true
 }

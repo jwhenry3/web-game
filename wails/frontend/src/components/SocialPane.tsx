@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
-import type { FriendInfo, PartyMember, WorldPlayer } from "../types";
+import type { FriendInfo, PartyMember, WorldEntity } from "../types";
 
 type SocialTab = "search" | "friends" | "party";
 
@@ -10,7 +10,7 @@ function PlayerRow({
   selfId,
   actions,
 }: {
-  p: Pick<WorldPlayer, "id" | "name" | "level" | "weapon" | "in_combat">;
+  p: Pick<WorldEntity, "id" | "name" | "level" | "weapon" | "engaged">;
   selfId: string | null;
   actions?: ReactNode;
 }) {
@@ -20,9 +20,9 @@ function PlayerRow({
       <div className="cm-social-row-main">
         <span className="cm-party-name">{p.name}</span>
         <span className="dim">
-          Lv{p.level} {p.weapon || "—"}
+          Lv{p.level ?? 0} {p.weapon || "—"}
         </span>
-        {p.in_combat && <span className="cm-tag">In Combat</span>}
+        {p.engaged && <span className="cm-tag">In Combat</span>}
       </div>
       {actions && <div className="cm-social-row-actions">{actions}</div>}
     </div>
@@ -46,7 +46,7 @@ function FriendRow({ f, actions }: { f: FriendInfo; actions?: React.ReactNode })
 
 export function SocialPane() {
   const selfId = useGame((s) => s.selfId);
-  const players = useGame((s) => s.players);
+  const entities = useGame((s) => s.entities);
   const friends = useGame((s) => s.friends);
   const outgoingFriendRequests = useGame((s) => s.outgoingFriendRequests);
   const party = useGame((s) => s.party);
@@ -54,8 +54,11 @@ export function SocialPane() {
   const [query, setQuery] = useState("");
 
   const online = useMemo(
-    () => Object.values(players).sort((a, b) => a.name.localeCompare(b.name)),
-    [players],
+    () =>
+      Object.values(entities)
+        .filter((e) => e.kind === "player")
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [entities],
   );
 
   const matches = useMemo(() => {

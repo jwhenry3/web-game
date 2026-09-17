@@ -87,8 +87,6 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.HouseStatePayload{}
 	case TypeHouseReturn:
 		return &pb.HouseReturnPayload{}
-	case TypePetState:
-		return &pb.PetStatePayload{}
 	case TypeAction:
 		return &pb.ActionPayload{}
 	case TypeSetTarget:
@@ -104,15 +102,15 @@ func newPayloadMessage(t MessageType) proto.Message {
 	case TypeWorldState:
 		return &pb.WorldStatePayload{}
 	case TypePlayerJoin, TypePlayerSync:
-		return &pb.WorldPlayer{}
+		return &pb.WorldEntity{}
 	case TypePlayerLeft:
 		return &pb.PlayerLeftPayload{}
 	case TypePlayerMoved:
 		return &pb.PlayerMovedPayload{}
 	case TypeChatMsg:
 		return &pb.ChatMessagePayload{}
-	case TypeNPCState:
-		return &pb.NPCStatePayload{}
+	case TypeEntityState:
+		return &pb.EntityStatePayload{}
 	case TypeSocialState:
 		return &pb.SocialStatePayload{}
 	case TypePartyInviteMsg:
@@ -234,10 +232,10 @@ var messageTypeSet = map[MessageType]struct{}{
 	TypeHousePlaceFurniture: {}, TypeHousePickFurniture: {}, TypeSetCampSkin: {},
 	TypePetSetFollow: {}, TypePetSetBattle: {}, TypePetRelease: {},
 	TypeWelcome: {}, TypeWorldState: {}, TypePlayerJoin: {}, TypePlayerLeft: {}, TypePlayerMoved: {},
-	TypePlayerSync: {}, TypeChatMsg: {}, TypeNPCState: {}, TypeSocialState: {},
+	TypePlayerSync: {}, TypeChatMsg: {}, TypeEntityState: {}, TypeSocialState: {},
 	TypePartyInviteMsg: {}, TypeFriendRequestMsg: {}, TypeRewardNotice: {},
 	TypeCombatTick: {}, TypeCombatEvent: {},
-	TypeCampState: {}, TypeHouseState: {}, TypeHouseReturn: {}, TypePetState: {},
+	TypeCampState: {}, TypeHouseState: {}, TypeHouseReturn: {},
 	TypeError: {}, TypeMapConfig: {},
 }
 

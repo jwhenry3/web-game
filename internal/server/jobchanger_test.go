@@ -9,7 +9,7 @@ import (
 )
 
 func TestSetJobsRequiresJobChangerProximity(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
 	if len(game.JobChangers) == 0 {
 		t.Fatal("expected job changers from overworld data")
 	}
@@ -27,7 +27,7 @@ func TestSetJobsRequiresJobChangerProximity(t *testing.T) {
 		t.Fatal("should not change jobs from far away")
 	}
 
-	wp.X, wp.Y = center.X, center.Y
+	pe.X, pe.Y = center.X, center.Y
 	h.handleSetJobs(c, raw)
 	profile, ok := h.store.Get(c.Name)
 	if !ok || profile.MainJob != string(game.JobHEX) {
@@ -36,13 +36,13 @@ func TestSetJobsRequiresJobChangerProximity(t *testing.T) {
 }
 
 func TestSetJobsRequiresJobChangerID(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
 	if len(game.JobChangers) == 0 {
 		t.Fatal("expected job changers")
 	}
 	jc := game.JobChangers[0]
 	center := game.TileCenter(jc.Tile)
-	wp.X, wp.Y = center.X, center.Y
+	pe.X, pe.Y = center.X, center.Y
 
 	raw, _ := json.Marshal(protocol.SetJobsPayload{MainJob: string(game.JobBRW), SubJob: ""})
 	h.handleSetJobs(c, raw)

@@ -115,8 +115,8 @@ func TestProtobufRoundTripRewardNoticeDefeat(t *testing.T) {
 
 func TestProtobufRoundTripCombatEntityZeroHP(t *testing.T) {
 	frame := protocol.Encode(protocol.TypeCombatTick, protocol.CombatTickPayload{
-		Entities: []protocol.CombatEntity{{
-			ID: "p1", HP: 0, MP: 10, SkillATB: 0, Alive: false, IsPlayer: true,
+		Entities: []protocol.WorldEntity{{
+			ID: "p1", HP: 0, MP: 10, SkillATB: 0, Alive: false, Kind: "player",
 		}},
 	})
 	bin, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)

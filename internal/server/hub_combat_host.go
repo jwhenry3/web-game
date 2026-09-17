@@ -57,6 +57,11 @@ func (h *Hub) ClientName(clientID string) string {
 	return ""
 }
 
-func (h *Hub) WorldPlayer(clientID string) *protocol.WorldPlayer {
-	return h.world[clientID]
+// WorldEntity returns the wire snapshot for a client's player entity.
+func (h *Hub) WorldEntity(clientID string) *protocol.WorldEntity {
+	if e := h.playerEnt(clientID); e != nil {
+		we := h.entitySync(e)
+		return &we
+	}
+	return nil
 }

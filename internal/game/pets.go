@@ -6,11 +6,11 @@ import (
 )
 
 const (
-	MaxPets            = 20
-	CaptureHPThreshold = 0.20
-	CaptureChanceMin   = 0.05
-	CaptureChanceMax   = 0.85
-	CaptureChanceBase  = 0.35
+	MaxPets             = 20
+	CaptureHPThreshold  = 0.20
+	CaptureChanceMin    = 0.05
+	CaptureChanceMax    = 0.85
+	CaptureChanceBase   = 0.35
 	CaptureChancePerLvl = 0.04
 
 	ActionIDCapture = "capture"
@@ -29,6 +29,7 @@ type PetRecord struct {
 	Kind     string `json:"kind"`
 	Name     string `json:"name"`
 	Level    int    `json:"level"`
+	XP       int    `json:"xp"`
 	CaughtAt int64  `json:"caught_at,omitempty"` // unix millis
 }
 
@@ -91,6 +92,31 @@ func NewPetRecord(id, kind, name string, level int) PetRecord {
 		Level:    level,
 		CaughtAt: time.Now().UnixMilli(),
 	}
+}
+
+// PetXPToNext returns the XP required to advance from the given level.
+// Uses the same curve as player XP.
+func PetXPToNext(level int) int {
+	if level < 1 {
+		level = 1
+	}
+	return level * 100
+}
+
+// PetAwardXP adds XP to a pet record, leveling it up as many times as the XP
+// allows. Returns true if the pet leveled up at least once.
+func PetAwardXP(pet *PetRecord, xp int) bool {
+	if xp < 1 || pet == nil {
+		return false
+	}
+	pet.XP += xp
+	leveled := false
+	for pet.XP >= PetXPToNext(pet.Level) {
+		pet.XP -= PetXPToNext(pet.Level)
+		pet.Level++
+		leveled = true
+	}
+	return leveled
 }
 
 // PetCombatStats scales enemy template stats for a pet ally at the given level.

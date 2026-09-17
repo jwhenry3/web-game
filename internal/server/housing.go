@@ -51,8 +51,9 @@ func (h *Hub) broadcastCamps() {
 	h.broadcastAll(protocol.Encode(protocol.TypeCampState, protocol.CampStatePayload{Camps: h.campList()}))
 }
 
-func (h *Hub) placeCamp(c *Client, wp *protocol.WorldPlayer) {
-	if wp == nil || wp.InCombat || wp.InHouse {
+func (h *Hub) placeCamp(c *Client, e *entity) {
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
 		h.sendError(c, "You cannot pitch a camp right now.")
 		return
 	}
@@ -62,7 +63,7 @@ func (h *Hub) placeCamp(c *Client, wp *protocol.WorldPlayer) {
 		h.despawnCamp(c.Name, "Camp relocated.", false)
 	}
 	// Offset south of the caster so the tent isn't buried under their sprite.
-	campX, campY := wp.X, wp.Y+float64(game.HouseTileSize)+8
+	campX, campY := e.X, e.Y+float64(game.HouseTileSize)+8
 	camp := &worldCamp{
 		OwnerName:     c.Name,
 		OwnerClientID: c.ID,
@@ -107,11 +108,14 @@ func (h *Hub) closeHouse(ownerName, reason string) {
 
 func (h *Hub) releaseFromHouse(clientID, reason string) {
 	c := h.clients[clientID]
-	wp := h.world[clientID]
-	if wp != nil {
-		wp.InHouse = false
-		wp.HouseOwner = ""
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	if e := h.playerEnt(clientID); e != nil {
+		if cc := clientControlOf(e); cc != nil {
+			cc.inHouse = false
+			cc.houseOwner = ""
+		}
+		e.hidden = false
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+		h.syncPetEntities()
 	}
 	if c != nil {
 		c.HouseOwner = ""
@@ -124,8 +128,9 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	wp, ok := h.world[c.ID]
-	if !ok || wp.InCombat || wp.InHouse {
+	e := h.playerEnt(c.ID)
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
 		h.sendError(c, "You cannot enter a house right now.")
 		return
 	}
@@ -135,7 +140,7 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 		h.sendError(c, "That camp is not pitched.")
 		return
 	}
-	if dist(wp.X, wp.Y, camp.X, camp.Y) > campInteractRange {
+	if dist(e.X, e.Y, camp.X, camp.Y) > campInteractRange {
 		h.sendError(c, "Move closer to the camp.")
 		return
 	}
@@ -152,12 +157,13 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 		h.houses[owner] = room
 	}
 	sx, sy := game.HouseSpawnCenter()
-	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: wp.Facing}
+	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: e.Facing}
 	room.Guests[c.ID] = guest
-	wp.InHouse = true
-	wp.HouseOwner = owner
+	cc.inHouse = true
+	cc.houseOwner = owner
+	e.hidden = true
 	c.HouseOwner = owner
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 	h.sendHouseState(room)
 }
 
@@ -177,11 +183,11 @@ func (h *Hub) handleLeaveHouse(c *Client) {
 	}
 	// Return near camp on overworld.
 	if camp, ok := h.camps[owner]; ok {
-		if wp := h.world[c.ID]; wp != nil {
-			wp.X, wp.Y = camp.X, camp.Y
-			h.persistWorldLocation(c, wp, true)
+		if e := h.playerEnt(c.ID); e != nil {
+			e.X, e.Y = camp.X, camp.Y
+			h.persistWorldLocation(c, e, true)
 			h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-				ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
+				ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
 			}))
 		}
 	}
@@ -382,7 +388,7 @@ func (h *Hub) sendHouseState(room *houseRoom) {
 	}
 }
 
-func (h *Hub) moveInHouse(c *Client, wp *protocol.WorldPlayer, x, y float64, facing *float64) {
+func (h *Hub) moveInHouse(c *Client, e *entity, x, y float64, facing *float64) {
 	room := h.houses[c.HouseOwner]
 	if room == nil {
 		return
@@ -395,7 +401,7 @@ func (h *Hub) moveInHouse(c *Client, wp *protocol.WorldPlayer, x, y float64, fac
 	nx, ny = game.ClampHousePos(nx, ny)
 	guest.Facing = game.ResolveFacingYaw(nx-guest.X, ny-guest.Y, derefFacing(facing), facing != nil, guest.Facing)
 	guest.X, guest.Y = nx, ny
-	_ = wp
+	_ = e
 	h.sendHouseState(room)
 }
 

@@ -37,12 +37,11 @@ export type MessageType =
   | "welcome"
   | "map_config"
   | "world_state"
-  | "pet_state"
   | "player_joined"
   | "player_left"
   | "player_moved"
   | "player_sync"
-  | "npc_state"
+  | "entity_state"
   | "camp_state"
   | "house_state"
   | "house_return"
@@ -264,45 +263,57 @@ export interface MapPortal {
   h: number;
 }
 
-export interface WorldPlayer {
+/** Entity classes carried in WorldEntity.kind. */
+export type EntityKind = "player" | "npc" | "pet";
+
+/**
+ * Unified world entity: players, NPCs, and pets share one snapshot shape.
+ * `kind` selects the class; `sprite` is the enemy key / pet kind / player race.
+ * Fields that don't apply to a kind are absent on the wire.
+ */
+export interface WorldEntity {
   id: string;
   name: string;
-  weapon: string;
-  race?: string;
-  main_job: string;
-  sub_job?: string;
-  level: number;
-  appearance?: CharacterAppearanceWire;
+  kind: EntityKind;
+  sprite?: string;
+  owner_id?: string;
+  level?: number;
   x: number;
   y: number;
   facing?: number | string;
-  in_combat?: boolean;
   hp: number;
   max_hp: number;
-  mp: number;
-  max_mp: number;
-  stamina: number;
+  mp?: number;
+  max_mp?: number;
+  stamina?: number;
+  alive: boolean;
+  engaged?: boolean; // in combat
+  is_ally?: boolean;
   target_id?: string;
-  in_house?: boolean;
-  house_owner?: string;
-  immune_until?: number;
+  statuses?: StatusSnapshot[];
+  capturable?: boolean;
+  skill_atb?: number;
+  has_queued_action?: boolean;
   casting_skill_id?: string;
+  cast_target_id?: string;
+  cast_progress?: number;
   cast_time_ms?: number;
   cast_ends_at?: number;
+  // Player presence extras.
+  weapon?: string;
+  main_job?: string;
+  sub_job?: string;
+  appearance?: CharacterAppearanceWire;
+  immune_until?: number;
+  in_house?: boolean;
+  house_owner?: string;
 }
 
-export interface WorldNPC {
-  id: string;
-  name: string;
-  kind: string;
-  level: number;
-  x: number;
-  y: number;
-  engaged?: boolean;
-  hp: number;
-  max_hp: number;
-  target_id?: string;
-}
+/** Convenience predicates over the unified entity record. */
+export const isPlayerEntity = (e: WorldEntity) => e.kind === "player";
+export const isNpcEntity = (e: WorldEntity) => e.kind === "npc";
+export const isPetEntity = (e: WorldEntity) => e.kind === "pet";
+export const isAllyEntity = (e: WorldEntity) => e.kind === "player" || !!e.is_ally;
 
 export interface SavePoint {
   id: string;
@@ -398,24 +409,16 @@ export interface HouseStatePayload {
 }
 
 export interface WorldStatePayload {
-  players: WorldPlayer[];
-  npcs?: WorldNPC[];
+  entities: WorldEntity[];
   camps?: WorldCamp[];
-  pets?: WorldPet[];
   save_points?: SavePoint[];
   job_changers?: JobChanger[];
   map?: OverworldMap;
 }
 
-export interface WorldPet {
-  id: string;
-  owner_id: string;
-  kind: string;
-  name: string;
-  level: number;
-  x: number;
-  y: number;
-  facing?: number | string;
+/** Incremental entity updates (movement, engagement, spawns) for NPCs/pets. */
+export interface EntityStatePayload {
+  entities: WorldEntity[];
 }
 
 export type ChatChannel = "general" | "social" | "system" | "battle";
@@ -462,35 +465,8 @@ export interface StatusSnapshot {
   shield_hp?: number;
 }
 
-/** One combat participant snapshot: engaged NPC, fighting player, or battle pet. */
-export interface CombatEntity {
-  id: string;
-  name: string;
-  kind?: string;
-  is_player: boolean;
-  is_ally?: boolean;
-  owner_id?: string;
-  level?: number;
-  x: number;
-  y: number;
-  hp: number;
-  max_hp: number;
-  mp?: number;
-  max_mp?: number;
-  skill_atb?: number;
-  target_id?: string;
-  alive: boolean;
-  capturable?: boolean;
-  statuses?: StatusSnapshot[];
-  casting_skill_id?: string;
-  cast_target_id?: string;
-  cast_progress?: number;
-  cast_time_ms?: number;
-  has_queued_action?: boolean;
-}
-
 export interface CombatTickPayload {
-  entities: CombatEntity[];
+  entities: WorldEntity[];
 }
 
 export interface CombatEventPayload {
@@ -506,7 +482,7 @@ export interface CombatEventPayload {
   success?: boolean;
   cast_started?: boolean;
   cast_cancelled?: boolean;
-  entities: CombatEntity[];
+  entities: WorldEntity[];
 }
 
 export interface RewardNoticePayload {
@@ -722,12 +698,12 @@ export function skillWeaponMatches(sk: SkillInfo, profile: ProfileInfo): boolean
   return weaponTypeForSkill(sk, profile) === sk.weapon_req;
 }
 
-export function isFriendlyEntity(e: { is_player?: boolean; is_ally?: boolean }): boolean {
-  return !!e.is_player || !!e.is_ally;
+export function isFriendlyEntity(e: Pick<WorldEntity, "kind" | "is_ally">): boolean {
+  return e.kind === "player" || !!e.is_ally;
 }
 
-export function isEnemyEntity(e: { is_player?: boolean; is_ally?: boolean }): boolean {
-  return !e.is_player && !e.is_ally;
+export function isEnemyEntity(e: Pick<WorldEntity, "kind" | "is_ally">): boolean {
+  return e.kind === "npc" && !e.is_ally;
 }
 
 export function captureEligible(e: { alive?: boolean; capturable?: boolean; hp: number; max_hp: number }): boolean {

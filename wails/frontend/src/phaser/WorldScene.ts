@@ -13,7 +13,8 @@ import {
   terrainInputsChanged,
   type TerrainSyncInputs,
 } from "../world/worldTerrainSync";
-import type { MapTerrainLayers, OverworldMap, WorldNPC, CharacterAppearanceWire, SavePoint, JobChanger, WorldPlayer, WorldCamp, WorldPet, CombatEntity, StatusSnapshot, ActionResult } from "../types";
+import type { MapTerrainLayers, OverworldMap, WorldEntity, CharacterAppearanceWire, SavePoint, JobChanger, WorldCamp, StatusSnapshot, ActionResult } from "../types";
+import { isAllyEntity } from "../types";
 import { bindingToPhaserKeyCode, mergeKeybinds, resolveHotbarSlot } from "../input/keybinds";
 import { CharacterSprite } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
@@ -61,12 +62,10 @@ const POI_LABEL_Y = -28;
 const CAMP_LABEL_Y = -32;
 /** Follow pets use the battle foe sprite at a reduced size. */
 const PET_FOLLOW_SCALE = 0.55;
-/** Resting distance behind the owner (pixels). */
-const PET_FOLLOW_DIST = 32;
-/** Exponential follow rate — higher = snappier trail. */
-const PET_FOLLOW_SMOOTH = 7;
-/** How quickly the behind-offset slides to the other side on turn. Lower = more fluid arc. */
-const PET_SIDE_SMOOTH = 3.2;
+/** Lerp factor for pet movement — matches NPC interpolation (0.2). */
+const PET_LERP = 0.2;
+/** Distance beyond which the pet snaps instead of interpolating. */
+const PET_SNAP_DIST = 120;
 
 /** Dodge dash distance — two 32px squares (matches the old realtime battle dash). */
 const DODGE_DIST = 64;
@@ -80,7 +79,7 @@ const MELEE_RANGE = 70;
 /** Survives Phaser remounts when crossing maps. */
 let lastWorldFacing: CharacterFacing = H99_FACING_DEFAULT;
 
-function facingOf(wp: Pick<WorldPlayer, "facing">, fallback: CharacterFacing): CharacterFacing {
+function facingOf(wp: Pick<WorldEntity, "facing">, fallback: CharacterFacing): CharacterFacing {
   return wp.facing === "left" || wp.facing === "right" ? wp.facing : fallback;
 }
 
@@ -103,8 +102,6 @@ interface PetMarker {
   enemy: EnemySprite;
   label: Phaser.GameObjects.Text;
   kind: string;
-  /** Smoothed X offset from owner (behind); lerps on facing change. */
-  offsetX: number;
   lastX: number;
   lastY: number;
 }
@@ -669,7 +666,7 @@ export class WorldScene extends Phaser.Scene {
   private trySetSavePoint(sp: SavePoint) {
     const state = useGame.getState();
     const selfId = state.selfId;
-    const self = selfId ? state.players[selfId] : undefined;
+    const self = selfId ? state.entities[selfId] : undefined;
     if (!selfId || !self) return;
     const av = this.avatars.get(selfId);
     const x = av?.wrapper.x ?? self.x;
@@ -715,7 +712,7 @@ export class WorldScene extends Phaser.Scene {
   private tryOpenJobChanger(jc: JobChanger) {
     const state = useGame.getState();
     const selfId = state.selfId;
-    const self = selfId ? state.players[selfId] : undefined;
+    const self = selfId ? state.entities[selfId] : undefined;
     if (!selfId || !self) return;
     const av = this.avatars.get(selfId);
     const x = av?.wrapper.x ?? self.x;
@@ -740,55 +737,34 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private syncPets(pets: Record<string, WorldPet>, players: Record<string, WorldPlayer>, delta: number) {
+  /**
+   * Pets are positioned by the server (same as NPCs). Combat ticks merge
+   * positions into the same entity record, and the client simply lerps to
+   * that target — identical to syncFoes.
+   */
+  private syncPets(entities: Record<string, WorldEntity>, delta: number) {
     for (const [id, marker] of this.pets) {
-      if (!pets[id]) {
+      const e = entities[id];
+      if (!e || e.kind !== "pet") {
         marker.enemy.destroy();
         marker.wrapper.destroy();
         this.pets.delete(id);
       }
     }
-    const dt = Math.max(0, delta) / 1000;
-    const followT = 1 - Math.exp(-PET_FOLLOW_SMOOTH * dt);
-    const sideT = 1 - Math.exp(-PET_SIDE_SMOOTH * dt);
 
-    const combatEntities = useGame.getState().combatEntities;
-    for (const pet of Object.values(pets)) {
-      const owner = players[pet.owner_id];
-      const ce = combatEntities[pet.id];
-      let facing: CharacterFacing = pet.facing === "left" || pet.facing === "right" ? pet.facing : "right";
-      let targetX = ce?.x ?? pet.x;
-      let targetY = ce?.y ?? pet.y;
-      // A pet fighting as a combat ally stops trailing its owner.
-      const followOwner = !!(!ce && owner && !owner.in_house && !owner.in_combat);
-      let ownerX = targetX;
-      let ownerY = targetY;
-      if (followOwner && owner) {
-        const av = this.avatars.get(owner.id);
-        ownerX = av?.wrapper.x ?? owner.x;
-        ownerY = av?.wrapper.y ?? owner.y;
-        const selfId = useGame.getState().selfId;
-        // Prefer live local facing; store facing lags until the next move sync.
-        if (owner.id === selfId) {
-          facing = lastWorldFacing;
-        } else if (av) {
-          facing = av.sprite.getFacing();
-        } else {
-          facing = facingOf(owner, facing);
-        }
-      }
-      // Behind the owner: left when facing right, right when facing left.
-      const desiredOffsetX = facing === "right" ? -PET_FOLLOW_DIST : PET_FOLLOW_DIST;
+    const combatIds = useGame.getState().combatIds;
+    for (const pet of Object.values(entities)) {
+      if (pet.kind !== "pet") continue;
+      const ce = combatIds[pet.id] ? pet : undefined;
+      const tx = pet.x;
+      const ty = pet.y;
 
-      const kind = enemyKindFromName(pet.name, pet.kind);
+      const kind = enemyKindFromName(pet.name, pet.sprite);
       let marker = this.pets.get(pet.id);
       if (!marker) {
-        const spawnX = followOwner ? ownerX + desiredOffsetX : targetX;
-        const spawnY = followOwner ? ownerY + 4 : targetY;
-        const wrapper = this.add.container(spawnX, spawnY).setDepth(8);
+        const wrapper = this.add.container(tx, ty).setDepth(8);
         const enemy = new EnemySprite(this, 0, 0, kind);
         enemy.container.setScale(PET_FOLLOW_SCALE);
-        enemy.setFacing(facing);
         const label = this.add
           .text(0, Math.round(H99_NAME_LABEL_Y * PET_FOLLOW_SCALE) - 2, pet.name.slice(0, 10), {
             fontFamily: "Georgia, serif",
@@ -800,45 +776,32 @@ export class WorldScene extends Phaser.Scene {
           .setOrigin(0.5, 1);
         wrapper.add([enemy.container, label]);
         enemy.setInteractive(() => this.onEntityClicked(pet.id));
-        marker = {
-          wrapper,
-          enemy,
-          label,
-          kind,
-          offsetX: desiredOffsetX,
-          lastX: spawnX,
-          lastY: spawnY,
-        };
+        marker = { wrapper, enemy, label, kind, lastX: tx, lastY: ty };
         this.pets.set(pet.id, marker);
       } else {
         if (marker.kind !== kind) {
           marker.enemy.setKind(kind);
           marker.kind = kind;
         }
-        if (ce) {
-          marker.offsetX = desiredOffsetX;
-        } else if (followOwner) {
-          // Drift the side offset so a turn arcs the pet around instead of snapping.
-          marker.offsetX += (desiredOffsetX - marker.offsetX) * sideT;
-          targetX = ownerX + marker.offsetX;
-          targetY = ownerY + 4;
-        } else {
-          marker.offsetX = desiredOffsetX;
-        }
         marker.wrapper.setAlpha(ce && !ce.alive ? 0.35 : 1);
         marker.enemy.setCasting(!!ce?.casting_skill_id);
+
+        // Lerp exactly like NPC syncFoes: snap if too far, linear interpolate otherwise.
         const prevX = marker.wrapper.x;
         const prevY = marker.wrapper.y;
-        marker.wrapper.x += (targetX - marker.wrapper.x) * followT;
-        marker.wrapper.y += (targetY - marker.wrapper.y) * followT;
-        const mdx = marker.wrapper.x - prevX;
-        const mdy = marker.wrapper.y - prevY;
-        if (Math.hypot(mdx, mdy) > 0.2) {
-          // Use owner facing for the flip so a side-swap doesn't briefly face the wrong way.
-          marker.enemy.setMoving(true, facing === "right" ? 1 : -1, mdy);
-        } else {
+        if (Math.hypot(prevX - tx, prevY - ty) > PET_SNAP_DIST) {
+          marker.wrapper.setPosition(tx, ty);
           marker.enemy.setMoving(false);
-          marker.enemy.setFacing(facing);
+        } else {
+          marker.wrapper.x = Phaser.Math.Linear(prevX, tx, PET_LERP);
+          marker.wrapper.y = Phaser.Math.Linear(prevY, ty, PET_LERP);
+          const mdx = marker.wrapper.x - prevX;
+          const mdy = marker.wrapper.y - prevY;
+          if (Math.hypot(mdx, mdy) > 0.3) {
+            marker.enemy.setMoving(true, mdx, mdy);
+          } else {
+            marker.enemy.setMoving(false);
+          }
         }
         marker.label.setText(pet.name.slice(0, 10));
         marker.lastX = marker.wrapper.x;
@@ -885,7 +848,7 @@ export class WorldScene extends Phaser.Scene {
   private tryEnterCamp(camp: WorldCamp) {
     const state = useGame.getState();
     const selfId = state.selfId;
-    const self = selfId ? state.players[selfId] : undefined;
+    const self = selfId ? state.entities[selfId] : undefined;
     if (!selfId || !self || self.in_house) return;
     const live = state.camps[camp.owner_name] ?? camp;
     const av = this.avatars.get(selfId);
@@ -924,10 +887,10 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private ensureFoe(npc: WorldNPC): FoeAvatar {
+  private ensureFoe(npc: WorldEntity): FoeAvatar {
     let av = this.foes.get(npc.id);
     if (av) return av;
-    const kind = enemyKindFromName(npc.name, npc.kind);
+    const kind = enemyKindFromName(npc.name, npc.sprite);
     const wrapper = this.add.container(npc.x, npc.y).setDepth(9);
     const enemy = new EnemySprite(this, 0, 0, kind);
     wrapper.add([enemy.container]);
@@ -944,11 +907,12 @@ export class WorldScene extends Phaser.Scene {
   private onEntityClicked(id: string) {
     const state = useGame.getState();
     if (id === state.selfId) return;
-    const ce = state.combatEntities[id];
-    const isPlayer = !!state.players[id] || !!ce?.is_player;
-    const isAlly = ce?.is_ally ?? !!state.pets[id];
-    const alive = ce ? ce.alive : true;
-    net.clickEntity({ id, alive, is_player: isPlayer, is_ally: isAlly });
+    const e = state.entities[id];
+    if (!e) return;
+    // Only trust `alive` while the entity is in a visible fight; world
+    // replicas are considered alive for click/cast purposes.
+    const alive = state.combatIds[id] ? e.alive : true;
+    net.clickEntity({ ...e, alive });
   }
 
   /** Scene position + sprite for any combat id: player, NPC, pet, or combat-only extra. */
@@ -967,8 +931,9 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** Live cast progress 0–1 for an entity id, from combat ticks or world cast fields. */
-  private entityCastPct(id: string, wp?: WorldPlayer): number | undefined {
-    const ce = useGame.getState().combatEntities[id];
+  private entityCastPct(id: string, wp?: WorldEntity): number | undefined {
+    const state = useGame.getState();
+    const ce = state.combatIds[id] ? state.entities[id] : undefined;
     if (ce?.casting_skill_id) {
       return Phaser.Math.Clamp((ce.cast_progress ?? 0) / 100, 0, 1);
     }
@@ -978,15 +943,14 @@ export class WorldScene extends Phaser.Scene {
   /** Compact HP shown over engaged/damaged combatants; undefined keeps the bar hidden. */
   private entityHpMark(id: string, fallback?: { hp: number; max_hp: number }): { value: number; max: number } | undefined {
     const state = useGame.getState();
-    const ce = state.combatEntities[id];
-    if (ce) {
+    const e = state.entities[id];
+    if (e && state.combatIds[id]) {
       // Presence in the AoI combat snapshot means engaged; always show the bar.
-      return { value: ce.hp, max: ce.max_hp };
+      return { value: e.hp, max: e.max_hp };
     }
-    const wp = state.players[id];
-    if (wp?.in_combat || (wp && wp.hp < wp.max_hp)) return { value: wp.hp, max: wp.max_hp };
-    const npc = state.npcs[id];
-    if (npc?.engaged || (npc && npc.hp < npc.max_hp)) return { value: npc.hp, max: npc.max_hp };
+    if (e && e.kind !== "pet" && (e.engaged || e.hp < e.max_hp)) {
+      return { value: e.hp, max: e.max_hp };
+    }
     if (fallback && fallback.hp < fallback.max_hp) return { value: fallback.hp, max: fallback.max_hp };
     return undefined;
   }
@@ -996,7 +960,7 @@ export class WorldScene extends Phaser.Scene {
     return x >= view.x - pad && x <= view.right + pad && y >= view.y - pad && y <= view.bottom + pad;
   }
 
-  private castProgress(wp: WorldPlayer): number | undefined {
+  private castProgress(wp: WorldEntity): number | undefined {
     const casting = !!wp.casting_skill_id && (wp.cast_time_ms ?? 0) > 0;
     if (!casting) return undefined;
     const ms = wp.cast_time_ms ?? 1;
@@ -1087,7 +1051,8 @@ export class WorldScene extends Phaser.Scene {
     }
 
     for (const [id, av] of this.avatars) {
-      if (!state.players[id]) {
+      const e = state.entities[id];
+      if (!e || e.kind !== "player") {
         av.wrapper.destroy();
         this.avatars.delete(id);
         if (id === selfId) this.selfSpawned = false;
@@ -1103,7 +1068,8 @@ export class WorldScene extends Phaser.Scene {
     const overlayMarks: EntityOverlayMark[] = [];
     const stageXf = getStageTransform(this);
 
-    for (const wp of Object.values(state.players)) {
+    for (const wp of Object.values(state.entities)) {
+      if (wp.kind !== "player") continue;
       // Inside a house: gone from the overworld (no sprite, no interact).
       if (wp.in_house) {
         const gone = this.avatars.get(wp.id);
@@ -1114,10 +1080,10 @@ export class WorldScene extends Phaser.Scene {
         }
         continue;
       }
-      const av = this.ensureAvatar(wp.id, wp.race, wp.weapon, wp.appearance);
-      const ce = state.combatEntities[wp.id];
+      const av = this.ensureAvatar(wp.id, wp.sprite, wp.weapon, wp.appearance);
+      const ce = state.combatIds[wp.id] ? wp : undefined;
       const dead = ce ? !ce.alive : false;
-      const immune = !wp.in_combat && (wp.immune_until ?? 0) > Date.now();
+      const immune = !wp.engaged && (wp.immune_until ?? 0) > Date.now();
       av.wrapper.setAlpha(dead ? 0.35 : 1);
       if (av.ring) {
         av.ring.setVisible(immune);
@@ -1129,9 +1095,9 @@ export class WorldScene extends Phaser.Scene {
 
       const isSelf = wp.id === selfId;
       const inView = isSelf || this.isNearCamera(av.wrapper.x, av.wrapper.y);
-      // Engaged players move on the 50ms combat tick; fall back to world pos.
-      const tx = isSelf ? wp.x : (ce?.x ?? wp.x);
-      const ty = isSelf ? wp.y : (ce?.y ?? wp.y);
+      // Engaged players move on the 50ms combat tick, merged into the entity.
+      const tx = wp.x;
+      const ty = wp.y;
       if (!isSelf && inView && !this.jumping.has(wp.id)) {
         if (Math.hypot(av.wrapper.x - tx, av.wrapper.y - ty) > 80) {
           av.wrapper.setPosition(tx, ty);
@@ -1181,7 +1147,7 @@ export class WorldScene extends Phaser.Scene {
         overlayMarks.push(
           this.stageMark(
             wp.id,
-            `${wp.name} Lv${wp.level}${wp.in_combat ? " ⚔" : ""}${immune ? " 🛡" : ""}`,
+            `${wp.name} Lv${wp.level ?? 0}${wp.engaged ? " ⚔" : ""}${immune ? " 🛡" : ""}`,
             isSelf ? "self" : "player",
             av.wrapper.x,
             av.wrapper.y,
@@ -1194,13 +1160,13 @@ export class WorldScene extends Phaser.Scene {
       }
     }
 
-    this.syncFoes(state.npcs, delta, overlayMarks, stageXf);
+    this.syncFoes(state.entities, delta, overlayMarks, stageXf);
     this.syncCombatEntities(state, delta, overlayMarks, stageXf);
     this.updateTargetRing(state);
     this.updateMeleeRing(state);
     this.updateDodgeCooldown();
     this.moveSelf(time, selfId, state.overworld);
-    this.syncPets(state.pets, state.players, delta);
+    this.syncPets(state.entities, delta);
 
     // POIs are world-fixed; project with the camera scroll Phaser will use this frame
     // (follow lerp runs in Camera.preRender after Scene.update).
@@ -1256,15 +1222,11 @@ export class WorldScene extends Phaser.Scene {
     selfId: string,
     transform: StageTransform,
   ): InteractPromptMark[] {
-    // InteractPromptState still requires the legacy `battles` roster, which
-    // GameState no longer has — cast until world/interact drops that field.
-    const showPrompts = canShowWorldInteractPrompts(
-      state as unknown as Parameters<typeof canShowWorldInteractPrompts>[0],
-    );
+    const showPrompts = canShowWorldInteractPrompts(state);
     if (!showPrompts) return [];
     const keyLabel = interactKeyLabel(state.profile?.keybinds);
     const selfAv = this.avatars.get(selfId);
-    const self = state.players[selfId];
+    const self = state.entities[selfId];
     const selfX = selfAv?.wrapper.x ?? self?.x ?? 0;
     const selfY = selfAv?.wrapper.y ?? self?.y ?? 0;
     const out: InteractPromptMark[] = [];
@@ -1286,33 +1248,35 @@ export class WorldScene extends Phaser.Scene {
     return out;
   }
 
-  /** Engaged NPCs move on 50ms combat ticks — CombatEntity pos overrides npc_state. */
+  /** Engaged NPCs move on 50ms combat ticks, merged into the entity record. */
   private syncFoes(
-    npcs: Record<string, WorldNPC>,
+    entities: Record<string, WorldEntity>,
     delta: number,
     overlayMarks: EntityOverlayMark[],
     stageXf = getStageTransform(this),
   ) {
-    const combatEntities = useGame.getState().combatEntities;
+    const combatIds = useGame.getState().combatIds;
     for (const [id, av] of this.foes) {
-      if (!npcs[id]) {
+      const e = entities[id];
+      if (!e || e.kind !== "npc") {
         av.wrapper.destroy();
         this.foes.delete(id);
       }
     }
-    for (const npc of Object.values(npcs)) {
+    for (const npc of Object.values(entities)) {
+      if (npc.kind !== "npc") continue;
       const av = this.ensureFoe(npc);
-      const kind = enemyKindFromName(npc.name, npc.kind);
+      const kind = enemyKindFromName(npc.name, npc.sprite);
       av.enemy.setKind(kind);
-      const ce = combatEntities[npc.id];
+      const ce = combatIds[npc.id] ? npc : undefined;
       const dead = ce ? !ce.alive : npc.hp <= 0;
-      const engaged = npc.engaged || !!ce;
+      const engaged = !!npc.engaged || !!ce;
       av.wrapper.setAlpha(dead ? 0.35 : 1);
       const inView = this.isNearCamera(av.wrapper.x, av.wrapper.y);
       const prevX = av.lastX;
       const prevY = av.lastY;
-      const tx = ce?.x ?? npc.x;
-      const ty = ce?.y ?? npc.y;
+      const tx = npc.x;
+      const ty = npc.y;
       if (inView && !this.jumping.has(npc.id)) {
         if (Math.hypot(av.wrapper.x - tx, av.wrapper.y - ty) > 120) {
           av.wrapper.setPosition(tx, ty);
@@ -1334,7 +1298,7 @@ export class WorldScene extends Phaser.Scene {
         overlayMarks.push(
           this.stageMark(
             npc.id,
-            `${npc.name} Lv${npc.level}${engaged ? " ⚔" : ""}`,
+            `${npc.name} Lv${npc.level ?? 0}${engaged ? " ⚔" : ""}`,
             "enemy",
             av.wrapper.x,
             av.wrapper.y,
@@ -1353,7 +1317,7 @@ export class WorldScene extends Phaser.Scene {
   /**
    * Combat entities with no world replica (battle pets, summons) get a
    * temporary avatar for the duration of the fight; engaged NPC/player
-   * replicas are driven by the normal sync paths via combatEntities.
+   * replicas are driven by the normal sync paths via combatIds + entities.
    */
   private syncCombatEntities(
     state: ReturnType<typeof useGame.getState>,
@@ -1361,15 +1325,16 @@ export class WorldScene extends Phaser.Scene {
     overlayMarks: EntityOverlayMark[],
     stageXf: StageTransform,
   ) {
-    const entities = state.combatEntities;
     for (const [id, ex] of this.combatExtras) {
-      if (!entities[id]) {
+      const e = state.combatIds[id] ? state.entities[id] : undefined;
+      if (!e || this.avatars.has(id) || this.foes.has(id) || this.pets.has(id)) {
         ex.wrapper.destroy();
         this.combatExtras.delete(id);
       }
     }
-    for (const ce of Object.values(entities)) {
-      if (ce.id === state.selfId) continue;
+    for (const id of Object.keys(state.combatIds)) {
+      const ce = state.entities[id];
+      if (!ce || ce.id === state.selfId) continue;
       // World replicas (players/NPCs/pets) are synced by their own loops.
       if (this.avatars.has(ce.id) || this.foes.has(ce.id) || this.pets.has(ce.id)) continue;
       const ex = this.ensureCombatExtra(ce);
@@ -1394,7 +1359,7 @@ export class WorldScene extends Phaser.Scene {
           this.stageMark(
             ce.id,
             `${ce.name}${ce.level ? ` Lv${ce.level}` : ""}`,
-            ce.is_player || ce.is_ally ? "player" : "enemy",
+            isAllyEntity(ce) ? "player" : "enemy",
             ex.wrapper.x,
             ex.wrapper.y,
             this.entityCastPct(ce.id),
@@ -1409,21 +1374,20 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  private ensureCombatExtra(ce: CombatEntity): CombatExtra {
+  private ensureCombatExtra(ce: WorldEntity): CombatExtra {
     let ex = this.combatExtras.get(ce.id);
     if (ex) return ex;
     const wrapper = this.add.container(ce.x, ce.y).setDepth(10);
     let sprite: CharacterSprite | EnemySprite;
-    if (ce.is_player) {
-      const wp = useGame.getState().players[ce.id];
+    if (ce.kind === "player") {
       sprite = new CharacterSprite(
         this,
         0,
         0,
-        this.resolveAppearance(ce.id, wp?.race, wp?.weapon, wp?.appearance),
+        this.resolveAppearance(ce.id, ce.sprite, ce.weapon, ce.appearance),
       );
     } else {
-      sprite = new EnemySprite(this, 0, 0, enemyKindFromName(ce.name, ce.kind));
+      sprite = new EnemySprite(this, 0, 0, enemyKindFromName(ce.name, ce.sprite));
     }
     wrapper.add([sprite.container]);
     wrapper.setSize(44, 60);
@@ -1437,12 +1401,11 @@ export class WorldScene extends Phaser.Scene {
   /** Pulsing ring under the current focus target (socket set_target echo). */
   private updateTargetRing(state: ReturnType<typeof useGame.getState>) {
     const selfId = state.selfId;
-    const focusId = selfId
-      ? (state.combatEntities[selfId]?.target_id ?? state.players[selfId]?.target_id)
-      : undefined;
-    const focusCe = focusId ? state.combatEntities[focusId] : undefined;
+    const focusId = selfId ? state.entities[selfId]?.target_id : undefined;
+    const focusE = focusId ? state.entities[focusId] : undefined;
+    const focusInFight = !!focusId && !!state.combatIds[focusId];
     const av = focusId ? this.combatAvatarFor(focusId) : undefined;
-    const alive = focusCe ? focusCe.alive : !!av;
+    const alive = focusInFight ? (focusE?.alive ?? false) : !!av;
     if (!focusId || !av || !alive) {
       this.targetRing?.setVisible(false);
       return;
@@ -1458,10 +1421,7 @@ export class WorldScene extends Phaser.Scene {
     this.targetRing.setAlpha(0.65 + 0.3 * Math.sin(this.time.now / 160));
     // Gold while an armed action can legally hit the focus.
     const sel = state.selectedAction;
-    const friendly =
-      focusCe != null
-        ? !!(focusCe.is_player || focusCe.is_ally)
-        : !!state.players[focusId] || !!state.pets[focusId];
+    const friendly = focusE != null && (isAllyEntity(focusE) || focusE.kind === "pet");
     this.targetRing.setStrokeStyle(2.5, sel && sel.heals === friendly ? 0xffe9a8 : 0xe05545, 0.9);
   }
 
@@ -1469,10 +1429,11 @@ export class WorldScene extends Phaser.Scene {
   private updateMeleeRing(state: ReturnType<typeof useGame.getState>) {
     const selfId = state.selfId;
     const selfAv = selfId ? this.avatars.get(selfId) : undefined;
+    const selfE = selfId ? state.entities[selfId] : undefined;
     const fighting =
-      !!(selfId && state.combatEntities[selfId]) ||
-      !!(selfId && state.players[selfId]?.in_combat) ||
-      !!(selfId && (state.combatEntities[selfId]?.target_id ?? state.players[selfId]?.target_id)) ||
+      !!(selfId && state.combatIds[selfId]) ||
+      !!selfE?.engaged ||
+      !!selfE?.target_id ||
       !!state.selectedAction;
     if (selfAv && fighting) {
       if (!this.meleeRing) {
@@ -1518,10 +1479,10 @@ export class WorldScene extends Phaser.Scene {
     const state = useGame.getState();
     const selfId = state.selfId;
     const av = selfId ? this.avatars.get(selfId) : undefined;
-    const wp = selfId ? state.players[selfId] : undefined;
+    const wp = selfId ? state.entities[selfId] : undefined;
     if (!selfId || !av || !wp || this.dodging || this.jumping.has(selfId)) return;
     if (state.screen !== "world" || wp.in_house) return;
-    const selfCe = state.combatEntities[selfId];
+    const selfCe = state.combatIds[selfId] ? wp : undefined;
     if (selfCe && !selfCe.alive) return;
     const { x: dx, y: dy } = this.moveDir;
     if (dx === 0 && dy === 0) return;
@@ -1576,36 +1537,20 @@ export class WorldScene extends Phaser.Scene {
     const selfId = useGame.getState().selfId;
     if (!selfId) return;
     useGame.setState((s) => {
-      const wp = s.players[selfId];
-      const ce = s.combatEntities[selfId];
+      const e = s.entities[selfId];
+      if (!e?.casting_skill_id) return s;
       return {
-        ...(wp?.casting_skill_id
-          ? {
-              players: {
-                ...s.players,
-                [selfId]: {
-                  ...wp,
-                  casting_skill_id: undefined,
-                  cast_time_ms: undefined,
-                  cast_ends_at: undefined,
-                },
-              },
-            }
-          : {}),
-        ...(ce?.casting_skill_id
-          ? {
-              combatEntities: {
-                ...s.combatEntities,
-                [selfId]: {
-                  ...ce,
-                  casting_skill_id: undefined,
-                  cast_target_id: undefined,
-                  cast_progress: undefined,
-                  cast_time_ms: undefined,
-                },
-              },
-            }
-          : {}),
+        entities: {
+          ...s.entities,
+          [selfId]: {
+            ...e,
+            casting_skill_id: undefined,
+            cast_target_id: undefined,
+            cast_progress: undefined,
+            cast_time_ms: undefined,
+            cast_ends_at: undefined,
+          },
+        },
       };
     });
   }
@@ -1765,7 +1710,7 @@ export class WorldScene extends Phaser.Scene {
 
   private moveSelf(time: number, selfId: string, overworld: OverworldMap | null) {
     const av = this.avatars.get(selfId);
-    const wp = useGame.getState().players[selfId];
+    const wp = useGame.getState().entities[selfId];
     if (!av || !wp || !overworld) return;
     // The dodge dash tween owns the wrapper until it lands.
     if (this.dodging || this.jumping.has(selfId)) return;
@@ -1873,9 +1818,7 @@ export class WorldScene extends Phaser.Scene {
       setWorldLocalPos(slid.x, slid.y);
       const moved = Math.hypot(slid.x - ox, slid.y - oy) > 0.5;
       const st = useGame.getState();
-      const interruptCast =
-        (!!st.players[selfId]?.casting_skill_id || !!st.combatEntities[selfId]?.casting_skill_id) &&
-        moved;
+      const interruptCast = !!st.entities[selfId]?.casting_skill_id && moved;
       if (interruptCast) this.clearSelfCastLocal();
       this.sendPosition(time, slid.x, slid.y, interruptCast);
     });

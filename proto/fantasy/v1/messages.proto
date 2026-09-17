@@ -80,21 +80,6 @@ message PetIDPayload {
   string pet_id = 1;
 }
 
-message WorldPet {
-  string id = 1;
-  string owner_id = 2;
-  string kind = 3;
-  string name = 4;
-  int32 level = 5;
-  double x = 6;
-  double y = 7;
-  double facing = 8; // Y-axis yaw radians
-}
-
-message PetStatePayload {
-  repeated WorldPet pets = 1;
-}
-
 message SetTargetPayload {
   string target_id = 1;
 }
@@ -174,13 +159,11 @@ message MapConfigPayload {
 }
 
 message WorldStatePayload {
-  repeated WorldPlayer players = 1;
-  repeated WorldNPC npcs = 2;
+  repeated WorldEntity entities = 1;
   repeated SavePoint save_points = 4;
   repeated JobChanger job_changers = 5;
   OverworldMap map = 6;
   repeated WorldCamp camps = 7;
-  repeated WorldPet pets = 8;
 }
 
 message PlayerLeftPayload {
@@ -201,8 +184,10 @@ message ChatMessagePayload {
   string channel = 4;
 }
 
-message NPCStatePayload {
-  repeated WorldNPC npcs = 1;
+// EntityStatePayload carries incremental world-entity updates (movement,
+// engagement flips, spawns/despawns) for server-driven entities: NPCs and pets.
+message EntityStatePayload {
+  repeated WorldEntity entities = 1;
 }
 
 message PartyInvitePayload {
@@ -236,7 +221,7 @@ message ErrorPayload {
 }
 
 message CombatTickPayload {
-  repeated CombatEntity entities = 1;
+  repeated WorldEntity entities = 1;
 }
 
 message CombatEventPayload {
@@ -252,7 +237,7 @@ message CombatEventPayload {
   bool success = 10;
   bool cast_started = 11;
   bool cast_cancelled = 12;
-  repeated CombatEntity entities = 13;
+  repeated WorldEntity entities = 13;
 }
 
 // EmptyPayload covers dodge, party_accept, leave_house, etc.

@@ -9,7 +9,7 @@ import {
 
 const pending = new Map<string, Promise<void>>();
 
-function loadSpritesheet(scene: Phaser.Scene, textureKey: string, path: string): Promise<void> {
+export function loadSpritesheet(scene: Phaser.Scene, textureKey: string, path: string): Promise<void> {
   if (scene.textures.exists(textureKey)) return Promise.resolve();
   const existing = pending.get(textureKey);
   if (existing) return existing;

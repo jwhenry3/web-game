@@ -17,10 +17,18 @@ func testSocialHub(t *testing.T) (*Hub, *Client, *Client) {
 	b := &Client{ID: "b", Name: "Bravo", Joined: true, Send: make(chan []byte, 64), Hub: h}
 	h.clients[a.ID] = a
 	h.clients[b.ID] = b
-	h.store.GetOrCreate("Alpha", game.JobVAN)
-	h.store.GetOrCreate("Bravo", game.JobHEX)
-	h.world[a.ID] = &protocol.WorldPlayer{ID: a.ID, Name: "Alpha", Level: 1, Weapon: "sword"}
-	h.world[b.ID] = &protocol.WorldPlayer{ID: b.ID, Name: "Bravo", Level: 1, Weapon: "staff"}
+	pa := h.store.GetOrCreate("Alpha", game.JobVAN)
+	pb := h.store.GetOrCreate("Bravo", game.JobHEX)
+	ea := h.ensurePlayer(a)
+	h.applyProfilePresence(ea, pa)
+	if cc := clientControlOf(ea); cc != nil {
+		cc.weaponName = "sword"
+	}
+	eb := h.ensurePlayer(b)
+	h.applyProfilePresence(eb, pb)
+	if cc := clientControlOf(eb); cc != nil {
+		cc.weaponName = "staff"
+	}
 	return h, a, b
 }
 
@@ -102,7 +110,9 @@ func TestPartyCombatShareShowsInCombat(t *testing.T) {
 
 	// Overworld combat: a party member fighting an engaged NPC is flagged
 	// in_combat for the party UI — no room join required.
-	h.world[a.ID].InCombat = true
+	if cc := clientControlOf(h.playerEnt(a.ID)); cc != nil {
+		cc.inCombat = true
+	}
 	party := h.parties[h.clientParty[a.ID]]
 	info := h.buildPartyInfo(party)
 	if info == nil || len(info.Members) != 2 {
@@ -123,7 +133,8 @@ func TestOnlyLeaderCanInvite(t *testing.T) {
 	h, a, b := testSocialHub(t)
 	c := &Client{ID: "c", Name: "Charlie", Joined: true, Send: make(chan []byte, 64), Hub: h}
 	h.clients[c.ID] = c
-	h.world[c.ID] = &protocol.WorldPlayer{ID: c.ID, Name: "Charlie", Level: 1}
+	ec := h.ensurePlayer(c)
+	ec.Level = 1
 	raw, _ := json.Marshal(protocol.PlayerNamePayload{PlayerName: "Bravo"})
 	h.handlePartyInvite(a, raw)
 	h.handlePartyAccept(b)

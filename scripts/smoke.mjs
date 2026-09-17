@@ -58,8 +58,10 @@ function makePlayer(name, token, mainJob) {
         p.profile = pl.profile;
         break;
       case "world_state":
-        for (const wp of pl.players ?? []) p.worldPlayers[wp.id] = wp;
-        for (const n of pl.npcs ?? []) p.npcs[n.id] = n;
+        for (const e of pl.entities ?? []) {
+          if (e.kind === "player") p.worldPlayers[e.id] = e;
+          else if (e.kind === "npc") p.npcs[e.id] = e;
+        }
         if (pl.map?.cells) p.map = pl.map;
         break;
       case "player_joined":
@@ -72,8 +74,8 @@ function makePlayer(name, token, mainJob) {
       case "chat_message":
         p.chatSeen.push(`${pl.from_name}: ${pl.message}`);
         break;
-      case "npc_state":
-        for (const n of pl.npcs ?? []) p.npcs[n.id] = n;
+      case "entity_state":
+        for (const e of pl.entities ?? []) { if (e.kind === "npc") p.npcs[e.id] = e; }
         break;
       case "combat_tick":
       case "combat_event":
@@ -209,14 +211,14 @@ async function main() {
   await walkToward(bartz, () => bartz.npcs[foe.id] ?? bartz.combat.get(foe.id), 24);
   await sleep(2000);
   const engagedByProximity =
-    bartz.worldPlayers[bartz.id]?.in_combat === true ||
+    bartz.worldPlayers[bartz.id]?.engaged === true ||
     [...bartz.combat.values()].some((e) => e.id === bartz.id);
   if (!engagedByProximity) {
     bartz.send("set_target", { target_id: foe.id });
     bartz.send("action", { action_id: "attack", target_id: foe.id });
   }
   await bartz.until(
-    (p) => p.worldPlayers[p.id]?.in_combat === true || [...p.combat.values()].some((e) => e.id === p.id),
+    (p) => p.worldPlayers[p.id]?.engaged === true || [...p.combat.values()].some((e) => e.id === p.id),
     "bartz pulled into combat",
   );
   check(engagedByProximity ? "proximity aggro starts overworld combat" : "attack pull starts overworld combat", true);
@@ -268,7 +270,7 @@ async function main() {
   check("contributor share for second player", lenna.rewards.at(-1).xp > 0, `+${lenna.rewards.at(-1).xp} xp`);
 
   // Combat flag clears once nothing engages the players.
-  await bartz.until((p) => p.worldPlayers[p.id] && !p.worldPlayers[p.id].in_combat, "bartz leaves combat");
+  await bartz.until((p) => p.worldPlayers[p.id] && !p.worldPlayers[p.id].engaged, "bartz leaves combat");
   check("in_combat clears after the fight", true);
 
   // Dodge: move then Shift-dash — stamina should drop below 100.

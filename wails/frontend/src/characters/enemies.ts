@@ -1,4 +1,4 @@
-/** Overworld / battle enemy kinds — SVG sprites baked into Heroes 99 frame layout. */
+/** Overworld / battle enemy kinds — pixel-art PNG sheets in the Heroes 99 frame layout. */
 
 export type EnemyKind = "goblin" | "dire_wolf" | "stone_imp";
 
@@ -11,9 +11,9 @@ export const ENEMY_KIND_LABELS: Record<EnemyKind, string> = {
 };
 
 export const ENEMY_SPRITE_SRC: Record<EnemyKind, string> = {
-  goblin: "/assets/enemies/goblin.svg",
-  dire_wolf: "/assets/enemies/dire_wolf.svg",
-  stone_imp: "/assets/enemies/stone_imp.svg",
+  goblin: "/assets/enemies/goblin_icon.png",
+  dire_wolf: "/assets/enemies/dire_wolf_icon.png",
+  stone_imp: "/assets/enemies/stone_imp_icon.png",
 };
 
 export const ENEMY_KIND_BY_NAME: Record<string, EnemyKind> = {

@@ -13,8 +13,8 @@ import (
 
 // ---- test helpers ----
 
-// addWorldClient attaches a second joined client + world player to a test hub.
-func addWorldClient(h *Hub, id, name string, x, y float64) (*Client, *protocol.WorldPlayer) {
+// addWorldClient attaches a second joined client + player entity to a test hub.
+func addWorldClient(h *Hub, id, name string, x, y float64) (*Client, *entity) {
 	c := &Client{
 		ID:     id,
 		Name:   name,
@@ -24,9 +24,9 @@ func addWorldClient(h *Hub, id, name string, x, y float64) (*Client, *protocol.W
 	}
 	h.clients[c.ID] = c
 	h.store.GetOrCreate(name, game.JobVAN)
-	wp := &protocol.WorldPlayer{ID: c.ID, Name: name, Level: 1, X: x, Y: y}
-	h.world[c.ID] = wp
-	return c, wp
+	e := h.ensurePlayer(c)
+	e.X, e.Y = x, y
+	return c, e
 }
 
 // drainClient pops every queued frame from the client's send buffer. All hub
@@ -138,27 +138,27 @@ func farCorner(h *Hub, x, y float64) (float64, float64) {
 
 func TestDodgeAfterMoveDrainsStaminaAndCooldown(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	pc := h.ensureCombatant(c)
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
 
 	// A real move stamps lastMoveAt, which opens the 250ms dodge window.
 	raw, _ := json.Marshal(protocol.MovePayload{X: px, Y: py + 8})
 	h.handleMove(c, raw)
-	if pc.lastMoveAt.IsZero() {
-		pc.lastMoveAt = time.Now() // terrain-dependent; stamp directly
+	if cc.lastMoveAt.IsZero() {
+		cc.lastMoveAt = time.Now() // terrain-dependent; stamp directly
 	}
 
 	drainClient(c)
 	h.handleDodge(c)
 
 	want := staminaMax - dodgeStaminaCost
-	if got := pc.staminaNow(time.Now()); math.Abs(got-want) > 0.5 {
+	if got := cc.staminaNow(time.Now()); math.Abs(got-want) > 0.5 {
 		t.Fatalf("dodge should cost %v stamina, have %v", dodgeStaminaCost, got)
 	}
-	if math.Abs(wp.Stamina-want) > 0.5 {
-		t.Fatalf("world player stamina should sync to ~%v, got %v", want, wp.Stamina)
+	if got := h.entitySync(pe).Stamina; math.Abs(got-want) > 0.5 {
+		t.Fatalf("world state should report stamina ~%v, got %v", want, got)
 	}
-	if until := time.Until(pc.dodgeReadyAt); until <= 0 || until > dodgeCooldown+50*time.Millisecond {
+	if until := time.Until(cc.dodgeReadyAt); until <= 0 || until > dodgeCooldown+50*time.Millisecond {
 		t.Fatalf("dodge cooldown should be ~%v out, got %v", dodgeCooldown, until)
 	}
 	evs := combatEvents(drainClient(c))
@@ -174,15 +174,15 @@ func TestDodgeAfterMoveDrainsStaminaAndCooldown(t *testing.T) {
 
 	// A second dodge inside the cooldown is a no-op.
 	h.handleDodge(c)
-	if got := pc.staminaNow(time.Now()); math.Abs(got-want) > 0.5 {
+	if got := cc.staminaNow(time.Now()); math.Abs(got-want) > 0.5 {
 		t.Fatalf("cooldown dodge must not drain stamina, got %v", got)
 	}
 
 	// Once the cooldown lapses (and movement is recent) dodge works again.
-	pc.dodgeReadyAt = time.Now().Add(-time.Millisecond)
-	pc.lastMoveAt = time.Now()
+	cc.dodgeReadyAt = time.Now().Add(-time.Millisecond)
+	cc.lastMoveAt = time.Now()
 	h.handleDodge(c)
-	if got := pc.staminaNow(time.Now()); math.Abs(got-(want-dodgeStaminaCost)) > 0.5 {
+	if got := cc.staminaNow(time.Now()); math.Abs(got-(want-dodgeStaminaCost)) > 0.5 {
 		t.Fatalf("second dodge should cost another %v stamina, got %v", dodgeStaminaCost, got)
 	}
 }
@@ -190,14 +190,15 @@ func TestDodgeAfterMoveDrainsStaminaAndCooldown(t *testing.T) {
 func TestDodgeFailsWithoutRecentMovement(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
-	pc := h.ensureCombatant(c)
 	drainClient(c)
 
+	pe := h.playerEnt(c.ID)
+	cc := clientControlOf(pe)
 	h.handleDodge(c)
-	if !pc.dodgeReadyAt.IsZero() {
+	if !cc.dodgeReadyAt.IsZero() {
 		t.Fatal("dodge without recent movement must not start the cooldown")
 	}
-	if got := pc.staminaNow(time.Now()); math.Abs(got-staminaMax) > 0.5 {
+	if got := cc.staminaNow(time.Now()); math.Abs(got-staminaMax) > 0.5 {
 		t.Fatalf("dodge without recent movement must not drain stamina, got %v", got)
 	}
 	for _, ev := range combatEvents(drainClient(c)) {
@@ -210,73 +211,80 @@ func TestDodgeFailsWithoutRecentMovement(t *testing.T) {
 func TestDodgeFailsWithLowStamina(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
-	pc := h.ensureCombatant(c)
-	pc.stamina = dodgeStaminaCost - 10
-	pc.staminaAt = time.Now()
-	pc.lastMoveAt = time.Now()
+	pe := h.playerEnt(c.ID)
+	cc := clientControlOf(pe)
+	cc.stamina = dodgeStaminaCost - 10
+	cc.staminaAt = time.Now()
+	cc.lastMoveAt = time.Now()
 
 	h.handleDodge(c)
-	if !pc.dodgeReadyAt.IsZero() {
+	if !cc.dodgeReadyAt.IsZero() {
 		t.Fatal("dodge with insufficient stamina must not start the cooldown")
 	}
-	if got := pc.staminaNow(time.Now()); got >= dodgeStaminaCost {
-		t.Fatalf("stamina should be untouched below the cost, got %v", got)
+	if got := cc.staminaNow(time.Now()); got >= dodgeStaminaCost {
+		t.Fatalf("stamina should be untouched on a failed dodge, got %v", got)
+	}
+	for _, ev := range combatEvents(drainClient(c)) {
+		if ev.ActionID == game.ActionIDDodge {
+			t.Fatal("no dodge event should be emitted on low stamina")
+		}
 	}
 }
 
 func TestCombatStaminaRegen(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	pc := h.ensureCombatant(c)
+	h, c, pe := testHubWithPlayer(t, px, py)
+	_ = c
+	cc := clientControlOf(pe)
 
-	// Lazy regen: 1s at staminaRegenRate/s.
-	pc.stamina = 50
-	pc.staminaAt = time.Now().Add(-time.Second)
-	if got := pc.staminaNow(time.Now()); got < 50+staminaRegenRate-1 || got > staminaMax {
-		t.Fatalf("stamina should regen ~%v/s, got %v", staminaRegenRate, got)
+	// staminaNow applies regen on read.
+	cc.stamina = 50
+	cc.staminaAt = time.Now().Add(-time.Second)
+	if got := cc.staminaNow(time.Now()); got < 50+staminaRegenRate-0.5 {
+		t.Fatalf("stamina should regen ~%v/s, got %v after 1s", staminaRegenRate, got)
 	}
 
-	// The out-of-combat regen tick pushes stamina onto the wire player and
-	// restores hp/mp once per second of accumulated tick time.
-	pc.stamina = 40
-	pc.staminaAt = time.Now().Add(-time.Second)
-	pc.hp = pc.maxHP - 20
-	hpBefore := pc.hp
+	// The out-of-combat regen tick pushes stamina onto the wire and restores
+	// hp/mp once per second of accumulated tick time.
+	cc.stamina = 40
+	cc.staminaAt = time.Now().Add(-time.Second)
+	pe.hp = pe.maxHP - 20
+	hpBefore := pe.hp
 	for i := 0; i < 4; i++ {
 		h.outOfCombatRegen()
 	}
-	if wp.Stamina < 40+staminaRegenRate-1 {
-		t.Fatalf("outOfCombatRegen should sync regenerated stamina, got %v", wp.Stamina)
+	if got := h.entitySync(pe).Stamina; got < 40+staminaRegenRate-1 {
+		t.Fatalf("outOfCombatRegen should sync regenerated stamina, got %v", got)
 	}
-	if pc.hp <= hpBefore {
+	if pe.hp <= hpBefore {
 		t.Fatal("out-of-combat regen should restore hp after ~1s of ticks")
 	}
 }
 
 func TestDodgeInterruptsCast(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	pc := h.ensureCombatant(c)
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
 
 	skill, ok := game.FindSkill("san_sanare")
 	if !ok || game.SkillCastTime(skill) == 0 {
 		t.Fatal("san_sanare should be a casted skill")
 	}
-	pc.casting = &activeCast{SkillID: skill.ID, TargetID: c.ID}
-	pc.castX, pc.castY = wp.X, wp.Y
-	pc.mp = 0
-	pc.startGCD(time.Now())
-	pc.lastMoveAt = time.Now()
+	pe.casting = &activeCast{SkillID: skill.ID, TargetID: c.ID}
+	pe.castX, pe.castY = pe.X, pe.Y
+	pe.mp = 0
+	pe.startGCD(time.Now())
+	cc.lastMoveAt = time.Now()
 	drainClient(c)
 
 	h.handleDodge(c)
-	if pc.casting != nil {
+	if pe.casting != nil {
 		t.Fatal("dodge should interrupt the active cast")
 	}
-	if pc.mp != skill.MPCost {
-		t.Fatalf("interrupted cast should refund %d mp, got %d", skill.MPCost, pc.mp)
+	if pe.mp != skill.MPCost {
+		t.Fatalf("interrupted cast should refund %d mp, got %d", skill.MPCost, pe.mp)
 	}
-	if !pc.gcdReadyAt.IsZero() {
+	if !pe.gcdReadyAt.IsZero() {
 		t.Fatal("interrupt should clear the GCD")
 	}
 	found := false
@@ -294,14 +302,14 @@ func TestDodgeInterruptsCast(t *testing.T) {
 
 func TestCombatTickRequiresActiveFight(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
+	h, c, pe := testHubWithPlayer(t, px, py)
 	drainClient(c)
 
 	// Nothing engaged: the tick is a no-op and sends nothing.
 	if h.combatActive() {
 		t.Fatal("fresh hub should have no active combat")
 	}
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 	if frames := drainClient(c); len(frames) != 0 {
 		t.Fatalf("idle tick should emit nothing, got %v", frameTypes(frames))
 	}
@@ -310,15 +318,14 @@ func TestCombatTickRequiresActiveFight(t *testing.T) {
 	}
 
 	// Engaging an NPC activates the simulation.
-	n := hostileNPC("npc-1", px+40, py)
-	n.patrol.Home = game.WorldToTile(px, py)
-	h.npcs[n.ID] = n
-	h.engageNPC(n, c.ID)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	h.engage(n, h.playerEnt(c.ID))
 	if !h.combatActive() {
 		t.Fatal("an engaged npc should activate combat")
 	}
 	drainClient(c)
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 	ticks := combatTicks(drainClient(c))
 	if len(ticks) == 0 || len(ticks[len(ticks)-1].Entities) == 0 {
 		t.Fatal("active fight should broadcast combat_tick entities")
@@ -326,9 +333,9 @@ func TestCombatTickRequiresActiveFight(t *testing.T) {
 
 	// When the fight ends, the previous AoI member gets one empty tick and
 	// the player's combat flag clears.
-	h.disengageNPC(n, false)
+	h.disengage(n, false)
 	drainClient(c)
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 	frames := drainClient(c)
 	tick, ok := lastFrame(frames, protocol.TypeCombatTick)
 	if !ok {
@@ -344,7 +351,7 @@ func TestCombatTickRequiresActiveFight(t *testing.T) {
 	if len(h.aoi) != 0 {
 		t.Fatal("aoi should be cleared when no entities remain")
 	}
-	if pc := h.combatants[c.ID]; pc.inCombat || wp.InCombat {
+	if cc := clientControlOf(pe); cc == nil || cc.inCombat {
 		t.Fatal("player combat flag should clear once no npc fights them")
 	}
 }
@@ -356,17 +363,16 @@ func TestCombatTickAoIScope(t *testing.T) {
 	if dist(px, py, fx, fy) <= combatAoIDist {
 		t.Skip("map too small for AoI distance test")
 	}
-	cB, wpB := addWorldClient(h, "client-2", "Lenna", fx, fy)
+	cB, peB := addWorldClient(h, "client-2", "Lenna", fx, fy)
 
-	n := hostileNPC("npc-1", px+40, py)
-	n.patrol.Home = game.WorldToTile(px, py)
-	h.npcs[n.ID] = n
-	h.engageNPC(n, cA.ID)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	h.engage(n, h.playerEnt(cA.ID))
 	drainClient(cA)
 	drainClient(cB)
 
 	// Near fighter gets the tick; the far bystander does not.
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 	if ticks := combatTicks(drainClient(cA)); len(ticks) == 0 || len(ticks[len(ticks)-1].Entities) == 0 {
 		t.Fatal("client near the fight should receive combat_tick entities")
 	}
@@ -378,10 +384,10 @@ func TestCombatTickAoIScope(t *testing.T) {
 	}
 
 	// Bystander walking into the AoI starts receiving ticks.
-	wpB.X, wpB.Y = px+200, py
+	peB.X, peB.Y = px+200, py
 	drainClient(cA)
 	drainClient(cB)
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 	if ticks := combatTicks(drainClient(cB)); len(ticks) == 0 || len(ticks[len(ticks)-1].Entities) == 0 {
 		t.Fatal("bystander inside AoI should receive combat_tick entities")
 	}
@@ -390,10 +396,10 @@ func TestCombatTickAoIScope(t *testing.T) {
 	}
 
 	// Leaving the AoI flushes exactly one empty tick so the HUD clears.
-	wpB.X, wpB.Y = fx, fy
+	peB.X, peB.Y = fx, fy
 	drainClient(cA)
 	drainClient(cB)
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 	ticks := combatTicks(drainClient(cB))
 	if len(ticks) != 1 || len(ticks[0].Entities) != 0 {
 		t.Fatalf("bystander leaving AoI should get one empty tick, got %+v", ticks)
@@ -435,19 +441,18 @@ func TestNPCLeashesBeyondRadius(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
 
-	n := hostileNPC("npc-1", px+40, py)
-	n.patrol.Home = game.WorldToTile(px+leashRadius+300, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px+leashRadius+300, py)
 	n.hp = 10
-	n.Engaged = true
+	npcEngageOf(n).engaged = true
 	n.targetID = c.ID
-	h.npcs[n.ID] = n
 
-	home := game.TileCenter(n.patrol.Home)
+	home := game.TileCenter(wanderOf(n).patrol.Home)
 	if dist(n.X, n.Y, home.X, home.Y) <= leashRadius {
 		t.Fatal("test setup: npc should start beyond leash range")
 	}
-	h.tickCombat(time.Now())
-	if n.Engaged {
+	h.tickEntities(time.Now())
+	if npcEngaged(n) {
 		t.Fatal("npc past leash radius should disengage")
 	}
 	if n.hp != n.maxHP {
@@ -467,43 +472,40 @@ func TestNPCLeashesBeyondRadius(t *testing.T) {
 // leash anchors to where combat began, not the spawn tile.
 func TestEngageFarFromHomeDoesNotLeash(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
+	h, _, pe := testHubWithPlayer(t, px, py)
 
-	n := hostileNPC("npc-1", px+aggroRadius-10, py)
-	n.patrol.Home = game.WorldToTile(px+leashRadius+300, py) // spawned far away
-	h.npcs[n.ID] = n
-	h.engageNPC(n, c.ID)
+	n := hostileNPC(h, "npc-1", px+aggroRadius-10, py)
+	npcSetHome(h, n, px+leashRadius+300, py) // spawned far away
+	h.engage(n, pe)
 
 	for i := 0; i < 10; i++ {
-		h.tickCombat(time.Now())
-		if !n.Engaged {
+		h.tickEntities(time.Now())
+		if !npcEngaged(n) {
 			t.Fatalf("npc leashed on tick %d though the fight never left its anchor", i)
 		}
 	}
 	if dist(n.X, n.Y, px, py) > aggroRadius+leashRadius {
 		t.Fatalf("npc drifted implausibly far: %.0f,%.0f", n.X, n.Y)
 	}
-	_ = wp
 }
 
 // TestLeashedNPCReturnsToEngageAnchor: dragging an NPC beyond leashRadius from
 // where combat began resets it to that spot — not to a distant patrol home.
 func TestLeashedNPCReturnsToEngageAnchor(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
+	h, c, pe := testHubWithPlayer(t, px, py)
 
-	n := hostileNPC("npc-1", px+60, py)
-	h.npcs[n.ID] = n
-	h.engageNPC(n, c.ID)
+	n := hostileNPC(h, "npc-1", px+60, py)
+	h.engage(n, h.playerEnt(c.ID))
 	anchorX, anchorY := n.X, n.Y
 
 	// Drag the fight past the leash radius: move the npc with the player.
 	n.X = anchorX + leashRadius + 40
-	wp.X = n.X + 10
-	wp.Y = n.Y
-	h.tickCombat(time.Now())
+	pe.X = n.X + 10
+	pe.Y = n.Y
+	h.tickEntities(time.Now())
 
-	if n.Engaged {
+	if npcEngaged(n) {
 		t.Fatal("npc dragged past leash radius should disengage")
 	}
 	if dist(n.X, n.Y, anchorX, anchorY) > 1 {
@@ -540,33 +542,34 @@ func TestEngagedNPCPathsAroundWall(t *testing.T) {
 		return v.X, v.Y
 	}
 	px, py := center(17, 4) // east of the wall
-	_, wp := addWorldClient(h, "client-1", "Bartz", px, py)
+	_, pe := addWorldClient(h, "client-1", "Bartz", px, py)
 
 	nx, ny := center(7, 4) // west of the wall, same row — direct chase blocked
-	n := hostileNPC("npc-1", nx, ny)
-	n.patrol.Home = game.Tile{C: 7, R: 4}
-	h.npcs[n.ID] = n
-	h.engageNPC(n, "client-1")
-	if !n.Engaged {
+	n := hostileNPC(h, "npc-1", nx, ny)
+	if w := wanderOf(n); w != nil {
+		w.patrol.Home = game.Tile{C: 7, R: 4}
+	}
+	h.engage(n, h.playerEnt("client-1"))
+	if !npcEngaged(n) {
 		t.Fatal("setup: npc should be engaged")
 	}
 
 	reached := false
 	for i := 0; i < 900; i++ {
-		h.tickEngagedNPCs(time.Now())
-		if !n.Engaged {
+		h.tickEntities(time.Now())
+		if !npcEngaged(n) {
 			t.Fatalf("npc disengaged at tick %d (%.0f,%.0f)", i, n.X, n.Y)
 		}
 		if !ow.WalkableAt(n.X, n.Y) {
 			t.Fatalf("npc stood on blocked terrain at %.0f,%.0f", n.X, n.Y)
 		}
-		if dist(n.X, n.Y, wp.X, wp.Y) <= meleeStopDistW+npcHoldSlackW+stepSlack() {
+		if dist(n.X, n.Y, pe.X, pe.Y) <= meleeStopDistW+npcHoldSlackW+stepSlack() {
 			reached = true
 			break
 		}
 	}
 	if !reached {
-		t.Fatalf("npc never reached the player (at %.0f,%.0f, dist %.0f)", n.X, n.Y, dist(n.X, n.Y, wp.X, wp.Y))
+		t.Fatalf("npc never reached the player (at %.0f,%.0f, dist %.0f)", n.X, n.Y, dist(n.X, n.Y, pe.X, pe.Y))
 	}
 	// The only route runs below the wall — the NPC must have crossed c=12 at a
 	// row >= 8, i.e. it actually pathed rather than clipping through.
@@ -581,22 +584,22 @@ func TestKillNPCDespawnsAndRewardsContributor(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
 
-	n := hostileNPC("g1", px+10, py)
-	n.patrol.Home = game.WorldToTile(px, py)
-	h.npcs[n.ID] = n
-	h.engageNPC(n, c.ID)
+	n := hostileNPC(h, "g1", px+10, py)
+	npcSetHome(h, n, px, py)
+	h.engage(n, h.playerEnt(c.ID))
 	n.contributors[c.ID] = 12
 	drainClient(c)
 
-	h.killNPC(n, c.ID)
+	h.kill(n, h.playerEnt(c.ID))
 
 	if n.onWorld() || hasWorldNPC(h, "g1") {
 		t.Fatal("killed npc must despawn")
 	}
-	if n.Engaged || n.targetID != "" {
+	if npcEngaged(n) || n.targetID != "" {
 		t.Fatal("killed npc must drop engagement")
 	}
-	if n.respawnAt.IsZero() || !n.respawnAt.After(time.Now()) {
+	r := respawnOf(n)
+	if r == nil || r.respawnAt.IsZero() || !r.respawnAt.After(time.Now()) {
 		t.Fatal("kill should schedule a future respawn")
 	}
 
@@ -615,15 +618,14 @@ func TestKillNPCDespawnsAndRewardsContributor(t *testing.T) {
 
 func TestPlayerDefeatRespawnsAtSavePoint(t *testing.T) {
 	px, py := wildernessXY()
-	h, c, wp := testHubWithPlayer(t, px, py)
-	pc := h.ensureCombatant(c)
-	pc.hp = contactDamageW - 1 // one hit kills
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
+	pe.hp = contactDamageW - 1 // one hit kills
 
-	n := hostileNPC("npc-1", px+30, py)
-	n.patrol.Home = game.WorldToTile(px, py)
-	n.Engaged = true
+	n := hostileNPC(h, "npc-1", px+30, py)
+	npcSetHome(h, n, px, py)
+	npcEngageOf(n).engaged = true
 	n.targetID = c.ID
-	h.npcs[n.ID] = n
 
 	profile, _ := h.store.Get(c.Name)
 	expX, expY := game.SpawnPosition(profile.SavePointID)
@@ -631,18 +633,18 @@ func TestPlayerDefeatRespawnsAtSavePoint(t *testing.T) {
 		expX, expY = h.overworld.SpawnPosition(profile.SavePointID)
 	}
 
-	h.tickCombat(time.Now())
+	h.tickEntities(time.Now())
 
-	if pc.hp != pc.maxHP || wp.HP != pc.maxHP {
-		t.Fatalf("defeat should restore hp to %d, got pc=%d wp=%d", pc.maxHP, pc.hp, wp.HP)
+	if pe.hp != pe.maxHP || h.entitySync(pe).HP != pe.maxHP {
+		t.Fatalf("defeat should restore hp to %d, got pe=%d wire=%d", pe.maxHP, pe.hp, h.entitySync(pe).HP)
 	}
-	if wp.X != expX || wp.Y != expY {
-		t.Fatalf("defeated player should respawn at save point %v,%v, got %v,%v", expX, expY, wp.X, wp.Y)
+	if pe.X != expX || pe.Y != expY {
+		t.Fatalf("defeated player should respawn at save point %v,%v, got %v,%v", expX, expY, pe.X, pe.Y)
 	}
-	if pc.inCombat || wp.InCombat {
+	if cc.inCombat || h.entitySync(pe).Engaged {
 		t.Fatal("defeat should clear the combat flag")
 	}
-	if !battleImmune(wp) {
+	if !battleImmuneEnt(pe) {
 		t.Fatal("respawn should grant battle immunity")
 	}
 	if n.targetID != "" {
@@ -650,8 +652,8 @@ func TestPlayerDefeatRespawnsAtSavePoint(t *testing.T) {
 	}
 
 	// With the victim immune and far away, the npc gives up next tick.
-	h.tickCombat(time.Now())
-	if n.Engaged {
+	h.tickEntities(time.Now())
+	if npcEngaged(n) {
 		t.Fatal("npc should disengage once its target is gone")
 	}
 }
@@ -661,24 +663,25 @@ func TestPlayerDefeatRespawnsAtSavePoint(t *testing.T) {
 func TestSetTargetStoresTargetID(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
+	delete(h.entities, c.ID) // prove set_target creates the player entity
 
 	raw, _ := json.Marshal(protocol.SetTargetPayload{TargetID: "npc-9"})
 	h.handleSetTarget(c, raw)
-	pc := h.combatants[c.ID]
-	if pc == nil {
-		t.Fatal("set_target should create the combatant")
+	e := h.playerEnt(c.ID)
+	if e == nil {
+		t.Fatal("set_target should create the player entity")
 	}
-	if pc.targetID != "npc-9" {
-		t.Fatalf("set_target should store the target, got %q", pc.targetID)
+	if e.targetID != "npc-9" {
+		t.Fatalf("set_target should store the target, got %q", e.targetID)
 	}
 }
 
 func TestGCDSwallowsSecondAction(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
-	n := hostileNPC("npc-1", px+40, py) // inside basic-attack range
-	n.patrol.Home = game.WorldToTile(px, py)
-	h.npcs[n.ID] = n
+	pe := h.playerEnt(c.ID)
+	n := hostileNPC(h, "npc-1", px+40, py) // inside basic-attack range
+	npcSetHome(h, n, px, py)
 
 	raw, _ := json.Marshal(protocol.ActionPayload{
 		ActionID: game.BasicAttack.ID, TargetID: n.ID,
@@ -687,11 +690,10 @@ func TestGCDSwallowsSecondAction(t *testing.T) {
 	if n.hp >= n.maxHP {
 		t.Fatal("first attack should land")
 	}
-	pc := h.combatants[c.ID]
-	if pc.gcdReady(time.Now()) {
+	if pe.gcdReady(time.Now()) {
 		t.Fatal("attack should start the GCD")
 	}
-	if pc.targetID != n.ID {
+	if pe.targetID != n.ID {
 		t.Fatal("attack should record the npc as the player's target")
 	}
 
@@ -701,7 +703,7 @@ func TestGCDSwallowsSecondAction(t *testing.T) {
 		t.Fatal("action inside the GCD window must be ignored")
 	}
 
-	pc.gcdReadyAt = time.Now().Add(-time.Millisecond)
+	pe.gcdReadyAt = time.Now().Add(-time.Millisecond)
 	h.handleAction(c, raw)
 	if n.hp >= hpAfterFirst {
 		t.Fatal("attack after the GCD should land")

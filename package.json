@@ -20,6 +20,7 @@
     "build": "npm run wails:build:frontend",
     "seed:content": "node scripts/seed-content-catalogs.mjs",
     "world:gen": "go run ./cmd/genworld",
+    "sprites:enemies": "node scripts/gen-enemy-sprites.mjs",
     "test": "npm run server:test"
   }
 }

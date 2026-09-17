@@ -10,6 +10,13 @@
 
 Layer stack: skin → cloth (bot/top) → hair (bot/top) → face → weapon (bot/top).
 
+## Enemy sprites — generated in-repo
+
+- **Location:** `wails/frontend/public/assets/enemies/` (`<kind>.png` sheets, `<kind>_icon.png` previews)
+- **Usage:** Overworld/battle enemy sprites in the Heroes 99 frame layout (100×40 cells, same anims)
+- **Regenerate:** `npm run sprites:enemies` (`scripts/gen-enemy-sprites.mjs` — hand-authored pixel painter + PNG encoder, no deps)
+- The legacy `*.svg` sources in the same folder are unused and kept only as reference.
+
 ## Clockwork Raven Studios — Raven Fantasy Icons
 
 - **Pack:** Raven Fantasy Icons (Free)

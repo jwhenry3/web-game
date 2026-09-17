@@ -72,26 +72,30 @@ func TestReseedNPCsPreservesEngagement(t *testing.T) {
 	h := mustTestHub()
 	h.SetMap("greenwood", "Greenwood", game.Loaded())
 	h.seedNPCs(npcCount)
-	if len(h.npcs) == 0 {
+	var id string
+	seeded := 0
+	h.eachEntity(kindNPC, func(e *entity) {
+		seeded++
+		if id == "" {
+			id = e.ID
+		}
+	})
+	if seeded == 0 {
 		t.Fatal("expected seeded npcs")
 	}
-	var id string
-	for k := range h.npcs {
-		id = k
-		break
-	}
-	h.npcs[id].Engaged = true
-	h.npcs[id].targetID = "client-1"
-	h.npcs[id].contributors = map[string]int{"client-1": 42}
-	h.npcs[id].X = 111
-	h.npcs[id].Y = 222
+	n := h.ent(id)
+	npcEngageOf(n).engaged = true
+	n.targetID = "client-1"
+	n.contributors = map[string]int{"client-1": 42}
+	n.X = 111
+	n.Y = 222
 
 	h.reseedNPCsPreservingCombat(npcCount)
-	n := h.npcs[id]
+	n = h.ent(id)
 	if n == nil {
 		t.Fatal("npc missing after reseed")
 	}
-	if !n.Engaged || n.targetID != "client-1" || n.X != 111 || n.Y != 222 {
+	if !npcEngaged(n) || n.targetID != "client-1" || n.X != 111 || n.Y != 222 {
 		t.Fatalf("combat state not preserved: %+v", n)
 	}
 	if n.contributors["client-1"] != 42 {

@@ -106,8 +106,9 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	wp, ok := h.world[c.ID]
-	if !ok || wp.InCombat || wp.InHouse {
+	e := h.playerEnt(c.ID)
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
 		h.sendError(c, "You cannot use that right now.")
 		return
 	}
@@ -151,16 +152,16 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 	}
 
 	if ms := game.SkillCastTime(skill); ms > 0 {
-		h.beginWorldCast(c, wp, skill, destID, ms)
+		h.beginWorldCast(c, e, skill, destID, ms)
 		return
 	}
-	h.cancelWorldCast(c, wp, "")
+	h.cancelWorldCast(c, e, "")
 	if skill.ID == game.SkillIDCamp {
-		h.placeCamp(c, wp)
+		h.placeCamp(c, e)
 		c.lastWorldSkill = time.Now()
 		return
 	}
-	if !h.warpToSavePoint(c, wp, destID, skill.Name+": "+savePointName(destID)+".") {
+	if !h.warpToSavePoint(c, e, destID, skill.Name+": "+savePointName(destID)+".") {
 		return
 	}
 	c.lastWorldSkill = time.Now()
@@ -168,50 +169,52 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 
 const worldCastMoveCancel = 3.0
 
-func (h *Hub) beginWorldCast(c *Client, wp *protocol.WorldPlayer, skill game.Skill, destID string, ms int) {
+func (h *Hub) beginWorldCast(c *Client, e *entity, skill game.Skill, destID string, ms int) {
 	now := time.Now()
 	c.worldCastSkill = skill.ID
 	c.worldCastDest = destID
 	c.worldCastReady = now.Add(time.Duration(ms) * time.Millisecond)
-	c.worldCastX, c.worldCastY = wp.X, wp.Y
-	wp.CastingSkillID = skill.ID
-	wp.CastTimeMs = ms
-	wp.CastEndsAt = c.worldCastReady.UnixMilli()
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	c.worldCastX, c.worldCastY = e.X, e.Y
+	if cc := clientControlOf(e); cc != nil {
+		cc.fieldCastSkillID = skill.ID
+		cc.fieldCastTimeMs = ms
+		cc.fieldCastEndsAt = c.worldCastReady.UnixMilli()
+	}
+	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 }
 
-func (h *Hub) clearWorldCast(c *Client, wp *protocol.WorldPlayer) {
+func (h *Hub) clearWorldCast(c *Client, e *entity) {
 	c.worldCastSkill = ""
 	c.worldCastDest = ""
 	c.worldCastReady = time.Time{}
-	if wp != nil {
-		wp.CastingSkillID = ""
-		wp.CastTimeMs = 0
-		wp.CastEndsAt = 0
+	if cc := clientControlOf(e); cc != nil {
+		cc.fieldCastSkillID = ""
+		cc.fieldCastTimeMs = 0
+		cc.fieldCastEndsAt = 0
 	}
 }
 
-func (h *Hub) cancelWorldCast(c *Client, wp *protocol.WorldPlayer, notice string) {
+func (h *Hub) cancelWorldCast(c *Client, e *entity, notice string) {
 	if c.worldCastSkill == "" {
 		return
 	}
-	h.clearWorldCast(c, wp)
+	h.clearWorldCast(c, e)
 	if notice != "" {
 		h.send(c, protocol.TypeChatMsg, protocol.ChatMessagePayload{FromName: "System", Message: notice})
 	}
-	if wp != nil {
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	if e != nil {
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 	}
 }
 
-func (h *Hub) interruptWorldCastOnMove(c *Client, wp *protocol.WorldPlayer) {
-	if c.worldCastSkill == "" || wp == nil {
+func (h *Hub) interruptWorldCastOnMove(c *Client, e *entity) {
+	if c.worldCastSkill == "" || e == nil {
 		return
 	}
-	if dist(c.worldCastX, c.worldCastY, wp.X, wp.Y) <= worldCastMoveCancel {
+	if dist(c.worldCastX, c.worldCastY, e.X, e.Y) <= worldCastMoveCancel {
 		return
 	}
-	h.cancelWorldCast(c, wp, "Cast cancelled.")
+	h.cancelWorldCast(c, e, "Cast cancelled.")
 }
 
 func (h *Hub) finishDueWorldCasts(now time.Time) {
@@ -235,27 +238,28 @@ func (h *Hub) completeWorldCast(c *Client) {
 	if skillID == "" {
 		return
 	}
-	wp := h.world[c.ID]
-	h.clearWorldCast(c, wp)
-	if wp == nil || wp.InCombat || wp.InHouse {
-		if wp != nil {
-			h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	e := h.playerEnt(c.ID)
+	h.clearWorldCast(c, e)
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
+		if e != nil {
+			h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 		}
 		return
 	}
 	skill, ok := game.FindSkill(skillID)
 	if !ok {
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 		return
 	}
 	if skill.ID == game.SkillIDCamp {
-		h.placeCamp(c, wp)
+		h.placeCamp(c, e)
 		c.lastWorldSkill = time.Now()
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 		return
 	}
-	if !h.warpToSavePoint(c, wp, destID, skill.Name+": "+savePointName(destID)+".") {
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	if !h.warpToSavePoint(c, e, destID, skill.Name+": "+savePointName(destID)+".") {
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 		return
 	}
 	c.lastWorldSkill = time.Now()
@@ -272,7 +276,7 @@ func (h *Hub) resolveSavePointDest(id string) (mapID, name string, x, y float64,
 	return "", "", 0, 0, false
 }
 
-func (h *Hub) warpToSavePoint(c *Client, wp *protocol.WorldPlayer, destID, notice string) bool {
+func (h *Hub) warpToSavePoint(c *Client, e *entity, destID, notice string) bool {
 	mapID, _, x, y, ok := h.resolveSavePointDest(destID)
 	if !ok {
 		h.sendError(c, "Unknown save point.")
@@ -282,16 +286,16 @@ func (h *Hub) warpToSavePoint(c *Client, wp *protocol.WorldPlayer, destID, notic
 		h.send(c, protocol.TypeChatMsg, protocol.ChatMessagePayload{FromName: "System", Message: notice})
 	}
 	if mapID != "" && mapID != h.mapID && h.OnTransfer != nil {
-		h.OnTransfer(c.ID, mapID, x, y, wp.Facing)
+		h.OnTransfer(c.ID, mapID, x, y, e.Facing)
 		return true
 	}
-	wp.X, wp.Y = x, y
-	h.persistWorldLocation(c, wp, true)
-	h.grantBattleImmunity(wp)
+	e.X, e.Y = x, y
+	h.persistWorldLocation(c, e, true)
+	h.grantBattleImmunity(e)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
+		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
 	}))
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 	return true
 }
 
@@ -300,8 +304,9 @@ func (h *Hub) handleSetSavePoint(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	wp, ok := h.world[c.ID]
-	if !ok || wp.InCombat {
+	e := h.playerEnt(c.ID)
+	cc := clientControlOf(e)
+	if e == nil || (cc != nil && cc.inCombat) {
 		h.sendError(c, "You cannot set a save point right now.")
 		return
 	}
@@ -311,7 +316,7 @@ func (h *Hub) handleSetSavePoint(c *Client, raw json.RawMessage) {
 		return
 	}
 	center := game.TileCenter(sp.Tile)
-	if dist(wp.X, wp.Y, center.X, center.Y) > savePointInteractRange {
+	if dist(e.X, e.Y, center.X, center.Y) > savePointInteractRange {
 		h.sendError(c, "Move closer to the save point.")
 		return
 	}
@@ -324,8 +329,8 @@ func (h *Hub) handleSetSavePoint(c *Client, raw json.RawMessage) {
 }
 
 func (h *Hub) respawnAtSavePoint(clientID string) {
-	wp, ok := h.world[clientID]
-	if !ok {
+	e := h.playerEnt(clientID)
+	if e == nil {
 		return
 	}
 	saveID := ""
@@ -335,14 +340,14 @@ func (h *Hub) respawnAtSavePoint(clientID string) {
 		}
 	}
 	if h.overworld != nil {
-		wp.X, wp.Y = h.overworld.SpawnPosition(saveID)
+		e.X, e.Y = h.overworld.SpawnPosition(saveID)
 	} else {
-		wp.X, wp.Y = game.SpawnPosition(saveID)
+		e.X, e.Y = game.SpawnPosition(saveID)
 	}
 	if c, ok := h.clients[clientID]; ok {
-		h.persistWorldLocation(c, wp, true)
+		h.persistWorldLocation(c, e, true)
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: clientID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
+		ID: clientID, X: e.X, Y: e.Y, Facing: e.Facing,
 	}))
 }

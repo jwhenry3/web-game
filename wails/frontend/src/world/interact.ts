@@ -1,6 +1,7 @@
 import { net } from "../net/socket";
 import { openJobMasterDialog } from "./npcDialogue";
 import { pushChat, useGame } from "../state/store";
+import type { WorldEntity } from "../types";
 
 import { bindingToDisplay, mergeKeybinds, type KeybindMap } from "../input/keybinds";
 
@@ -20,14 +21,14 @@ type InteractPromptState = {
   worldSkillDialog: string | null;
   npcDialog: unknown;
   jobChangeDialog: unknown;
-  players: Record<string, { in_combat?: boolean; in_house?: boolean }>;
+  entities: Record<string, WorldEntity>;
   camps?: Record<string, { owner_name: string; x: number; y: number }>;
 };
 
 export function canShowWorldInteractPrompts(state: InteractPromptState): boolean {
   if (state.screen !== "world" || !state.selfId) return false;
   if (state.mainMenuOpen || state.openWindow || state.worldSkillDialog || state.npcDialog || state.jobChangeDialog) return false;
-  const self = state.players[state.selfId];
+  const self = state.entities[state.selfId];
   return !!self && !self.in_house;
 }
 
@@ -35,7 +36,7 @@ export function tryWorldInteract(): boolean {
   const state = useGame.getState();
   if (!canShowWorldInteractPrompts(state)) return false;
 
-  const self = state.players[state.selfId!];
+  const self = state.entities[state.selfId!];
   const x = self.x;
   const y = self.y;
 
@@ -79,7 +80,8 @@ export function tryWorldInteract(): boolean {
   // Combat is proximity/attack driven — interacting near an engaged NPC
   // focuses it as your target rather than joining an instanced battle.
   let nearestFoe: { id: string; dist: number } | null = null;
-  for (const npc of Object.values(state.npcs)) {
+  for (const npc of Object.values(state.entities)) {
+    if (npc.kind !== "npc") continue;
     const dist = Math.hypot(x - npc.x, y - npc.y);
     if (dist <= INTERACT_RANGE && (!nearestFoe || dist < nearestFoe.dist)) {
       nearestFoe = { id: npc.id, dist };

@@ -51,10 +51,8 @@ interface TargetView {
 export function WorldHUD() {
   const profile = useGame((s) => s.profile);
   const selfId = useGame((s) => s.selfId);
-  const players = useGame((s) => s.players);
-  const npcs = useGame((s) => s.npcs);
-  const combatEntities = useGame((s) => s.combatEntities);
-  const combatLog = useGame((s) => s.combatLog);
+  const entities = useGame((s) => s.entities);
+  const combatIds = useGame((s) => s.combatIds);
   const party = useGame((s) => s.party);
   const selected = useGame((s) => s.selectedAction);
   const commandPetId = useGame((s) => s.commandPetId);
@@ -62,9 +60,9 @@ export function WorldHUD() {
   const localCastStart = useRef(0);
   const localCastKey = useRef("");
 
-  const self = selfId ? players[selfId] : undefined;
-  const selfCombat = selfId ? combatEntities[selfId] : undefined;
-  const inCombat = !!(self?.in_combat || selfCombat);
+  const self = selfId ? entities[selfId] : undefined;
+  const selfCombat = selfId && combatIds[selfId] ? entities[selfId] : undefined;
+  const inCombat = !!(self?.engaged || selfCombat);
   const immuneUntil = self?.immune_until ?? 0;
   const castingId = self?.casting_skill_id;
   const castMs = self?.cast_time_ms ?? 0;
@@ -109,49 +107,26 @@ export function WorldHUD() {
   const stamina = self?.stamina ?? 0;
   const recovering = immuneUntil > now && !inCombat;
 
-  // Focus target: the server-driven target_id, resolved against the combat
-  // entity map first (freshest snapshots), then world NPCs and players.
+  // Focus target: the server-driven target_id, resolved against the unified
+  // entity map (combat ticks merge the freshest snapshots into it).
   const focusId = self?.target_id ?? selfCombat?.target_id;
   let target: TargetView | undefined;
   if (focusId) {
-    const ce = combatEntities[focusId];
-    const npc = ce ? undefined : npcs[focusId];
-    const pl = ce || npc ? undefined : players[focusId];
-    if (ce) {
+    const fe = entities[focusId];
+    if (fe) {
+      const inFight = !!combatIds[focusId];
       target = {
-        id: ce.id,
-        name: ce.name,
-        level: ce.level,
-        hp: ce.hp,
-        max_hp: ce.max_hp,
-        mp: ce.mp,
-        max_mp: ce.max_mp,
-        hostile: isEnemyEntity(ce),
-        alive: ce.alive,
-        statuses: ce.statuses,
-        capturable: ce.capturable,
-      };
-    } else if (npc) {
-      target = {
-        id: npc.id,
-        name: npc.name,
-        level: npc.level,
-        hp: npc.hp,
-        max_hp: npc.max_hp,
-        hostile: true,
-        alive: npc.hp > 0,
-      };
-    } else if (pl) {
-      target = {
-        id: pl.id,
-        name: pl.name,
-        level: pl.level,
-        hp: pl.hp,
-        max_hp: pl.max_hp,
-        mp: pl.mp,
-        max_mp: pl.max_mp,
-        hostile: false,
-        alive: pl.hp > 0,
+        id: fe.id,
+        name: fe.name,
+        level: fe.level,
+        hp: fe.hp,
+        max_hp: fe.max_hp,
+        mp: fe.mp,
+        max_mp: fe.max_mp,
+        hostile: isEnemyEntity(fe),
+        alive: inFight ? fe.alive : fe.hp > 0,
+        statuses: fe.statuses,
+        capturable: fe.capturable,
       };
     }
   }
@@ -165,23 +140,32 @@ export function WorldHUD() {
           <div className="cm-panel">
             <div className="cm-panel-head">Party</div>
             {party.members.map((m) => {
-              const ce = combatEntities[m.id];
-              const wp = players[m.id];
-              const mhp = ce?.hp ?? wp?.hp;
-              const mmax = ce?.max_hp ?? wp?.max_hp;
+              const e = entities[m.id];
+              const inFight = !!combatIds[m.id];
+              const mhp = e?.hp;
+              const mmax = e?.max_hp;
               return (
                 <button
                   key={m.id}
                   type="button"
                   tabIndex={-1}
-                  className={`ff-party-row ${m.id === selfId ? "ff-focused" : ""} ${ce && !ce.alive ? "entity-dead" : ""} ${selected?.heals ? "targetable" : ""}`}
+                  className={`ff-party-row ${m.id === selfId ? "ff-focused" : ""} ${inFight && e && !e.alive ? "entity-dead" : ""} ${selected?.heals ? "targetable" : ""}`}
                   onClick={() =>
-                    net.clickEntity({
-                      id: m.id,
-                      alive: ce ? ce.alive : wp ? wp.hp > 0 : true,
-                      is_player: true,
-                      is_ally: true,
-                    })
+                    net.clickEntity(
+                      e
+                        ? { ...e, alive: inFight ? e.alive : e.hp > 0 }
+                        : {
+                            id: m.id,
+                            name: m.name,
+                            kind: "player",
+                            x: 0,
+                            y: 0,
+                            hp: 0,
+                            max_hp: 0,
+                            alive: true,
+                            is_ally: true,
+                          },
+                    )
                   }
                 >
                   <div className="ff-party-name">
@@ -189,7 +173,7 @@ export function WorldHUD() {
                     {m.leader ? " ★" : ""}
                     {m.in_combat ? " ⚔" : ""}
                   </div>
-                  <StatusIcons statuses={ce?.statuses} className="status-icons--compact" />
+                  <StatusIcons statuses={inFight ? e?.statuses : undefined} className="status-icons--compact" />
                   {mhp != null && mmax != null && (
                     <ResourceBar
                       label="HP"
@@ -201,16 +185,6 @@ export function WorldHUD() {
                 </button>
               );
             })}
-          </div>
-        )}
-        {combatLog.length > 0 && (
-          <div className="cm-panel">
-            <div className="cm-panel-head">Combat</div>
-            {combatLog.slice(-8).map((line, i) => (
-              <div key={`${combatLog.length}-${i}`} className="log-line">
-                {line}
-              </div>
-            ))}
           </div>
         )}
       </div>

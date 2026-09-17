@@ -544,8 +544,8 @@ function layoutSkillTree(skills: SkillInfo[]): TreePos[] {
 
 function SkillsPane({ profile }: { profile: ProfileInfo }) {
   const locked = useGame((s) => {
-    const self = s.selfId ? s.players[s.selfId] : undefined;
-    return self?.in_combat ?? false;
+    const self = s.selfId ? s.entities[s.selfId] : undefined;
+    return self?.engaged ?? false;
   });
   const [tab, setTab] = useState<ActionTab>("general");
   const [focusId, setFocusId] = useState<string | null>(null);

@@ -28,7 +28,9 @@ function labelFor(bind: HotbarBinding | undefined, profile: ProfileInfo): string
 export function Hotbar() {
   const profile = useGame((s) => s.profile);
   const selected = useGame((s) => s.selectedAction);
-  const selfCombat = useGame((s) => (s.selfId ? s.combatEntities[s.selfId] : undefined));
+  const selfCombat = useGame((s) =>
+    s.selfId && s.combatIds[s.selfId] ? s.entities[s.selfId] : undefined,
+  );
   const drag = useGame((s) => s.hotbarDrag);
   const keybinds = useMemo(() => mergeKeybinds(profile?.keybinds), [profile?.keybinds]);
   if (!profile) return null;

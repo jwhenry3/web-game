@@ -16,7 +16,7 @@ Each map node owns one `game.Overworld`:
 - **Save points** — attune / respawn / Return–Teleport destinations
 - **Job changers** — optional POIs inside sanctuaries
 
-Movement is server-authoritative (slide / bounds checks). Clients send move intents; the Hub broadcasts `world_state` / `npc_state`.
+Movement is server-authoritative (slide / bounds checks). Clients send move intents; the Hub broadcasts `world_state` / `entity_state`. Players, NPCs, and pets share one `WorldEntity` wire shape — kind selects the entity class and plugin-driven behavior.
 
 ### Sanctuary rules
 

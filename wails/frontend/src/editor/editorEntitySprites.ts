@@ -1,64 +1,40 @@
 import type { EditorObject } from "./editorTypes";
 import { enemyKindFromName, type EnemyKind } from "../characters/enemies";
-import { frameForAnim, H99_DISPLAY_SCALE, H99_ORIGIN } from "../characters/heroes99";
+import { H99_DISPLAY_SCALE, H99_ORIGIN, H99_SHEET } from "../characters/heroes99";
 import { isSanctuaryRegion } from "./hierarchyTree";
 import { propString } from "./editorTypes";
 import { parseNpcServiceRoles } from "./objectProps";
 import { hasCombatRole, isNpcEntity, normalizeNpcObject } from "./npcEntity";
 import { regionPolygon } from "./regionPolygon";
 
-const ENEMY_SVG: Record<EnemyKind, string> = {
-  goblin: "/assets/enemies/goblin.svg",
-  dire_wolf: "/assets/enemies/dire_wolf.svg",
-  stone_imp: "/assets/enemies/stone_imp.svg",
-};
-
-const ENEMY_DRAW_SIZE: Record<EnemyKind, { w: number; h: number }> = {
-  goblin: { w: 48, h: 36 },
-  dire_wolf: { w: 56, h: 32 },
-  stone_imp: { w: 44, h: 40 },
+const ENEMY_SHEET: Record<EnemyKind, string> = {
+  goblin: "/assets/enemies/goblin.png",
+  dire_wolf: "/assets/enemies/dire_wolf.png",
+  stone_imp: "/assets/enemies/stone_imp.png",
 };
 
 const enemyImages = new Map<EnemyKind, HTMLImageElement>();
 let enemyLoadPromise: Promise<void> | null = null;
 
-function frameMotion(frame: number): { bob: number; lunge: number; sway: number } {
-  if (frame < 6) {
-    return { bob: Math.sin(frame * 0.8) * 2, lunge: 0, sway: 0 };
-  }
-  if (frame >= 16 && frame <= 23) {
-    const phase = frame - 16;
-    return { bob: Math.sin(phase * 0.9) * 1, lunge: 0, sway: Math.sin(phase * 1.4) * 2 };
-  }
-  if (frame >= 36) {
-    const phase = frame - 36;
-    return { bob: Math.sin(phase * 0.7) * 1, lunge: Math.min(1, phase / 3) * 8, sway: 0 };
-  }
-  return { bob: 0, lunge: 0, sway: 0 };
-}
-
 async function loadEnemyImage(kind: EnemyKind): Promise<HTMLImageElement> {
   const cached = enemyImages.get(kind);
   if (cached) return cached;
-  const resp = await fetch(ENEMY_SVG[kind]);
-  if (!resp.ok) throw new Error(`Failed to load ${ENEMY_SVG[kind]}`);
-  const svg = (await resp.text()).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
     el.onerror = () => reject(new Error(`Failed to decode ${kind}`));
-    el.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    el.src = ENEMY_SHEET[kind];
   });
   enemyImages.set(kind, img);
   return img;
 }
 
-/** Preload enemy SVGs used by combat NPC previews in the map editor. */
+/** Preload enemy sheets used by combat NPC previews in the map editor. */
 export function ensureEditorSpritesLoaded(): Promise<void> {
   if (enemyImages.size >= 3) return Promise.resolve();
   if (!enemyLoadPromise) {
     enemyLoadPromise = Promise.all(
-      (Object.keys(ENEMY_SVG) as EnemyKind[]).map((kind) => loadEnemyImage(kind)),
+      (Object.keys(ENEMY_SHEET) as EnemyKind[]).map((kind) => loadEnemyImage(kind)),
     ).then(() => undefined);
   }
   return enemyLoadPromise;
@@ -212,15 +188,17 @@ function drawCombatNpc(ctx: CanvasRenderingContext2D, obj: EditorObject, x: numb
   const name = propString(obj.properties, "name") || kind;
 
   if (img) {
-    const frame = frameForAnim("idle", 0);
-    const { bob, lunge, sway } = frameMotion(frame);
-    const { w, h } = ENEMY_DRAW_SIZE[kind];
+    // Draw the sheet's idle frame (cell 0) at world scale, foot-anchored like the game.
+    const { frameWidth, frameHeight } = H99_SHEET;
     const scale = H99_DISPLAY_SCALE * z;
-    const drawW = w * scale;
-    const drawH = h * scale;
-    const ox = x - drawW * H99_ORIGIN.x + lunge * z;
-    const oy = y - drawH * H99_ORIGIN.y + bob * z + sway * 0.3 * z;
-    ctx.drawImage(img, ox, oy, drawW, drawH);
+    const drawW = frameWidth * scale;
+    const drawH = frameHeight * scale;
+    const ox = x - drawW * H99_ORIGIN.x;
+    const oy = y - drawH * H99_ORIGIN.y;
+    const smoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, frameWidth, frameHeight, ox, oy, drawW, drawH);
+    ctx.imageSmoothingEnabled = smoothing;
   } else {
     ctx.fillStyle = "#fbbf24";
     ctx.beginPath();

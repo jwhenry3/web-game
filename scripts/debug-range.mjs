@@ -34,13 +34,15 @@ ws.addEventListener("message", (evt) => {
   switch (env.type) {
     case "welcome": p.id = pl.player_id; p.profile = pl.profile; break;
     case "world_state":
-      for (const w of pl.players ?? []) p.worldPlayers[w.id] = w;
-      for (const n of pl.npcs ?? []) p.npcs[n.id] = n;
+      for (const e of pl.entities ?? []) {
+        if (e.kind === "player") p.worldPlayers[e.id] = e;
+        else if (e.kind === "npc") p.npcs[e.id] = e;
+      }
       if (pl.map?.cells) p.map = pl.map;
       break;
     case "player_joined": case "player_sync": p.worldPlayers[pl.id] = pl; break;
     case "player_moved": if (p.worldPlayers[pl.id]) Object.assign(p.worldPlayers[pl.id], { x: pl.x, y: pl.y }); break;
-    case "npc_state": for (const n of pl.npcs ?? []) p.npcs[n.id] = n; break;
+    case "entity_state": for (const e of pl.entities ?? []) { if (e.kind === "npc") p.npcs[e.id] = e; } break;
     case "combat_tick":
       p.combat.clear();
       for (const e of pl.entities ?? []) p.combat.set(e.id, e);
@@ -117,7 +119,7 @@ async function main() {
   {
     const npc = Object.values(p.npcs)[0];
     let path = null;
-    for (let i = 0; i < 200 && !self()?.in_combat; i++) {
+    for (let i = 0; i < 200 && !self()?.engaged; i++) {
       const cur = p.npcs[npc?.id] ?? Object.values(p.npcs)[0];
       const s = self();
       if (!cur || !s) break;
@@ -135,7 +137,7 @@ async function main() {
       await sleep(280);
     }
   }
-  await p.until((pl) => pl.worldPlayers[pl.id]?.in_combat === true, "combat engaged");
+  await p.until((pl) => pl.worldPlayers[pl.id]?.engaged === true, "combat engaged");
   console.log("\nengaged. combat entities:");
   for (const e of p.combat.values()) console.log(`  ${e.id} ${e.name} @(${e.x.toFixed(0)},${e.y.toFixed(0)}) player=${e.is_player}`);
 

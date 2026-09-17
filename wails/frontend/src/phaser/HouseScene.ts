@@ -207,12 +207,12 @@ export class HouseScene extends Phaser.Scene {
 
   private ensureAvatar(p: HousePlayer): HouseAvatar {
     const state = useGame.getState();
-    const wp = state.players[p.id];
+    const wp = state.entities[p.id];
     const appearance = resolveCharacterAppearance({
       playerId: p.id,
       selfId: state.selfId,
       profile: state.profile,
-      race: wp?.race,
+      race: wp?.sprite,
       weapon: wp?.weapon,
       wire: wp?.appearance,
     });

@@ -42,24 +42,27 @@ func (h *Hub) findClientByName(name string) *Client {
 	return nil
 }
 
-func (h *Hub) findWorldByName(name string) *protocol.WorldPlayer {
-	for _, wp := range h.world {
-		if strings.EqualFold(wp.Name, name) {
-			return wp
+func (h *Hub) findWorldByName(name string) *entity {
+	var found *entity
+	h.eachEntity(kindPlayer, func(e *entity) {
+		if strings.EqualFold(e.Name, name) {
+			found = e
 		}
-	}
-	return nil
+	})
+	return found
 }
 
 func (h *Hub) buildFriendList(profile store.Profile) []protocol.FriendInfo {
 	out := make([]protocol.FriendInfo, 0, len(profile.Friends))
 	for _, fname := range profile.Friends {
 		fi := protocol.FriendInfo{Name: fname}
-		if wp := h.findWorldByName(fname); wp != nil {
+		if e := h.findWorldByName(fname); e != nil {
 			fi.Online = true
-			fi.Level = wp.Level
-			fi.Weapon = wp.Weapon
-			fi.InCombat = wp.InCombat
+			fi.Level = e.Level
+			if cc := clientControlOf(e); cc != nil {
+				fi.Weapon = cc.weaponName
+				fi.InCombat = cc.inCombat
+			}
 		}
 		out = append(out, fi)
 	}
@@ -72,13 +75,19 @@ func (h *Hub) buildPartyInfo(party *hubParty) *protocol.PartyInfo {
 	}
 	members := make([]protocol.PartyMember, 0, len(party.MemberIDs))
 	for _, id := range party.MemberIDs {
-		wp := h.world[id]
-		if wp == nil {
+		e := h.playerEnt(id)
+		if e == nil {
 			continue
 		}
+		var weapon string
+		inCombat := false
+		if cc := clientControlOf(e); cc != nil {
+			weapon = cc.weaponName
+			inCombat = cc.inCombat
+		}
 		members = append(members, protocol.PartyMember{
-			ID: wp.ID, Name: wp.Name, Level: wp.Level, Weapon: wp.Weapon,
-			Leader: id == party.LeaderID, InCombat: wp.InCombat,
+			ID: e.ID, Name: e.Name, Level: e.Level, Weapon: weapon,
+			Leader: id == party.LeaderID, InCombat: inCombat,
 		})
 	}
 	return &protocol.PartyInfo{

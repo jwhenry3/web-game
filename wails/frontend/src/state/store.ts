@@ -4,7 +4,6 @@ import type {
   ChatChannel,
   ChatLine,
   ChatTone,
-  CombatEntity,
   CombatEventPayload,
   FriendInfo,
   FriendRequestPayload,
@@ -14,15 +13,13 @@ import type {
   SelectedAction,
   WindowId,
   OverworldMap,
-  WorldNPC,
-  WorldPlayer,
+  WorldEntity,
   SavePoint,
   AtlasMap,
   JobChanger,
   MapTileOverrides,
   MapTerrainLayers,
   WorldCamp,
-  WorldPet,
   HouseStatePayload,
 } from "../types";
 import type { NpcDialogueTarget } from "../world/npcDialogue";
@@ -67,12 +64,11 @@ interface GameState {
   creation: CreationDraft;
   selfId: string | null;
   profile: ProfileInfo | null;
-  players: Record<string, WorldPlayer>;
-  npcs: Record<string, WorldNPC>;
+  /** Unified world entities (players, NPCs, pets), keyed by entity id. */
+  entities: Record<string, WorldEntity>;
   savePoints: Record<string, SavePoint>;
   jobChangers: Record<string, JobChanger>;
   camps: Record<string, WorldCamp>;
-  pets: Record<string, WorldPet>;
   house: HouseStatePayload | null;
   overworld: OverworldMap | null;
   mapInfo: {
@@ -89,10 +85,8 @@ interface GameState {
   outgoingFriendRequests: string[];
   party: PartyInfo | null;
   partyInvite: PartyInvitePayload | null;
-  /** AoI-scoped combat participants, keyed by entity id (replaced by combat_tick). */
-  combatEntities: Record<string, CombatEntity>;
-  /** Recent combat messages from combat_event (capped). */
-  combatLog: string[];
+  /** Entity ids currently in a fight visible to this client (from combat_tick). */
+  combatIds: Record<string, true>;
   /** Recent combat events for VFX/animation triggers (capped, seq-tagged). */
   combatEvents: CombatEvent[];
   commandPetId: string | null;
@@ -168,12 +162,10 @@ const initial = {
   } as CreationDraft,
   selfId: null,
   profile: null,
-  players: {},
-  npcs: {},
+  entities: {},
   savePoints: {},
   jobChangers: {},
   camps: {},
-  pets: {},
   house: null,
   overworld: null,
   mapInfo: null,
@@ -184,8 +176,7 @@ const initial = {
   outgoingFriendRequests: [] as string[],
   party: null,
   partyInvite: null,
-  combatEntities: {} as Record<string, CombatEntity>,
-  combatLog: [] as string[],
+  combatIds: {} as Record<string, true>,
   combatEvents: [] as CombatEvent[],
   commandPetId: null as string | null,
   selectedAction: null,
@@ -377,24 +368,6 @@ export function pushChat(
   }));
 }
 
-export function appendCombatLog(line: string, tone?: ChatTone) {
-  useGame.setState((s) => ({
-    combatLog: [...s.combatLog, line].slice(-50),
-    chat: line
-      ? [
-          ...s.chat,
-          {
-            channel: "battle" as ChatChannel,
-            from_id: "",
-            from_name: "",
-            message: line,
-            ...(tone ? { tone } : {}),
-          },
-        ].slice(-200)
-      : s.chat,
-  }));
-}
-
 function combatTone(p: CombatEventPayload): ChatTone | undefined {
   if (p.cast_started) return "cast";
   if (!p.success && !p.cast_cancelled) return "fail";
@@ -410,8 +383,12 @@ let combatEventSeq = 0;
 /** Record a combat_event: merge entity snapshots, append message, push VFX event. */
 export function applyCombatEvent(p: CombatEventPayload) {
   useGame.setState((s) => {
-    const combatEntities = { ...s.combatEntities };
-    for (const e of p.entities ?? []) combatEntities[e.id] = e;
+    const entities = { ...s.entities };
+    const combatIds = { ...s.combatIds };
+    for (const e of p.entities ?? []) {
+      entities[e.id] = { ...entities[e.id], ...e };
+      combatIds[e.id] = true;
+    }
     const ev: CombatEvent = { ...p, seq: ++combatEventSeq };
     const tone = combatTone(p);
     const chat = p.message
@@ -427,17 +404,24 @@ export function applyCombatEvent(p: CombatEventPayload) {
         ].slice(-200)
       : s.chat;
     return {
-      combatEntities,
-      combatLog: p.message ? [...s.combatLog, p.message].slice(-50) : s.combatLog,
+      entities,
+      combatIds,
       combatEvents: [...s.combatEvents, ev].slice(-100),
       chat,
     };
   });
 }
 
-/** Replace the whole combat entity map (empty array clears it). */
-export function applyCombatTick(p: { entities?: CombatEntity[] }) {
-  const combatEntities: Record<string, CombatEntity> = {};
-  for (const e of p.entities ?? []) combatEntities[e.id] = e;
-  useGame.setState({ combatEntities });
+/** Merge combat participant snapshots and replace the in-combat id set
+ *  (empty array ends combat tracking). */
+export function applyCombatTick(p: { entities?: WorldEntity[] }) {
+  useGame.setState((s) => {
+    const entities = { ...s.entities };
+    const combatIds: Record<string, true> = {};
+    for (const e of p.entities ?? []) {
+      entities[e.id] = { ...entities[e.id], ...e };
+      combatIds[e.id] = true;
+    }
+    return { entities, combatIds };
+  });
 }

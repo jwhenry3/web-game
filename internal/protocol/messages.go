@@ -58,7 +58,7 @@ const (
 	TypePlayerMoved      MessageType = "player_moved"
 	TypePlayerSync       MessageType = "player_sync" // status/job/level changes
 	TypeChatMsg          MessageType = "chat_message"
-	TypeNPCState         MessageType = "npc_state"
+	TypeEntityState      MessageType = "entity_state"
 	TypeSocialState      MessageType = "social_state"
 	TypePartyInviteMsg   MessageType = "party_invite_received"
 	TypeFriendRequestMsg MessageType = "friend_request_received"
@@ -68,7 +68,6 @@ const (
 	TypeCampState        MessageType = "camp_state"
 	TypeHouseState       MessageType = "house_state"
 	TypeHouseReturn      MessageType = "house_return"
-	TypePetState         MessageType = "pet_state"
 	TypeError            MessageType = "error"
 	TypeMapConfig        MessageType = "map_config"
 )
@@ -312,45 +311,47 @@ type MapPortal struct {
 	H float64 `json:"h"`
 }
 
-type WorldPlayer struct {
-	ID          string              `json:"id"`
-	Name        string              `json:"name"`
-	Weapon      string              `json:"weapon"`
-	Race        string              `json:"race,omitempty"`
-	MainJob     string              `json:"main_job"`
+// WorldEntity is the unified snapshot for every world inhabitant: players,
+// NPCs, and pets. Kind selects the entity class; fields that don't apply to a
+// kind stay zero-valued and are omitted on the wire. The same shape is used
+// for world_state, entity_state deltas, player join/sync, and combat ticks.
+type WorldEntity struct {
+	ID              string                `json:"id"`
+	Name            string                `json:"name"`
+	Kind            string                `json:"kind"`             // "player" | "npc" | "pet"
+	Sprite          string                `json:"sprite,omitempty"` // enemy key / pet kind / player race
+	OwnerID         string                `json:"owner_id,omitempty"`
+	Level           int                   `json:"level,omitempty"`
+	X               float64               `json:"x"`
+	Y               float64               `json:"y"`
+	Facing          float64               `json:"facing,omitempty"`
+	HP              int                   `json:"hp"`
+	MaxHP           int                   `json:"max_hp"`
+	MP              int                   `json:"mp,omitempty"`
+	MaxMP           int                   `json:"max_mp,omitempty"`
+	Stamina         float64               `json:"stamina,omitempty"`
+	Alive           bool                  `json:"alive"`
+	Engaged         bool                  `json:"engaged,omitempty"` // in combat
+	IsAlly          bool                  `json:"is_ally,omitempty"`
+	TargetID        string                `json:"target_id,omitempty"`
+	Statuses        []game.StatusSnapshot `json:"statuses,omitempty"`
+	Capturable      bool                  `json:"capturable,omitempty"`
+	SkillATB        float64               `json:"skill_atb,omitempty"`
+	HasQueuedAction bool                  `json:"has_queued_action,omitempty"`
+	// Casting state (both field-casts like Teleport and combat casts).
+	CastingSkillID string  `json:"casting_skill_id,omitempty"`
+	CastTargetID   string  `json:"cast_target_id,omitempty"`
+	CastProgress   float64 `json:"cast_progress,omitempty"`
+	CastTimeMs     int     `json:"cast_time_ms,omitempty"`
+	CastEndsAt     int64   `json:"cast_ends_at,omitempty"` // unix millis
+	// Player presence extras.
+	Weapon      string              `json:"weapon,omitempty"`
+	MainJob     string              `json:"main_job,omitempty"`
 	SubJob      string              `json:"sub_job,omitempty"`
-	Level       int                 `json:"level"`
 	Appearance  CharacterAppearance `json:"appearance,omitempty"`
-	X           float64             `json:"x"`
-	Y           float64             `json:"y"`
-	Facing      float64             `json:"facing"` // Y-axis yaw radians (Three.js)
-	InCombat    bool                `json:"in_combat,omitempty"`
-	HP          int                 `json:"hp"`
-	MaxHP       int                 `json:"max_hp"`
-	MP          int                 `json:"mp"`
-	MaxMP       int                 `json:"max_mp"`
-	Stamina     float64             `json:"stamina"`
-	TargetID    string              `json:"target_id,omitempty"`
-	InHouse     bool                `json:"in_house,omitempty"`
-	HouseOwner  string              `json:"house_owner,omitempty"`  // owner character name
 	ImmuneUntil int64               `json:"immune_until,omitempty"` // unix millis; collision/search blocked
-	// Field-cast (Teleport). Clients interpolate a bar from local receipt + CastTimeMs.
-	CastingSkillID string `json:"casting_skill_id,omitempty"`
-	CastTimeMs     int    `json:"cast_time_ms,omitempty"`
-	CastEndsAt     int64  `json:"cast_ends_at,omitempty"` // unix millis
-}
-
-type WorldNPC struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Kind     string  `json:"kind"`
-	Level    int     `json:"level"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Engaged  bool    `json:"engaged,omitempty"`
-	HP       int     `json:"hp"`
-	MaxHP    int     `json:"max_hp"`
-	TargetID string  `json:"target_id,omitempty"`
+	InHouse     bool                `json:"in_house,omitempty"`
+	HouseOwner  string              `json:"house_owner,omitempty"` // owner character name
 }
 
 type OverworldMap struct {
@@ -395,28 +396,11 @@ type JobChanger struct {
 }
 
 type WorldStatePayload struct {
-	Players     []WorldPlayer `json:"players"`
-	NPCs        []WorldNPC    `json:"npcs"`
+	Entities    []WorldEntity `json:"entities"`
 	Camps       []WorldCamp   `json:"camps,omitempty"`
-	Pets        []WorldPet    `json:"pets,omitempty"`
 	SavePoints  []SavePoint   `json:"save_points"`
 	JobChangers []JobChanger  `json:"job_changers"`
 	Map         OverworldMap  `json:"map"`
-}
-
-type WorldPet struct {
-	ID      string  `json:"id"`
-	OwnerID string  `json:"owner_id"`
-	Kind    string  `json:"kind"`
-	Name    string  `json:"name"`
-	Level   int     `json:"level"`
-	X       float64 `json:"x"`
-	Y       float64 `json:"y"`
-	Facing  float64 `json:"facing"`
-}
-
-type PetStatePayload struct {
-	Pets []WorldPet `json:"pets"`
 }
 
 type WorldCamp struct {
@@ -497,8 +481,10 @@ type HouseReturnPayload struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-type NPCStatePayload struct {
-	NPCs []WorldNPC `json:"npcs"`
+// EntityStatePayload carries incremental world-entity updates (movement,
+// engagement flips, spawns/despawns) for server-driven entities: NPCs and pets.
+type EntityStatePayload struct {
+	Entities []WorldEntity `json:"entities"`
 }
 
 type PlayerLeftPayload struct {
@@ -607,51 +593,22 @@ type ErrorPayload struct {
 
 // ---- Overworld realtime combat ----
 
-// CombatEntity is one combat participant snapshot: an engaged NPC, a fighting
-// player, or a battle pet. Sent via combat_tick / combat_event only to clients
-// whose AoI overlaps the fight.
-type CombatEntity struct {
-	ID              string                `json:"id"`
-	Name            string                `json:"name"`
-	Kind            string                `json:"kind,omitempty"`
-	IsPlayer        bool                  `json:"is_player"`
-	IsAlly          bool                  `json:"is_ally,omitempty"`
-	OwnerID         string                `json:"owner_id,omitempty"`
-	Level           int                   `json:"level,omitempty"`
-	X               float64               `json:"x"`
-	Y               float64               `json:"y"`
-	HP              int                   `json:"hp"`
-	MaxHP           int                   `json:"max_hp"`
-	MP              int                   `json:"mp,omitempty"`
-	MaxMP           int                   `json:"max_mp,omitempty"`
-	SkillATB        float64               `json:"skill_atb,omitempty"`
-	TargetID        string                `json:"target_id,omitempty"`
-	Alive           bool                  `json:"alive"`
-	Capturable      bool                  `json:"capturable,omitempty"`
-	Statuses        []game.StatusSnapshot `json:"statuses,omitempty"`
-	CastingSkillID  string                `json:"casting_skill_id,omitempty"`
-	CastTargetID    string                `json:"cast_target_id,omitempty"`
-	CastProgress    float64               `json:"cast_progress,omitempty"`
-	CastTimeMs      int                   `json:"cast_time_ms,omitempty"`
-	HasQueuedAction bool                  `json:"has_queued_action,omitempty"`
-}
-
 type CombatTickPayload struct {
-	Entities []CombatEntity `json:"entities"`
+	Entities []WorldEntity `json:"entities"`
 }
 
 type CombatEventPayload struct {
-	AttackerID    string         `json:"attacker_id"`
-	TargetID      string         `json:"target_id"`
-	Damage        int            `json:"damage"`
-	Heal          int            `json:"heal,omitempty"`
-	MPRestored    int            `json:"mp_restored,omitempty"`
-	Hit           bool           `json:"hit"`
-	Message       string         `json:"message,omitempty"`
-	ActionID      string         `json:"action_id,omitempty"`
-	ActionName    string         `json:"action_name,omitempty"`
-	Success       bool           `json:"success,omitempty"`
-	CastStarted   bool           `json:"cast_started,omitempty"`
-	CastCancelled bool           `json:"cast_cancelled,omitempty"`
-	Entities      []CombatEntity `json:"entities"`
+	AttackerID    string        `json:"attacker_id"`
+	TargetID      string        `json:"target_id"`
+	Damage        int           `json:"damage"`
+	Heal          int           `json:"heal,omitempty"`
+	MPRestored    int           `json:"mp_restored,omitempty"`
+	Hit           bool          `json:"hit"`
+	Message       string        `json:"message,omitempty"`
+	ActionID      string        `json:"action_id,omitempty"`
+	ActionName    string        `json:"action_name,omitempty"`
+	Success       bool          `json:"success,omitempty"`
+	CastStarted   bool          `json:"cast_started,omitempty"`
+	CastCancelled bool          `json:"cast_cancelled,omitempty"`
+	Entities      []WorldEntity `json:"entities"`
 }

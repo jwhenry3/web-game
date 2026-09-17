@@ -1,0 +1,273 @@
+package server
+
+import (
+	"encoding/json"
+	"math"
+	"testing"
+	"time"
+
+	"clara-mundi/internal/game"
+	"clara-mundi/internal/protocol"
+)
+
+// slotBattlePet adds a pet record to Bartz's profile and slots it as the
+// battle pet so syncPetEntities keeps its entity on the world.
+func slotBattlePet(t *testing.T, h *Hub, kind, name string, level int) game.PetRecord {
+	t.Helper()
+	_, rec, errMsg := h.store.AddPet("Bartz", kind, name, level)
+	if errMsg != "" {
+		t.Fatalf("AddPet: %s", errMsg)
+	}
+	if _, errMsg := h.store.SetBattlePet("Bartz", rec.ID); errMsg != "" {
+		t.Fatalf("SetBattlePet: %s", errMsg)
+	}
+	return rec
+}
+
+func TestEntityFactionGates(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, pe := testHubWithPlayer(t, px, py)
+
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "Gob", Level: 1}, pe)
+	h.entities[pet.ID] = pet
+	hostile := hostileNPC(h, "npc-h", px+50, py)
+	neutral := newNPCEntity(game.Patrol{ID: "npc-n", Name: "Merchant"}, game.Region{}, h.overworld)
+	neutral.Faction = factionNeutral
+	h.entities[neutral.ID] = neutral
+
+	if h.canAttack(pe, pet) {
+		t.Fatal("player must not attack their own pet (same faction)")
+	}
+	if !h.canAttack(hostile, pet) {
+		t.Fatal("hostile npc should be able to attack an ally pet")
+	}
+	if h.canAttack(neutral, pe) {
+		t.Fatal("neutral npc must never attack")
+	}
+	if h.canAttack(pe, neutral) {
+		t.Fatal("neutral npc must not be targetable")
+	}
+
+	// A second player's pet is still an ally: assistable.
+	_, peB := addWorldClient(h, "client-2", "Lenna", px+10, py)
+	petB := newPetEntity(game.PetRecord{ID: "pet-2", Kind: "dire_wolf", Name: "Wolf", Level: 1}, peB)
+	h.entities[petB.ID] = petB
+	if !h.canAssist(pe, petB) {
+		t.Fatal("player should be able to assist another player's pet")
+	}
+	if h.canAttack(pe, petB) {
+		t.Fatal("player must not attack another player's pet")
+	}
+
+	// Battle immunity makes a player unattackable.
+	clientControlOf(peB).immuneUntil = time.Now().Add(5 * time.Second).UnixMilli()
+	if h.canAttack(hostile, peB) {
+		t.Fatal("immune player must not be attackable")
+	}
+}
+
+func TestNPCRetargetsToPetAfterPlayerDeath(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
+	h.tickEntities(time.Now())
+	pet := h.ent(rec.ID)
+	if pet == nil {
+		t.Fatal("expected pet entity on the world")
+	}
+
+	n := hostileNPC(h, "npc-1", px+30, py)
+	npcSetHome(h, n, px, py)
+	pet.X, pet.Y = px+20, py
+	npcEngageOf(n).engaged = true
+	n.targetID = pe.ID
+	// Hold the attack until the retarget is verified.
+	n.attackCD = time.Now().Add(time.Hour)
+
+	h.kill(pe, n)
+	if n.targetID == pe.ID {
+		t.Fatal("npc should drop the dead player's target")
+	}
+
+	// The kill respawns the (now immune) player at the save point; over the
+	// next ticks the engaged npc must fall back to the pet standing beside it.
+	for i := 0; i < 6; i++ {
+		h.tickEntities(time.Now())
+		if n.targetID == pet.ID {
+			break
+		}
+	}
+	if n.targetID != pet.ID {
+		t.Fatalf("npc should retarget the pet, got %q", n.targetID)
+	}
+
+	// Off cooldown, the npc hits its new target.
+	n.attackCD = time.Now().Add(-time.Millisecond)
+	hpBefore := pet.hp
+	h.tickEntities(time.Now())
+	if pet.hp >= hpBefore {
+		t.Fatal("npc should damage the pet after retargeting")
+	}
+	_ = c
+}
+
+func TestPetDeathAndRecovery(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
+	h.tickEntities(time.Now())
+	pet := h.ent(rec.ID)
+	if pet == nil {
+		t.Fatal("expected pet entity on the world")
+	}
+	pet.X, pet.Y = px+20, py
+
+	n := hostileNPC(h, "npc-1", px+30, py)
+	npcSetHome(h, n, px, py)
+	npcEngageOf(n).engaged = true
+	n.targetID = pet.ID
+
+	h.applyDamage(n, pet, 9999, basicAttackEvent())
+	if pet.alive {
+		t.Fatal("lethal damage should kill the pet")
+	}
+	if n.targetID == pet.ID {
+		t.Fatal("npc should drop the dead pet as a target")
+	}
+
+	// The pet stays down while its owner is still fighting; once the owner's
+	// combat flag clears, OnLeaveCombat revives it at full health.
+	cc := clientControlOf(pe)
+	cc.inCombat = true
+	h.updateCombatFlags(time.Now())
+	if !pet.alive {
+		t.Fatal("pet should revive when the owner leaves combat")
+	}
+	if pet.hp != pet.maxHP {
+		t.Fatalf("revived pet should be at full hp, got %d/%d", pet.hp, pet.maxHP)
+	}
+	if pet.targetID != "" {
+		t.Fatal("revived pet should start untargeted")
+	}
+	_ = c
+}
+
+func TestPetLevelCap(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, pe := testHubWithPlayer(t, px, py)
+	pe.Level = 3
+	rec := slotBattlePet(t, h, "goblin", "Gobby", 10)
+
+	h.tickEntities(time.Now())
+	pet := h.ent(rec.ID)
+	if pet == nil {
+		t.Fatal("expected pet entity on the world")
+	}
+	if pet.Level != 3 {
+		t.Fatalf("pet level should cap at owner level 3, got %d", pet.Level)
+	}
+	tpl := petTemplate("goblin")
+	wantHP, _, _ := game.PetCombatStats(tpl.hp, tpl.str, tpl.agi, 3)
+	if pet.maxHP != wantHP {
+		t.Fatalf("pet maxHP should match level-3 stats: got %d, want %d", pet.maxHP, wantHP)
+	}
+}
+
+func TestKillClearsTargets(t *testing.T) {
+	px, py := wildernessXY()
+	h, cA, peA := testHubWithPlayer(t, px, py)
+	cB, peB := addWorldClient(h, "client-2", "Lenna", px+10, py)
+	n := hostileNPC(h, "npc-1", px+30, py)
+	peA.targetID = n.ID
+	peB.targetID = n.ID
+	drainClient(cA)
+	drainClient(cB)
+
+	h.kill(n, nil)
+
+	if peA.targetID != "" || peB.targetID != "" {
+		t.Fatalf("killing the npc should clear player targets, got %q %q", peA.targetID, peB.targetID)
+	}
+	for _, c := range []*Client{cA, cB} {
+		found := false
+		for _, f := range drainClient(c) {
+			if f.Type != protocol.TypeSetTarget {
+				continue
+			}
+			var p protocol.SetTargetPayload
+			if json.Unmarshal(f.Payload, &p) == nil && p.TargetID == "" {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("client %s should receive a set_target release", c.ID)
+		}
+	}
+}
+
+func TestPetFollowDecel(t *testing.T) {
+	px, py := wildernessXY()
+	h, _, pe := testHubWithPlayer(t, px, py)
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "Gob", Level: 1}, pe)
+	h.entities[pet.ID] = pet
+	var fo *followOwner
+	if !pet.plugin(&fo) {
+		t.Fatal("pet should carry a followOwner plugin")
+	}
+	dt := combatTickInterval.Seconds()
+	full := petSpeed * dt
+
+	// Close to the rest point: the pet eases in below full speed.
+	gx, gy := followOffset(pe.X, pe.Y, pe.Facing)
+	pet.X, pet.Y = gx-petFollowDist/2, gy
+	bx, by := pet.X, pet.Y
+	fo.Tick(h, pet, time.Now(), dt)
+	moved := dist(bx, by, pet.X, pet.Y)
+	if moved <= 0 {
+		t.Fatal("pet should still creep toward the rest point")
+	}
+	if moved >= full {
+		t.Fatalf("close-in movement should decelerate below %v, got %v", full, moved)
+	}
+
+	// Far away: full speed, exactly one step.
+	pet.X, pet.Y = gx-petFollowDist*5, gy
+	bx, by = pet.X, pet.Y
+	fo.Tick(h, pet, time.Now(), dt)
+	moved = dist(bx, by, pet.X, pet.Y)
+	if math.Abs(moved-full) > 1e-6 {
+		t.Fatalf("far pet should move a full %v step, got %v", full, moved)
+	}
+}
+
+func TestPetInheritsOwnerTarget(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
+	n := hostileNPC(h, "npc-1", px+200, py)
+
+	// Target the foe through the client message path.
+	raw, _ := json.Marshal(protocol.SetTargetPayload{TargetID: n.ID})
+	h.handleSetTarget(c, raw)
+	if pe.targetID != n.ID {
+		t.Fatal("owner target not set")
+	}
+
+	h.tickEntities(time.Now()) // creates the pet and runs its plugins
+	pet := h.ent(rec.ID)
+	if pet == nil {
+		t.Fatal("expected pet entity on the world")
+	}
+	if pet.targetID != n.ID {
+		t.Fatalf("pet should inherit the owner's target, got %q", pet.targetID)
+	}
+
+	// On the following tick the pet chases toward its attack position.
+	gx, gy := petAttackPos(pe.X, pe.Y, n.X, n.Y)
+	before := dist(pet.X, pet.Y, gx, gy)
+	h.tickEntities(time.Now())
+	after := dist(pet.X, pet.Y, gx, gy)
+	if after >= before {
+		t.Fatalf("pet should close on petAttackPos (before %.1f, after %.1f)", before, after)
+	}
+}

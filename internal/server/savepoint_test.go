@@ -10,7 +10,7 @@ import (
 )
 
 func TestSetSavePointRequiresProximity(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
 	if len(game.SavePoints) == 0 {
 		t.Fatal("expected save points from overworld data")
 	}
@@ -23,7 +23,7 @@ func TestSetSavePointRequiresProximity(t *testing.T) {
 		t.Fatal("should not set save point from far away")
 	}
 
-	wp.X, wp.Y = center.X, center.Y
+	pe.X, pe.Y = center.X, center.Y
 	h.handleSetSavePoint(c, raw)
 	profile, ok := h.store.Get(c.Name)
 	if !ok || profile.SavePointID != sp.ID {
@@ -32,7 +32,7 @@ func TestSetSavePointRequiresProximity(t *testing.T) {
 }
 
 func TestDefeatRespawnsAtSavePoint(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 500, 500)
+	h, c, pe := testHubWithPlayer(t, 500, 500)
 	if len(game.SavePoints) == 0 {
 		t.Fatal("expected save points")
 	}
@@ -43,21 +43,21 @@ func TestDefeatRespawnsAtSavePoint(t *testing.T) {
 
 	h.respawnAtSavePoint(c.ID)
 	wantX, wantY := game.SpawnPosition(sp.ID)
-	if dist(wp.X, wp.Y, wantX, wantY) > 1 {
-		t.Fatalf("respawn at save point, got %f,%f want %f,%f", wp.X, wp.Y, wantX, wantY)
+	if dist(pe.X, pe.Y, wantX, wantY) > 1 {
+		t.Fatalf("respawn at save point, got %f,%f want %f,%f", pe.X, pe.Y, wantX, wantY)
 	}
 }
 
 func TestDefeatWithoutSavePointUsesDefaultSpawn(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 500, 500)
+	h, c, pe := testHubWithPlayer(t, 500, 500)
 	if len(game.SavePoints) == 0 {
 		t.Fatal("expected save points")
 	}
 	h.respawnAtSavePoint(c.ID)
 	// Unattuned defeat respawns at the map's first save point (haven crystal).
 	wantX, wantY := game.SpawnPosition(game.SavePoints[0].ID)
-	if dist(wp.X, wp.Y, wantX, wantY) > 1 {
-		t.Fatalf("default respawn expected haven spawn, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, wantX, wantY) > 1 {
+		t.Fatalf("default respawn expected haven spawn, got %f,%f", pe.X, pe.Y)
 	}
 }
 
@@ -75,10 +75,13 @@ func TestJoinWorldSpawnsAtSavePoint(t *testing.T) {
 	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: "Bartz"})
 	h.handleJoinWorld(c, raw)
 
-	wp := h.world[c.ID]
+	pe := h.playerEnt(c.ID)
+	if pe == nil {
+		t.Fatal("expected world player after join")
+	}
 	wantX, wantY := game.SpawnPosition(sp.ID)
-	if dist(wp.X, wp.Y, wantX, wantY) > 1 {
-		t.Fatalf("join spawn at save point, got %f,%f want %f,%f", wp.X, wp.Y, wantX, wantY)
+	if dist(pe.X, pe.Y, wantX, wantY) > 1 {
+		t.Fatalf("join spawn at save point, got %f,%f want %f,%f", pe.X, pe.Y, wantX, wantY)
 	}
 }
 
@@ -94,22 +97,22 @@ func TestJoinWorldRestoresLastPosition(t *testing.T) {
 	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: "Bartz"})
 	h.handleJoinWorld(c, raw)
 
-	wp := h.world[c.ID]
-	if wp == nil {
+	pe := h.playerEnt(c.ID)
+	if pe == nil {
 		t.Fatal("expected world player")
 	}
-	if dist(wp.X, wp.Y, 500, 500) > 1 {
-		t.Fatalf("resume last position, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, 500, 500) > 1 {
+		t.Fatalf("resume last position, got %f,%f", pe.X, pe.Y)
 	}
-	if wp.Facing != game.FacingYawWest {
-		t.Fatalf("facing %v", wp.Facing)
+	if pe.Facing != game.FacingYawWest {
+		t.Fatalf("facing %v", pe.Facing)
 	}
 }
 
 func TestDisconnectPersistsPosition(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 480, 520)
+	h, c, pe := testHubWithPlayer(t, 480, 520)
 	h.SetMap("north", "Northern Wastes", game.Loaded())
-	wp.Facing = game.FacingYawEast
+	pe.Facing = game.FacingYawEast
 	h.handleDisconnect(c)
 
 	profile, ok := h.store.Get("Bartz")
@@ -142,18 +145,21 @@ func TestJoinWorldUnwalkableLastPosUsesSavePoint(t *testing.T) {
 	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: "Bartz"})
 	h.handleJoinWorld(c, raw)
 
-	wp := h.world[c.ID]
+	pe := h.playerEnt(c.ID)
+	if pe == nil {
+		t.Fatal("expected world player")
+	}
 	wantX, wantY := game.SpawnPosition(sp.ID)
-	if dist(wp.X, wp.Y, wantX, wantY) > 1 {
-		t.Fatalf("expected save-point fallback, got %f,%f want %f,%f", wp.X, wp.Y, wantX, wantY)
+	if dist(pe.X, pe.Y, wantX, wantY) > 1 {
+		t.Fatalf("expected save-point fallback, got %f,%f want %f,%f", pe.X, pe.Y, wantX, wantY)
 	}
 }
 
 func TestSetSavePointRecordsVisit(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
 	sp := game.SavePoints[0]
 	center := game.TileCenter(sp.Tile)
-	wp.X, wp.Y = center.X, center.Y
+	pe.X, pe.Y = center.X, center.Y
 	raw, _ := json.Marshal(protocol.SetSavePointPayload{SavePointID: sp.ID})
 	h.handleSetSavePoint(c, raw)
 	profile, ok := h.store.Get(c.Name)
@@ -163,89 +169,92 @@ func TestSetSavePointRecordsVisit(t *testing.T) {
 }
 
 func TestReturnWarpsToSavePoint(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
+	cc := clientControlOf(pe)
 	sp := game.SavePoints[0]
 	center := game.TileCenter(sp.Tile)
-	wp.X, wp.Y = center.X, center.Y
+	pe.X, pe.Y = center.X, center.Y
 	raw, _ := json.Marshal(protocol.SetSavePointPayload{SavePointID: sp.ID})
 	h.handleSetSavePoint(c, raw)
-	wp.X, wp.Y = 500, 500
+	pe.X, pe.Y = 500, 500
 	raw, _ = json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDReturn})
 	h.handleUseWorldSkill(c, raw)
-	if dist(wp.X, wp.Y, 500, 500) > 1 {
-		t.Fatalf("return should wait for cast, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, 500, 500) > 1 {
+		t.Fatalf("return should wait for cast, got %f,%f", pe.X, pe.Y)
 	}
-	if wp.CastingSkillID != game.SkillIDReturn {
-		t.Fatalf("expected return cast, got %q", wp.CastingSkillID)
+	if cc.fieldCastSkillID != game.SkillIDReturn {
+		t.Fatalf("expected return cast, got %q", cc.fieldCastSkillID)
 	}
-	if wp.CastTimeMs != game.TeleportCastTimeMs {
-		t.Fatalf("return cast time %d, want %d", wp.CastTimeMs, game.TeleportCastTimeMs)
+	if cc.fieldCastTimeMs != game.TeleportCastTimeMs {
+		t.Fatalf("return cast time %d, want %d", cc.fieldCastTimeMs, game.TeleportCastTimeMs)
 	}
 	h.finishDueWorldCasts(time.Now().Add(3 * time.Second))
-	if dist(wp.X, wp.Y, center.X, center.Y) > 1 {
-		t.Fatalf("return landed at %f,%f want %f,%f", wp.X, wp.Y, center.X, center.Y)
+	if dist(pe.X, pe.Y, center.X, center.Y) > 1 {
+		t.Fatalf("return landed at %f,%f want %f,%f", pe.X, pe.Y, center.X, center.Y)
 	}
 }
 
 func TestTeleportRequiresVisit(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 500, 500)
+	h, c, pe := testHubWithPlayer(t, 500, 500)
 	sp := game.SavePoints[0]
-	fromX, fromY := wp.X, wp.Y
+	fromX, fromY := pe.X, pe.Y
 	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDPort, SavePointID: sp.ID})
 	h.handleUseWorldSkill(c, raw)
-	if dist(wp.X, wp.Y, fromX, fromY) > 1 {
-		t.Fatalf("teleport without visit should not move, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, fromX, fromY) > 1 {
+		t.Fatalf("teleport without visit should not move, got %f,%f", pe.X, pe.Y)
 	}
 }
 
-func attuneAndStand(t *testing.T, h *Hub, c *Client, wp *protocol.WorldPlayer) (game.SavePoint, game.Vec2) {
+func attuneAndStand(t *testing.T, h *Hub, c *Client, pe *entity) (game.SavePoint, game.Vec2) {
 	t.Helper()
 	sp := game.SavePoints[0]
 	center := game.TileCenter(sp.Tile)
-	wp.X, wp.Y = center.X, center.Y
+	pe.X, pe.Y = center.X, center.Y
 	raw, _ := json.Marshal(protocol.SetSavePointPayload{SavePointID: sp.ID})
 	h.handleSetSavePoint(c, raw)
-	wp.X, wp.Y = 500, 500
+	pe.X, pe.Y = 500, 500
 	c.lastWorldSkill = time.Time{}
 	return sp, center
 }
 
 func TestTeleportToVisitedSavePoint(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
-	sp, center := attuneAndStand(t, h, c, wp)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
+	cc := clientControlOf(pe)
+	sp, center := attuneAndStand(t, h, c, pe)
 	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDPort, SavePointID: sp.ID})
 	h.handleUseWorldSkill(c, raw)
-	if dist(wp.X, wp.Y, 500, 500) > 1 {
-		t.Fatalf("teleport should wait for cast, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, 500, 500) > 1 {
+		t.Fatalf("teleport should wait for cast, got %f,%f", pe.X, pe.Y)
 	}
-	if wp.CastingSkillID != game.SkillIDPort {
-		t.Fatalf("expected teleport cast, got %q", wp.CastingSkillID)
+	if cc.fieldCastSkillID != game.SkillIDPort {
+		t.Fatalf("expected teleport cast, got %q", cc.fieldCastSkillID)
 	}
 	h.finishDueWorldCasts(time.Now())
-	if dist(wp.X, wp.Y, 500, 500) > 1 {
-		t.Fatalf("teleport should not finish early, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, 500, 500) > 1 {
+		t.Fatalf("teleport should not finish early, got %f,%f", pe.X, pe.Y)
 	}
 	h.finishDueWorldCasts(time.Now().Add(3 * time.Second))
-	if dist(wp.X, wp.Y, center.X, center.Y) > 1 {
-		t.Fatalf("teleport landed at %f,%f want %f,%f", wp.X, wp.Y, center.X, center.Y)
+	if dist(pe.X, pe.Y, center.X, center.Y) > 1 {
+		t.Fatalf("teleport landed at %f,%f want %f,%f", pe.X, pe.Y, center.X, center.Y)
 	}
-	if wp.CastingSkillID != "" {
-		t.Fatalf("cast should clear after warp, got %q", wp.CastingSkillID)
+	if cc.fieldCastSkillID != "" {
+		t.Fatalf("cast should clear after warp, got %q", cc.fieldCastSkillID)
 	}
 }
 
 func TestTeleportCancelledByMove(t *testing.T) {
-	h, c, wp := testHubWithPlayer(t, 400, 400)
-	sp, center := attuneAndStand(t, h, c, wp)
+	h, c, pe := testHubWithPlayer(t, 400, 400)
+	cc := clientControlOf(pe)
+	sp, center := attuneAndStand(t, h, c, pe)
 	raw, _ := json.Marshal(protocol.UseWorldSkillPayload{SkillID: game.SkillIDPort, SavePointID: sp.ID})
 	h.handleUseWorldSkill(c, raw)
 	move, _ := json.Marshal(protocol.MovePayload{X: 540, Y: 500})
 	h.handleMove(c, move)
-	if wp.CastingSkillID != "" {
-		t.Fatalf("move should cancel teleport, still casting %q", wp.CastingSkillID)
+	if cc.fieldCastSkillID != "" {
+		t.Fatalf("move should cancel teleport, still casting %q", cc.fieldCastSkillID)
 	}
 	h.finishDueWorldCasts(time.Now().Add(3 * time.Second))
-	if dist(wp.X, wp.Y, center.X, center.Y) < 20 {
-		t.Fatalf("cancelled teleport should not warp, got %f,%f", wp.X, wp.Y)
+	if dist(pe.X, pe.Y, center.X, center.Y) < 20 {
+		t.Fatalf("cancelled teleport should not warp, got %f,%f", pe.X, pe.Y)
 	}
 }

@@ -164,31 +164,45 @@ message MapSnapshot {
   MapTerrainLayers terrain_layers = 10;
 }
 
-message WorldPlayer {
+// WorldEntity is the unified snapshot for every world inhabitant: players,
+// NPCs, and pets. kind selects the entity class ("player" | "npc" | "pet");
+// fields that don't apply to a kind stay at their proto defaults.
+message WorldEntity {
   string id = 1;
   string name = 2;
-  string weapon = 3;
-  string race = 4;
-  string main_job = 5;
-  string sub_job = 6;
-  int32 level = 7;
-  CharacterAppearance appearance = 8;
-  double x = 9;
-  double y = 10;
-  double facing = 11; // Y-axis yaw radians (Three.js)
-  bool in_combat = 12;
-  int64 immune_until = 14;
-  string casting_skill_id = 15;
-  int32 cast_time_ms = 16;
-  int64 cast_ends_at = 17;
-  bool in_house = 18;
-  string house_owner = 19;
-  int32 hp = 20;
-  int32 max_hp = 21;
-  int32 mp = 22;
-  int32 max_mp = 23;
-  double stamina = 24;
-  string target_id = 25;
+  string kind = 3;
+  string sprite = 4; // enemy key / pet kind / player race
+  string owner_id = 5;
+  int32 level = 6;
+  double x = 7;
+  double y = 8;
+  double facing = 9; // Y-axis yaw radians
+  int32 hp = 10;
+  int32 max_hp = 11;
+  int32 mp = 12;
+  int32 max_mp = 13;
+  double stamina = 14;
+  bool alive = 15;
+  bool engaged = 16; // in combat
+  bool is_ally = 17;
+  string target_id = 18;
+  repeated StatusSnapshot statuses = 19;
+  bool capturable = 20;
+  double skill_atb = 21;
+  bool has_queued_action = 22;
+  string casting_skill_id = 23;
+  string cast_target_id = 24;
+  double cast_progress = 25;
+  int32 cast_time_ms = 26;
+  int64 cast_ends_at = 27; // unix millis
+  // Player presence extras.
+  string weapon = 28;
+  string main_job = 29;
+  string sub_job = 30;
+  CharacterAppearance appearance = 31;
+  int64 immune_until = 32; // unix millis; collision/search blocked
+  bool in_house = 33;
+  string house_owner = 34;
 }
 
 message WorldCamp {
@@ -222,19 +236,6 @@ message HousePOI {
   string name = 3;
   double x = 4;
   double y = 5;
-}
-
-message WorldNPC {
-  string id = 1;
-  string name = 2;
-  string kind = 3;
-  int32 level = 4;
-  double x = 5;
-  double y = 6;
-  bool engaged = 7;
-  int32 hp = 9;
-  int32 max_hp = 10;
-  string target_id = 11;
 }
 
 message SavePoint {
@@ -291,27 +292,4 @@ message PartyInfo {
   repeated PartyMember members = 3;
 }
 
-message CombatEntity {
-  string id = 1;
-  string name = 2;
-  string kind = 3;
-  bool is_player = 4;
-  double x = 5;
-  double y = 6;
-  int32 hp = 7;
-  int32 max_hp = 8;
-  int32 mp = 9;
-  int32 max_mp = 10;
-  double skill_atb = 11;
-  string target_id = 12;
-  bool alive = 13;
-  repeated StatusSnapshot statuses = 14;
-  string casting_skill_id = 15;
-  string cast_target_id = 16;
-  double cast_progress = 17;
-  int32 cast_time_ms = 18;
-  bool is_ally = 19;
-  string owner_id = 20;
-  bool capturable = 21;
-  int32 level = 22;
-}
+

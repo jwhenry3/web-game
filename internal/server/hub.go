@@ -52,10 +52,9 @@ type Hub struct {
 	tokens   *auth.TokenIssuer
 
 	// Run-goroutine owned:
-	world        map[string]*protocol.WorldPlayer // clientID -> world presence
-	npcs         map[string]*worldNPC
-	combatants   map[string]*combatant // clientID -> combat state
-	aoi          map[string]bool       // clientIDs currently receiving combat ticks
+	entities     map[string]*entity // unified world entities (players, NPCs, pets)
+	entityDirty  bool               // set when a server-driven entity moved/changed; broadcasts entity_state
+	aoi          map[string]bool    // clientIDs currently receiving combat ticks
 	rng          *rand.Rand
 	parties      map[string]*hubParty
 	clientParty  map[string]string
@@ -87,9 +86,7 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		store:        profiles,
 		accounts:     accounts,
 		tokens:       tokens,
-		world:        make(map[string]*protocol.WorldPlayer),
-		npcs:         make(map[string]*worldNPC),
-		combatants:   make(map[string]*combatant),
+		entities:     make(map[string]*entity),
 		rng:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		parties:      make(map[string]*hubParty),
 		clientParty:  make(map[string]string),
@@ -165,10 +162,8 @@ func (h *Hub) reloadOverworld(id, name string, ow *game.Overworld) {
 func (h *Hub) broadcastWorldState() {
 	tile, cols, rows, cells := h.mapCells()
 	h.broadcastAll(protocol.Encode(protocol.TypeWorldState, protocol.WorldStatePayload{
-		Players:     h.worldPlayers(),
-		NPCs:        h.worldNPCs(),
+		Entities:    h.worldEntities(time.Now()),
 		Camps:       h.campList(),
-		Pets:        h.worldPets(),
 		SavePoints:  h.worldSavePoints(),
 		JobChangers: h.worldJobChangers(),
 		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
@@ -298,12 +293,11 @@ func (h *Hub) Run() {
 			task()
 
 		case <-ticker.C:
-			h.tickNPCs()
 			h.outOfCombatRegen()
 
 		case <-castTicker.C:
 			h.finishDueWorldCasts(time.Now())
-			h.tickCombat(time.Now())
+			h.tickEntities(time.Now())
 		}
 	}
 }
@@ -357,23 +351,19 @@ func (h *Hub) handleDisconnect(client *Client) {
 	close(client.Send)
 	h.mu.Unlock()
 
-	if wp, ok := h.world[client.ID]; ok {
-		h.persistWorldLocation(client, wp, true)
-	}
-	if pc := h.combatants[client.ID]; pc != nil {
-		h.flushSkillUsage(pc)
-		for _, n := range h.npcs {
-			if n.Engaged && n.targetID == client.ID {
-				n.targetID = "" // retarget next tick
-			}
-			delete(n.contributors, client.ID)
-		}
-		delete(h.combatants, client.ID)
+	joined := false
+	if e := h.playerEnt(client.ID); e != nil {
+		joined = true
+		h.persistWorldLocation(client, e, true)
+		h.flushSkillUsage(e)
+		h.clearTargeting(client.ID) // engaged NPCs retarget next tick
+		h.eachEntity(kindNPC, func(n *entity) { delete(n.contributors, client.ID) })
 	}
 	delete(h.aoi, client.ID)
 	h.onHousingDisconnect(client)
-	if _, ok := h.world[client.ID]; ok {
-		delete(h.world, client.ID)
+	if joined {
+		delete(h.entities, client.ID)
+		h.syncPetEntities()
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerLeft, protocol.PlayerLeftPayload{ID: client.ID}))
 	}
 	h.onClientDisconnectSocial(client.ID)
@@ -520,55 +510,63 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	}
 
 	name = profile.Name
-	for _, wp := range h.world {
-		if strings.EqualFold(wp.Name, name) {
-			h.sendError(c, "That hero is already online.")
-			return
+	dup := false
+	h.eachEntity(kindPlayer, func(o *entity) {
+		if strings.EqualFold(o.Name, name) {
+			dup = true
 		}
+	})
+	if dup {
+		h.sendError(c, "That hero is already online.")
+		return
 	}
 
 	c.Name = name
 	c.Joined = true
 
-	app := appearanceProto(profile)
 	spawnX, spawnY, facing := h.resumeSpawn(c, profile)
-	wp := &protocol.WorldPlayer{
-		ID:         c.ID,
-		Name:       profile.Name,
-		Weapon:     string(profile.WeaponType()),
-		Race:       profile.Race,
-		MainJob:    profile.MainJob,
-		SubJob:     profile.SubJob,
-		Level:      profile.MainJobLevel(),
-		Appearance: app,
-		X:          spawnX,
-		Y:          spawnY,
-		Facing:     facing,
-	}
+	e := h.ensurePlayer(c)
+	e.Name = profile.Name
+	e.Sprite = profile.Race
+	e.X, e.Y, e.Facing = spawnX, spawnY, facing
+	h.applyProfilePresence(e, profile)
 	// Zone transfers attach with UseSpawn — grant the same invuln window.
 	if c.UseSpawn {
-		h.grantBattleImmunity(wp)
+		h.grantBattleImmunity(e)
 	}
-	pc := h.ensureCombatant(c)
-	h.syncWorldPlayer(wp, pc)
-	h.world[c.ID] = wp
-	h.persistWorldLocation(c, wp, true)
+	h.persistWorldLocation(c, e, true)
+	h.syncPetEntities()
 
 	h.sendWelcome(c, profile)
 	tile, cols, rows, cells := h.mapCells()
 	h.send(c, protocol.TypeWorldState, protocol.WorldStatePayload{
-		Players:     h.worldPlayers(),
-		NPCs:        h.worldNPCs(),
+		Entities:    h.worldEntities(time.Now()),
 		Camps:       h.campList(),
-		Pets:        h.worldPets(),
 		SavePoints:  h.worldSavePoints(),
 		JobChangers: h.worldJobChangers(),
 		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
 	})
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerJoin, *wp))
+	h.broadcastAll(protocol.Encode(protocol.TypePlayerJoin, h.entitySync(e)))
 	h.sendSocialState(c)
 	h.refreshFriendsSocial(c.Name)
 	log.Printf("%s joined the world as %s/%s (lv %d)", name, profile.MainJob, profile.SubJob, profile.MainJobLevel())
+}
+
+// applyProfilePresence copies profile-visible fields (race, jobs, weapon,
+// appearance) onto the player entity's clientControl plugin.
+func (h *Hub) applyProfilePresence(e *entity, profile store.Profile) {
+	cc := clientControlOf(e)
+	if cc == nil {
+		return
+	}
+	cc.weaponName = string(profile.WeaponType())
+	cc.race = profile.Race
+	cc.mainJobName = profile.MainJob
+	cc.subJobName = profile.SubJob
+	cc.appearance = appearanceProto(profile)
+	e.Name = profile.Name
+	e.Sprite = profile.Race
+	e.Level = profile.MainJobLevel()
 }
 
 func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facing float64) {
@@ -593,63 +591,64 @@ func (h *Hub) canResumeAt(x, y float64) bool {
 	return game.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
 }
 
-func (h *Hub) persistWorldLocation(c *Client, wp *protocol.WorldPlayer, flush bool) {
-	if c == nil || wp == nil || c.Name == "" {
+func (h *Hub) persistWorldLocation(c *Client, e *entity, flush bool) {
+	if c == nil || e == nil || c.Name == "" {
 		return
 	}
 	doFlush := flush || time.Since(c.lastWorldSave) >= worldPosSaveInterval
-	h.store.SetWorldLocation(c.Name, h.mapID, wp.X, wp.Y, wp.Facing, doFlush)
+	h.store.SetWorldLocation(c.Name, h.mapID, e.X, e.Y, e.Facing, doFlush)
 	if doFlush {
 		c.lastWorldSave = time.Now()
 	}
 }
 
 func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
-	wp, ok := h.world[c.ID]
-	if !ok {
+	e := h.playerEnt(c.ID)
+	if e == nil {
 		return
 	}
 	var p protocol.MovePayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	if wp.InHouse {
-		h.moveInHouse(c, wp, p.X, p.Y, p.Facing)
+	cc := clientControlOf(e)
+	if cc == nil {
 		return
 	}
-	prevX, prevY := wp.X, wp.Y
-	pc := h.combatants[c.ID]
+	if cc.inHouse {
+		h.moveInHouse(c, e, p.X, p.Y, p.Facing)
+		return
+	}
+	prevX, prevY := e.X, e.Y
 	maxStep := maxMoveStep
-	if pc != nil && time.Since(pc.dodgedAt) < dodgeLandingWindow {
+	if time.Since(cc.dodgedAt) < dodgeLandingWindow {
 		maxStep += dodgeDashDist
 	}
-	wp.X, wp.Y = h.clampMoveStep(wp.X, wp.Y, p.X, p.Y, maxStep)
-	wp.Facing = game.ResolveFacingYaw(wp.X-prevX, wp.Y-prevY, derefFacing(p.Facing), p.Facing != nil, wp.Facing)
-	h.interruptWorldCastOnMove(c, wp)
+	e.X, e.Y = h.clampMoveStep(e.X, e.Y, p.X, p.Y, maxStep)
+	e.Facing = game.ResolveFacingYaw(e.X-prevX, e.Y-prevY, derefFacing(p.Facing), p.Facing != nil, e.Facing)
+	h.interruptWorldCastOnMove(c, e)
 	// Combat: movement while casting a battle skill interrupts it past the
 	// cancel threshold, and real displacement keeps the dodge window alive.
-	if pc != nil {
-		moved := math.Hypot(wp.X-prevX, wp.Y-prevY)
-		if moved > 0.5 {
-			pc.lastMoveAt = time.Now()
-			pc.lastMoveDX = wp.X - prevX
-			pc.lastMoveDY = wp.Y - prevY
-		}
-		if pc.casting != nil && dist(wp.X, wp.Y, pc.castX, pc.castY) >= castMoveCancel {
-			h.interruptCast(pc)
-		}
+	moved := math.Hypot(e.X-prevX, e.Y-prevY)
+	if moved > 0.5 {
+		cc.lastMoveAt = time.Now()
+		cc.lastMoveDX = e.X - prevX
+		cc.lastMoveDY = e.Y - prevY
 	}
-	h.persistWorldLocation(c, wp, false)
+	if e.casting != nil && dist(e.X, e.Y, e.castX, e.castY) >= castMoveCancel {
+		h.interruptCast(e)
+	}
+	h.persistWorldLocation(c, e, false)
 	if h.OnTransfer != nil && h.overworld != nil {
-		if exit, ok := h.overworld.ExitAt(wp.X, wp.Y); ok && exit.DestMap != h.mapID {
-			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, wp.Facing)
+		if exit, ok := h.overworld.ExitAt(e.X, e.Y); ok && exit.DestMap != h.mapID {
+			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, e.Facing)
 			return
 		}
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: wp.X, Y: wp.Y, Facing: wp.Facing,
+		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
 	}))
-	h.checkAggroAt(c.ID, wp.X, wp.Y)
+	h.checkAggroAt(c.ID, e.X, e.Y)
 }
 
 func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
@@ -667,8 +666,8 @@ func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
 }
 
 func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
-	wp, ok := h.world[c.ID]
-	if !ok {
+	e := h.playerEnt(c.ID)
+	if e == nil {
 		return
 	}
 	var p protocol.EquipPayload
@@ -680,18 +679,17 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	wp.Weapon = string(profile.WeaponType())
-	if pc := h.combatants[c.ID]; pc != nil {
-		h.refreshCombatStats(c, pc)
-		h.syncWorldPlayer(wp, pc)
+	h.refreshCombatStats(c, e)
+	if cc := clientControlOf(e); cc != nil {
+		cc.weaponName = string(profile.WeaponType())
 	}
 	h.sendWelcome(c, profile)
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	h.sendPlayerSync(e)
 }
 
 func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
-	wp, ok := h.world[c.ID]
-	if !ok {
+	e := h.playerEnt(c.ID)
+	if e == nil {
 		return
 	}
 	var p protocol.UnequipPayload
@@ -702,21 +700,20 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	if !ok {
 		return
 	}
-	wp.Weapon = string(profile.WeaponType())
-	if pc := h.combatants[c.ID]; pc != nil {
-		h.refreshCombatStats(c, pc)
-		h.syncWorldPlayer(wp, pc)
+	h.refreshCombatStats(c, e)
+	if cc := clientControlOf(e); cc != nil {
+		cc.weaponName = string(profile.WeaponType())
 	}
 	h.sendWelcome(c, profile)
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	h.sendPlayerSync(e)
 }
 
 func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
-	wp, ok := h.world[c.ID]
-	if !ok {
+	e := h.playerEnt(c.ID)
+	if e == nil {
 		return
 	}
-	if wp.InCombat {
+	if cc := clientControlOf(e); cc != nil && cc.inCombat {
 		h.sendError(c, "Cannot change jobs while in combat.")
 		return
 	}
@@ -729,7 +726,7 @@ func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Visit a Job Master to change jobs.")
 		return
 	}
-	if !h.nearJobChanger(wp.X, wp.Y, p.JobChangerID) {
+	if !h.nearJobChanger(e.X, e.Y, p.JobChangerID) {
 		h.sendError(c, "Move closer to the Job Master.")
 		return
 	}
@@ -738,12 +735,9 @@ func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	wp.Weapon = string(profile.WeaponType())
-	wp.MainJob = profile.MainJob
-	wp.SubJob = profile.SubJob
-	wp.Level = profile.MainJobLevel()
+	h.applyProfilePresence(e, profile)
 	h.sendWelcome(c, profile)
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, *wp))
+	h.sendPlayerSync(e)
 }
 
 func (h *Hub) handleSetHotbar(c *Client, raw json.RawMessage) {
@@ -772,19 +766,26 @@ func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
 	h.sendWelcome(c, profile)
 }
 
-func (h *Hub) worldPlayers() []protocol.WorldPlayer {
-	out := make([]protocol.WorldPlayer, 0, len(h.world))
-	for _, wp := range h.world {
-		out = append(out, *wp)
+// worldEntities snapshots every world inhabitant for world_state. Players are
+// always listed (in_house flag tells clients to hide them); NPCs and pets are
+// omitted while hidden (despawned / owner off-world).
+func (h *Hub) worldEntities(now time.Time) []protocol.WorldEntity {
+	out := make([]protocol.WorldEntity, 0, len(h.entities))
+	for _, e := range h.entities {
+		if e.Kind != kindPlayer && e.hidden {
+			continue
+		}
+		out = append(out, h.entitySnapshot(e, now))
 	}
 	return out
 }
 
-func (h *Hub) grantBattleImmunity(wp *protocol.WorldPlayer) {
-	if wp == nil {
+func (h *Hub) grantBattleImmunity(e *entity) {
+	cc := clientControlOf(e)
+	if cc == nil {
 		return
 	}
-	wp.ImmuneUntil = time.Now().Add(battleImmunity).UnixMilli()
+	cc.immuneUntil = time.Now().Add(battleImmunity).UnixMilli()
 }
 
 // StatusCounts returns online player count and engaged NPC count for this map.

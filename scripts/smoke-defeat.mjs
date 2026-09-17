@@ -47,7 +47,7 @@ function nearestNPC() {
 }
 
 async function walkTowardNPC() {
-  if (walking || self?.in_combat) return;
+  if (walking || self?.engaged) return;
   walking = true;
   const target = nearestNPC();
   if (!target || !self) {
@@ -58,17 +58,17 @@ async function walkTowardNPC() {
   // A* routes around walls; if the foe patrols the sanctuary border we may
   // stay on safe tiles — fall back to an attack pull either way.
   let path = null;
-  for (let i = 0; i < 280 && !self?.in_combat; i++) {
+  for (let i = 0; i < 280 && !self?.engaged; i++) {
     const cur = npcs[target.id];
     if (!cur) break;
     const dist = Math.hypot(cur.x - self.x, cur.y - self.y) || 1;
     if (dist <= 24) {
       await sleep(1500); // give proximity aggro a beat, then pull if safe-zoned
-      if (!self?.in_combat) {
+      if (!self?.engaged) {
         send("set_target", { target_id: target.id });
         send("action", { action_id: "attack", target_id: target.id });
         await sleep(1500);
-        if (!self?.in_combat) break;
+        if (!self?.engaged) break;
       }
       break;
     }
@@ -118,24 +118,24 @@ ws.addEventListener("message", (evt) => {
       break;
 
     case "world_state":
-      for (const wp of pl.players ?? []) {
-        if (wp.id === selfId) self = wp;
+      for (const e of pl.entities ?? []) {
+        if (e.id === selfId) self = e;
+        else if (e.kind === "npc") npcs[e.id] = e;
       }
-      for (const n of pl.npcs ?? []) npcs[n.id] = n;
       if (pl.map?.cells) map = pl.map;
-      if (selfId && !self?.in_combat && Object.keys(npcs).length > 0) {
+      if (selfId && !self?.engaged && Object.keys(npcs).length > 0) {
         void walkTowardNPC();
       }
       break;
 
     case "player_sync":
       if (pl.id === selfId) {
-        const wasCombat = self?.in_combat === true;
+        const wasCombat = self?.engaged === true;
         self = pl;
-        if (pl.in_combat && !wasCombat) {
+        if (pl.engaged && !wasCombat) {
           console.log("engaged by NPC, standing idle until defeat...");
         }
-        if (sawDefeat && !pl.in_combat && pl.hp === pl.max_hp) {
+        if (sawDefeat && !pl.engaged && pl.hp === pl.max_hp) {
           console.log(`PASS: respawned at (${pl.x.toFixed(0)},${pl.y.toFixed(0)}) hp=${pl.hp}/${pl.max_hp} immune_until=${pl.immune_until}`);
           if (pl.immune_until > Date.now()) {
             console.log("PASS: post-defeat immunity window granted");
@@ -150,8 +150,8 @@ ws.addEventListener("message", (evt) => {
       if (pl.id === selfId && self) Object.assign(self, { x: pl.x, y: pl.y });
       break;
 
-    case "npc_state":
-      for (const n of pl.npcs ?? []) npcs[n.id] = n;
+    case "entity_state":
+      for (const e of pl.entities ?? []) { if (e.kind === "npc") npcs[e.id] = e; }
       break;
 
     case "combat_event":

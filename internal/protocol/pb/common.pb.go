@@ -1434,50 +1434,64 @@ func (x *MapSnapshot) GetTerrainLayers() *MapTerrainLayers {
 	return nil
 }
 
-type WorldPlayer struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Weapon         string                 `protobuf:"bytes,3,opt,name=weapon,proto3" json:"weapon,omitempty"`
-	Race           string                 `protobuf:"bytes,4,opt,name=race,proto3" json:"race,omitempty"`
-	MainJob        string                 `protobuf:"bytes,5,opt,name=main_job,json=mainJob,proto3" json:"main_job,omitempty"`
-	SubJob         string                 `protobuf:"bytes,6,opt,name=sub_job,json=subJob,proto3" json:"sub_job,omitempty"`
-	Level          int32                  `protobuf:"varint,7,opt,name=level,proto3" json:"level,omitempty"`
-	Appearance     *CharacterAppearance   `protobuf:"bytes,8,opt,name=appearance,proto3" json:"appearance,omitempty"`
-	X              float64                `protobuf:"fixed64,9,opt,name=x,proto3" json:"x,omitempty"`
-	Y              float64                `protobuf:"fixed64,10,opt,name=y,proto3" json:"y,omitempty"`
-	Facing         float64                `protobuf:"fixed64,11,opt,name=facing,proto3" json:"facing,omitempty"` // Y-axis yaw radians (Three.js)
-	InCombat       bool                   `protobuf:"varint,12,opt,name=in_combat,json=inCombat,proto3" json:"in_combat,omitempty"`
-	ImmuneUntil    int64                  `protobuf:"varint,14,opt,name=immune_until,json=immuneUntil,proto3" json:"immune_until,omitempty"`
-	CastingSkillId string                 `protobuf:"bytes,15,opt,name=casting_skill_id,json=castingSkillId,proto3" json:"casting_skill_id,omitempty"`
-	CastTimeMs     int32                  `protobuf:"varint,16,opt,name=cast_time_ms,json=castTimeMs,proto3" json:"cast_time_ms,omitempty"`
-	CastEndsAt     int64                  `protobuf:"varint,17,opt,name=cast_ends_at,json=castEndsAt,proto3" json:"cast_ends_at,omitempty"`
-	InHouse        bool                   `protobuf:"varint,18,opt,name=in_house,json=inHouse,proto3" json:"in_house,omitempty"`
-	HouseOwner     string                 `protobuf:"bytes,19,opt,name=house_owner,json=houseOwner,proto3" json:"house_owner,omitempty"`
-	Hp             int32                  `protobuf:"varint,20,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp          int32                  `protobuf:"varint,21,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
-	Mp             int32                  `protobuf:"varint,22,opt,name=mp,proto3" json:"mp,omitempty"`
-	MaxMp          int32                  `protobuf:"varint,23,opt,name=max_mp,json=maxMp,proto3" json:"max_mp,omitempty"`
-	Stamina        float64                `protobuf:"fixed64,24,opt,name=stamina,proto3" json:"stamina,omitempty"`
-	TargetId       string                 `protobuf:"bytes,25,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+// WorldEntity is the unified snapshot for every world inhabitant: players,
+// NPCs, and pets. kind selects the entity class ("player" | "npc" | "pet");
+// fields that don't apply to a kind stay at their proto defaults.
+type WorldEntity struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Kind            string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
+	Sprite          string                 `protobuf:"bytes,4,opt,name=sprite,proto3" json:"sprite,omitempty"` // enemy key / pet kind / player race
+	OwnerId         string                 `protobuf:"bytes,5,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
+	Level           int32                  `protobuf:"varint,6,opt,name=level,proto3" json:"level,omitempty"`
+	X               float64                `protobuf:"fixed64,7,opt,name=x,proto3" json:"x,omitempty"`
+	Y               float64                `protobuf:"fixed64,8,opt,name=y,proto3" json:"y,omitempty"`
+	Facing          float64                `protobuf:"fixed64,9,opt,name=facing,proto3" json:"facing,omitempty"` // Y-axis yaw radians
+	Hp              int32                  `protobuf:"varint,10,opt,name=hp,proto3" json:"hp,omitempty"`
+	MaxHp           int32                  `protobuf:"varint,11,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
+	Mp              int32                  `protobuf:"varint,12,opt,name=mp,proto3" json:"mp,omitempty"`
+	MaxMp           int32                  `protobuf:"varint,13,opt,name=max_mp,json=maxMp,proto3" json:"max_mp,omitempty"`
+	Stamina         float64                `protobuf:"fixed64,14,opt,name=stamina,proto3" json:"stamina,omitempty"`
+	Alive           bool                   `protobuf:"varint,15,opt,name=alive,proto3" json:"alive,omitempty"`
+	Engaged         bool                   `protobuf:"varint,16,opt,name=engaged,proto3" json:"engaged,omitempty"` // in combat
+	IsAlly          bool                   `protobuf:"varint,17,opt,name=is_ally,json=isAlly,proto3" json:"is_ally,omitempty"`
+	TargetId        string                 `protobuf:"bytes,18,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	Statuses        []*StatusSnapshot      `protobuf:"bytes,19,rep,name=statuses,proto3" json:"statuses,omitempty"`
+	Capturable      bool                   `protobuf:"varint,20,opt,name=capturable,proto3" json:"capturable,omitempty"`
+	SkillAtb        float64                `protobuf:"fixed64,21,opt,name=skill_atb,json=skillAtb,proto3" json:"skill_atb,omitempty"`
+	HasQueuedAction bool                   `protobuf:"varint,22,opt,name=has_queued_action,json=hasQueuedAction,proto3" json:"has_queued_action,omitempty"`
+	CastingSkillId  string                 `protobuf:"bytes,23,opt,name=casting_skill_id,json=castingSkillId,proto3" json:"casting_skill_id,omitempty"`
+	CastTargetId    string                 `protobuf:"bytes,24,opt,name=cast_target_id,json=castTargetId,proto3" json:"cast_target_id,omitempty"`
+	CastProgress    float64                `protobuf:"fixed64,25,opt,name=cast_progress,json=castProgress,proto3" json:"cast_progress,omitempty"`
+	CastTimeMs      int32                  `protobuf:"varint,26,opt,name=cast_time_ms,json=castTimeMs,proto3" json:"cast_time_ms,omitempty"`
+	CastEndsAt      int64                  `protobuf:"varint,27,opt,name=cast_ends_at,json=castEndsAt,proto3" json:"cast_ends_at,omitempty"` // unix millis
+	// Player presence extras.
+	Weapon        string               `protobuf:"bytes,28,opt,name=weapon,proto3" json:"weapon,omitempty"`
+	MainJob       string               `protobuf:"bytes,29,opt,name=main_job,json=mainJob,proto3" json:"main_job,omitempty"`
+	SubJob        string               `protobuf:"bytes,30,opt,name=sub_job,json=subJob,proto3" json:"sub_job,omitempty"`
+	Appearance    *CharacterAppearance `protobuf:"bytes,31,opt,name=appearance,proto3" json:"appearance,omitempty"`
+	ImmuneUntil   int64                `protobuf:"varint,32,opt,name=immune_until,json=immuneUntil,proto3" json:"immune_until,omitempty"` // unix millis; collision/search blocked
+	InHouse       bool                 `protobuf:"varint,33,opt,name=in_house,json=inHouse,proto3" json:"in_house,omitempty"`
+	HouseOwner    string               `protobuf:"bytes,34,opt,name=house_owner,json=houseOwner,proto3" json:"house_owner,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *WorldPlayer) Reset() {
-	*x = WorldPlayer{}
+func (x *WorldEntity) Reset() {
+	*x = WorldEntity{}
 	mi := &file_fantasy_v1_common_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *WorldPlayer) String() string {
+func (x *WorldEntity) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*WorldPlayer) ProtoMessage() {}
+func (*WorldEntity) ProtoMessage() {}
 
-func (x *WorldPlayer) ProtoReflect() protoreflect.Message {
+func (x *WorldEntity) ProtoReflect() protoreflect.Message {
 	mi := &file_fantasy_v1_common_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -1489,175 +1503,245 @@ func (x *WorldPlayer) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use WorldPlayer.ProtoReflect.Descriptor instead.
-func (*WorldPlayer) Descriptor() ([]byte, []int) {
+// Deprecated: Use WorldEntity.ProtoReflect.Descriptor instead.
+func (*WorldEntity) Descriptor() ([]byte, []int) {
 	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{15}
 }
 
-func (x *WorldPlayer) GetId() string {
+func (x *WorldEntity) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *WorldPlayer) GetName() string {
+func (x *WorldEntity) GetName() string {
 	if x != nil {
 		return x.Name
 	}
 	return ""
 }
 
-func (x *WorldPlayer) GetWeapon() string {
+func (x *WorldEntity) GetKind() string {
 	if x != nil {
-		return x.Weapon
+		return x.Kind
 	}
 	return ""
 }
 
-func (x *WorldPlayer) GetRace() string {
+func (x *WorldEntity) GetSprite() string {
 	if x != nil {
-		return x.Race
+		return x.Sprite
 	}
 	return ""
 }
 
-func (x *WorldPlayer) GetMainJob() string {
+func (x *WorldEntity) GetOwnerId() string {
 	if x != nil {
-		return x.MainJob
+		return x.OwnerId
 	}
 	return ""
 }
 
-func (x *WorldPlayer) GetSubJob() string {
-	if x != nil {
-		return x.SubJob
-	}
-	return ""
-}
-
-func (x *WorldPlayer) GetLevel() int32 {
+func (x *WorldEntity) GetLevel() int32 {
 	if x != nil {
 		return x.Level
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetAppearance() *CharacterAppearance {
-	if x != nil {
-		return x.Appearance
-	}
-	return nil
-}
-
-func (x *WorldPlayer) GetX() float64 {
+func (x *WorldEntity) GetX() float64 {
 	if x != nil {
 		return x.X
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetY() float64 {
+func (x *WorldEntity) GetY() float64 {
 	if x != nil {
 		return x.Y
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetFacing() float64 {
+func (x *WorldEntity) GetFacing() float64 {
 	if x != nil {
 		return x.Facing
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetInCombat() bool {
-	if x != nil {
-		return x.InCombat
-	}
-	return false
-}
-
-func (x *WorldPlayer) GetImmuneUntil() int64 {
-	if x != nil {
-		return x.ImmuneUntil
-	}
-	return 0
-}
-
-func (x *WorldPlayer) GetCastingSkillId() string {
-	if x != nil {
-		return x.CastingSkillId
-	}
-	return ""
-}
-
-func (x *WorldPlayer) GetCastTimeMs() int32 {
-	if x != nil {
-		return x.CastTimeMs
-	}
-	return 0
-}
-
-func (x *WorldPlayer) GetCastEndsAt() int64 {
-	if x != nil {
-		return x.CastEndsAt
-	}
-	return 0
-}
-
-func (x *WorldPlayer) GetInHouse() bool {
-	if x != nil {
-		return x.InHouse
-	}
-	return false
-}
-
-func (x *WorldPlayer) GetHouseOwner() string {
-	if x != nil {
-		return x.HouseOwner
-	}
-	return ""
-}
-
-func (x *WorldPlayer) GetHp() int32 {
+func (x *WorldEntity) GetHp() int32 {
 	if x != nil {
 		return x.Hp
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetMaxHp() int32 {
+func (x *WorldEntity) GetMaxHp() int32 {
 	if x != nil {
 		return x.MaxHp
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetMp() int32 {
+func (x *WorldEntity) GetMp() int32 {
 	if x != nil {
 		return x.Mp
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetMaxMp() int32 {
+func (x *WorldEntity) GetMaxMp() int32 {
 	if x != nil {
 		return x.MaxMp
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetStamina() float64 {
+func (x *WorldEntity) GetStamina() float64 {
 	if x != nil {
 		return x.Stamina
 	}
 	return 0
 }
 
-func (x *WorldPlayer) GetTargetId() string {
+func (x *WorldEntity) GetAlive() bool {
+	if x != nil {
+		return x.Alive
+	}
+	return false
+}
+
+func (x *WorldEntity) GetEngaged() bool {
+	if x != nil {
+		return x.Engaged
+	}
+	return false
+}
+
+func (x *WorldEntity) GetIsAlly() bool {
+	if x != nil {
+		return x.IsAlly
+	}
+	return false
+}
+
+func (x *WorldEntity) GetTargetId() string {
 	if x != nil {
 		return x.TargetId
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetStatuses() []*StatusSnapshot {
+	if x != nil {
+		return x.Statuses
+	}
+	return nil
+}
+
+func (x *WorldEntity) GetCapturable() bool {
+	if x != nil {
+		return x.Capturable
+	}
+	return false
+}
+
+func (x *WorldEntity) GetSkillAtb() float64 {
+	if x != nil {
+		return x.SkillAtb
+	}
+	return 0
+}
+
+func (x *WorldEntity) GetHasQueuedAction() bool {
+	if x != nil {
+		return x.HasQueuedAction
+	}
+	return false
+}
+
+func (x *WorldEntity) GetCastingSkillId() string {
+	if x != nil {
+		return x.CastingSkillId
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetCastTargetId() string {
+	if x != nil {
+		return x.CastTargetId
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetCastProgress() float64 {
+	if x != nil {
+		return x.CastProgress
+	}
+	return 0
+}
+
+func (x *WorldEntity) GetCastTimeMs() int32 {
+	if x != nil {
+		return x.CastTimeMs
+	}
+	return 0
+}
+
+func (x *WorldEntity) GetCastEndsAt() int64 {
+	if x != nil {
+		return x.CastEndsAt
+	}
+	return 0
+}
+
+func (x *WorldEntity) GetWeapon() string {
+	if x != nil {
+		return x.Weapon
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetMainJob() string {
+	if x != nil {
+		return x.MainJob
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetSubJob() string {
+	if x != nil {
+		return x.SubJob
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetAppearance() *CharacterAppearance {
+	if x != nil {
+		return x.Appearance
+	}
+	return nil
+}
+
+func (x *WorldEntity) GetImmuneUntil() int64 {
+	if x != nil {
+		return x.ImmuneUntil
+	}
+	return 0
+}
+
+func (x *WorldEntity) GetInHouse() bool {
+	if x != nil {
+		return x.InHouse
+	}
+	return false
+}
+
+func (x *WorldEntity) GetHouseOwner() string {
+	if x != nil {
+		return x.HouseOwner
 	}
 	return ""
 }
@@ -1974,122 +2058,6 @@ func (x *HousePOI) GetY() float64 {
 	return 0
 }
 
-type WorldNPC struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Level         int32                  `protobuf:"varint,4,opt,name=level,proto3" json:"level,omitempty"`
-	X             float64                `protobuf:"fixed64,5,opt,name=x,proto3" json:"x,omitempty"`
-	Y             float64                `protobuf:"fixed64,6,opt,name=y,proto3" json:"y,omitempty"`
-	Engaged       bool                   `protobuf:"varint,7,opt,name=engaged,proto3" json:"engaged,omitempty"`
-	Hp            int32                  `protobuf:"varint,9,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp         int32                  `protobuf:"varint,10,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
-	TargetId      string                 `protobuf:"bytes,11,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *WorldNPC) Reset() {
-	*x = WorldNPC{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[20]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *WorldNPC) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*WorldNPC) ProtoMessage() {}
-
-func (x *WorldNPC) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[20]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use WorldNPC.ProtoReflect.Descriptor instead.
-func (*WorldNPC) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{20}
-}
-
-func (x *WorldNPC) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *WorldNPC) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *WorldNPC) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *WorldNPC) GetLevel() int32 {
-	if x != nil {
-		return x.Level
-	}
-	return 0
-}
-
-func (x *WorldNPC) GetX() float64 {
-	if x != nil {
-		return x.X
-	}
-	return 0
-}
-
-func (x *WorldNPC) GetY() float64 {
-	if x != nil {
-		return x.Y
-	}
-	return 0
-}
-
-func (x *WorldNPC) GetEngaged() bool {
-	if x != nil {
-		return x.Engaged
-	}
-	return false
-}
-
-func (x *WorldNPC) GetHp() int32 {
-	if x != nil {
-		return x.Hp
-	}
-	return 0
-}
-
-func (x *WorldNPC) GetMaxHp() int32 {
-	if x != nil {
-		return x.MaxHp
-	}
-	return 0
-}
-
-func (x *WorldNPC) GetTargetId() string {
-	if x != nil {
-		return x.TargetId
-	}
-	return ""
-}
-
 type SavePoint struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -2102,7 +2070,7 @@ type SavePoint struct {
 
 func (x *SavePoint) Reset() {
 	*x = SavePoint{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[21]
+	mi := &file_fantasy_v1_common_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2114,7 +2082,7 @@ func (x *SavePoint) String() string {
 func (*SavePoint) ProtoMessage() {}
 
 func (x *SavePoint) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[21]
+	mi := &file_fantasy_v1_common_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2127,7 +2095,7 @@ func (x *SavePoint) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SavePoint.ProtoReflect.Descriptor instead.
 func (*SavePoint) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{21}
+	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SavePoint) GetId() string {
@@ -2170,7 +2138,7 @@ type JobChanger struct {
 
 func (x *JobChanger) Reset() {
 	*x = JobChanger{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[22]
+	mi := &file_fantasy_v1_common_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2182,7 +2150,7 @@ func (x *JobChanger) String() string {
 func (*JobChanger) ProtoMessage() {}
 
 func (x *JobChanger) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[22]
+	mi := &file_fantasy_v1_common_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2195,7 +2163,7 @@ func (x *JobChanger) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobChanger.ProtoReflect.Descriptor instead.
 func (*JobChanger) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{22}
+	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *JobChanger) GetId() string {
@@ -2248,7 +2216,7 @@ type PlayerReward struct {
 
 func (x *PlayerReward) Reset() {
 	*x = PlayerReward{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[23]
+	mi := &file_fantasy_v1_common_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2260,7 +2228,7 @@ func (x *PlayerReward) String() string {
 func (*PlayerReward) ProtoMessage() {}
 
 func (x *PlayerReward) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[23]
+	mi := &file_fantasy_v1_common_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2273,7 +2241,7 @@ func (x *PlayerReward) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerReward.ProtoReflect.Descriptor instead.
 func (*PlayerReward) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{23}
+	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PlayerReward) GetPlayerId() string {
@@ -2387,7 +2355,7 @@ type FriendInfo struct {
 
 func (x *FriendInfo) Reset() {
 	*x = FriendInfo{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[24]
+	mi := &file_fantasy_v1_common_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2399,7 +2367,7 @@ func (x *FriendInfo) String() string {
 func (*FriendInfo) ProtoMessage() {}
 
 func (x *FriendInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[24]
+	mi := &file_fantasy_v1_common_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2412,7 +2380,7 @@ func (x *FriendInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FriendInfo.ProtoReflect.Descriptor instead.
 func (*FriendInfo) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{24}
+	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *FriendInfo) GetName() string {
@@ -2464,7 +2432,7 @@ type PartyMember struct {
 
 func (x *PartyMember) Reset() {
 	*x = PartyMember{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[25]
+	mi := &file_fantasy_v1_common_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2476,7 +2444,7 @@ func (x *PartyMember) String() string {
 func (*PartyMember) ProtoMessage() {}
 
 func (x *PartyMember) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[25]
+	mi := &file_fantasy_v1_common_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2489,7 +2457,7 @@ func (x *PartyMember) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PartyMember.ProtoReflect.Descriptor instead.
 func (*PartyMember) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{25}
+	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PartyMember) GetId() string {
@@ -2545,7 +2513,7 @@ type PartyInfo struct {
 
 func (x *PartyInfo) Reset() {
 	*x = PartyInfo{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[26]
+	mi := &file_fantasy_v1_common_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2557,7 +2525,7 @@ func (x *PartyInfo) String() string {
 func (*PartyInfo) ProtoMessage() {}
 
 func (x *PartyInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[26]
+	mi := &file_fantasy_v1_common_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2570,7 +2538,7 @@ func (x *PartyInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PartyInfo.ProtoReflect.Descriptor instead.
 func (*PartyInfo) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{26}
+	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *PartyInfo) GetId() string {
@@ -2592,218 +2560,6 @@ func (x *PartyInfo) GetMembers() []*PartyMember {
 		return x.Members
 	}
 	return nil
-}
-
-type CombatEntity struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Kind           string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	IsPlayer       bool                   `protobuf:"varint,4,opt,name=is_player,json=isPlayer,proto3" json:"is_player,omitempty"`
-	X              float64                `protobuf:"fixed64,5,opt,name=x,proto3" json:"x,omitempty"`
-	Y              float64                `protobuf:"fixed64,6,opt,name=y,proto3" json:"y,omitempty"`
-	Hp             int32                  `protobuf:"varint,7,opt,name=hp,proto3" json:"hp,omitempty"`
-	MaxHp          int32                  `protobuf:"varint,8,opt,name=max_hp,json=maxHp,proto3" json:"max_hp,omitempty"`
-	Mp             int32                  `protobuf:"varint,9,opt,name=mp,proto3" json:"mp,omitempty"`
-	MaxMp          int32                  `protobuf:"varint,10,opt,name=max_mp,json=maxMp,proto3" json:"max_mp,omitempty"`
-	SkillAtb       float64                `protobuf:"fixed64,11,opt,name=skill_atb,json=skillAtb,proto3" json:"skill_atb,omitempty"`
-	TargetId       string                 `protobuf:"bytes,12,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
-	Alive          bool                   `protobuf:"varint,13,opt,name=alive,proto3" json:"alive,omitempty"`
-	Statuses       []*StatusSnapshot      `protobuf:"bytes,14,rep,name=statuses,proto3" json:"statuses,omitempty"`
-	CastingSkillId string                 `protobuf:"bytes,15,opt,name=casting_skill_id,json=castingSkillId,proto3" json:"casting_skill_id,omitempty"`
-	CastTargetId   string                 `protobuf:"bytes,16,opt,name=cast_target_id,json=castTargetId,proto3" json:"cast_target_id,omitempty"`
-	CastProgress   float64                `protobuf:"fixed64,17,opt,name=cast_progress,json=castProgress,proto3" json:"cast_progress,omitempty"`
-	CastTimeMs     int32                  `protobuf:"varint,18,opt,name=cast_time_ms,json=castTimeMs,proto3" json:"cast_time_ms,omitempty"`
-	IsAlly         bool                   `protobuf:"varint,19,opt,name=is_ally,json=isAlly,proto3" json:"is_ally,omitempty"`
-	OwnerId        string                 `protobuf:"bytes,20,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
-	Capturable     bool                   `protobuf:"varint,21,opt,name=capturable,proto3" json:"capturable,omitempty"`
-	Level          int32                  `protobuf:"varint,22,opt,name=level,proto3" json:"level,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *CombatEntity) Reset() {
-	*x = CombatEntity{}
-	mi := &file_fantasy_v1_common_proto_msgTypes[27]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CombatEntity) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CombatEntity) ProtoMessage() {}
-
-func (x *CombatEntity) ProtoReflect() protoreflect.Message {
-	mi := &file_fantasy_v1_common_proto_msgTypes[27]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CombatEntity.ProtoReflect.Descriptor instead.
-func (*CombatEntity) Descriptor() ([]byte, []int) {
-	return file_fantasy_v1_common_proto_rawDescGZIP(), []int{27}
-}
-
-func (x *CombatEntity) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetKind() string {
-	if x != nil {
-		return x.Kind
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetIsPlayer() bool {
-	if x != nil {
-		return x.IsPlayer
-	}
-	return false
-}
-
-func (x *CombatEntity) GetX() float64 {
-	if x != nil {
-		return x.X
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetY() float64 {
-	if x != nil {
-		return x.Y
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetHp() int32 {
-	if x != nil {
-		return x.Hp
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetMaxHp() int32 {
-	if x != nil {
-		return x.MaxHp
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetMp() int32 {
-	if x != nil {
-		return x.Mp
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetMaxMp() int32 {
-	if x != nil {
-		return x.MaxMp
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetSkillAtb() float64 {
-	if x != nil {
-		return x.SkillAtb
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetTargetId() string {
-	if x != nil {
-		return x.TargetId
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetAlive() bool {
-	if x != nil {
-		return x.Alive
-	}
-	return false
-}
-
-func (x *CombatEntity) GetStatuses() []*StatusSnapshot {
-	if x != nil {
-		return x.Statuses
-	}
-	return nil
-}
-
-func (x *CombatEntity) GetCastingSkillId() string {
-	if x != nil {
-		return x.CastingSkillId
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetCastTargetId() string {
-	if x != nil {
-		return x.CastTargetId
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetCastProgress() float64 {
-	if x != nil {
-		return x.CastProgress
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetCastTimeMs() int32 {
-	if x != nil {
-		return x.CastTimeMs
-	}
-	return 0
-}
-
-func (x *CombatEntity) GetIsAlly() bool {
-	if x != nil {
-		return x.IsAlly
-	}
-	return false
-}
-
-func (x *CombatEntity) GetOwnerId() string {
-	if x != nil {
-		return x.OwnerId
-	}
-	return ""
-}
-
-func (x *CombatEntity) GetCapturable() bool {
-	if x != nil {
-		return x.Capturable
-	}
-	return false
-}
-
-func (x *CombatEntity) GetLevel() int32 {
-	if x != nil {
-		return x.Level
-	}
-	return 0
 }
 
 var File_fantasy_v1_common_proto protoreflect.FileDescriptor
@@ -2963,38 +2719,50 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\aportals\x18\b \x03(\v2\x15.fantasy.v1.MapPortalR\aportals\x12C\n" +
 	"\x0etile_overrides\x18\t \x01(\v2\x1c.fantasy.v1.MapTileOverridesR\rtileOverrides\x12C\n" +
 	"\x0eterrain_layers\x18\n" +
-	" \x01(\v2\x1c.fantasy.v1.MapTerrainLayersR\rterrainLayers\"\x8b\x05\n" +
-	"\vWorldPlayer\x12\x0e\n" +
+	" \x01(\v2\x1c.fantasy.v1.MapTerrainLayersR\rterrainLayers\"\xd6\a\n" +
+	"\vWorldEntity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
-	"\x06weapon\x18\x03 \x01(\tR\x06weapon\x12\x12\n" +
-	"\x04race\x18\x04 \x01(\tR\x04race\x12\x19\n" +
-	"\bmain_job\x18\x05 \x01(\tR\amainJob\x12\x17\n" +
-	"\asub_job\x18\x06 \x01(\tR\x06subJob\x12\x14\n" +
-	"\x05level\x18\a \x01(\x05R\x05level\x12?\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x16\n" +
+	"\x06sprite\x18\x04 \x01(\tR\x06sprite\x12\x19\n" +
+	"\bowner_id\x18\x05 \x01(\tR\aownerId\x12\x14\n" +
+	"\x05level\x18\x06 \x01(\x05R\x05level\x12\f\n" +
+	"\x01x\x18\a \x01(\x01R\x01x\x12\f\n" +
+	"\x01y\x18\b \x01(\x01R\x01y\x12\x16\n" +
+	"\x06facing\x18\t \x01(\x01R\x06facing\x12\x0e\n" +
+	"\x02hp\x18\n" +
+	" \x01(\x05R\x02hp\x12\x15\n" +
+	"\x06max_hp\x18\v \x01(\x05R\x05maxHp\x12\x0e\n" +
+	"\x02mp\x18\f \x01(\x05R\x02mp\x12\x15\n" +
+	"\x06max_mp\x18\r \x01(\x05R\x05maxMp\x12\x18\n" +
+	"\astamina\x18\x0e \x01(\x01R\astamina\x12\x14\n" +
+	"\x05alive\x18\x0f \x01(\bR\x05alive\x12\x18\n" +
+	"\aengaged\x18\x10 \x01(\bR\aengaged\x12\x17\n" +
+	"\ais_ally\x18\x11 \x01(\bR\x06isAlly\x12\x1b\n" +
+	"\ttarget_id\x18\x12 \x01(\tR\btargetId\x126\n" +
+	"\bstatuses\x18\x13 \x03(\v2\x1a.fantasy.v1.StatusSnapshotR\bstatuses\x12\x1e\n" +
 	"\n" +
-	"appearance\x18\b \x01(\v2\x1f.fantasy.v1.CharacterAppearanceR\n" +
-	"appearance\x12\f\n" +
-	"\x01x\x18\t \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\n" +
-	" \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\v \x01(\x01R\x06facing\x12\x1b\n" +
-	"\tin_combat\x18\f \x01(\bR\binCombat\x12!\n" +
-	"\fimmune_until\x18\x0e \x01(\x03R\vimmuneUntil\x12(\n" +
-	"\x10casting_skill_id\x18\x0f \x01(\tR\x0ecastingSkillId\x12 \n" +
-	"\fcast_time_ms\x18\x10 \x01(\x05R\n" +
+	"capturable\x18\x14 \x01(\bR\n" +
+	"capturable\x12\x1b\n" +
+	"\tskill_atb\x18\x15 \x01(\x01R\bskillAtb\x12*\n" +
+	"\x11has_queued_action\x18\x16 \x01(\bR\x0fhasQueuedAction\x12(\n" +
+	"\x10casting_skill_id\x18\x17 \x01(\tR\x0ecastingSkillId\x12$\n" +
+	"\x0ecast_target_id\x18\x18 \x01(\tR\fcastTargetId\x12#\n" +
+	"\rcast_progress\x18\x19 \x01(\x01R\fcastProgress\x12 \n" +
+	"\fcast_time_ms\x18\x1a \x01(\x05R\n" +
 	"castTimeMs\x12 \n" +
-	"\fcast_ends_at\x18\x11 \x01(\x03R\n" +
-	"castEndsAt\x12\x19\n" +
-	"\bin_house\x18\x12 \x01(\bR\ainHouse\x12\x1f\n" +
-	"\vhouse_owner\x18\x13 \x01(\tR\n" +
-	"houseOwner\x12\x0e\n" +
-	"\x02hp\x18\x14 \x01(\x05R\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\x15 \x01(\x05R\x05maxHp\x12\x0e\n" +
-	"\x02mp\x18\x16 \x01(\x05R\x02mp\x12\x15\n" +
-	"\x06max_mp\x18\x17 \x01(\x05R\x05maxMp\x12\x18\n" +
-	"\astamina\x18\x18 \x01(\x01R\astamina\x12\x1b\n" +
-	"\ttarget_id\x18\x19 \x01(\tR\btargetId\"u\n" +
+	"\fcast_ends_at\x18\x1b \x01(\x03R\n" +
+	"castEndsAt\x12\x16\n" +
+	"\x06weapon\x18\x1c \x01(\tR\x06weapon\x12\x19\n" +
+	"\bmain_job\x18\x1d \x01(\tR\amainJob\x12\x17\n" +
+	"\asub_job\x18\x1e \x01(\tR\x06subJob\x12?\n" +
+	"\n" +
+	"appearance\x18\x1f \x01(\v2\x1f.fantasy.v1.CharacterAppearanceR\n" +
+	"appearance\x12!\n" +
+	"\fimmune_until\x18  \x01(\x03R\vimmuneUntil\x12\x19\n" +
+	"\bin_house\x18! \x01(\bR\ainHouse\x12\x1f\n" +
+	"\vhouse_owner\x18\" \x01(\tR\n" +
+	"houseOwner\"u\n" +
 	"\tWorldCamp\x12\x1d\n" +
 	"\n" +
 	"owner_name\x18\x01 \x01(\tR\townerName\x12\x19\n" +
@@ -3020,19 +2788,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\f\n" +
 	"\x01x\x18\x04 \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\x05 \x01(\x01R\x01y\"\xd2\x01\n" +
-	"\bWorldNPC\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x14\n" +
-	"\x05level\x18\x04 \x01(\x05R\x05level\x12\f\n" +
-	"\x01x\x18\x05 \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\x06 \x01(\x01R\x01y\x12\x18\n" +
-	"\aengaged\x18\a \x01(\bR\aengaged\x12\x0e\n" +
-	"\x02hp\x18\t \x01(\x05R\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\n" +
-	" \x01(\x05R\x05maxHp\x12\x1b\n" +
-	"\ttarget_id\x18\v \x01(\tR\btargetId\"K\n" +
+	"\x01y\x18\x05 \x01(\x01R\x01y\"K\n" +
 	"\tSavePoint\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -3080,34 +2836,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\tPartyInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tleader_id\x18\x02 \x01(\tR\bleaderId\x121\n" +
-	"\amembers\x18\x03 \x03(\v2\x17.fantasy.v1.PartyMemberR\amembers\"\xd6\x04\n" +
-	"\fCombatEntity\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x1b\n" +
-	"\tis_player\x18\x04 \x01(\bR\bisPlayer\x12\f\n" +
-	"\x01x\x18\x05 \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\x06 \x01(\x01R\x01y\x12\x0e\n" +
-	"\x02hp\x18\a \x01(\x05R\x02hp\x12\x15\n" +
-	"\x06max_hp\x18\b \x01(\x05R\x05maxHp\x12\x0e\n" +
-	"\x02mp\x18\t \x01(\x05R\x02mp\x12\x15\n" +
-	"\x06max_mp\x18\n" +
-	" \x01(\x05R\x05maxMp\x12\x1b\n" +
-	"\tskill_atb\x18\v \x01(\x01R\bskillAtb\x12\x1b\n" +
-	"\ttarget_id\x18\f \x01(\tR\btargetId\x12\x14\n" +
-	"\x05alive\x18\r \x01(\bR\x05alive\x126\n" +
-	"\bstatuses\x18\x0e \x03(\v2\x1a.fantasy.v1.StatusSnapshotR\bstatuses\x12(\n" +
-	"\x10casting_skill_id\x18\x0f \x01(\tR\x0ecastingSkillId\x12$\n" +
-	"\x0ecast_target_id\x18\x10 \x01(\tR\fcastTargetId\x12#\n" +
-	"\rcast_progress\x18\x11 \x01(\x01R\fcastProgress\x12 \n" +
-	"\fcast_time_ms\x18\x12 \x01(\x05R\n" +
-	"castTimeMs\x12\x17\n" +
-	"\ais_ally\x18\x13 \x01(\bR\x06isAlly\x12\x19\n" +
-	"\bowner_id\x18\x14 \x01(\tR\aownerId\x12\x1e\n" +
-	"\n" +
-	"capturable\x18\x15 \x01(\bR\n" +
-	"capturable\x12\x14\n" +
-	"\x05level\x18\x16 \x01(\x05R\x05levelB\"Z clara-mundi/internal/protocol/pbb\x06proto3"
+	"\amembers\x18\x03 \x03(\v2\x17.fantasy.v1.PartyMemberR\amembersB\"Z clara-mundi/internal/protocol/pbb\x06proto3"
 
 var (
 	file_fantasy_v1_common_proto_rawDescOnce sync.Once
@@ -3121,7 +2850,7 @@ func file_fantasy_v1_common_proto_rawDescGZIP() []byte {
 	return file_fantasy_v1_common_proto_rawDescData
 }
 
-var file_fantasy_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_fantasy_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_fantasy_v1_common_proto_goTypes = []any{
 	(*CharacterAppearance)(nil), // 0: fantasy.v1.CharacterAppearance
 	(*Item)(nil),                // 1: fantasy.v1.Item
@@ -3138,48 +2867,46 @@ var file_fantasy_v1_common_proto_goTypes = []any{
 	(*MapTileOverrides)(nil),    // 12: fantasy.v1.MapTileOverrides
 	(*MapPortal)(nil),           // 13: fantasy.v1.MapPortal
 	(*MapSnapshot)(nil),         // 14: fantasy.v1.MapSnapshot
-	(*WorldPlayer)(nil),         // 15: fantasy.v1.WorldPlayer
+	(*WorldEntity)(nil),         // 15: fantasy.v1.WorldEntity
 	(*WorldCamp)(nil),           // 16: fantasy.v1.WorldCamp
 	(*HouseFurniture)(nil),      // 17: fantasy.v1.HouseFurniture
 	(*HousePlayer)(nil),         // 18: fantasy.v1.HousePlayer
 	(*HousePOI)(nil),            // 19: fantasy.v1.HousePOI
-	(*WorldNPC)(nil),            // 20: fantasy.v1.WorldNPC
-	(*SavePoint)(nil),           // 21: fantasy.v1.SavePoint
-	(*JobChanger)(nil),          // 22: fantasy.v1.JobChanger
-	(*PlayerReward)(nil),        // 23: fantasy.v1.PlayerReward
-	(*FriendInfo)(nil),          // 24: fantasy.v1.FriendInfo
-	(*PartyMember)(nil),         // 25: fantasy.v1.PartyMember
-	(*PartyInfo)(nil),           // 26: fantasy.v1.PartyInfo
-	(*CombatEntity)(nil),        // 27: fantasy.v1.CombatEntity
-	nil,                         // 28: fantasy.v1.Item.StatsEntry
-	nil,                         // 29: fantasy.v1.ProfileInfo.EquippedEntry
-	nil,                         // 30: fantasy.v1.ProfileInfo.HotbarEntry
-	nil,                         // 31: fantasy.v1.ProfileInfo.KeybindsEntry
-	(*structpb.Struct)(nil),     // 32: google.protobuf.Struct
+	(*SavePoint)(nil),           // 20: fantasy.v1.SavePoint
+	(*JobChanger)(nil),          // 21: fantasy.v1.JobChanger
+	(*PlayerReward)(nil),        // 22: fantasy.v1.PlayerReward
+	(*FriendInfo)(nil),          // 23: fantasy.v1.FriendInfo
+	(*PartyMember)(nil),         // 24: fantasy.v1.PartyMember
+	(*PartyInfo)(nil),           // 25: fantasy.v1.PartyInfo
+	nil,                         // 26: fantasy.v1.Item.StatsEntry
+	nil,                         // 27: fantasy.v1.ProfileInfo.EquippedEntry
+	nil,                         // 28: fantasy.v1.ProfileInfo.HotbarEntry
+	nil,                         // 29: fantasy.v1.ProfileInfo.KeybindsEntry
+	(*structpb.Struct)(nil),     // 30: google.protobuf.Struct
 }
 var file_fantasy_v1_common_proto_depIdxs = []int32{
-	28, // 0: fantasy.v1.Item.stats:type_name -> fantasy.v1.Item.StatsEntry
+	26, // 0: fantasy.v1.Item.stats:type_name -> fantasy.v1.Item.StatsEntry
 	0,  // 1: fantasy.v1.ProfileInfo.appearance:type_name -> fantasy.v1.CharacterAppearance
 	4,  // 2: fantasy.v1.ProfileInfo.jobs:type_name -> fantasy.v1.JobProgressInfo
 	5,  // 3: fantasy.v1.ProfileInfo.stats:type_name -> fantasy.v1.StatBlock
 	1,  // 4: fantasy.v1.ProfileInfo.inventory:type_name -> fantasy.v1.Item
-	29, // 5: fantasy.v1.ProfileInfo.equipped:type_name -> fantasy.v1.ProfileInfo.EquippedEntry
-	30, // 6: fantasy.v1.ProfileInfo.hotbar:type_name -> fantasy.v1.ProfileInfo.HotbarEntry
+	27, // 5: fantasy.v1.ProfileInfo.equipped:type_name -> fantasy.v1.ProfileInfo.EquippedEntry
+	28, // 6: fantasy.v1.ProfileInfo.hotbar:type_name -> fantasy.v1.ProfileInfo.HotbarEntry
 	3,  // 7: fantasy.v1.ProfileInfo.skills:type_name -> fantasy.v1.SkillInfo
 	7,  // 8: fantasy.v1.ProfileInfo.visited_save_points:type_name -> fantasy.v1.VisitedSavePoint
-	31, // 9: fantasy.v1.ProfileInfo.keybinds:type_name -> fantasy.v1.ProfileInfo.KeybindsEntry
+	29, // 9: fantasy.v1.ProfileInfo.keybinds:type_name -> fantasy.v1.ProfileInfo.KeybindsEntry
 	1,  // 10: fantasy.v1.ProfileInfo.house_storage:type_name -> fantasy.v1.Item
 	8,  // 11: fantasy.v1.ProfileInfo.pets:type_name -> fantasy.v1.PetRecord
-	32, // 12: fantasy.v1.MapTileOverrides.layers:type_name -> google.protobuf.Struct
+	30, // 12: fantasy.v1.MapTileOverrides.layers:type_name -> google.protobuf.Struct
 	10, // 13: fantasy.v1.MapSnapshot.overworld:type_name -> fantasy.v1.OverworldMap
 	13, // 14: fantasy.v1.MapSnapshot.portals:type_name -> fantasy.v1.MapPortal
 	12, // 15: fantasy.v1.MapSnapshot.tile_overrides:type_name -> fantasy.v1.MapTileOverrides
 	11, // 16: fantasy.v1.MapSnapshot.terrain_layers:type_name -> fantasy.v1.MapTerrainLayers
-	0,  // 17: fantasy.v1.WorldPlayer.appearance:type_name -> fantasy.v1.CharacterAppearance
-	1,  // 18: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
-	1,  // 19: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
-	25, // 20: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
-	2,  // 21: fantasy.v1.CombatEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
+	2,  // 17: fantasy.v1.WorldEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
+	0,  // 18: fantasy.v1.WorldEntity.appearance:type_name -> fantasy.v1.CharacterAppearance
+	1,  // 19: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
+	1,  // 20: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
+	24, // 21: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
 	6,  // 22: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
 	23, // [23:23] is the sub-list for method output_type
 	23, // [23:23] is the sub-list for method input_type
@@ -3199,7 +2926,7 @@ func file_fantasy_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fantasy_v1_common_proto_rawDesc), len(file_fantasy_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   32,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
