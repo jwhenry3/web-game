@@ -315,6 +315,30 @@ export const net = {
     const next = pool[(idx + dir + pool.length) % pool.length];
     if (next) this.setTarget(next.id);
   },
+
+  /** Tab targeting: cycle hostile targets; outside combat, nearest-first. */
+  tabTarget(dir: 1 | -1) {
+    const self = selfCombatEntity();
+    if (!self) return;
+    const inCombat = combatEntityList().filter((e) => isEnemy(e) && e.alive);
+    const pool =
+      inCombat.length > 0
+        ? inCombat
+        : Object.values(useGame.getState().entities)
+            .filter((e) => isEnemy(e) && e.alive)
+            .sort(
+              (a, b) =>
+                Math.hypot(a.x - self.x, a.y - self.y) - Math.hypot(b.x - self.x, b.y - self.y),
+            );
+    if (pool.length === 0) return;
+    const focusId = selfTargetId() ?? self.target_id;
+    let idx = pool.findIndex((e) => e.id === focusId);
+    if (idx < 0) {
+      idx = dir > 0 ? -1 : 0;
+    }
+    const next = pool[(idx + dir + pool.length) % pool.length];
+    if (next) this.setTarget(next.id);
+  },
   setSavePoint(savePointId: string) {
     send("set_save_point", { save_point_id: savePointId });
   },
@@ -379,6 +403,10 @@ export const net = {
   },
   petRelease(petId: string) {
     send("pet_release", { pet_id: petId });
+  },
+  /** Pet hotbar commands: "attack" sends pets at the focus target, "heel" calls them back. */
+  petCommand(command: "attack" | "heel") {
+    send("pet_command", { command });
   },
   capture(targetId: string) {
     send("action", { action_id: "capture", target_id: targetId });

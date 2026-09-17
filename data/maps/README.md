@@ -8,7 +8,7 @@ Full stack context: [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md). Lore & regi
 
 | Artifact | Role |
 |----------|------|
-| `data/maps/{id}.map.json` | **Loaded by the server** — terrain grids, regions, NPCs, save points, exits, objects |
+| `data/maps/{id}.map.json` | **Loaded by the server** — terrain grids, regions, NPCs, save points, borders, exits, objects |
 | `data/maps/{id}.server.json` | Per-map server config (name, addr, overworld path) |
 | `data/maps/overrides/{id}.json` | Sparse patches from **Game Designer** / `genmapwalls` |
 | `base_chip.tsx` / `base_chip.png` | Base terrain tileset definition (GID centers for paint / walls) |
@@ -71,7 +71,7 @@ See `data/maps/base_chip.tsx`, `internal/game/base_chip.go`, `internal/game/pipo
 - `save_point` — `id`, `name` (**required** inside every sanctuary)
 - `job_changer` / service NPC — sanctuary services
 - `npc` — combat/service entities
-- `exit` — `destMap`, `destX`, `destY`
+- `exit` — `destMap`, `destX`, `destY` (interior portals only; edge adjacency lives in `borders`)
 
 ## Sanctuaries
 

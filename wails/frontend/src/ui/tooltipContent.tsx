@@ -65,7 +65,7 @@ export function SkillTooltipContent({
       {sk.description && <div className="cm-tooltip-desc dim">{sk.description}</div>}
       {!sk.unlocked && <div className="cm-tooltip-hint dim">Level your job to unlock.</div>}
       {sk.world_only && sk.unlocked && (
-        <div className="cm-tooltip-hint dim">Use from the hotbar in the field.</div>
+        <div className="cm-tooltip-hint dim">Double-click to use, or drag onto the hotbar.</div>
       )}
       {sk.unlocked && !sk.world_only && !atMax && <div className="cm-tooltip-hint dim">Use in battle to level up.</div>}
       {sk.unlocked && !sk.world_only && atMax && <div className="cm-tooltip-hint dim">Max level.</div>}

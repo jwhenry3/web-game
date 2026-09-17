@@ -81,6 +81,8 @@ func newPayloadMessage(t MessageType) proto.Message {
 		return &pb.SetCampSkinPayload{}
 	case TypePetSetFollow, TypePetSetBattle, TypePetRelease:
 		return &pb.PetIDPayload{}
+	case TypePetCommand:
+		return &pb.PetCommandPayload{}
 	case TypeCampState:
 		return &pb.CampStatePayload{}
 	case TypeHouseState:
@@ -230,7 +232,7 @@ var messageTypeSet = map[MessageType]struct{}{
 	TypeEnterHouse: {}, TypeLeaveHouse: {}, TypeHouseInteract: {},
 	TypeHouseStorageDeposit: {}, TypeHouseStorageWithdraw: {},
 	TypeHousePlaceFurniture: {}, TypeHousePickFurniture: {}, TypeSetCampSkin: {},
-	TypePetSetFollow: {}, TypePetSetBattle: {}, TypePetRelease: {},
+	TypePetSetFollow: {}, TypePetSetBattle: {}, TypePetRelease: {}, TypePetCommand: {},
 	TypeWelcome: {}, TypeWorldState: {}, TypePlayerJoin: {}, TypePlayerLeft: {}, TypePlayerMoved: {},
 	TypePlayerSync: {}, TypeChatMsg: {}, TypeEntityState: {}, TypeSocialState: {},
 	TypePartyInviteMsg: {}, TypeFriendRequestMsg: {}, TypeRewardNotice: {},

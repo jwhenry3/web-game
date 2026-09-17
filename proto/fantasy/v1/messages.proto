@@ -80,6 +80,10 @@ message PetIDPayload {
   string pet_id = 1;
 }
 
+message PetCommandPayload {
+  string command = 1; // "attack" | "heel"
+}
+
 message SetTargetPayload {
   string target_id = 1;
 }

@@ -582,16 +582,23 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	if !e.alive {
 		return
 	}
-	// Target: the owner's target, else whoever is attacking us or the owner.
-	if t := h.validTarget(owner); t != nil {
-		e.targetID = t.ID
-	} else if h.validTarget(e) == nil {
+	// Target: the owner's committed attack (engageID — selecting a target
+	// alone doesn't count), else whoever is attacking us or the owner.
+	// A heeled pet (petHold) never acquires a target — it just follows.
+	if e.petHold {
 		e.targetID = ""
-		for _, o := range h.entities {
-			if (o.targetID == e.ID || o.targetID == owner.ID) && h.canAttack(e, o) &&
-				dist(e.X, e.Y, o.X, o.Y) <= dropRange {
-				e.targetID = o.ID
-				break
+	} else if t := h.ent(owner.engageID); t != nil && h.canAttack(owner, t) {
+		e.targetID = t.ID
+	} else {
+		owner.engageID = "" // stale engage (target died, leashed, or left)
+		if h.validTarget(e) == nil {
+			e.targetID = ""
+			for _, o := range h.entities {
+				if (o.targetID == e.ID || o.targetID == owner.ID) && h.canAttack(e, o) &&
+					dist(e.X, e.Y, o.X, o.Y) <= dropRange {
+					e.targetID = o.ID
+					break
+				}
 			}
 		}
 	}

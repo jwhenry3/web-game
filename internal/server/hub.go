@@ -66,11 +66,25 @@ type Hub struct {
 	overworld  *game.Overworld
 	mapID      string
 	mapName    string
-	OnTransfer func(clientID, destMap string, destX, destY float64, facing float64)
+	OnTransfer func(clientID string, dest TransferDest)
 
 	quit     chan struct{}
 	done     chan struct{}
 	stopOnce sync.Once
+}
+
+// TransferDest is where a leaving client should re-attach: absolute
+// (Map + X/Y — save-point travel, interior portals) or edge-derived
+// (Map + Edge + EdgeT — the destination map computes the mirrored landing
+// on its own rim). Plain struct keeps the server cluster-agnostic.
+type TransferDest struct {
+	Map    string
+	X, Y   float64
+	Facing float64
+	// Edge is the edge on the DESTINATION map the player enters through
+	// ("north"|"south"|"east"|"west"); EdgeT is the 0..1 fraction along it.
+	Edge  game.BorderEdge
+	EdgeT float64
 }
 
 func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer) (*Hub, error) {
@@ -182,14 +196,23 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		return nil
 	}
 	tile, cols, rows, cells := h.overworld.MapPayload()
-	portals := make([]protocol.MapPortal, 0, len(h.overworld.Exits))
 	ts := float64(h.overworld.TileSizePx())
+	portals := make([]protocol.MapPortal, 0, len(h.overworld.Exits)+len(h.overworld.Borders))
 	for _, e := range h.overworld.Exits {
 		portals = append(portals, protocol.MapPortal{
 			X: float64(e.MinC) * ts,
 			Y: float64(e.MinR) * ts,
 			W: float64(e.MaxC-e.MinC+1) * ts,
 			H: float64(e.MaxR-e.MinR+1) * ts,
+		})
+	}
+	// Border crossings get their walkable band strips as portal rects.
+	for _, r := range h.overworld.BorderPortalRects() {
+		portals = append(portals, protocol.MapPortal{
+			X: float64(r[0]) * ts,
+			Y: float64(r[1]) * ts,
+			W: float64(r[2]-r[0]+1) * ts,
+			H: float64(r[3]-r[1]+1) * ts,
 		})
 	}
 	return &protocol.MapSnapshot{
@@ -448,6 +471,8 @@ func (h *Hub) handleEvent(ev Event) {
 		h.handlePetSetBattle(c, ev.Payload)
 	case protocol.TypePetRelease:
 		h.handlePetRelease(c, ev.Payload)
+	case protocol.TypePetCommand:
+		h.handlePetCommand(c, ev.Payload)
 	default:
 		h.sendError(c, fmt.Sprintf("Unknown message type %q.", ev.Type))
 	}
@@ -571,6 +596,12 @@ func (h *Hub) applyProfilePresence(e *entity, profile store.Profile) {
 
 func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facing float64) {
 	if c.UseSpawn {
+		if c.SpawnEdge != "" && h.overworld != nil {
+			// EntryPoint already falls back to the map spawn when no
+			// walkable landing exists on that edge.
+			x, y = h.overworld.EntryPoint(c.SpawnEdge, c.SpawnEdgeT)
+			return x, y, c.SpawnFacing
+		}
 		return c.SpawnX, c.SpawnY, c.SpawnFacing
 	}
 	if profile.HasWorldPos && h.canResumeAt(profile.WorldX, profile.WorldY) {
@@ -640,8 +671,16 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	}
 	h.persistWorldLocation(c, e, false)
 	if h.OnTransfer != nil && h.overworld != nil {
+		if destMap, edge, t, ok := h.overworld.BorderCrossingAt(e.X, e.Y); ok && destMap != h.mapID {
+			h.OnTransfer(c.ID, TransferDest{
+				Map: destMap, Edge: edge.Opposite(), EdgeT: t, Facing: e.Facing,
+			})
+			return
+		}
 		if exit, ok := h.overworld.ExitAt(e.X, e.Y); ok && exit.DestMap != h.mapID {
-			h.OnTransfer(c.ID, exit.DestMap, exit.DestX, exit.DestY, e.Facing)
+			h.OnTransfer(c.ID, TransferDest{
+				Map: exit.DestMap, X: exit.DestX, Y: exit.DestY, Facing: e.Facing,
+			})
 			return
 		}
 	}

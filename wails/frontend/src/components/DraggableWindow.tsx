@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties, type Poin
 
 type Offset = { x: number; y: number };
 
-/** Titlebar-drag positioning for floating game windows. */
-export function useWindowDrag(resetKey?: string | number | null) {
+/**
+ * Titlebar-drag positioning for floating game windows. `scale` composes into
+ * the transform after the translate so pointer drags stay 1:1 in screen px.
+ */
+export function useWindowDrag(resetKey?: string | number | null, scale = 1) {
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
   const drag = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
 
@@ -49,7 +52,7 @@ export function useWindowDrag(resetKey?: string | number | null) {
 
   return {
     style: {
-      transform: `translate(${offset.x}px, ${offset.y}px)`,
+      transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
     } satisfies CSSProperties,
     titlebarProps: {
       onPointerDown,
@@ -68,6 +71,7 @@ export function DraggableWindowShell({
   onClose,
   children,
   bodyClassName,
+  scale = 1,
 }: {
   resetKey?: string | number | null;
   className?: string;
@@ -75,13 +79,14 @@ export function DraggableWindowShell({
   onClose: () => void;
   children: ReactNode;
   bodyClassName?: string;
+  scale?: number;
 }) {
-  const { style, titlebarProps } = useWindowDrag(resetKey);
+  const { style, titlebarProps } = useWindowDrag(resetKey, scale);
 
   return (
     <div
       className={className ?? "cm-window"}
-      style={style}
+      style={{ ...style, ["--win-scale" as string]: scale }}
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >

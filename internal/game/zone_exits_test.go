@@ -5,66 +5,65 @@ import (
 	"testing"
 )
 
+// loadMap is the shared test helper: load a sibling .map.json by id.
+func loadMap(t *testing.T, id string) *Overworld {
+	t.Helper()
+	ow, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), id+".map.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ow
+}
+
 func TestZoneBordersVerdantFrost(t *testing.T) {
-	northwatch, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "northwatch.map.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	frostmarch, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "frostmarch.map.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(northwatch.Exits) == 0 || len(frostmarch.Exits) == 0 {
-		t.Fatal("border maps need zone exits")
-	}
-	toFrost, ok := exitTo(northwatch, "frostmarch")
+	northwatch := loadMap(t, "northwatch")
+	frostmarch := loadMap(t, "frostmarch")
+
+	toFrost, ok := borderTo(northwatch, "frostmarch")
 	if !ok {
-		t.Fatal("northwatch missing exit to frostmarch")
+		t.Fatal("northwatch missing border to frostmarch")
 	}
-	toWatch, ok := exitTo(frostmarch, "northwatch")
+	if toFrost.Edge != EdgeNorth {
+		t.Fatalf("northwatch→frostmarch should border north, got %s", toFrost.Edge)
+	}
+	toWatch, ok := borderTo(frostmarch, "northwatch")
 	if !ok {
-		t.Fatal("frostmarch missing exit to northwatch")
+		t.Fatal("frostmarch missing border to northwatch")
 	}
-	assertInlandSpawn(t, "frostmarch spawn from northwatch", frostmarch, toFrost)
-	assertInlandSpawn(t, "northwatch spawn from frostmarch", northwatch, toWatch)
-	if toFrost.MinR > 4 {
-		t.Fatalf("northwatch→frostmarch exit should sit on north edge, minR=%d", toFrost.MinR)
+	if toWatch.Edge != EdgeSouth {
+		t.Fatalf("frostmarch→northwatch should border south, got %s", toWatch.Edge)
 	}
-	if toWatch.MaxR < frostmarch.Rows-5 {
-		t.Fatalf("frostmarch→northwatch exit should sit on south edge, maxR=%d", toWatch.MaxR)
-	}
+	// Crossing northwatch's north edge lands on frostmarch's south edge.
+	assertBorderEntry(t, "frostmarch entry from northwatch", frostmarch, EdgeSouth)
+	assertBorderEntry(t, "northwatch entry from frostmarch", northwatch, EdgeNorth)
 }
 
 func TestZoneBordersVerdantTide(t *testing.T) {
-	deep, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "deepcanopy.map.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	wharf, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "westwharf.map.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	toWharf, ok := exitTo(deep, "westwharf")
+	deep := loadMap(t, "deepcanopy")
+	wharf := loadMap(t, "westwharf")
+
+	toWharf, ok := borderTo(deep, "westwharf")
 	if !ok {
-		t.Fatal("deepcanopy missing exit to westwharf")
+		t.Fatal("deepcanopy missing border to westwharf")
 	}
-	toDeep, ok := exitTo(wharf, "deepcanopy")
+	if toWharf.Edge != EdgeEast {
+		t.Fatalf("deepcanopy→westwharf should border east, got %s", toWharf.Edge)
+	}
+	toDeep, ok := borderTo(wharf, "deepcanopy")
 	if !ok {
-		t.Fatal("westwharf missing exit to deepcanopy")
+		t.Fatal("westwharf missing border to deepcanopy")
 	}
-	assertInlandSpawn(t, "westwharf spawn", wharf, toWharf)
-	assertInlandSpawn(t, "deepcanopy spawn", deep, toDeep)
+	if toDeep.Edge != EdgeWest {
+		t.Fatalf("westwharf→deepcanopy should border west, got %s", toDeep.Edge)
+	}
+	assertBorderEntry(t, "westwharf entry", wharf, EdgeWest)
+	assertBorderEntry(t, "deepcanopy entry", deep, EdgeEast)
 }
 
 func TestMandateFerryFrostTide(t *testing.T) {
-	frost, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "frostkeep.map.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	tide, err := LoadOverworldData(filepath.Join(filepath.Dir(defaultOverworldPath()), "tidecourt.map.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	frost := loadMap(t, "frostkeep")
+	tide := loadMap(t, "tidecourt")
+
 	toTide, ok := exitTo(frost, "tidecourt")
 	if !ok {
 		t.Fatal("frostkeep missing Mandate ferry to tidecourt")
@@ -131,6 +130,37 @@ func TestZoneExitGraph(t *testing.T) {
 		}
 		id := MapIDFromPath(path)
 		byID[id] = ow
+	}
+
+	have := map[string]bool{}
+	link := func(a, b string) {
+		if a > b {
+			a, b = b, a
+		}
+		have[a+"|"+b] = true
+	}
+
+	for id, ow := range byID {
+		// Borders: edge adjacency — must reciprocate on the opposite edge and
+		// produce a walkable landing that does not ping-pong back.
+		for _, b := range ow.Borders {
+			if b.Map == "" {
+				t.Fatalf("%s has %s border with empty map id", id, b.Edge)
+			}
+			if b.Map == id {
+				t.Fatalf("%s has self-border on %s", id, b.Edge)
+			}
+			dst := mustLoad(t, byID, dir, b.Map)
+			back, ok := borderTo(dst, id)
+			if !ok {
+				t.Fatalf("one-way border %s→%s (missing reverse)", id, b.Map)
+			} else if back.Edge != b.Edge.Opposite() {
+				t.Fatalf("border %s→%s: reverse sits on %s, want %s", id, b.Map, back.Edge, b.Edge.Opposite())
+			}
+			assertBorderEntry(t, id+"→"+b.Map, dst, b.Edge.Opposite())
+			link(id, b.Map)
+		}
+		// Exits: interior portals — must reciprocate and land inland.
 		for _, e := range ow.Exits {
 			if e.DestMap == "" {
 				t.Fatalf("%s has exit with empty destMap", id)
@@ -138,21 +168,12 @@ func TestZoneExitGraph(t *testing.T) {
 			if e.DestMap == id {
 				t.Fatalf("%s has self-transition exit (destMap=%s)", id, e.DestMap)
 			}
-			assertInlandSpawn(t, id+"→"+e.DestMap, mustLoad(t, byID, dir, e.DestMap), e)
-		}
-	}
-
-	have := map[string]bool{}
-	for id, ow := range byID {
-		for _, e := range ow.Exits {
-			a, b := id, e.DestMap
-			if a > b {
-				a, b = b, a
-			}
-			have[a+"|"+b] = true
-			if _, ok := exitTo(mustLoad(t, byID, dir, e.DestMap), id); !ok {
+			dst := mustLoad(t, byID, dir, e.DestMap)
+			assertInlandSpawn(t, id+"→"+e.DestMap, dst, e)
+			if _, ok := exitTo(dst, id); !ok {
 				t.Fatalf("one-way link %s→%s (missing reverse)", id, e.DestMap)
 			}
+			link(id, e.DestMap)
 		}
 	}
 	for _, pair := range expectedZoneLinks {
@@ -165,11 +186,11 @@ func TestZoneExitGraph(t *testing.T) {
 		}
 	}
 	// Towns flank Windswept, not Frostkeep.
-	if _, ok := exitTo(byID["frostkeep"], "cairnwatch"); ok {
-		t.Fatal("frostkeep should not exit to cairnwatch (link via windswept)")
+	if _, ok := borderTo(byID["frostkeep"], "cairnwatch"); ok {
+		t.Fatal("frostkeep should not border cairnwatch (link via windswept)")
 	}
-	if _, ok := exitTo(byID["frostkeep"], "stillstone"); ok {
-		t.Fatal("frostkeep should not exit to stillstone (link via windswept)")
+	if _, ok := borderTo(byID["frostkeep"], "stillstone"); ok {
+		t.Fatal("frostkeep should not border stillstone (link via windswept)")
 	}
 }
 
@@ -186,6 +207,15 @@ func mustLoad(t *testing.T, cache map[string]*Overworld, dir, id string) *Overwo
 	return ow
 }
 
+func borderTo(ow *Overworld, dest string) (MapBorder, bool) {
+	for _, b := range ow.Borders {
+		if b.Map == dest {
+			return b, true
+		}
+	}
+	return MapBorder{}, false
+}
+
 func exitTo(ow *Overworld, dest string) (MapExit, bool) {
 	for _, e := range ow.Exits {
 		if e.DestMap == dest {
@@ -193,6 +223,22 @@ func exitTo(ow *Overworld, dest string) (MapExit, bool) {
 		}
 	}
 	return MapExit{}, false
+}
+
+// assertBorderEntry checks that entering dest across entryEdge lands on a
+// walkable point just inside that edge — not on the trigger band (which
+// would ping-pong back across the border).
+func assertBorderEntry(t *testing.T, name string, dest *Overworld, entryEdge BorderEdge) {
+	t.Helper()
+	for _, frac := range []float64{0.25, 0.5, 0.75} {
+		x, y := dest.EntryPoint(entryEdge, frac)
+		if !dest.BoundsWalkableAt(x, y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+			t.Fatalf("%s entry (%0.f,%0.f) is not walkable on dest map", name, x, y)
+		}
+		if _, _, _, crossing := dest.BorderCrossingAt(x, y); crossing {
+			t.Fatalf("%s entry lands inside the return band (would ping-pong)", name)
+		}
+	}
 }
 
 func assertInlandSpawn(t *testing.T, name string, dest *Overworld, from MapExit) {
@@ -203,5 +249,8 @@ func assertInlandSpawn(t *testing.T, name string, dest *Overworld, from MapExit)
 	}
 	if _, onExit := dest.ExitAt(from.DestX, from.DestY); onExit {
 		t.Fatalf("%s lands on the return portal (would ping-pong)", name)
+	}
+	if _, _, _, crossing := dest.BorderCrossingAt(from.DestX, from.DestY); crossing {
+		t.Fatalf("%s lands inside a border band (would ping-pong)", name)
 	}
 }

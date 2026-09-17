@@ -140,9 +140,10 @@ export function GameHotkeys() {
           chat?.blur();
           return;
         }
-        if (state.openWindow || state.bindSlot || state.selectedAction) {
+        if (state.openWindow || state.bindSlot || state.selectedAction || state.commandPetId) {
           state.closeWindow();
           state.setSelectedAction(null);
+          state.setCommandPetId(null);
           state.setBindSlot(null);
           return;
         }
@@ -152,6 +153,11 @@ export function GameHotkeys() {
         }
         if (state.screen === "house" && getHouseSkinPickerOpen()) {
           setHouseSkinPickerOpen(false);
+          return;
+        }
+        const selfEnt = state.selfId ? state.entities[state.selfId] : undefined;
+        if (selfEnt?.target_id) {
+          net.setTarget("");
           return;
         }
         state.openMainMenu();
@@ -195,6 +201,15 @@ export function GameHotkeys() {
           const dir: 1 | -1 = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
           net.cycleTarget(horizontal ? "horizontal" : "vertical", dir);
         }
+        return;
+      }
+
+      // Tab cycles hostile targets (Shift+Tab backwards) when no UI owns input;
+      // with a menu/window/dialog open it keeps its normal focus behaviour.
+      if (e.key === "Tab") {
+        if (dialogIsOpen(state)) return;
+        e.preventDefault();
+        if (state.screen === "world") net.tabTarget(e.shiftKey ? -1 : 1);
         return;
       }
 

@@ -24663,33 +24663,11 @@
       ]
     }
   ],
+  "borders": {
+    "north": "windswept",
+    "south": "frostmarch"
+  },
   "exits": [
-    {
-      "destMap": "frostmarch",
-      "tiles": [
-        59,
-        92,
-        69,
-        95
-      ],
-      "dest": [
-        2064,
-        464
-      ]
-    },
-    {
-      "destMap": "windswept",
-      "tiles": [
-        59,
-        0,
-        69,
-        3
-      ],
-      "dest": [
-        2064,
-        2608
-      ]
-    },
     {
       "destMap": "tidecourt",
       "tiles": [

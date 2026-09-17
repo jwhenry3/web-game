@@ -24687,47 +24687,11 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "greenwood",
-      "tiles": [
-        59,
-        92,
-        69,
-        95
-      ],
-      "dest": [
-        2064,
-        464
-      ]
-    },
-    {
-      "destMap": "sanctuarygrove",
-      "tiles": [
-        0,
-        39,
-        3,
-        49
-      ],
-      "dest": [
-        3120,
-        1552
-      ]
-    },
-    {
-      "destMap": "northwatch",
-      "tiles": [
-        59,
-        0,
-        69,
-        3
-      ],
-      "dest": [
-        2064,
-        2096
-      ]
-    }
-  ],
+  "borders": {
+    "north": "northwatch",
+    "south": "greenwood",
+    "west": "sanctuarygrove"
+  },
   "objects": [
     {
       "id": 1,

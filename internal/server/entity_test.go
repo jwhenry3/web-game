@@ -240,13 +240,14 @@ func TestPetFollowDecel(t *testing.T) {
 	}
 }
 
-func TestPetInheritsOwnerTarget(t *testing.T) {
+func TestPetEngagesOnOwnerAttack(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, pe := testHubWithPlayer(t, px, py)
 	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
-	n := hostileNPC(h, "npc-1", px+200, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
 
-	// Target the foe through the client message path.
+	// Selecting the foe must not pull the pet in.
 	raw, _ := json.Marshal(protocol.SetTargetPayload{TargetID: n.ID})
 	h.handleSetTarget(c, raw)
 	if pe.targetID != n.ID {
@@ -258,8 +259,20 @@ func TestPetInheritsOwnerTarget(t *testing.T) {
 	if pet == nil {
 		t.Fatal("expected pet entity on the world")
 	}
+	if pet.targetID != "" {
+		t.Fatalf("target selection alone must not engage the pet, got %q", pet.targetID)
+	}
+
+	// Attacking the foe (even an attempt) marks the owner's engage — the pet
+	// joins the fight on the next tick.
+	raw, _ = json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID, TargetID: n.ID})
+	h.handleAction(c, raw)
+	if pe.engageID != n.ID {
+		t.Fatal("attack should record the owner's engage target")
+	}
+	h.tickEntities(time.Now())
 	if pet.targetID != n.ID {
-		t.Fatalf("pet should inherit the owner's target, got %q", pet.targetID)
+		t.Fatalf("pet should engage the owner's attack target, got %q", pet.targetID)
 	}
 
 	// On the following tick the pet chases toward its attack position.
@@ -269,5 +282,91 @@ func TestPetInheritsOwnerTarget(t *testing.T) {
 	after := dist(pet.X, pet.Y, gx, gy)
 	if after >= before {
 		t.Fatalf("pet should close on petAttackPos (before %.1f, after %.1f)", before, after)
+	}
+}
+
+func TestPetCommandAttackHeel(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
+	n := hostileNPC(h, "npc-1", px+200, py)
+
+	h.tickEntities(time.Now()) // creates the pet entity
+	pet := h.ent(rec.ID)
+	if pet == nil {
+		t.Fatal("expected pet entity on the world")
+	}
+
+	// Heel first: the pet goes passive and stops inheriting the owner's target.
+	raw, _ := json.Marshal(protocol.PetCommandPayload{Command: "heel"})
+	h.handlePetCommand(c, raw)
+	if !pet.petHold {
+		t.Fatal("heel should put the pet on hold")
+	}
+	raw, _ = json.Marshal(protocol.SetTargetPayload{TargetID: n.ID})
+	h.handleSetTarget(c, raw)
+	if pe.targetID != n.ID {
+		t.Fatal("owner target not set")
+	}
+	h.tickEntities(time.Now())
+	if pet.targetID != "" {
+		t.Fatalf("heeled pet must not acquire a target, got %q", pet.targetID)
+	}
+
+	// Attack: the hold releases and the pet goes for the owner's focus target.
+	raw, _ = json.Marshal(protocol.PetCommandPayload{Command: "attack"})
+	h.handlePetCommand(c, raw)
+	if pet.petHold {
+		t.Fatal("attack should release the hold")
+	}
+	if pet.targetID != n.ID {
+		t.Fatalf("pet should target the owner's focus, got %q", pet.targetID)
+	}
+
+	// Heel mid-fight: the pet drops its target and stays dropped.
+	raw, _ = json.Marshal(protocol.PetCommandPayload{Command: "heel"})
+	h.handlePetCommand(c, raw)
+	if pet.targetID != "" {
+		t.Fatalf("heel should clear the pet target, got %q", pet.targetID)
+	}
+	h.tickEntities(time.Now())
+	if pet.targetID != "" {
+		t.Fatalf("heeled pet must not re-acquire the owner's target, got %q", pet.targetID)
+	}
+}
+
+func TestPetFollowsOwnerIntoCamp(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
+	h.tickEntities(time.Now())
+	pet := h.ent(rec.ID)
+	if pet == nil {
+		t.Fatal("expected pet entity on the world")
+	}
+
+	h.placeCamp(c, pe)
+	raw, _ := json.Marshal(protocol.EnterHousePayload{OwnerName: "Bartz"})
+	h.handleEnterHouse(c, raw)
+	room := h.houses["Bartz"]
+	if room == nil {
+		t.Fatal("expected a house room")
+	}
+	guest := room.Guests[c.ID]
+	if guest == nil || len(guest.Pets) != 1 || guest.Pets[0].ID != rec.ID {
+		t.Fatalf("pet should follow the owner inside, got %+v", guest)
+	}
+	h.tickEntities(time.Now())
+	if !pet.hidden {
+		t.Fatal("pet should be hidden on the overworld while the owner is inside")
+	}
+
+	h.handleLeaveHouse(c)
+	h.tickEntities(time.Now())
+	if pet.hidden {
+		t.Fatal("pet should be back on the overworld after leaving")
+	}
+	if d := dist(pet.X, pet.Y, pe.X, pe.Y); d > 120 {
+		t.Fatalf("pet should reappear beside the owner (dist %.1f)", d)
 	}
 }

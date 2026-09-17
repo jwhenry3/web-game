@@ -19,8 +19,12 @@ type MapConfig struct {
 	SavePoints  []savePointFile  `json:"save_points"`
 	JobChangers []jobChangerFile `json:"job_changers"`
 	NPCs        []patrolFile     `json:"npcs"`
-	Exits       []exitFile       `json:"exits"`
-	Objects     []OverrideObject `json:"objects,omitempty"`
+	// Borders maps an edge ("north"|"south"|"east"|"west") to the map id it
+	// adjoins. Edge crossings are derived from walkable border tiles — no
+	// rects needed. Symmetry is validated across the cluster at boot.
+	Borders map[string]string `json:"borders,omitempty"`
+	Exits   []exitFile        `json:"exits"`
+	Objects []OverrideObject  `json:"objects,omitempty"`
 }
 
 // MapConfigTerrain holds authoritative ground/collision GID grids.
@@ -102,16 +106,16 @@ func LoadOverworldFromMapConfig(path string) (*Overworld, error) {
 	ApplyMapOverride(layerMap, override)
 
 	ow := &Overworld{
-		Path:     path,
-		Cols:     cfg.Cols,
-		Rows:     cfg.Rows,
-		TileSize: cfg.TileSize,
-		WorldW:   cfg.Cols * cfg.TileSize,
-		WorldH:   cfg.Rows * cfg.TileSize,
-		Wander:   cfg.Wander,
-		Regions:  append([]Region(nil), cfg.Regions...),
-		Ground:   append([]int(nil), layerMap["ground"]...),
-		Collision: append([]int(nil), layerMap["collision"]...),
+		Path:          path,
+		Cols:          cfg.Cols,
+		Rows:          cfg.Rows,
+		TileSize:      cfg.TileSize,
+		WorldW:        cfg.Cols * cfg.TileSize,
+		WorldH:        cfg.Rows * cfg.TileSize,
+		Wander:        cfg.Wander,
+		Regions:       append([]Region(nil), cfg.Regions...),
+		Ground:        append([]int(nil), layerMap["ground"]...),
+		Collision:     append([]int(nil), layerMap["collision"]...),
 		TileOverrides: override,
 	}
 	if ow.Wander.PauseSec <= 0 || ow.Wander.Speed <= 0 {
@@ -169,7 +173,7 @@ func applyMapConfigEntities(ow *Overworld, cfg *MapConfig) error {
 		}
 		ow.NPCPatrols = append(ow.NPCPatrols, Patrol{
 			ID: n.ID, Kind: n.Kind, Name: n.Name, Level: n.Level, Region: n.Region,
-			Home: Tile{C: n.Home[0], R: n.Home[1]},
+			Home:      Tile{C: n.Home[0], R: n.Home[1]},
 			Encounter: encounterFromPatrolFile(n),
 		})
 	}
@@ -198,6 +202,22 @@ func applyMapConfigEntities(ow *Overworld, cfg *MapConfig) error {
 		ow.JobChangers = append(ow.JobChangers, JobChanger{ID: jc.ID, Name: jc.Name, Tile: tile})
 	}
 
+	selfID := MapIDFromPath(ow.Path)
+	for edgeName, dest := range cfg.Borders {
+		edge := BorderEdge(strings.ToLower(strings.TrimSpace(edgeName)))
+		if !edge.Valid() {
+			return fmt.Errorf("border edge %q invalid (want north/south/east/west)", edgeName)
+		}
+		dest = normalizeDestMap(dest)
+		if dest == "" {
+			return fmt.Errorf("border %s missing map id", edgeName)
+		}
+		if selfID != "" && dest == selfID {
+			return fmt.Errorf("border %q targets this map (self-border)", edgeName)
+		}
+		ow.Borders = append(ow.Borders, MapBorder{Edge: edge, Map: dest})
+	}
+
 	for _, e := range cfg.Exits {
 		dest := normalizeDestMap(e.DestMap)
 		if dest == "" {
@@ -217,8 +237,8 @@ func applyMapConfigEntities(ow *Overworld, cfg *MapConfig) error {
 		ow.Exits = append(ow.Exits, MapExit{
 			DestMap: dest,
 			MinC:    minC, MinR: minR,
-			MaxC:    maxC, MaxR: maxR,
-			DestX:   e.Dest[0], DestY: e.Dest[1],
+			MaxC: maxC, MaxR: maxR,
+			DestX: e.Dest[0], DestY: e.Dest[1],
 		})
 	}
 	return nil
@@ -299,15 +319,15 @@ func loadOverworldFromTiledBase(path string) (*Overworld, []OverrideObject, wand
 	}
 
 	ow := &Overworld{
-		Path:       path,
-		Cols:       raw.Width,
-		Rows:       raw.Height,
-		TileSize:   tileSize,
-		WorldW:     raw.Width * tileSize,
-		WorldH:     raw.Height * tileSize,
-		Wander:     wander,
-		Ground:     append([]int(nil), ground...),
-		Collision:  append([]int(nil), collision...),
+		Path:      path,
+		Cols:      raw.Width,
+		Rows:      raw.Height,
+		TileSize:  tileSize,
+		WorldW:    raw.Width * tileSize,
+		WorldH:    raw.Height * tileSize,
+		Wander:    wander,
+		Ground:    append([]int(nil), ground...),
+		Collision: append([]int(nil), collision...),
 	}
 	ow.Cells = buildCellsFromLayers(collision, ground, ow.Cols, ow.Rows)
 

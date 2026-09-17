@@ -14,6 +14,7 @@ import { WorldSkillDialogs } from "./components/WorldSkillDialogs";
 import { NpcDialog } from "./components/NpcDialog";
 import { JobChangeDialog } from "./components/JobChangeDialog";
 import { Hotbar } from "./components/Hotbar";
+import { PetHotbar } from "./components/PetHotbar";
 import { HouseToolbar } from "./components/HouseToolbar";
 import { HousePlaceLayer } from "./components/HousePlaceLayer";
 import { GameHotkeys } from "./components/GameHotkeys";
@@ -22,6 +23,7 @@ import { ExpBar } from "./components/ExpBar";
 import { ItemMenuProvider } from "./components/ItemContextMenu";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
 import { TitleScreen } from "./components/TitleScreen";
+import { hudScaleVars } from "./ui/uiScale";
 // Game Designer (2D map editor) currently disabled.
 // import { AdminLoginScreen } from "./components/AdminLoginScreen";
 // import { MapEditorScreen } from "./components/MapEditorScreen";
@@ -29,6 +31,7 @@ import { TitleScreen } from "./components/TitleScreen";
 function AppBody() {
   const screen = useGame((s) => s.screen);
   const setAuth = useGame((s) => s.setAuth);
+  const uiScale = useGame((s) => s.options.uiScale);
   const [booting, setBooting] = useState(true);
 
   useEffect(() => {
@@ -102,12 +105,13 @@ function AppBody() {
   return (
     <ItemMenuProvider>
       <div className="game-layout">
-        <div className="game-stage">
+        <div className="game-stage" style={hudScaleVars(uiScale)}>
           <PhaserGame />
           <EntityOverlays />
           {screen === "house" ? <HouseHUD /> : <WorldHUD />}
           <SidePanel />
           {screen === "house" ? <HouseToolbar /> : <Hotbar />}
+          {screen === "world" && <PetHotbar />}
           {screen === "house" && <HousePlaceLayer />}
           <ExpBar />
           <WindowBar />
@@ -124,6 +128,19 @@ function AppBody() {
 }
 
 export function App() {
+  useEffect(() => {
+    // Suppress the native context menu app-wide; custom React menus and
+    // right-click world deselect handle the gesture instead. Text inputs
+    // keep the default menu for copy/paste.
+    const suppress = (e: MouseEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("input, textarea, [contenteditable]")) return;
+      e.preventDefault();
+    };
+    window.addEventListener("contextmenu", suppress);
+    return () => window.removeEventListener("contextmenu", suppress);
+  }, []);
+
   return (
     <>
       <GameHotkeys />

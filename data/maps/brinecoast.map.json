@@ -24687,47 +24687,11 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "westwharf",
-      "tiles": [
-        0,
-        43,
-        3,
-        53
-      ],
-      "dest": [
-        3632,
-        1296
-      ]
-    },
-    {
-      "destMap": "tidecourt",
-      "tiles": [
-        124,
-        43,
-        127,
-        53
-      ],
-      "dest": [
-        464,
-        1552
-      ]
-    },
-    {
-      "destMap": "cliffhaven",
-      "tiles": [
-        54,
-        0,
-        62,
-        3
-      ],
-      "dest": [
-        2000,
-        2352
-      ]
-    }
-  ],
+  "borders": {
+    "north": "cliffhaven",
+    "west": "westwharf",
+    "east": "tidecourt"
+  },
   "objects": [
     {
       "id": 1,

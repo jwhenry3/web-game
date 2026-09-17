@@ -24698,34 +24698,10 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "greenwood",
-      "tiles": [
-        0,
-        43,
-        3,
-        53
-      ],
-      "dest": [
-        3632,
-        1552
-      ]
-    },
-    {
-      "destMap": "westwharf",
-      "tiles": [
-        124,
-        42,
-        127,
-        54
-      ],
-      "dest": [
-        464,
-        1296
-      ]
-    }
-  ],
+  "borders": {
+    "west": "greenwood",
+    "east": "westwharf"
+  },
   "objects": [
     {
       "id": 1,

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"math"
+	"strings"
 
 	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
@@ -56,6 +57,63 @@ func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
 	h.sendWelcome(c, profile)
 	h.syncPetEntities()
 	h.broadcastWorldState()
+}
+
+// handlePetCommand drives the pet hotbar: "attack" sends every active pet at
+// the owner's focus target (and re-arms auto-assist), "heel" calls them back
+// to a passive follow until the next attack command.
+func (h *Hub) handlePetCommand(c *Client, raw json.RawMessage) {
+	var p protocol.PetCommandPayload
+	if err := json.Unmarshal(raw, &p); err != nil {
+		h.sendError(c, "Malformed pet command.")
+		return
+	}
+	e := h.playerEnt(c.ID)
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || e.hidden || cc.inHouse {
+		h.sendError(c, "Your pet can't do that right now.")
+		return
+	}
+	pets := 0
+	countPets := func(fn func(pet *entity)) {
+		h.eachEntity(kindPet, func(pet *entity) {
+			if pet.OwnerID != c.ID {
+				return
+			}
+			pets++
+			fn(pet)
+		})
+	}
+	switch strings.ToLower(strings.TrimSpace(p.Command)) {
+	case "attack":
+		t := h.validTarget(e)
+		if t == nil {
+			h.sendError(c, "Target an enemy first.")
+			return
+		}
+		e.engageID = t.ID // siccing the pet declares the owner's fight
+		countPets(func(pet *entity) {
+			pet.petHold = false
+			if h.canAttack(pet, t) {
+				pet.targetID = t.ID
+			}
+			h.entityDirty = true
+		})
+		if pets == 0 {
+			h.sendError(c, "You have no pet out.")
+		}
+	case "heel":
+		countPets(func(pet *entity) {
+			pet.petHold = true
+			pet.targetID = ""
+			h.entityDirty = true
+		})
+		if pets == 0 {
+			h.sendError(c, "You have no pet out.")
+		}
+	default:
+		h.sendError(c, "Unknown pet command.")
+	}
 }
 
 // activePetIDs returns all pet record IDs that should be on the world for

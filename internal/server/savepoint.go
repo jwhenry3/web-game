@@ -286,7 +286,7 @@ func (h *Hub) warpToSavePoint(c *Client, e *entity, destID, notice string) bool 
 		h.send(c, protocol.TypeChatMsg, protocol.ChatMessagePayload{FromName: "System", Message: notice})
 	}
 	if mapID != "" && mapID != h.mapID && h.OnTransfer != nil {
-		h.OnTransfer(c.ID, mapID, x, y, e.Facing)
+		h.OnTransfer(c.ID, TransferDest{Map: mapID, X: x, Y: y, Facing: e.Facing})
 		return true
 	}
 	e.X, e.Y = x, y

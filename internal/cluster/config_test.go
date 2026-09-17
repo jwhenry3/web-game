@@ -87,3 +87,26 @@ func TestMapsRegistryRoundTrip(t *testing.T) {
 		t.Fatalf("maps = %+v", loaded.Maps)
 	}
 }
+
+// TestRealClusterBorderGraph loads the shipped cluster.json + map configs
+// and verifies the border graph validates (symmetric opposite edges).
+// Load also picks up data/cluster.maps.json — the live deployment path.
+func TestRealClusterBorderGraph(t *testing.T) {
+	root := filepath.Join("..", "..")
+	if _, err := os.Stat(filepath.Join(root, "data", "cluster.json")); err != nil {
+		t.Skip("repo data/cluster.json not available")
+	}
+	// cluster.json paths are relative to the repo root.
+	cwd, _ := os.Getwd()
+	if err := os.Chdir(root); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(cwd)
+	cfg, err := Load("data/cluster.json")
+	if err != nil {
+		t.Fatalf("cluster.Load: %v", err)
+	}
+	if len(cfg.Maps) == 0 {
+		t.Fatal("expected maps in cluster config")
+	}
+}

@@ -19799,21 +19799,9 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "tidecourt",
-      "tiles": [
-        51,
-        0,
-        61,
-        3
-      ],
-      "dest": [
-        2064,
-        2608
-      ]
-    }
-  ],
+  "borders": {
+    "north": "tidecourt"
+  },
   "objects": [
     {
       "id": 1,

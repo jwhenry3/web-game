@@ -19799,34 +19799,10 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "timberroad",
-      "tiles": [
-        108,
-        43,
-        111,
-        53
-      ],
-      "dest": [
-        464,
-        1424
-      ]
-    },
-    {
-      "destMap": "willowford",
-      "tiles": [
-        52,
-        84,
-        60,
-        87
-      ],
-      "dest": [
-        1808,
-        464
-      ]
-    }
-  ],
+  "borders": {
+    "south": "willowford",
+    "east": "timberroad"
+  },
   "objects": [
     {
       "id": 1,

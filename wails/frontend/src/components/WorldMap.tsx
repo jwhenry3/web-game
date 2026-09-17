@@ -259,111 +259,113 @@ export function WorldMap({
 
   return (
     <div className="world-map">
-      {maps.length > 1 && (
-        <div className="cm-tabs world-map-tabs">
-          {maps.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              className={`cm-tab ${m.id === atlas.id ? "on" : ""}`}
-              onClick={() => {
-                didDrag.current = false;
-                onResetSelection?.();
-                onSelectMap(m.id);
-              }}
-            >
-              {m.name}
-            </button>
-          ))}
-        </div>
-      )}
-      <div
-        ref={viewportRef}
-        className={`world-map-viewport ${grabbing ? "grabbing" : ""}`}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-      >
+      <div className={`world-map-body ${maps.length > 1 ? "world-map-body--tabs" : ""}`}>
+        {maps.length > 1 && (
+          <div className="cm-tabs world-map-tabs">
+            {maps.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                className={`cm-tab ${m.id === atlas.id ? "on" : ""}`}
+                onClick={() => {
+                  didDrag.current = false;
+                  onResetSelection?.();
+                  onSelectMap(m.id);
+                }}
+              >
+                {m.name}
+              </button>
+            ))}
+          </div>
+        )}
         <div
-          className="world-map-plane"
-          style={{
-            width: planeW || "100%",
-            height: planeH || "100%",
-            transform: `translate(${pan.x}px, ${pan.y}px)`,
-          }}
+          ref={viewportRef}
+          className={`world-map-viewport ${grabbing ? "grabbing" : ""}`}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
         >
-          <canvas ref={canvasRef} className="world-map-canvas" />
-          {markers.map((m) => {
-            const pct = worldPct(ow, m.x, m.y);
-            return (
-              <HoverTooltip key={m.id} content={m.name}>
-                <button
-                  type="button"
-                  className={[
-                    "world-map-poi",
-                    `poi-${m.kind}`,
-                    m.home ? "home" : "",
-                    m.discovered ? "" : "undiscovered",
-                    m.selectable ? "selectable" : "",
-                    selectedMarkerId === m.id ? "selected" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  style={{ left: `${pct.left}%`, top: `${pct.top}%` }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    didDrag.current = false;
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (didDrag.current) return;
-                    if (m.kind !== "save_point" || !m.discovered) return;
-                    onSelectMarker?.(m.id);
-                  }}
-                  aria-label={m.name}
-                />
-              </HoverTooltip>
-            );
-          })}
-        </div>
-        <div className="world-map-zoom" onPointerDown={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            className="cm-btn world-map-zoom-btn"
-            onClick={() => {
-              const r = viewportRef.current?.getBoundingClientRect();
-              if (!r) return;
-              applyZoom(zoom * 1.2, r.left + r.width / 2, r.top + r.height / 2);
+          <div
+            className="world-map-plane"
+            style={{
+              width: planeW || "100%",
+              height: planeH || "100%",
+              transform: `translate(${pan.x}px, ${pan.y}px)`,
             }}
-            aria-label="Zoom in"
           >
-            +
-          </button>
-          <button
-            type="button"
-            className="cm-btn world-map-zoom-btn"
-            onClick={() => {
-              const r = viewportRef.current?.getBoundingClientRect();
-              if (!r) return;
-              applyZoom(MIN_ZOOM, r.left + r.width / 2, r.top + r.height / 2);
-            }}
-            aria-label="Fit map"
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            className="cm-btn world-map-zoom-btn"
-            onClick={() => {
-              const r = viewportRef.current?.getBoundingClientRect();
-              if (!r) return;
-              applyZoom(zoom / 1.2, r.left + r.width / 2, r.top + r.height / 2);
-            }}
-            aria-label="Zoom out"
-          >
-            −
-          </button>
+            <canvas ref={canvasRef} className="world-map-canvas" />
+            {markers.map((m) => {
+              const pct = worldPct(ow, m.x, m.y);
+              return (
+                <HoverTooltip key={m.id} content={m.name}>
+                  <button
+                    type="button"
+                    className={[
+                      "world-map-poi",
+                      `poi-${m.kind}`,
+                      m.home ? "home" : "",
+                      m.discovered ? "" : "undiscovered",
+                      m.selectable ? "selectable" : "",
+                      selectedMarkerId === m.id ? "selected" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    style={{ left: `${pct.left}%`, top: `${pct.top}%` }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      didDrag.current = false;
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (didDrag.current) return;
+                      if (m.kind !== "save_point" || !m.discovered) return;
+                      onSelectMarker?.(m.id);
+                    }}
+                    aria-label={m.name}
+                  />
+                </HoverTooltip>
+              );
+            })}
+          </div>
+          <div className="world-map-zoom" onPointerDown={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="cm-btn world-map-zoom-btn"
+              onClick={() => {
+                const r = viewportRef.current?.getBoundingClientRect();
+                if (!r) return;
+                applyZoom(zoom * 1.2, r.left + r.width / 2, r.top + r.height / 2);
+              }}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="cm-btn world-map-zoom-btn"
+              onClick={() => {
+                const r = viewportRef.current?.getBoundingClientRect();
+                if (!r) return;
+                applyZoom(MIN_ZOOM, r.left + r.width / 2, r.top + r.height / 2);
+              }}
+              aria-label="Fit map"
+            >
+              Fit
+            </button>
+            <button
+              type="button"
+              className="cm-btn world-map-zoom-btn"
+              onClick={() => {
+                const r = viewportRef.current?.getBoundingClientRect();
+                if (!r) return;
+                applyZoom(zoom / 1.2, r.left + r.width / 2, r.top + r.height / 2);
+              }}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+          </div>
         </div>
       </div>
       <div className="world-map-caption">

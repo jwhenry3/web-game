@@ -24762,47 +24762,11 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "timberroad",
-      "tiles": [
-        59,
-        0,
-        69,
-        3
-      ],
-      "dest": [
-        2064,
-        2608
-      ]
-    },
-    {
-      "destMap": "willowford",
-      "tiles": [
-        0,
-        43,
-        3,
-        53
-      ],
-      "dest": [
-        3120,
-        1424
-      ]
-    },
-    {
-      "destMap": "deepcanopy",
-      "tiles": [
-        124,
-        43,
-        127,
-        53
-      ],
-      "dest": [
-        464,
-        1552
-      ]
-    }
-  ],
+  "borders": {
+    "north": "timberroad",
+    "west": "willowford",
+    "east": "deepcanopy"
+  },
   "objects": [
     {
       "id": 1,

@@ -20580,34 +20580,10 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "deepcanopy",
-      "tiles": [
-        0,
-        34,
-        3,
-        46
-      ],
-      "dest": [
-        3632,
-        1552
-      ]
-    },
-    {
-      "destMap": "brinecoast",
-      "tiles": [
-        124,
-        35,
-        127,
-        45
-      ],
-      "dest": [
-        464,
-        1552
-      ]
-    }
-  ],
+  "borders": {
+    "west": "deepcanopy",
+    "east": "brinecoast"
+  },
   "objects": [
     {
       "id": 1,

@@ -31,13 +31,16 @@ import {
 } from "../world/interact";
 import {
   isJumpAction,
+  playActionArc,
+  playBattleVfx,
   playCastStartVfx,
   playDodgeVfx,
   playFizzleVfx,
-  playHitVfx,
   playJumpCrash,
+  vfxCategoryForAction,
 } from "./battleVfx";
 import { battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
+import { entityShadow } from "./entityShadow";
 import { findPath, type PathPoint } from "../world/pathfind";
 import { clearWorldLocalPos, setWorldLocalPos } from "../world/worldLocalPos";
 import { campSkinById, drawCampTent } from "../housing/campSkins";
@@ -100,7 +103,6 @@ interface FoeAvatar {
 interface PetMarker {
   wrapper: Phaser.GameObjects.Container;
   enemy: EnemySprite;
-  label: Phaser.GameObjects.Text;
   kind: string;
   lastX: number;
   lastY: number;
@@ -210,11 +212,26 @@ export class WorldScene extends Phaser.Scene {
     pointer: Phaser.Input.Pointer,
     over: Phaser.GameObjects.GameObject[],
   ) => {
+    // Right-click anywhere in the world deselects the current target and
+    // cancels any armed hotbar action (entity/POI zones only handle left).
+    if (pointer.button === 2) {
+      this.clearTargetSelection();
+      return;
+    }
     if (pointer.button !== 0 || (over && over.length > 0)) return;
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
     this.startClickMove(pointer.worldX, pointer.worldY);
   };
+
+  private clearTargetSelection() {
+    const s = useGame.getState();
+    if (s.selectedAction || s.commandPetId) {
+      useGame.setState({ selectedAction: null, commandPetId: null });
+    }
+    const self = s.selfId ? s.entities[s.selfId] : undefined;
+    if (self?.target_id) net.setTarget("");
+  }
 
   /** Path the local player to a world point and flash the destination. */
   private startClickMove(wx: number, wy: number) {
@@ -613,7 +630,7 @@ export class WorldScene extends Phaser.Scene {
     const wrapper = this.add.container(0, 0).setDepth(10);
     const ring = this.add.circle(0, H99_WORLD_RING_Y, H99_WORLD_RING_RADIUS, 0xffe9a8, 0).setVisible(false);
     const sprite = new CharacterSprite(this, 0, 0, appearance);
-    wrapper.add([ring, sprite.container]);
+    wrapper.add([entityShadow(this), ring, sprite.container]);
 
     if (id !== useGame.getState().selfId) {
       sprite.setInteractive(() => this.onEntityClicked(id));
@@ -656,7 +673,9 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
       .setDepth(25)
       .setInteractive({ cursor: "pointer" });
-    hit.on("pointerdown", () => this.trySetSavePoint(sp));
+    hit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (p.button === 0) this.trySetSavePoint(sp);
+    });
 
     marker = { wrapper, hit, active, name: sp.name };
     this.savePoints.set(sp.id, marker);
@@ -702,7 +721,9 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
       .setDepth(25)
       .setInteractive({ cursor: "pointer" });
-    hit.on("pointerdown", () => this.tryOpenJobChanger(jc));
+    hit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (p.button === 0) this.tryOpenJobChanger(jc);
+    });
 
     marker = { wrapper, hit, name: jc.name };
     this.jobChangers.set(jc.id, marker);
@@ -742,7 +763,12 @@ export class WorldScene extends Phaser.Scene {
    * positions into the same entity record, and the client simply lerps to
    * that target — identical to syncFoes.
    */
-  private syncPets(entities: Record<string, WorldEntity>, delta: number) {
+  private syncPets(
+    entities: Record<string, WorldEntity>,
+    delta: number,
+    overlayMarks: EntityOverlayMark[],
+    stageXf: StageTransform,
+  ) {
     for (const [id, marker] of this.pets) {
       const e = entities[id];
       if (!e || e.kind !== "pet") {
@@ -765,18 +791,9 @@ export class WorldScene extends Phaser.Scene {
         const wrapper = this.add.container(tx, ty).setDepth(8);
         const enemy = new EnemySprite(this, 0, 0, kind);
         enemy.container.setScale(PET_FOLLOW_SCALE);
-        const label = this.add
-          .text(0, Math.round(H99_NAME_LABEL_Y * PET_FOLLOW_SCALE) - 2, pet.name.slice(0, 10), {
-            fontFamily: "Georgia, serif",
-            fontSize: "10px",
-            color: "#e8dcc8",
-            stroke: "#1a1410",
-            strokeThickness: 2,
-          })
-          .setOrigin(0.5, 1);
-        wrapper.add([enemy.container, label]);
+        wrapper.add([entityShadow(this, PET_FOLLOW_SCALE), enemy.container]);
         enemy.setInteractive(() => this.onEntityClicked(pet.id));
-        marker = { wrapper, enemy, label, kind, lastX: tx, lastY: ty };
+        marker = { wrapper, enemy, kind, lastX: tx, lastY: ty };
         this.pets.set(pet.id, marker);
       } else {
         if (marker.kind !== kind) {
@@ -803,12 +820,25 @@ export class WorldScene extends Phaser.Scene {
             marker.enemy.setMoving(false);
           }
         }
-        marker.label.setText(pet.name.slice(0, 10));
         marker.lastX = marker.wrapper.x;
         marker.lastY = marker.wrapper.y;
       }
       if (this.isNearCamera(marker.wrapper.x, marker.wrapper.y)) {
         marker.enemy.update(delta);
+        overlayMarks.push(
+          this.stageMark(
+            pet.id,
+            `${pet.name}${pet.level ? ` Lv${pet.level}` : ""}`,
+            isAllyEntity(pet) ? "player" : "enemy",
+            marker.wrapper.x,
+            marker.wrapper.y,
+            this.entityCastPct(pet.id),
+            stageXf,
+            this.entityHpMark(pet.id),
+            ce?.statuses,
+            Math.round(H99_NAME_LABEL_Y * PET_FOLLOW_SCALE) - 2,
+          ),
+        );
       }
     }
   }
@@ -839,7 +869,9 @@ export class WorldScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
       .setDepth(26)
       .setInteractive({ cursor: "pointer" });
-    hit.on("pointerdown", () => this.tryEnterCamp(camp));
+    hit.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (p.button === 0) this.tryEnterCamp(camp);
+    });
     marker = { wrapper, hit, glow, tent, ownerName: camp.owner_name, skin };
     this.camps.set(camp.owner_name, marker);
     return marker;
@@ -893,7 +925,7 @@ export class WorldScene extends Phaser.Scene {
     const kind = enemyKindFromName(npc.name, npc.sprite);
     const wrapper = this.add.container(npc.x, npc.y).setDepth(9);
     const enemy = new EnemySprite(this, 0, 0, kind);
-    wrapper.add([enemy.container]);
+    wrapper.add([entityShadow(this), enemy.container]);
     enemy.setInteractive(() => this.onEntityClicked(npc.id));
     av = { wrapper, enemy, lastX: npc.x, lastY: npc.y };
     this.foes.set(npc.id, av);
@@ -905,6 +937,7 @@ export class WorldScene extends Phaser.Scene {
    * it, or focuses it as the attack target (net.clickEntity → set_target).
    */
   private onEntityClicked(id: string) {
+    if (this.input.activePointer.button !== 0) return;
     const state = useGame.getState();
     if (id === state.selfId) return;
     const e = state.entities[id];
@@ -948,7 +981,7 @@ export class WorldScene extends Phaser.Scene {
       // Presence in the AoI combat snapshot means engaged; always show the bar.
       return { value: e.hp, max: e.max_hp };
     }
-    if (e && e.kind !== "pet" && (e.engaged || e.hp < e.max_hp)) {
+    if (e && (e.engaged || e.hp < e.max_hp)) {
       return { value: e.hp, max: e.max_hp };
     }
     if (fallback && fallback.hp < fallback.max_hp) return { value: fallback.hp, max: fallback.max_hp };
@@ -1011,9 +1044,10 @@ export class WorldScene extends Phaser.Scene {
     transform = getStageTransform(this),
     hp?: { value: number; max: number },
     statuses?: StatusSnapshot[],
+    nameLocalY = H99_NAME_LABEL_Y,
   ): EntityOverlayMark {
     const feet = worldToStagePoint(this, worldX, worldY, transform);
-    const nameOff = localOffsetToStage(0, H99_NAME_LABEL_Y, transform);
+    const nameOff = localOffsetToStage(0, nameLocalY, transform);
     const castOff = localOffsetToStage(0, CAST_BAR_Y, transform);
     return {
       id,
@@ -1166,7 +1200,7 @@ export class WorldScene extends Phaser.Scene {
     this.updateMeleeRing(state);
     this.updateDodgeCooldown();
     this.moveSelf(time, selfId, state.overworld);
-    this.syncPets(state.entities, delta);
+    this.syncPets(state.entities, delta, overlayMarks, stageXf);
 
     // POIs are world-fixed; project with the camera scroll Phaser will use this frame
     // (follow lerp runs in Camera.preRender after Scene.update).
@@ -1389,7 +1423,7 @@ export class WorldScene extends Phaser.Scene {
     } else {
       sprite = new EnemySprite(this, 0, 0, enemyKindFromName(ce.name, ce.sprite));
     }
-    wrapper.add([sprite.container]);
+    wrapper.add([entityShadow(this), sprite.container]);
     wrapper.setSize(44, 60);
     wrapper.setInteractive({ useHandCursor: true, cursor: "pointer" });
     wrapper.on("pointerdown", () => this.onEntityClicked(ce.id));
@@ -1565,7 +1599,7 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
-  /** Ported from RTBattleScene.animateEvent — target-only VFX, no arcs. */
+  /** Ported from RTBattleScene.animateEvent, including actor→target arcs. */
   private animateCombatEvent(ev: CombatEvent) {
     const speed = DEFAULT_BATTLE_SPEED;
     const actor = this.combatAvatarFor(ev.attacker_id);
@@ -1611,6 +1645,9 @@ export class WorldScene extends Phaser.Scene {
       if (actor) {
         actor.sprite.setCasting(true);
         playCastStartVfx(this, actor.wrapper.x, actor.wrapper.y - 20, result.action_id, speed);
+        if (target && target !== actor) {
+          playActionArc(this, actor.wrapper, target.wrapper, result.action_id, speed);
+        }
       }
       return;
     }
@@ -1647,7 +1684,13 @@ export class WorldScene extends Phaser.Scene {
         target.wrapper,
         speed,
         () => {
-          playHitVfx(this, result.action_id, result.heal, target.wrapper.x, target.wrapper.y - 16, speed);
+          playBattleVfx(
+            this,
+            result,
+            { x: target.wrapper.x, y: target.wrapper.y },
+            { x: target.wrapper.x, y: target.wrapper.y },
+            speed,
+          );
           showHit();
         },
         () => {
@@ -1657,9 +1700,24 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
 
-    // Hit particles at the target — no actor→target arcs in the overworld.
+    // Non-physical actions lob a projectile arc from actor to target;
+    // physical attacks get the melee swing arc inside playBattleVfx.
+    if (
+      actor &&
+      target &&
+      actor !== target &&
+      vfxCategoryForAction(result.action_id, result.heal) !== "physical"
+    ) {
+      playActionArc(this, actor.wrapper, target.wrapper, result.action_id, speed, result.heal);
+    }
     if (target) {
-      playHitVfx(this, result.action_id, result.heal, target.wrapper.x, target.wrapper.y - 16, speed);
+      playBattleVfx(
+        this,
+        result,
+        actor ? { x: actor.wrapper.x, y: actor.wrapper.y } : undefined,
+        { x: target.wrapper.x, y: target.wrapper.y },
+        speed,
+      );
     }
 
     if (actor && target && actor !== target) {

@@ -709,3 +709,26 @@ func TestGCDSwallowsSecondAction(t *testing.T) {
 		t.Fatal("attack after the GCD should land")
 	}
 }
+
+func TestCaptureIneligibleKeepsGCD(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	respawnOf(n).capturable = true
+
+	raw, _ := json.Marshal(protocol.ActionPayload{
+		ActionID: game.ActionIDCapture, TargetID: n.ID,
+	})
+	h.handleAction(c, raw)
+	if !pe.gcdReady(time.Now()) {
+		t.Fatal("capture on a healthy target must not trigger the GCD")
+	}
+
+	// Weaken the target below the capture threshold: a real attempt costs the GCD.
+	n.hp = int(float64(n.maxHP)*game.CaptureHPThreshold) - 1
+	h.handleAction(c, raw)
+	if pe.gcdReady(time.Now()) {
+		t.Fatal("an eligible capture attempt should trigger the GCD")
+	}
+}

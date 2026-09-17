@@ -14,25 +14,67 @@ type MapExit struct {
 	DestX, DestY float64
 }
 
+// BorderEdge names a map edge that links to a neighboring map.
+type BorderEdge string
+
+const (
+	EdgeNorth BorderEdge = "north"
+	EdgeSouth BorderEdge = "south"
+	EdgeWest  BorderEdge = "west"
+	EdgeEast  BorderEdge = "east"
+)
+
+// Opposite returns the edge a neighbor crosses back over.
+func (e BorderEdge) Opposite() BorderEdge {
+	switch e {
+	case EdgeNorth:
+		return EdgeSouth
+	case EdgeSouth:
+		return EdgeNorth
+	case EdgeWest:
+		return EdgeEast
+	case EdgeEast:
+		return EdgeWest
+	}
+	return ""
+}
+
+// Valid reports whether e is a known edge name.
+func (e BorderEdge) Valid() bool { return e.Opposite() != "" }
+
+// MapBorder declares that this map's edge adjoins the given map. Walking into
+// the outer walkable band of a bordered edge transfers the player to the
+// neighbor's opposite edge at a mirrored position.
+type MapBorder struct {
+	Edge BorderEdge
+	Map  string
+}
+
+// BorderBandTiles is how deep into the map (in tiles) a bordered edge triggers
+// a transfer. Players land at least this far inside the destination edge so
+// arrivals never sit inside the trigger band.
+const BorderBandTiles = 2
+
 // Overworld is one map's terrain, spawns, and exits. Each map server holds its own.
 type Overworld struct {
-	Path       string
-	TiledMap   string // client asset path, e.g. maps/greenwood.tmj
-	Cols       int
-	Rows       int
-	TileSize   int
-	WorldW     int
-	WorldH     int
-	Regions    []Region
-	NPCPatrols []Patrol
-	Cells      []string
-	SavePoints  []SavePoint
-	JobChangers []JobChanger
-	Wander      wanderSettings
+	Path          string
+	TiledMap      string // client asset path, e.g. maps/greenwood.tmj
+	Cols          int
+	Rows          int
+	TileSize      int
+	WorldW        int
+	WorldH        int
+	Regions       []Region
+	NPCPatrols    []Patrol
+	Cells         []string
+	SavePoints    []SavePoint
+	JobChangers   []JobChanger
+	Wander        wanderSettings
 	Exits         []MapExit
-	TileOverrides *MapTileOverrides // sparse client/server tile patches
+	Borders       []MapBorder       // edge adjacency; validated symmetric at boot
 	Ground        []int             // composed ground GIDs after overrides
 	Collision     []int             // composed collision layer after overrides
+	TileOverrides *MapTileOverrides // sparse tile patches applied on top of the base config
 	Objects       []OverrideObject  // composed object layer (base config + override)
 }
 
@@ -260,6 +302,182 @@ func (o *Overworld) ExitAt(x, y float64) (MapExit, bool) {
 		}
 	}
 	return MapExit{}, false
+}
+
+// BorderCrossingAt reports the map border the player is crossing at (x,y): the
+// tile must be walkable and inside the outer band of a bordered edge. Returns
+// the neighbor map, the edge crossed on THIS map, and t — the fractional
+// position along the edge (0..1, west→east for N/S edges, north→south for
+// W/E edges) so the destination can mirror the landing.
+func (o *Overworld) BorderCrossingAt(x, y float64) (destMap string, edge BorderEdge, t float64, ok bool) {
+	if o == nil || len(o.Borders) == 0 {
+		return "", "", 0, false
+	}
+	tile := o.WorldToTile(x, y)
+	cols, rows := o.dims()
+	for _, b := range o.Borders {
+		var inBand bool
+		switch b.Edge {
+		case EdgeNorth:
+			inBand = tile.R < BorderBandTiles
+		case EdgeSouth:
+			inBand = tile.R >= rows-BorderBandTiles
+		case EdgeWest:
+			inBand = tile.C < BorderBandTiles
+		case EdgeEast:
+			inBand = tile.C >= cols-BorderBandTiles
+		}
+		if !inBand || !o.WalkableTile(tile.C, tile.R) {
+			continue
+		}
+		if b.Edge == EdgeNorth || b.Edge == EdgeSouth {
+			t = x / float64(o.WorldW)
+		} else {
+			t = y / float64(o.WorldH)
+		}
+		if t < 0 {
+			t = 0
+		}
+		if t > 1 {
+			t = 1
+		}
+		return b.Map, b.Edge, t, true
+	}
+	return "", "", 0, false
+}
+
+// EntryPoint computes where a player lands when entering this map across the
+// given edge at fraction t along it. The point sits just inside the edge
+// (past the trigger band) and is nudged along the edge to the nearest
+// walkable tile. Falls back to the map spawn if nothing on the edge works.
+func (o *Overworld) EntryPoint(edge BorderEdge, t float64) (x, y float64) {
+	cols, rows := o.dims()
+	ts := float64(o.tileSz())
+	if t < 0 {
+		t = 0
+	}
+	if t > 1 {
+		t = 1
+	}
+	// along = tile index along the edge; inset = tiles inward from the rim.
+	var along, span int
+	var horizontal bool // edge runs horizontally (N/S) or vertically (W/E)
+	switch edge {
+	case EdgeWest, EdgeEast:
+		horizontal = false
+		span = rows
+		along = int(t * float64(rows-1))
+	default:
+		horizontal = true
+		span = cols
+		along = int(t * float64(cols-1))
+	}
+	insetFor := func(depth int) int {
+		// depth tiles inward from the rim on this edge.
+		switch edge {
+		case EdgeWest:
+			return depth
+		case EdgeEast:
+			return cols - 1 - depth
+		case EdgeNorth:
+			return depth
+		case EdgeSouth:
+			return rows - 1 - depth
+		}
+		return depth
+	}
+	// Walkable check: (c,r) for horizontal edges is (along-axis, edge-axis).
+	walkableAt := func(a, depth int) bool {
+		if horizontal {
+			return o.WalkableTile(a, insetFor(depth))
+		}
+		return o.WalkableTile(insetFor(depth), a)
+	}
+	// Nearest walkable along the edge: expand outward from the mirrored index,
+	// landing just past the trigger band (depth BorderBandTiles..+2).
+	const maxDepth = BorderBandTiles + 3
+	for dAlong := 0; dAlong < span; dAlong++ {
+		for _, a := range []int{along + dAlong, along - dAlong} {
+			if a < 0 || a >= span {
+				continue
+			}
+			for depth := BorderBandTiles; depth <= maxDepth; depth++ {
+				if !walkableAt(a, depth) {
+					continue
+				}
+				if horizontal {
+					return (float64(a) + 0.5) * ts, (float64(insetFor(depth)) + 0.5) * ts
+				}
+				return (float64(insetFor(depth)) + 0.5) * ts, (float64(a) + 0.5) * ts
+			}
+		}
+	}
+	sx, sy := o.SpawnPosition("")
+	return sx, sy
+}
+
+// BorderPortalRects returns display rects for the client: the contiguous runs
+// of walkable tiles inside each bordered edge's trigger band, so the world map
+// / portal glow only marks tiles that actually transfer.
+func (o *Overworld) BorderPortalRects() [][4]int {
+	var out [][4]int
+	cols, rows := o.dims()
+	for _, b := range o.Borders {
+		// Merge contiguous along-axis indices that have a walkable band tile.
+		flush := func(start, end int) {
+			if start < 0 || end < start {
+				return
+			}
+			switch b.Edge {
+			case EdgeNorth:
+				out = append(out, [4]int{start, 0, end, BorderBandTiles - 1})
+			case EdgeSouth:
+				out = append(out, [4]int{start, rows - BorderBandTiles, end, rows - 1})
+			case EdgeWest:
+				out = append(out, [4]int{0, start, BorderBandTiles - 1, end})
+			case EdgeEast:
+				out = append(out, [4]int{cols - BorderBandTiles, start, cols - 1, end})
+			}
+		}
+		span := cols
+		if b.Edge == EdgeWest || b.Edge == EdgeEast {
+			span = rows
+		}
+		start, prev := -1, -1
+		for a := 0; a < span; a++ {
+			open := false
+			for d := 0; d < BorderBandTiles; d++ {
+				var c, r int
+				switch b.Edge {
+				case EdgeNorth:
+					c, r = a, d
+				case EdgeSouth:
+					c, r = a, rows-1-d
+				case EdgeWest:
+					c, r = d, a
+				case EdgeEast:
+					c, r = cols-1-d, a
+				}
+				if o.WalkableTile(c, r) {
+					open = true
+					break
+				}
+			}
+			if open {
+				if start < 0 {
+					start = a
+				}
+				prev = a
+			} else if start >= 0 {
+				flush(start, prev)
+				start = -1
+			}
+		}
+		if start >= 0 {
+			flush(start, prev)
+		}
+	}
+	return out
 }
 
 func (o *Overworld) Pathfind(from, to Tile, region Region) []Vec2 {

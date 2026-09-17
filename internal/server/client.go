@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
 
 	"github.com/gorilla/websocket"
@@ -36,6 +37,8 @@ type Client struct {
 	SpawnY         float64
 	UseSpawn       bool
 	SpawnFacing    float64
+	SpawnEdge      game.BorderEdge // entry edge for border transfers ("" = use SpawnX/Y)
+	SpawnEdgeT     float64
 	HouseOwner     string
 	lastWorldSave  time.Time
 	lastWorldSkill time.Time

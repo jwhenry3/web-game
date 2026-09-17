@@ -24663,46 +24663,12 @@
       ]
     }
   ],
+  "borders": {
+    "south": "redsash",
+    "west": "brinecoast",
+    "east": "dunesreach"
+  },
   "exits": [
-    {
-      "destMap": "brinecoast",
-      "tiles": [
-        0,
-        43,
-        3,
-        53
-      ],
-      "dest": [
-        3632,
-        1552
-      ]
-    },
-    {
-      "destMap": "dunesreach",
-      "tiles": [
-        124,
-        43,
-        127,
-        53
-      ],
-      "dest": [
-        464,
-        1552
-      ]
-    },
-    {
-      "destMap": "redsash",
-      "tiles": [
-        59,
-        92,
-        69,
-        95
-      ],
-      "dest": [
-        1808,
-        464
-      ]
-    },
     {
       "destMap": "frostkeep",
       "tiles": [

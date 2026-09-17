@@ -30,8 +30,7 @@ h3 {
 .cm-chat,
 .cm-slot,
 .cm-item-row,
-.cm-hotbar-slot,
-.cm-detail {
+.cm-hotbar-slot {
   background: rgba(18, 18, 20, 0.82);
   border: 1px solid rgba(196, 163, 90, 0.55);
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.45), 0 4px 18px rgba(0, 0, 0, 0.45);
@@ -721,6 +720,7 @@ h3 {
   position: absolute;
   left: 50%;
   bottom: 220px;
+  zoom: var(--ui-gauges, 1);
   transform: translateX(-50%);
   width: auto;
   max-width: min(520px, 92vw);
@@ -752,6 +752,7 @@ h3 {
   position: absolute;
   left: 50%;
   bottom: 258px;
+  zoom: var(--ui-castbar, 1);
   transform: translateX(-50%);
   width: min(280px, 70%);
   z-index: 41;
@@ -779,6 +780,7 @@ h3 {
   position: absolute;
   top: 12px;
   right: 12px;
+  zoom: var(--ui-minimap, 1);
   z-index: 35;
   pointer-events: none;
   display: flex;
@@ -1105,8 +1107,37 @@ h3 {
   min-height: 0;
 }
 
+.world-map-body {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.world-map-tabs {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 150px;
+  flex-direction: column;
+  margin-bottom: 0;
+  overflow-y: auto;
+}
+
+.world-map-tabs .cm-tab {
+  text-align: left;
+}
+
+.world-map-body--tabs .world-map-viewport {
+  margin-left: 160px;
+}
+
 .world-map-viewport {
   position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
   width: 100%;
   aspect-ratio: 4 / 3;
   background: #0c100e;
@@ -1252,7 +1283,8 @@ h3 {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 14px;
+  /* Full-width bar: scale thickness + text rather than zooming the width. */
+  height: calc(14px * var(--ui-expbar, 1));
   background: rgba(8, 8, 10, 0.94);
   border-top: 1px solid rgba(196, 163, 90, 0.5);
   z-index: 45;
@@ -1272,7 +1304,7 @@ h3 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
+  font-size: calc(10px * var(--ui-expbar, 1));
   letter-spacing: 0.4px;
   color: #f0e8d0;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
@@ -1287,6 +1319,7 @@ h3 {
   position: absolute;
   top: 12px;
   left: 12px;
+  zoom: var(--ui-party, 1);
   width: 220px;
   display: flex;
   flex-direction: column;
@@ -1388,6 +1421,7 @@ h3 {
   position: absolute;
   left: 12px;
   bottom: 30px;
+  zoom: var(--ui-chat, 1);
   width: 420px;
   height: 300px;
   display: flex;
@@ -1508,7 +1542,9 @@ h3 {
 .cm-window-layer {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  /* Above all HUD chrome (hotbar 40, cast bar 41, exp bar 45, invite 50);
+     below the main menu (100), dialogs (200+), and toasts (300). */
+  z-index: 60;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1524,6 +1560,14 @@ h3 {
   overflow: hidden;
 }
 
+/* Per-window UI scale: --win-scale is set inline by DraggableWindowShell and
+   applied via the drag transform. Size caps are divided by the scale so the
+   scaled window can never outgrow the layer (titlebar stays reachable). */
+.cm-window-layer .cm-window {
+  max-width: calc(96% / var(--win-scale, 1));
+  max-height: calc(82% / var(--win-scale, 1));
+}
+
 .cm-window--map {
   width: min(860px, 96%);
 }
@@ -1531,6 +1575,10 @@ h3 {
 .cm-window--house-storage {
   width: min(720px, 94%);
   max-height: min(82vh, 720px);
+}
+
+.cm-window-layer .cm-window--house-storage {
+  max-height: calc(min(82vh, 720px) / var(--win-scale, 1));
 }
 
 .cm-body--house-storage {
@@ -2043,36 +2091,6 @@ h3 {
   color: #d4bc7d;
 }
 
-.cm-detail {
-  padding: 10px;
-  min-width: 200px;
-}
-
-.cm-detail-name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.cm-detail-meta {
-  font-size: 11px;
-  color: #8c8778;
-  text-transform: capitalize;
-  margin: 2px 0 6px;
-}
-
-.cm-detail-stats {
-  font-size: 12px;
-  color: #7eb6e0;
-  margin-bottom: 8px;
-}
-
-.cm-detail-actions {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
 .cm-tabs {
   display: flex;
   gap: 4px;
@@ -2149,59 +2167,18 @@ h3 {
   margin: 4px 0 0;
 }
 
-.cm-tree {
-  position: relative;
-  margin: 8px 0 12px;
-  min-height: 120px;
-}
-
-.cm-tree-links {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.cm-tree-links path {
-  fill: none;
-  stroke: rgba(196, 163, 90, 0.35);
-  stroke-width: 2;
-}
-
-.cm-tree-links path.on {
-  stroke: rgba(232, 201, 106, 0.85);
-}
-
-.cm-tree-node {
-  position: absolute;
-  width: 112px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  background: transparent;
-  border: 1px solid transparent;
-  color: inherit;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.cm-tree-node.selected {
-  border-color: #e8c96a;
-}
-
-.cm-tree-node.locked {
+/* Skill rows reuse the inventory list styles; locked skills are dimmed but
+   still interactive so tooltips and the detail pane keep working. */
+.cm-item-row-wrap.locked .cm-item-row {
   opacity: 0.45;
 }
 
-.cm-tree-node.learned .cm-tree-name {
-  color: #d4bc7d;
+.cm-item-row-wrap.locked .cm-item-row:hover {
+  opacity: 0.7;
 }
 
-.cm-tree-name {
-  font-size: 11px;
-  text-align: center;
-  line-height: 1.2;
+.cm-item-row-wrap.learned .cm-item-row-name {
+  color: #d4bc7d;
 }
 
 .cm-tree-tag {
@@ -2225,16 +2202,13 @@ h3 {
   border-color: rgba(212, 188, 125, 0.45);
 }
 
-.cm-tree-detail {
-  margin-top: 4px;
-}
-
 /* ---- Bottom chrome: centered hotbar, menu bottom-right ---- */
 .hotbar {
   position: absolute;
   left: 50%;
   bottom: 30px;
   transform: translateX(-50%);
+  zoom: var(--ui-hotbar, 1);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2248,7 +2222,13 @@ h3 {
   justify-content: center;
 }
 
-/* While a drag is in flight the bar's slots highlight as drop targets. */
+/* While a drag is in flight the bar's slots highlight as drop targets and the
+   bar pops above the window layer so skills/items can still be dropped on it
+   while a window is open. */
+.hotbar.hotbar--drop-target {
+  z-index: 70;
+}
+
 .hotbar--drop-target .hotbar-slot {
   border-color: rgba(232, 201, 106, 0.85);
 }
@@ -2257,6 +2237,7 @@ h3 {
   position: absolute;
   right: 16px;
   bottom: 28px;
+  zoom: var(--ui-menubar, 1);
   display: flex;
   gap: 4px;
   z-index: 40;
@@ -2463,6 +2444,21 @@ h3 {
   padding-right: 4px;
 }
 
+.main-menu-scales {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: min(56vh, 460px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.main-menu-scale-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .main-menu-keybind-section {
   display: flex;
   flex-direction: column;
@@ -2653,6 +2649,7 @@ h3 {
   top: 12px;
   bottom: auto;
   transform: translateX(-50%);
+  zoom: var(--ui-target, 1);
   width: 300px;
 }
 
@@ -2706,6 +2703,7 @@ h3 {
   left: 50%;
   bottom: 290px;
   transform: translateX(-50%);
+  zoom: var(--ui-flytext, 1);
   width: min(320px, 70vw);
   max-height: 90px;
   overflow: hidden;
@@ -4436,6 +4434,61 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* Floating pet command bar — draggable; default parks right of the field. */
+.pet-bar {
+  position: absolute;
+  right: 16px;
+  bottom: 200px;
+  z-index: 40;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 8px;
+  min-width: 150px;
+  background: rgba(12, 10, 8, 0.82);
+  border: 1px solid rgba(196, 163, 90, 0.45);
+  border-radius: 4px;
+  cursor: grab;
+  user-select: none;
+}
+
+.pet-bar:active {
+  cursor: grabbing;
+}
+
+.pet-bar-pet {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pet-bar-name {
+  font-size: 11px;
+  color: #e8dcc8;
+  letter-spacing: 0.03em;
+}
+
+.pet-bar-hp {
+  height: 4px;
+  width: 100%;
+}
+
+.pet-bar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.pet-bar-actions .ff-pet-cmd {
+  margin-top: 0;
+  flex: 1;
+}
+
+.pet-bar-actions .ff-pet-cmd:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .cm-pet-list {

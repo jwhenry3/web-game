@@ -3,6 +3,7 @@ import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { CHAT_TABS } from "../types";
 import { registerChatControl } from "../input/chatControl";
+import { hudScaleKey, uiScaleFactor } from "../ui/uiScale";
 
 const CHAT_SIZE_KEY = "cm.chatSize";
 const CHAT_MIN_W = 320;
@@ -31,6 +32,7 @@ export function SidePanel() {
   const chat = useGame((s) => s.chat);
   const chatTab = useGame((s) => s.chatTab);
   const setChatTab = useGame((s) => s.setChatTab);
+  const chatScale = useGame((s) => uiScaleFactor(s.options.uiScale, hudScaleKey("chat")));
   const [draft, setDraft] = useState("");
   const [size, setSize] = useState(loadChatSize);
   const draftRef = useRef(draft);
@@ -41,6 +43,7 @@ export function SidePanel() {
     startY: number;
     origW: number;
     origH: number;
+    scale: number;
   } | null>(null);
   const visible =
     chatTab === "general" ? chat : chat.filter((m) => m.channel === chatTab);
@@ -83,18 +86,20 @@ export function SidePanel() {
         startY: e.clientY,
         origW: size.w,
         origH: size.h,
+        scale: chatScale,
       };
     },
-    [size.w, size.h],
+    [size.w, size.h, chatScale],
   );
 
   const onResizePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
     const d = resizeRef.current;
     if (!d) return;
-    // Grow up/right from bottom-left anchored chat.
+    // Grow up/right from bottom-left anchored chat. Pointer deltas are in
+    // screen px; the panel is zoomed, so convert back to local px.
     const next = {
-      w: Math.min(CHAT_MAX_W, Math.max(CHAT_MIN_W, d.origW + (e.clientX - d.startX))),
-      h: Math.min(CHAT_MAX_H, Math.max(CHAT_MIN_H, d.origH - (e.clientY - d.startY))),
+      w: Math.min(CHAT_MAX_W, Math.max(CHAT_MIN_W, d.origW + (e.clientX - d.startX) / d.scale)),
+      h: Math.min(CHAT_MAX_H, Math.max(CHAT_MIN_H, d.origH - (e.clientY - d.startY) / d.scale)),
     };
     setSize(next);
   }, []);

@@ -24687,21 +24687,9 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "tidecourt",
-      "tiles": [
-        0,
-        43,
-        3,
-        53
-      ],
-      "dest": [
-        3632,
-        1552
-      ]
-    }
-  ],
+  "borders": {
+    "west": "tidecourt"
+  },
   "objects": [
     {
       "id": 1,

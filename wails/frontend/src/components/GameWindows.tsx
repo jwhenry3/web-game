@@ -35,6 +35,7 @@ import { MapWindow } from "./WorldMap";
 import { PetsPane } from "./PetsPane";
 import { DraggableWindowShell } from "./DraggableWindow";
 import { useBackdropDismiss } from "../ui/backdropDismiss";
+import { uiScaleFactor, windowScaleKey } from "../ui/uiScale";
 
 const TITLES: Record<WindowId, string> = {
   character: "Character",
@@ -52,6 +53,7 @@ export function GameWindows() {
   const close = useGame((s) => s.closeWindow);
   const profile = useGame((s) => s.profile);
   const screen = useGame((s) => s.screen);
+  const uiScale = useGame((s) => s.options.uiScale);
   const onBackdrop = useBackdropDismiss(close);
 
   if (!open || !profile) return null;
@@ -64,6 +66,7 @@ export function GameWindows() {
     <div className="cm-window-layer" onMouseDown={onBackdrop}>
       <DraggableWindowShell
         resetKey={open}
+        scale={uiScaleFactor(uiScale, windowScaleKey(open))}
         className={`cm-window ${open === "map" ? "cm-window--map" : ""}`}
         title={TITLES[open]}
         onClose={close}
@@ -90,6 +93,8 @@ export function GameWindows() {
 
 function HouseStorageWindows({ profile, onClose }: { profile: ProfileInfo; onClose: () => void }) {
   const house = useGame((s) => s.house);
+  const uiScale = useGame((s) => s.options.uiScale);
+  const winScale = uiScaleFactor(uiScale, windowScaleKey("house_storage"));
   const storage = house?.storage ?? [];
   const cap = house?.storage_capacity ?? 40;
   const self = house?.players.find((p) => p.name === profile.name);
@@ -99,7 +104,7 @@ function HouseStorageWindows({ profile, onClose }: { profile: ProfileInfo; onClo
   if (!house?.is_owner) {
     return (
       <div className="cm-window-layer" onMouseDown={onBackdrop}>
-        <DraggableWindowShell resetKey="house_storage_denied" title="House Storage" onClose={onClose}>
+        <DraggableWindowShell resetKey="house_storage_denied" scale={winScale} title="House Storage" onClose={onClose}>
           <p className="hint">House storage is only available to the owner while inside the house.</p>
         </DraggableWindowShell>
       </div>
@@ -125,6 +130,7 @@ function HouseStorageWindows({ profile, onClose }: { profile: ProfileInfo; onClo
     <div className="cm-window-layer" onMouseDown={onBackdrop}>
       <DraggableWindowShell
         resetKey="house_storage"
+        scale={winScale}
         className="cm-window cm-window--house-storage"
         title={`House Storage (${storage.length}/${cap})`}
         onClose={onClose}
@@ -506,62 +512,18 @@ function jobTabs(profile: ProfileInfo): { id: string; label: string; color: stri
   return tabs;
 }
 
-type TreePos = { id: string; x: number; y: number };
-
-const TREE_COL = 150;
-const TREE_ROW = 108;
-
-function layoutSkillTree(skills: SkillInfo[]): TreePos[] {
-  const byParent = new Map<string, SkillInfo[]>();
-  const roots: SkillInfo[] = [];
-  for (const sk of skills) {
-    if (!sk.prereq || !skills.some((s) => s.id === sk.prereq)) {
-      roots.push(sk);
-      continue;
-    }
-    const list = byParent.get(sk.prereq) ?? [];
-    list.push(sk);
-    byParent.set(sk.prereq, list);
-  }
-
-  const pos = new Map<string, TreePos>();
-  let cursor = 0;
-  const place = (sk: SkillInfo, depth: number): number => {
-    const kids = byParent.get(sk.id) ?? [];
-    if (kids.length === 0) {
-      pos.set(sk.id, { id: sk.id, x: cursor, y: depth });
-      cursor += 1;
-      return pos.get(sk.id)!.x;
-    }
-    const xs = kids.map((k) => place(k, depth + 1));
-    const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
-    pos.set(sk.id, { id: sk.id, x: mid, y: depth });
-    return mid;
-  };
-  for (const root of roots) place(root, 0);
-  return [...pos.values()];
-}
-
 function SkillsPane({ profile }: { profile: ProfileInfo }) {
-  const locked = useGame((s) => {
+  const engaged = useGame((s) => {
     const self = s.selfId ? s.entities[s.selfId] : undefined;
     return self?.engaged ?? false;
   });
   const [tab, setTab] = useState<ActionTab>("general");
-  const [focusId, setFocusId] = useState<string | null>(null);
   const byId = new Map(profile.skills.map((s) => [s.id, s]));
   const tabs = jobTabs(profile);
   const activeJob = tab === "general" ? null : tab;
-  const tree = activeJob
+  const skills = activeJob
     ? profile.skills.filter((s) => s.job === activeJob)
     : profile.skills.filter((s) => s.id === "attack" || s.id === "capture" || s.id === "dodge" || s.world_only);
-  const layout = useMemo(() => layoutSkillTree(tree), [tree]);
-  const focus = (focusId && byId.get(focusId)) || tree[0];
-
-  const maxX = layout.reduce((m, n) => Math.max(m, n.x), 0);
-  const maxY = layout.reduce((m, n) => Math.max(m, n.y), 0);
-  const width = Math.max(TREE_COL, (maxX + 1) * TREE_COL);
-  const height = (maxY + 1) * TREE_ROW;
 
   return (
     <div className="cm-actions">
@@ -574,10 +536,7 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
             key={j.id}
             className={`cm-tab ${tab === j.id ? "on" : ""}`}
             style={tab === j.id ? { color: j.color, borderColor: j.color } : undefined}
-            onClick={() => {
-              setTab(j.id);
-              setFocusId(null);
-            }}
+            onClick={() => setTab(j.id)}
           >
             {j.label}
           </button>
@@ -585,79 +544,49 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       </div>
       <p className="hint">
         {tab === "general"
-          ? "Drag a skill onto the hotbar — drag a slot off the bar (or right-click it) to remove it. Dodge is bound to Shift while moving, not a hotbar slot."
+          ? "Drag a skill onto the hotbar — drag a slot off the bar (or right-click it) to remove it. Double-click a field skill to use it. Dodge is bound to Shift while moving, not a hotbar slot."
           : "Skills unlock as your jobs level up. Drag them onto the hotbar — use them in combat to raise skill level."}
       </p>
-      <div className="cm-tree" style={{ width, height }}>
-        <svg className="cm-tree-links" width={width} height={height}>
-          {tree.map((sk) => {
-            if (!sk.prereq) return null;
-            const a = layout.find((n) => n.id === sk.prereq);
-            const b = layout.find((n) => n.id === sk.id);
-            if (!a || !b) return null;
-            const x1 = a.x * TREE_COL + 56;
-            const y1 = a.y * TREE_ROW + 52;
-            const x2 = b.x * TREE_COL + 56;
-            const y2 = b.y * TREE_ROW + 8;
-            return (
-              <path
-                key={`${sk.prereq}-${sk.id}`}
-                d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`}
-                className={sk.unlocked ? "on" : ""}
-              />
-            );
-          })}
-        </svg>
-        {layout.map((n) => {
-          const sk = byId.get(n.id);
-          if (!sk) return null;
-          return (
-            <SkillNode
-              key={sk.id}
-              sk={sk}
-              byId={byId}
-              selected={focus?.id === sk.id}
-              style={{ left: n.x * TREE_COL, top: n.y * TREE_ROW }}
-              onSelect={() => setFocusId(sk.id)}
-            />
-          );
-        })}
+      <div className="cm-item-list cm-item-list--grid-3">
+        {skills.map((sk) => (
+          <SkillRow key={sk.id} sk={sk} byId={byId} engaged={engaged} />
+        ))}
       </div>
-      {focus && <SkillDetail sk={focus} byId={byId} locked={locked} />}
     </div>
   );
 }
 
-function SkillNode({
+/** Inventory-style row for a skill — details live in the hover tooltip.
+ *  Locked rows stay interactive (no `disabled` attr) so tooltips still work. */
+function SkillRow({
   sk,
   byId,
-  selected,
-  style,
-  onSelect,
+  engaged,
 }: {
   sk: SkillInfo;
   byId: Map<string, SkillInfo>;
-  selected: boolean;
-  style: { left: number; top: number };
-  onSelect: () => void;
+  engaged: boolean;
 }) {
-  const prereqMet = !sk.prereq || !!byId.get(sk.prereq)?.unlocked;
-  const node = (
-    <button
-      type="button"
-      className={`cm-tree-node ${sk.unlocked ? "learned" : ""} ${selected ? "selected" : ""} ${!prereqMet ? "locked" : ""}`}
-      style={style}
-      draggable={sk.unlocked}
-      onDragStart={(e) => {
-        if (!sk.unlocked) return;
-        writeHotbarDrag(e, { kind: "skill", id: sk.id });
-      }}
-      onClick={onSelect}
-    >
-      <span className={`cm-slot ${sk.unlocked ? "equipped" : "empty"}`}>
-        <span className="cm-slot-glyph">
+  const row = (
+    <div className={`cm-item-row-wrap ${sk.unlocked ? "learned" : "locked"}`}>
+      <button
+        type="button"
+        className="cm-item-row"
+        aria-disabled={!sk.unlocked}
+        draggable={sk.unlocked}
+        onDragStart={(e) => {
+          if (!sk.unlocked) return;
+          writeHotbarDrag(e, { kind: "skill", id: sk.id });
+        }}
+        onDoubleClick={() => {
+          // Field skills fire straight from the list (return/port open their
+          // picker dialogs inside activateWorldSkill); still combat-gated.
+          if (sk.unlocked && sk.world_only && !engaged) net.activateWorldSkill(sk.id);
+        }}
+      >
+        <span className="cm-item-row-icon">
           <GameIcon
-              src={
+            src={
               sk.id === "attack"
                 ? ICONS.attack
                 : sk.id === "return" || sk.id === "port" || sk.id === "camp"
@@ -667,93 +596,23 @@ function SkillNode({
                     : ICONS.skillLockedNode
             }
             alt=""
-            size={16}
+            size={20}
           />
         </span>
-      </span>
-      <span className="cm-tree-name">
-        {sk.name}
-        {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
-      </span>
-      <span className={`cm-tree-tag ${sk.world_only ? "field" : "battle"}`}>
-        {sk.world_only ? "Field" : "Battle"}
-      </span>
-    </button>
+        <span className="cm-item-row-name">
+          {sk.name}
+          {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
+        </span>
+        <span className={`cm-tree-tag ${sk.world_only ? "field" : "battle"}`}>
+          {sk.world_only ? "Field" : "Battle"}
+        </span>
+      </button>
+    </div>
   );
   return (
     <HoverTooltip content={<SkillTooltipContent sk={sk} byId={byId} />}>
-      {node}
+      {row}
     </HoverTooltip>
-  );
-}
-
-function SkillDetail({
-  sk,
-  byId,
-  locked,
-}: {
-  sk: SkillInfo;
-  byId: Map<string, SkillInfo>;
-  locked: boolean;
-}) {
-  const prereq = sk.prereq ? byId.get(sk.prereq) : undefined;
-  const atMax = sk.unlocked && sk.level >= sk.max_level;
-  const usage = sk.usage ?? 0;
-  const toNext = sk.usage_to_next ?? 0;
-  return (
-    <div className="cm-detail cm-tree-detail">
-      <div className="cm-detail-name">{sk.name}</div>
-      <div className="cm-detail-meta">
-        {sk.world_only
-          ? "Field skill · 0 MP"
-          : sk.id === "attack" || sk.id === "dodge"
-            ? "0 MP · uses GCD"
-            : `${sk.mp_cost} MP${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
-        {!sk.world_only && sk.id !== "attack" && sk.id !== "dodge" && (
-          <>
-            {" "}
-            · Lv {sk.unlocked ? sk.level : 0}/{sk.max_level}
-            {!sk.unlocked ? ` · unlocks at job Lv ${sk.unlock_level}` : ""}
-          </>
-        )}
-        {!sk.unlocked && sk.prereq ? ` · requires ${prereq?.name ?? sk.prereq}` : ""}
-        {sk.unlocked && !sk.world_only && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
-        {sk.unlocked && !sk.world_only && usage > 0 && atMax ? ` · ${usage} uses` : ""}
-      </div>
-      <div className="dim">{sk.description}</div>
-      <div className="cm-detail-actions">
-        {sk.world_only && sk.unlocked ? (
-          <>
-            <span className="dim">Drag onto the hotbar or use now in the field.</span>
-            <button
-              type="button"
-              className="cm-btn gold"
-              disabled={locked}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (sk.id === "return" || sk.id === "port") {
-                  useGame.getState().openWorldSkillDialog(sk.id);
-                }
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                net.activateWorldSkill(sk.id);
-              }}
-            >
-              Use
-            </button>
-          </>
-        ) : !sk.unlocked ? (
-          <span className="dim">Level your job to unlock this action.</span>
-        ) : atMax ? (
-          <span className="dim">Max level. Drag onto the hotbar.</span>
-        ) : (
-          <span className="dim">{locked ? "Train through combat use." : "Use in combat to level up."}</span>
-        )}
-      </div>
-    </div>
   );
 }
 

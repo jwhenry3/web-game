@@ -9,9 +9,9 @@ import (
 
 const (
 	sanctuaryWallCollisionGID = 1
-	sanctuaryWallGroundGID     = PipoyaGIDRock
-	sanctuaryGateGroundGID     = PipoyaGIDPath
-	sanctuaryGateWidth         = 2
+	sanctuaryWallGroundGID    = PipoyaGIDRock
+	sanctuaryGateGroundGID    = PipoyaGIDPath
+	sanctuaryGateWidth        = 2
 )
 
 type wallSide int
@@ -40,11 +40,19 @@ func generateSanctuaryWallOverrideFromConfig(path string) (*MapTileOverrides, er
 	if err != nil {
 		return nil, err
 	}
+	var borders []MapBorder
+	for edgeName, dest := range cfg.Borders {
+		edge := BorderEdge(strings.ToLower(strings.TrimSpace(edgeName)))
+		if !edge.Valid() {
+			return nil, fmt.Errorf("border edge %q invalid (want north/south/east/west)", edgeName)
+		}
+		borders = append(borders, MapBorder{Edge: edge, Map: normalizeDestMap(dest)})
+	}
 	base := map[string][]int{
 		"ground":    append([]int(nil), cfg.Terrain.Ground...),
 		"collision": append([]int(nil), cfg.Terrain.Collision...),
 	}
-	return diffSanctuaryWalls(base, cfg.Cols, cfg.Rows, regions, exits, MapIDFromPath(path))
+	return diffSanctuaryWalls(base, cfg.Cols, cfg.Rows, regions, exits, borders, MapIDFromPath(path))
 }
 
 func generateSanctuaryWallOverrideFromTiled(tmjPath string) (*MapTileOverrides, error) {
@@ -65,7 +73,7 @@ func generateSanctuaryWallOverrideFromTiled(tmjPath string) (*MapTileOverrides, 
 		return nil, err
 	}
 	base := map[string][]int{"ground": ground, "collision": collision}
-	return diffSanctuaryWalls(base, raw.Width, raw.Height, regions, exits, MapIDFromPath(tmjPath))
+	return diffSanctuaryWalls(base, raw.Width, raw.Height, regions, exits, nil, MapIDFromPath(tmjPath))
 }
 
 func parseRegionsAndExitsFromConfig(cfg *MapConfig) ([]Region, []MapExit, error) {
@@ -90,10 +98,11 @@ func diffSanctuaryWalls(
 	cols, rows int,
 	regions []Region,
 	exits []MapExit,
+	borders []MapBorder,
 	mapID string,
 ) (*MapTileOverrides, error) {
 	current := CloneLayerMap(base)
-	if err := applySanctuaryWallsToLayers(current, cols, rows, regions, exits); err != nil {
+	if err := applySanctuaryWallsToLayers(current, cols, rows, regions, exits, borders); err != nil {
 		return nil, err
 	}
 	diff := DiffMapOverride(mapID, base, current)
@@ -173,9 +182,9 @@ func parseRegionsAndExits(raw tiledMapFile, tileSize int) ([]Region, []MapExit, 
 				exits = append(exits, MapExit{
 					DestMap: normalizeDestMap(dest),
 					MinC:    minC, MinR: minR,
-					MaxC:    maxC, MaxR: maxR,
-					DestX:   tiledPropFloat(obj.Properties, "destX"),
-					DestY:   tiledPropFloat(obj.Properties, "destY"),
+					MaxC: maxC, MaxR: maxR,
+					DestX: tiledPropFloat(obj.Properties, "destX"),
+					DestY: tiledPropFloat(obj.Properties, "destY"),
 				})
 			}
 		}
@@ -188,6 +197,7 @@ func applySanctuaryWallsToLayers(
 	cols, rows int,
 	regions []Region,
 	exits []MapExit,
+	borders []MapBorder,
 ) error {
 	ground := layers["ground"]
 	collision := layers["collision"]
@@ -196,14 +206,15 @@ func applySanctuaryWallsToLayers(
 	}
 	cells := buildCellsFromLayers(collision, ground, cols, rows)
 	ow := &Overworld{
-		Cols:       cols,
-		Rows:       rows,
-		Ground:     ground,
-		Collision:  collision,
-		Cells:      cells,
-		Regions:    regions,
-		Exits:      exits,
-		TileSize:   defaultMapTileSize,
+		Cols:      cols,
+		Rows:      rows,
+		Ground:    ground,
+		Collision: collision,
+		Cells:     cells,
+		Regions:   regions,
+		Exits:     exits,
+		Borders:   borders,
+		TileSize:  defaultMapTileSize,
 	}
 	for _, reg := range regions {
 		if !reg.Sanctuary {
@@ -421,6 +432,28 @@ func (ow *Overworld) tileOnMapExit(c, r int) bool {
 	for _, e := range ow.Exits {
 		if c >= e.MinC && c <= e.MaxC && r >= e.MinR && r <= e.MaxR {
 			return true
+		}
+	}
+	// Tiles inside a bordered edge's trigger band stay open — a wall across
+	// them would seal off the crossing to the neighbor map.
+	for _, b := range ow.Borders {
+		switch b.Edge {
+		case EdgeNorth:
+			if r < BorderBandTiles {
+				return true
+			}
+		case EdgeSouth:
+			if r >= ow.Rows-BorderBandTiles {
+				return true
+			}
+		case EdgeWest:
+			if c < BorderBandTiles {
+				return true
+			}
+		case EdgeEast:
+			if c >= ow.Cols-BorderBandTiles {
+				return true
+			}
 		}
 	}
 	return false

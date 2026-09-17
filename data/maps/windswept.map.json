@@ -24698,60 +24698,12 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "frostkeep",
-      "tiles": [
-        59,
-        92,
-        69,
-        95
-      ],
-      "dest": [
-        2064,
-        464
-      ]
-    },
-    {
-      "destMap": "cairnwatch",
-      "tiles": [
-        0,
-        43,
-        3,
-        53
-      ],
-      "dest": [
-        3120,
-        1424
-      ]
-    },
-    {
-      "destMap": "stillstone",
-      "tiles": [
-        124,
-        43,
-        127,
-        53
-      ],
-      "dest": [
-        464,
-        1424
-      ]
-    },
-    {
-      "destMap": "icehollow",
-      "tiles": [
-        59,
-        0,
-        69,
-        3
-      ],
-      "dest": [
-        1808,
-        2352
-      ]
-    }
-  ],
+  "borders": {
+    "north": "icehollow",
+    "south": "frostkeep",
+    "west": "cairnwatch",
+    "east": "stillstone"
+  },
   "objects": [
     {
       "id": 1,

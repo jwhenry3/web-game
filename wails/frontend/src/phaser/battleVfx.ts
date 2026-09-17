@@ -362,7 +362,7 @@ export function playBattleVfx(
 ): void {
   if (!result.success || !targetPos) return;
   const category = vfxCategoryForAction(result.action_id, result.heal);
-  const actorOnLeft = actorPos ? actorPos.x < 480 : true;
+  const actorOnLeft = actorPos ? actorPos.x < targetPos.x : true;
   playCategoryVfx(
     scene,
     category,

@@ -19799,21 +19799,9 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "brinecoast",
-      "tiles": [
-        58,
-        84,
-        66,
-        87
-      ],
-      "dest": [
-        1872,
-        464
-      ]
-    }
-  ],
+  "borders": {
+    "south": "brinecoast"
+  },
   "objects": [
     {
       "id": 1,

@@ -34,6 +34,7 @@ export type MessageType =
   | "pet_set_follow"
   | "pet_set_battle"
   | "pet_release"
+  | "pet_command"
   | "welcome"
   | "map_config"
   | "world_state"
@@ -380,6 +381,17 @@ export interface HousePlayer {
   y: number;
   facing?: number | string;
   owner?: boolean;
+  pets?: HousePet[];
+}
+
+/** A pet that followed its owner into the house. */
+export interface HousePet {
+  id: string;
+  name: string;
+  sprite?: string;
+  x: number;
+  y: number;
+  facing?: number;
 }
 
 export interface HousePOI {

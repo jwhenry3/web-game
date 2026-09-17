@@ -47,6 +47,7 @@ const (
 	TypePetSetFollow         MessageType = "pet_set_follow"
 	TypePetSetBattle         MessageType = "pet_set_battle"
 	TypePetRelease           MessageType = "pet_release"
+	TypePetCommand           MessageType = "pet_command"
 )
 
 // Server -> Client
@@ -168,6 +169,12 @@ type ActionPayload struct {
 
 type PetIDPayload struct {
 	PetID string `json:"pet_id"`
+}
+
+// PetCommandPayload orders the owner's active pets: "attack" sends them at
+// the owner's focus target, "heel" calls them back to a passive follow.
+type PetCommandPayload struct {
+	Command string `json:"command"` // "attack" | "heel"
 }
 
 type SetTargetPayload struct {
@@ -443,12 +450,23 @@ type SetCampSkinPayload struct {
 }
 
 type HousePlayer struct {
+	ID     string     `json:"id"`
+	Name   string     `json:"name"`
+	X      float64    `json:"x"`
+	Y      float64    `json:"y"`
+	Facing float64    `json:"facing"`
+	Owner  bool       `json:"owner,omitempty"`
+	Pets   []HousePet `json:"pets,omitempty"`
+}
+
+// HousePet is a pet that followed its owner into the house instance.
+type HousePet struct {
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`
+	Sprite string  `json:"sprite,omitempty"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`
 	Facing float64 `json:"facing"`
-	Owner  bool    `json:"owner,omitempty"`
 }
 
 type HousePOI struct {

@@ -48,6 +48,7 @@ type entity struct {
 	statuses             []game.ActiveStatus
 	statusTick           int
 	targetID             string
+	engageID             string // players only: enemy the player committed an attack on (pets auto-engage it; target selection alone does not count)
 	attackCD             time.Time
 	casting              *activeCast
 	castX, castY         float64
@@ -55,6 +56,7 @@ type entity struct {
 	contributors         map[string]int // rewarded entity ID -> damage dealt to me
 	alive                bool
 	hidden               bool // not present on the world (npc despawned, player in house)
+	petHold              bool // pets only: heeled — never acquire a target, just follow
 
 	plugins []entityPlugin
 }
@@ -245,6 +247,9 @@ func (h *Hub) nearestAttackable(from *entity, maxD float64) *entity {
 // set_target "" echo so the client releases the focus ring.
 func (h *Hub) clearTargeting(id string) {
 	for _, e := range h.entities {
+		if e.engageID == id {
+			e.engageID = ""
+		}
 		if e.targetID != id {
 			continue
 		}

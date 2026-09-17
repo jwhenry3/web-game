@@ -352,6 +352,7 @@ func (p *Proxy) handleTransfer(req cluster.TransferRequest) {
 	if !p.attach(s, req.DestMap, cluster.AttachRequest{
 		ClientID: s.id, AccountID: s.acctID, Username: s.user,
 		SpawnX: req.DestX, SpawnY: req.DestY, UseSpawn: true, Facing: req.Facing,
+		Edge: req.Edge, EdgeT: req.EdgeT,
 	}) {
 		// Reattach to source if possible so the player is not stranded.
 		if srcMapID != "" && srcMapID != req.DestMap && p.mapRunning(srcMapID) {

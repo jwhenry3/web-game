@@ -15,6 +15,16 @@ import {
   type KeybindMap,
 } from "../input/keybinds";
 import { comboDisplayName } from "../types";
+import {
+  HUD_SCALE_GROUPS,
+  UI_SCALE_MAX,
+  UI_SCALE_MIN,
+  UI_SCALE_STEP,
+  WINDOW_SCALE_GROUPS,
+  hudScaleKey,
+  uiScalePercent,
+  windowScaleKey,
+} from "../ui/uiScale";
 
 export function MainMenuTrigger() {
   const toggle = useGame((s) => s.toggleMainMenu);
@@ -133,14 +143,89 @@ function KeybindsContent() {
   );
 }
 
-type OptionsTab = "video" | "audio" | "controls" | "general";
+type OptionsTab = "video" | "interface" | "audio" | "controls" | "general";
 
 const OPTIONS_TABS: { id: OptionsTab; label: string }[] = [
   { id: "video", label: "Video" },
+  { id: "interface", label: "Interface" },
   { id: "audio", label: "Audio" },
   { id: "controls", label: "Controls" },
   { id: "general", label: "General" },
 ];
+
+function ScaleSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="main-menu-option">
+      <span className="main-menu-option-label">{label}</span>
+      <input
+        type="range"
+        min={UI_SCALE_MIN}
+        max={UI_SCALE_MAX}
+        step={UI_SCALE_STEP}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      <span className="main-menu-option-value">{value}%</span>
+    </label>
+  );
+}
+
+function InterfaceContent() {
+  const options = useGame((s) => s.options);
+  const setOptions = useGame((s) => s.setOptions);
+
+  const setScale = (key: string, v: number) => {
+    const next = { ...options, uiScale: { ...options.uiScale, [key]: v } };
+    setOptions(next);
+    saveOptions(next);
+  };
+
+  const resetScales = () => {
+    const next = { ...options, uiScale: {} };
+    setOptions(next);
+    saveOptions(next);
+  };
+
+  return (
+    <div className="main-menu-scales">
+      <section className="main-menu-scale-group">
+        <h3 className="cm-section-label">Windows</h3>
+        {WINDOW_SCALE_GROUPS.map((g) => (
+          <ScaleSlider
+            key={g.key}
+            label={g.label}
+            value={uiScalePercent(options.uiScale, windowScaleKey(g.key))}
+            onChange={(v) => setScale(windowScaleKey(g.key), v)}
+          />
+        ))}
+      </section>
+      <section className="main-menu-scale-group">
+        <h3 className="cm-section-label">HUD</h3>
+        {HUD_SCALE_GROUPS.map((g) => (
+          <ScaleSlider
+            key={g.key}
+            label={g.label}
+            value={uiScalePercent(options.uiScale, hudScaleKey(g.key))}
+            onChange={(v) => setScale(hudScaleKey(g.key), v)}
+          />
+        ))}
+      </section>
+      <div className="main-menu-actions">
+        <button type="button" className="cm-btn" onClick={resetScales}>
+          Reset All
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function OptionsPanel() {
   const options = useGame((s) => s.options);
@@ -174,6 +259,7 @@ function OptionsPanel() {
               <p className="hint">Display settings will appear here.</p>
             </div>
           )}
+          {tab === "interface" && <InterfaceContent />}
           {tab === "audio" && (
             <div className="main-menu-options">
               <label className="main-menu-option">

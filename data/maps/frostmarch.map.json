@@ -20580,34 +20580,10 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "northwatch",
-      "tiles": [
-        58,
-        76,
-        70,
-        79
-      ],
-      "dest": [
-        2064,
-        464
-      ]
-    },
-    {
-      "destMap": "frostkeep",
-      "tiles": [
-        59,
-        0,
-        69,
-        3
-      ],
-      "dest": [
-        2064,
-        2608
-      ]
-    }
-  ],
+  "borders": {
+    "north": "frostkeep",
+    "south": "northwatch"
+  },
   "objects": [
     {
       "id": 1,

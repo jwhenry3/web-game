@@ -20591,34 +20591,10 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "timberroad",
-      "tiles": [
-        59,
-        76,
-        69,
-        79
-      ],
-      "dest": [
-        2064,
-        464
-      ]
-    },
-    {
-      "destMap": "frostmarch",
-      "tiles": [
-        58,
-        0,
-        70,
-        3
-      ],
-      "dest": [
-        2064,
-        2096
-      ]
-    }
-  ],
+  "borders": {
+    "north": "frostmarch",
+    "south": "timberroad"
+  },
   "objects": [
     {
       "id": 1,

@@ -12,7 +12,8 @@ Each map node owns one `game.Overworld`:
 - **Regions** — wilderness / town / camp; `sanctuary: true` marks safe zones
 - **Collision** — non-walkable tiles; pathfinding and engage respect sanctuaries
 - **NPCs** — patrol/wander in a region; proximity or an attack pulls them into combat (not inside sanctuaries)
-- **Exits** — rectangles that transfer the player to another map (`destMap`, `destX`, `destY`)
+- **Borders** — edge adjacency (`"borders": {"north": "mapId", ...}`); walking into the outer walkable band transfers the player to the neighbor's opposite edge at a mirrored position. The graph is validated at boot: borders must be reciprocal on opposite edges.
+- **Exits** — interior portal rectangles that transfer the player to another map (`destMap`, `destX`, `destY`), e.g. the Frostkeep↔Tidecourt ferry
 - **Save points** — attune / respawn / Return–Teleport destinations
 - **Job changers** — optional POIs inside sanctuaries
 
@@ -61,11 +62,14 @@ All combat is **realtime** and fought **directly in the overworld** — there ar
 ### Pets & capture
 
 - Encounter enemies may set `"capturable": false` (default **true** when omitted).
-- While an enemy is alive, capturable, and under **20% HP**, the player may use the **Capture** skill (`capture`) from the hotbar (default slot 7).
+- While an enemy is alive, capturable, and under **20% HP**, the player may use the **Capture** skill (`capture`) from the hotbar (default slot 7) within ally-skill range (280px). An ineligible attempt (out of range, target too healthy, collection full) is free — no GCD.
 - Success chance: `clamp(0.05, 0.85, 0.35 + 0.04*(playerMainLvl − enemyLvl))`.
 - Captured pets go on the profile (`pets`, max 20) at the enemy's level.
 - One pet may **follow** on the overworld; one may fight as an **ally**.
 - Allies are friendly non-players (`is_ally`): enemy AI can hit them; they AI-attack foes. The owner may queue **one** skill via `actor_id`; after it resolves, AI resumes.
+- Pets engage only on real aggression: an explicit `attack` command, the owner committing an attack (`engageID` — selecting a target alone does nothing), or a foe striking the pet/owner. 
+- The **pet bar** (draggable HUD) sends `pet_command`: `attack` orders all active pets at the owner's focus target; `heel` makes them passive (no auto-engage) until the next `attack`.
+- Active pets follow their owner into **camps/houses** — they appear in `house_state` under each player's `pets` and trail the owner indoors.
 - Ally heals/buffs/items may target pets.
 
 Crossing a map exit (e.g. Wolfrun road → Northern Wastes) keeps the same WebSocket; only the owning map node changes.

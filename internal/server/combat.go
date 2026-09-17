@@ -685,6 +685,7 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 			return
 		}
 		e.targetID = t.ID
+		e.engageID = t.ID // committing an attack — pets may follow it
 		if !h.skillHits(e, t, skill) {
 			res.Message = "Target out of range."
 			res.TargetID = t.ID
@@ -897,8 +898,26 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
+	if dist(e.X, e.Y, n.X, n.Y) > allySkillRangeW {
+		res.Message = "Target out of range."
+		h.sendCombatEvent(res, e.X, e.Y)
+		return
+	}
 	if !game.EligibleForCapture(r.capturable, true, n.hp, n.maxHP) {
 		res.Message = "Target is not weak enough to capture."
+		h.sendCombatEvent(res, e.X, e.Y)
+		return
+	}
+	// Everything that can veto the attempt must run before the GCD and the
+	// roll — a capture that can't proceed is free.
+	prof, ok := h.store.Get(c.Name)
+	if !ok {
+		res.Message = "Character not found."
+		h.sendCombatEvent(res, e.X, e.Y)
+		return
+	}
+	if len(prof.Pets) >= game.MaxPets {
+		res.Message = fmt.Sprintf("Pet collection is full (%d).", game.MaxPets)
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
@@ -946,6 +965,7 @@ func (h *Hub) defeatPlayer(clientID string) {
 	e.casting = nil
 	e.statuses = nil
 	e.targetID = ""
+	e.engageID = ""
 	cc.inCombat = false
 	h.flushSkillUsage(e)
 	for _, n := range h.entities {

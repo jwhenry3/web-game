@@ -8,8 +8,11 @@ import {
   type CharacterFacing,
 } from "../characters/types";
 import { bindingToPhaserKeyCode, mergeKeybinds } from "../input/keybinds";
-import type { HouseFurniture, HousePlayer, HousePOI, HouseStatePayload } from "../types";
+import type { HouseFurniture, HousePet, HousePlayer, HousePOI, HouseStatePayload } from "../types";
+import { enemyKindFromName, type EnemyKind } from "../characters/enemies";
 import { CharacterSprite } from "./CharacterSprite";
+import { EnemySprite } from "./EnemySprite";
+import { entityShadow } from "./entityShadow";
 import { trackContentZoom } from "./contentZoom";
 import { VisibilityFX } from "./visibility";
 import { INTERACT_RANGE, interactKeyLabel } from "../world/interact";
@@ -38,11 +41,21 @@ const POI_PROMPT_Y = -28;
 const POI_LABEL_Y = -28;
 const FURNITURE_LABEL_Y = -16;
 const CAST_BAR_Y = 10;
+/** House pets draw at the same reduced scale as field follow pets. */
+const PET_SCALE = 0.55;
+const PET_LERP = 0.3;
+const PET_SNAP_DIST = 64;
 
 interface HouseAvatar {
   wrapper: Phaser.GameObjects.Container;
   sprite: CharacterSprite;
   appearanceKey: string;
+}
+
+interface HousePetMarker {
+  wrapper: Phaser.GameObjects.Container;
+  enemy: EnemySprite;
+  kind: EnemyKind;
 }
 
 interface PoiMarker {
@@ -66,6 +79,7 @@ export class HouseScene extends Phaser.Scene {
   private floor?: Phaser.GameObjects.Graphics;
   private placeGhost?: Phaser.GameObjects.Graphics;
   private avatars = new Map<string, HouseAvatar>();
+  private pets = new Map<string, HousePetMarker>();
   private furniture = new Map<string, FurnitureMarker>();
   private pois = new Map<string, PoiMarker>();
   private moveKeys: Partial<Record<"move_up" | "move_down" | "move_left" | "move_right", Phaser.Input.Keyboard.Key>> =
@@ -112,6 +126,8 @@ export class HouseScene extends Phaser.Scene {
     this.placeGhost = undefined;
     for (const av of this.avatars.values()) av.wrapper.destroy();
     this.avatars.clear();
+    for (const p of this.pets.values()) p.wrapper.destroy();
+    this.pets.clear();
     for (const f of this.furniture.values()) f.wrapper.destroy();
     this.furniture.clear();
     for (const p of this.pois.values()) p.wrapper.destroy();
@@ -227,7 +243,7 @@ export class HouseScene extends Phaser.Scene {
     }
     const wrapper = this.add.container(p.x, p.y).setDepth(10);
     const sprite = new CharacterSprite(this, 0, 0, appearance);
-    wrapper.add(sprite.container);
+    wrapper.add([entityShadow(this), sprite.container]);
     av = { wrapper, sprite, appearanceKey: appKey };
     this.avatars.set(p.id, av);
     return av;
@@ -332,6 +348,57 @@ export class HouseScene extends Phaser.Scene {
     }
   }
 
+  /** Sync guest pets that followed their owners inside; returns nameplate stubs. */
+  private syncPets(house: HouseStatePayload, delta: number): { id: string; label: string }[] {
+    const seen = new Set<string>();
+    const marks: { id: string; label: string }[] = [];
+    for (const p of house.players) {
+      for (const pet of p.pets ?? []) {
+        seen.add(pet.id);
+        marks.push(...this.syncPet(pet, delta));
+      }
+    }
+    for (const [id, m] of this.pets) {
+      if (!seen.has(id)) {
+        m.wrapper.destroy();
+        this.pets.delete(id);
+      }
+    }
+    return marks;
+  }
+
+  private syncPet(pet: HousePet, delta: number): { id: string; label: string }[] {
+    const kind = enemyKindFromName(pet.name, pet.sprite);
+    let marker = this.pets.get(pet.id);
+    if (!marker) {
+      const wrapper = this.add.container(pet.x, pet.y).setDepth(9);
+      const enemy = new EnemySprite(this, 0, 0, kind);
+      enemy.container.setScale(PET_SCALE);
+      wrapper.add([entityShadow(this, PET_SCALE), enemy.container]);
+      marker = { wrapper, enemy, kind };
+      this.pets.set(pet.id, marker);
+      return [{ id: pet.id, label: pet.name }];
+    }
+    if (marker.kind !== kind) {
+      marker.enemy.setKind(kind);
+      marker.kind = kind;
+    }
+    const prevX = marker.wrapper.x;
+    const prevY = marker.wrapper.y;
+    if (Math.hypot(prevX - pet.x, prevY - pet.y) > PET_SNAP_DIST) {
+      marker.wrapper.setPosition(pet.x, pet.y);
+      marker.enemy.setMoving(false);
+    } else {
+      marker.wrapper.x = Phaser.Math.Linear(prevX, pet.x, PET_LERP);
+      marker.wrapper.y = Phaser.Math.Linear(prevY, pet.y, PET_LERP);
+      const mdx = marker.wrapper.x - prevX;
+      const mdy = marker.wrapper.y - prevY;
+      marker.enemy.setMoving(Math.hypot(mdx, mdy) > 0.25, mdx, mdy);
+    }
+    marker.enemy.update(delta);
+    return [{ id: pet.id, label: pet.name }];
+  }
+
   private facingOf(p: HousePlayer, fallback: CharacterFacing): CharacterFacing {
     return p.facing === "left" || p.facing === "right" ? p.facing : fallback;
   }
@@ -343,9 +410,10 @@ export class HouseScene extends Phaser.Scene {
     worldX: number,
     worldY: number,
     transform: StageTransform,
+    nameLocalY = H99_NAME_LABEL_Y,
   ): EntityOverlayMark {
     const feet = worldToStagePoint(this, worldX, worldY, transform);
-    const name = worldLocalToStage(this, worldX, worldY, 0, H99_NAME_LABEL_Y, transform);
+    const name = worldLocalToStage(this, worldX, worldY, 0, nameLocalY, transform);
     const cast = worldLocalToStage(this, worldX, worldY, 0, CAST_BAR_Y, transform);
     return {
       id,
@@ -415,6 +483,7 @@ export class HouseScene extends Phaser.Scene {
         this.avatars.delete(id);
       }
     }
+    const petMarks = this.syncPets(house, delta);
 
     if (!selfId) {
       setWorldOverlays({ entities: [], pois: [], interacts: [] });
@@ -476,6 +545,21 @@ export class HouseScene extends Phaser.Scene {
       const av = this.avatars.get(stub.id);
       if (!av) continue;
       entities[i] = this.stageEntity(stub.id, stub.label, stub.variant, av.wrapper.x, av.wrapper.y, transform);
+    }
+    for (const pm of petMarks) {
+      const marker = this.pets.get(pm.id);
+      if (!marker) continue;
+      entities.push(
+        this.stageEntity(
+          pm.id,
+          pm.label,
+          "player",
+          marker.wrapper.x,
+          marker.wrapper.y,
+          transform,
+          Math.round(H99_NAME_LABEL_Y * PET_SCALE) - 2,
+        ),
+      );
     }
 
     for (const f of this.furniture.values()) {

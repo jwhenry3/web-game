@@ -3,8 +3,10 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"clara-mundi/internal/game"
 	"clara-mundi/internal/servercfg"
@@ -204,6 +206,46 @@ func (c Config) Validate() error {
 	}
 	if enabledCount == 0 {
 		return fmt.Errorf("cluster: at least one map must be enabled")
+	}
+	return c.validateBorders()
+}
+
+// validateBorders checks the map border graph across every configured map:
+// symmetric opposite-edge relationships, real destinations, and reachable
+// edge tiles. Broken relationships are boot-fatal; suspicious states log
+// warnings. Maps whose overworld is not a .map.json have no border graph.
+func (c Config) validateBorders() error {
+	cfgs := map[string]*game.MapConfig{}
+	enabled := map[string]bool{}
+	for _, m := range c.Maps {
+		sc, err := servercfg.Load(m.Config)
+		if err != nil {
+			continue // already reported by the per-map checks above
+		}
+		path := sc.Server.Overworld
+		if !game.IsMapConfigPath(path) {
+			continue
+		}
+		mc, err := game.LoadMapConfig(path)
+		if err != nil {
+			return fmt.Errorf("cluster: map %q: %w", m.ID, err)
+		}
+		cfgs[m.ID] = mc
+		enabled[m.ID] = m.IsEnabled()
+	}
+	rep := game.ValidateMapBorders(cfgs)
+	for _, w := range rep.Warnings {
+		log.Printf("cluster: border warning: %s", w)
+	}
+	for id, mc := range cfgs {
+		for _, dest := range mc.Borders {
+			if ok, known := enabled[dest]; known && !ok {
+				log.Printf("cluster: border warning: %s borders disabled map %q — transfers there will be refused", id, dest)
+			}
+		}
+	}
+	if len(rep.Errors) > 0 {
+		return fmt.Errorf("cluster: broken map border graph:\n  %s", strings.Join(rep.Errors, "\n  "))
 	}
 	return nil
 }

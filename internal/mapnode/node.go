@@ -45,10 +45,12 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 		OW:       ow,
 		sessions: map[string]*server.Client{},
 	}
-	hub.OnTransfer = func(clientID, destMap string, destX, destY float64, facing float64) {
+	hub.OnTransfer = func(clientID string, dest server.TransferDest) {
 		if n.Transfer != nil {
 			n.Transfer(cluster.TransferRequest{
-				ClientID: clientID, DestMap: destMap, DestX: destX, DestY: destY, Facing: facing,
+				ClientID: clientID, DestMap: dest.Map,
+				DestX: dest.X, DestY: dest.Y, Facing: dest.Facing,
+				Edge: string(dest.Edge), EdgeT: dest.EdgeT,
 			})
 		}
 	}
@@ -73,6 +75,8 @@ func (n *Node) Attach(req cluster.AttachRequest) *server.Client {
 		SpawnY:      req.SpawnY,
 		UseSpawn:    req.UseSpawn,
 		SpawnFacing: req.Facing,
+		SpawnEdge:   game.BorderEdge(req.Edge),
+		SpawnEdgeT:  req.EdgeT,
 		CloseFn: func() {
 			n.Detach(req.ClientID)
 		},

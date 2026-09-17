@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"strings"
+	"time"
 
 	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
@@ -18,11 +19,23 @@ type worldCamp struct {
 	Skin          string
 }
 
+// housePet is a pet that followed its owner into the house. It mirrors the
+// world pet entity (same record ID) while the owner is inside.
+type housePet struct {
+	ID     string
+	Name   string
+	Sprite string // pet kind / enemy sprite key
+	X, Y   float64
+	Facing float64
+}
+
 type houseGuest struct {
 	ClientID string
 	Name     string
 	X, Y     float64
 	Facing   float64
+	Pets     []*housePet
+	petTick  time.Time // last time house pets were advanced
 }
 
 type houseRoom struct {
@@ -114,6 +127,17 @@ func (h *Hub) releaseFromHouse(clientID, reason string) {
 			cc.houseOwner = ""
 		}
 		e.hidden = false
+		// Pets come back out at the owner's side.
+		i := 0
+		h.eachEntity(kindPet, func(pet *entity) {
+			if pet.OwnerID != clientID {
+				return
+			}
+			pet.targetID = ""
+			pet.X, pet.Y = housePetSpot(e.X, e.Y, e.Facing, i)
+			h.entityDirty = true
+			i++
+		})
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 		h.syncPetEntities()
 	}
@@ -157,7 +181,29 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 		h.houses[owner] = room
 	}
 	sx, sy := game.HouseSpawnCenter()
-	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: e.Facing}
+	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: e.Facing, petTick: time.Now()}
+	// Active pets come inside: mirror each slotted pet record as a house pet
+	// at the spawn point, and drop any fight the entity was in at the door.
+	if prof, ok := h.store.Get(c.Name); ok {
+		for i, petID := range activePetIDs(prof) {
+			rec, ok := prof.FindPet(petID)
+			if !ok {
+				continue
+			}
+			px, py := housePetSpot(sx, sy, guest.Facing, i)
+			px, py = game.ClampHousePos(px, py)
+			guest.Pets = append(guest.Pets, &housePet{
+				ID: rec.ID, Name: rec.Name, Sprite: rec.Kind,
+				X: px, Y: py, Facing: guest.Facing,
+			})
+		}
+	}
+	e.engageID = ""
+	h.eachEntity(kindPet, func(pe *entity) {
+		if pe.OwnerID == c.ID {
+			pe.targetID = ""
+		}
+	})
 	room.Guests[c.ID] = guest
 	cc.inHouse = true
 	cc.houseOwner = owner
@@ -347,9 +393,17 @@ func (h *Hub) sendHouseState(room *houseRoom) {
 	sc, sr := game.HouseStorageTile()
 	players := make([]protocol.HousePlayer, 0, len(room.Guests))
 	for _, g := range room.Guests {
+		pets := make([]protocol.HousePet, 0, len(g.Pets))
+		for _, p := range g.Pets {
+			pets = append(pets, protocol.HousePet{
+				ID: p.ID, Name: p.Name, Sprite: p.Sprite,
+				X: p.X, Y: p.Y, Facing: p.Facing,
+			})
+		}
 		players = append(players, protocol.HousePlayer{
 			ID: g.ClientID, Name: g.Name, X: g.X, Y: g.Y, Facing: g.Facing,
 			Owner: strings.EqualFold(g.Name, room.OwnerName),
+			Pets:  pets,
 		})
 	}
 	furniture := h.store.HouseFurnitureSnapshot(room.OwnerName)
@@ -402,7 +456,48 @@ func (h *Hub) moveInHouse(c *Client, e *entity, x, y float64, facing *float64) {
 	guest.Facing = game.ResolveFacingYaw(nx-guest.X, ny-guest.Y, derefFacing(facing), facing != nil, guest.Facing)
 	guest.X, guest.Y = nx, ny
 	_ = e
+	h.stepHousePets(guest)
 	h.sendHouseState(room)
+}
+
+// housePetSpot returns the follow position for the i-th house pet: behind the
+// owner like the overworld followOffset, fanned out sideways so pets don't stack.
+func housePetSpot(x, y, facing float64, i int) (float64, float64) {
+	gx, gy := followOffset(x, y, facing)
+	fx, fy := game.FacingDir(facing)
+	side := float64((i%2)*2-1) * (1 + float64(i/2))
+	return gx - fy*side*20, gy + fx*side*20
+}
+
+// stepHousePets advances each guest pet toward its follow spot on the move
+// packet cadence, so they trail the owner around the room.
+func (h *Hub) stepHousePets(guest *houseGuest) {
+	if len(guest.Pets) == 0 {
+		return
+	}
+	now := time.Now()
+	dt := now.Sub(guest.petTick).Seconds()
+	guest.petTick = now
+	if dt > 0.25 {
+		dt = 0.25
+	}
+	step := petSpeed * dt
+	for i, p := range guest.Pets {
+		gx, gy := housePetSpot(guest.X, guest.Y, guest.Facing, i)
+		dx, dy := gx-p.X, gy-p.Y
+		d := dist(p.X, p.Y, gx, gy)
+		if d < 0.01 {
+			continue
+		}
+		p.Facing = game.ResolveFacingYaw(dx, dy, 0, false, p.Facing)
+		if d <= step {
+			p.X, p.Y = gx, gy
+		} else {
+			p.X += dx / d * step
+			p.Y += dy / d * step
+		}
+		p.X, p.Y = game.ClampHousePos(p.X, p.Y)
+	}
 }
 
 func (h *Hub) onHousingDisconnect(c *Client) {

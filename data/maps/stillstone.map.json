@@ -19799,21 +19799,9 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "windswept",
-      "tiles": [
-        0,
-        39,
-        3,
-        49
-      ],
-      "dest": [
-        3632,
-        1552
-      ]
-    }
-  ],
+  "borders": {
+    "west": "windswept"
+  },
   "objects": [
     {
       "id": 1,

@@ -19799,34 +19799,10 @@
       ]
     }
   ],
-  "exits": [
-    {
-      "destMap": "greenwood",
-      "tiles": [
-        108,
-        39,
-        111,
-        49
-      ],
-      "dest": [
-        464,
-        1552
-      ]
-    },
-    {
-      "destMap": "sanctuarygrove",
-      "tiles": [
-        52,
-        0,
-        60,
-        3
-      ],
-      "dest": [
-        1808,
-        2352
-      ]
-    }
-  ],
+  "borders": {
+    "north": "sanctuarygrove",
+    "east": "greenwood"
+  },
   "objects": [
     {
       "id": 1,
