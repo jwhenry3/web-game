@@ -1,0 +1,33 @@
+{
+  "terrain": "data/maps/greenwood.map.json",
+  "simulation_regions": [
+    {
+      "id": "greenwood_northwest",
+      "minC": 0,
+      "minR": 0,
+      "maxC": 63,
+      "maxR": 47
+    },
+    {
+      "id": "greenwood_northeast",
+      "minC": 64,
+      "minR": 0,
+      "maxC": 127,
+      "maxR": 47
+    },
+    {
+      "id": "greenwood_southwest",
+      "minC": 0,
+      "minR": 48,
+      "maxC": 63,
+      "maxR": 95
+    },
+    {
+      "id": "greenwood_southeast",
+      "minC": 64,
+      "minR": 48,
+      "maxC": 127,
+      "maxR": 95
+    }
+  ]
+}

@@ -42,7 +42,7 @@ const (
 	meleeStopDistW  = attackRangeW
 	npcHoldSlackW   = 10.0
 	npcOverlapPadW  = 4.0
-	gcdDuration     = 2500 * time.Millisecond
+	gcdDuration     = time.Second
 	castMoveCancel  = 4.0
 	dodgeMoveGrace  = 250 * time.Millisecond
 	dodgeCooldown   = 500 * time.Millisecond
@@ -152,6 +152,10 @@ func (h *Hub) sendPlayerSync(e *entity) {
 
 // markPlayerCombat recomputes a player's combat stats on first engagement.
 func (h *Hub) markPlayerCombat(clientID string) {
+	if h.npcEffects != nil {
+		h.npcEffects.playerCombat[clientID] = true
+		return
+	}
 	h.mu.RLock()
 	c := h.clients[clientID]
 	h.mu.RUnlock()
@@ -499,6 +503,10 @@ func (h *Hub) clearAoI() {
 // sendCombatEvent delivers an action event to every client in the AoI (set)
 // plus anyone within radius of the event origin who isn't tracked yet.
 func (h *Hub) sendCombatEvent(ev protocol.CombatEventPayload, x, y float64) {
+	if h.npcEffects != nil {
+		h.npcEffects.events = append(h.npcEffects.events, npcCombatEvent{Event: ev, X: x, Y: y})
+		return
+	}
 	ev.Entities = h.combatSnapshots(time.Now())
 	msg := protocol.Encode(protocol.TypeCombatEvent, ev)
 	h.eachEntity(kindPlayer, func(p *entity) {
@@ -595,6 +603,7 @@ func (h *Hub) resolveDodge(c *Client, e *entity) {
 		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
 	}))
 	h.persistWorldLocation(c, e, false)
+	h.refreshRegionOwnership(c, e)
 	h.checkAggroAt(c.ID, e.X, e.Y)
 	h.sendCombatEvent(protocol.CombatEventPayload{
 		AttackerID: c.ID, ActionID: game.ActionIDDodge,
@@ -647,6 +656,16 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 	}
 	if !game.SkillAlwaysUnlocked(skill.ID) && cc.skillLevels[skill.ID] < 1 {
 		res.Message = "Skill not learned."
+		h.sendCombatEvent(res, e.X, e.Y)
+		return
+	}
+	if skill.Passive != nil {
+		res.Message = "Passive skill."
+		h.sendCombatEvent(res, e.X, e.Y)
+		return
+	}
+	if cc.skillReadyAt != nil && now.Before(cc.skillReadyAt[skill.ID]) {
+		res.Message = "Skill is recharging."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
@@ -707,9 +726,7 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 	res.TargetID = t.ID
 	if game.SkillCastTime(skill) > 0 {
 		e.mp -= skill.MPCost
-		if !game.SkillTargetsAlly(skill) || cc.inCombat {
-			e.startGCD(now)
-		}
+		h.startSkillCooldown(e, t, skill, now)
 		e.casting = &activeCast{SkillID: skill.ID, TargetID: t.ID}
 		e.castX, e.castY = e.X, e.Y
 		res.Success = true
@@ -732,6 +749,56 @@ func (h *Hub) autoTarget(e *entity) *entity {
 		e.targetID = best.ID
 	}
 	return best
+}
+
+// passiveContext supplies situational predicates for learned passive skills.
+func passiveContext(e, target *entity) game.PassiveContext {
+	ctx := game.PassiveContext{ComboStack: game.HighestComboStack(e.statuses)}
+	if target != nil && target.maxHP > 0 {
+		ctx.TargetHPFraction = float64(target.hp) / float64(target.maxHP)
+	}
+	return ctx
+}
+
+// startSkillCooldown starts the shared GCD and, when configured, the skill's
+// own ready time. A configured skill cooldown is added after the GCD ends.
+func (h *Hub) startSkillCooldown(e, target *entity, skill game.Skill, now time.Time) {
+	cc := clientControlOf(e)
+	if cc == nil {
+		return
+	}
+	if !game.SkillTargetsAlly(skill) || cc.inCombat {
+		e.startGCD(now)
+	}
+	if cc.skillReadyAt == nil {
+		cc.skillReadyAt = map[string]time.Time{}
+	}
+	if skill.CooldownMs <= 0 {
+		delete(cc.skillReadyAt, skill.ID)
+		return
+	}
+	cd := time.Duration(skill.CooldownMs) * time.Millisecond
+	reduction := game.PassiveCooldownReduction(cc.skillLevels, skill, passiveContext(e, target))
+	cd = time.Duration(float64(cd) * (1 - reduction))
+	cc.skillReadyAt[skill.ID] = now.Add(gcdDuration + cd)
+}
+
+// resolveComboSkill advances the status-backed combo and returns the effective
+// variant for this execution. The original skill remains the tracked identity.
+func (h *Hub) resolveComboSkill(caster *entity, skill game.Skill) (game.Skill, []game.StatusEffectDef) {
+	if skill.Combo == nil || len(skill.Combo.Variants) == 0 {
+		return skill, nil
+	}
+	step := game.AdvanceCombo(&caster.statuses, skill.Combo, caster.ID)
+	variant := skill.Combo.Variants[step]
+	resolved := skill
+	if variant.Name != "" {
+		resolved.Name = variant.Name
+	}
+	if variant.Power > 0 {
+		resolved.Power = variant.Power
+	}
+	return resolved, variant.StatusEffects
 }
 
 func (h *Hub) skillHits(e, t *entity, skill game.Skill) bool {
@@ -789,12 +856,12 @@ func (h *Hub) applySkillTo(caster, target *entity, skill game.Skill, res protoco
 	ally := game.SkillTargetsAlly(skill)
 	if caster.casting == nil && game.SkillCastTime(skill) == 0 {
 		caster.mp -= skill.MPCost
-		if !ally || cc.inCombat {
-			caster.startGCD(now)
-		}
+		h.startSkillCooldown(caster, target, skill, now)
 	}
 	res.Success = true
-	amount := h.rollDamage(caster, skill)
+	resolved, comboEffects := h.resolveComboSkill(caster, skill)
+	res.ActionName = resolved.Name
+	amount := h.rollDamage(caster, target, resolved)
 	amount = game.ModifyDamageDealt(caster.statuses, amount)
 	if ally {
 		healed := 0
@@ -802,7 +869,7 @@ func (h *Hub) applySkillTo(caster, target *entity, skill game.Skill, res protoco
 			healed = h.applyHeal(target, amount)
 			res.Heal = amount
 		}
-		h.applyStatuses(caster, target, skill)
+		h.applyStatuses(caster, target, resolved, comboEffects...)
 		h.trackSkillUse(caster, skill)
 		// Helping your side raises threat with everything fighting it.
 		h.splashEnmity(caster, enmityAllyBase+healed/2)
@@ -814,13 +881,16 @@ func (h *Hub) applySkillTo(caster, target *entity, skill game.Skill, res protoco
 		return
 	}
 	h.applyDamageMsg(caster, target, amount, res, "%s hits %s for %d")
+	if refreshed := h.ent(target.ID); refreshed != nil {
+		target = refreshed
+	}
 	if target.alive {
-		h.applyStatuses(caster, target, skill)
+		h.applyStatuses(caster, target, resolved, comboEffects...)
 	}
 	h.trackSkillUse(caster, skill)
 }
 
-func (h *Hub) rollDamage(e *entity, skill game.Skill) int {
+func (h *Hub) rollDamage(e, target *entity, skill game.Skill) int {
 	cc := clientControlOf(e)
 	stat := e.str
 	if skill.UsesMagic {
@@ -845,6 +915,7 @@ func (h *Hub) rollDamage(e *entity, skill game.Skill) int {
 		if cat != "" {
 			power *= game.WeaponSynergy(cat, cc.weaponForSkill(skill))
 		}
+		power *= game.PassiveSkillMultiplier(cc.skillLevels, skill, passiveContext(e, target))
 	}
 	dmg := int(float64(stat) * power * (0.85 + h.rng.Float64()*0.3))
 	if dmg < 1 {
@@ -854,12 +925,22 @@ func (h *Hub) rollDamage(e *entity, skill game.Skill) int {
 }
 
 // applyStatuses attaches a skill's configured effects to the target (or the
-// caster for OnCaster effects).
-func (h *Hub) applyStatuses(caster, target *entity, skill game.Skill) {
-	for _, def := range game.StatusesForSkill(skill.ID) {
+// caster for OnCaster effects), plus any variant-specific combo effects.
+func (h *Hub) applyStatuses(caster, target *entity, skill game.Skill, extra ...game.StatusEffectDef) {
+	defs := append([]game.StatusEffectDef{}, game.StatusesForSkill(skill.ID)...)
+	defs = append(defs, extra...)
+	remote := []game.StatusEffectDef{}
+	remoteShield := 0
+	for _, def := range defs {
 		list := &target.statuses
 		if def.OnCaster {
 			list = &caster.statuses
+		} else if h.npcWorkerFor(target) != nil {
+			remote = append(remote, def)
+			if def.Kind == game.StatusShield {
+				remoteShield = max(remoteShield, max(1, int(float64(caster.mag)*skill.Power*2)))
+			}
+			continue
 		}
 		shield := 0
 		if def.Kind == game.StatusShield {
@@ -867,6 +948,7 @@ func (h *Hub) applyStatuses(caster, target *entity, skill game.Skill) {
 		}
 		game.ApplyStatus(list, def, caster.ID, shield)
 	}
+	h.commandNPCStatuses(caster, target, remote, remoteShield)
 }
 
 func (h *Hub) trackSkillUse(e *entity, skill game.Skill) {
@@ -1099,6 +1181,9 @@ func (h *Hub) interruptCast(e *entity) {
 	}
 	e.casting = nil
 	e.gcdReadyAt = time.Time{}
+	if cc := clientControlOf(e); cc != nil {
+		delete(cc.skillReadyAt, skillID)
+	}
 	name := skillID
 	if skill, ok := game.FindSkill(skillID); ok {
 		name = skill.Name

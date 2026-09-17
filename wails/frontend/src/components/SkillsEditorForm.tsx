@@ -34,7 +34,9 @@ export function SkillsEditorForm({ draft, onChange }: { draft: SkillDef; onChang
       <NumberField label="MP cost" value={draft.mp_cost} min={0} onChange={(mp_cost) => onChange({ ...draft, mp_cost })} />
       <NumberField label="Power" value={draft.power} min={0} step={0.1} onChange={(power) => onChange({ ...draft, power })} />
       <NumberField label="Cast time (ms)" value={draft.cast_time_ms} min={0} onChange={(cast_time_ms) => onChange({ ...draft, cast_time_ms })} />
+      <NumberField label="Cooldown after GCD (ms)" value={draft.cooldown_ms ?? 0} min={0} onChange={(cooldown_ms) => onChange({ ...draft, cooldown_ms: cooldown_ms || undefined })} />
       <div className="map-editor-group-label">Flags</div>
+      <CheckboxField label="Passive" checked={draft.passive ?? false} onChange={(passive) => onChange({ ...draft, passive: passive || undefined })} />
       <CheckboxField label="Magic" checked={draft.magic} onChange={(magic) => onChange({ ...draft, magic })} />
       <CheckboxField label="Heals" checked={draft.heals} onChange={(heals) => onChange({ ...draft, heals })} />
       <CheckboxField label="Buffs allies" checked={draft.buffs} onChange={(buffs) => onChange({ ...draft, buffs })} />

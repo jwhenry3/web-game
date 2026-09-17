@@ -59,6 +59,9 @@ message SkillInfo {
   int32 usage_to_next = 16;
   int32 cast_time_ms = 17;
   bool world_only = 18;
+  int32 cooldown_ms = 19;
+  bool passive = 20;
+  int32 combo_length = 21;
 }
 
 message JobProgressInfo {

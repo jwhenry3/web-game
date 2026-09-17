@@ -40,8 +40,11 @@ func TestSkillIsRanged(t *testing.T) {
 func TestCatalogCoversAllJobs(t *testing.T) {
 	for _, job := range AllJobs() {
 		skills := SkillsForJob(job.ID)
-		if len(skills) != 4 {
-			t.Fatalf("%s should have 4 skills, got %d", job.ID, len(skills))
+		if len(skills) != 5 {
+			t.Fatalf("%s should have 5 skills, got %d", job.ID, len(skills))
+		}
+		if skills[4].Passive == nil {
+			t.Fatalf("%s fifth skill should be passive", job.ID)
 		}
 	}
 }

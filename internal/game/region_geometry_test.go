@@ -31,11 +31,11 @@ func TestPolygonsOverlapSharedEdgeAllowed(t *testing.T) {
 
 func TestRegionFromObjectPolygon(t *testing.T) {
 	obj := OverrideObject{
-		Type: "region",
-		Name: "poly",
-		X:    0,
-		Y:    128,
-		Width: 128,
+		Type:   "region",
+		Name:   "poly",
+		X:      0,
+		Y:      128,
+		Width:  128,
 		Height: 128,
 		Polygon: []Vec2{
 			{X: 0, Y: 0},

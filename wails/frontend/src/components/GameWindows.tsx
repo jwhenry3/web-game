@@ -524,6 +524,15 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
   const skills = activeJob
     ? profile.skills.filter((s) => s.job === activeJob)
     : profile.skills.filter((s) => s.id === "attack" || s.id === "capture" || s.id === "dodge" || s.world_only);
+  const sections = activeJob
+    ? [
+        { title: "Battle Skills", skills: skills.filter((s) => !s.passive) },
+        { title: "Passive Skills", skills: skills.filter((s) => s.passive) },
+      ]
+    : [
+        { title: "Battle Skills", skills: skills.filter((s) => !s.world_only) },
+        { title: "Field Skills", skills: skills.filter((s) => s.world_only) },
+      ];
 
   return (
     <div className="cm-actions">
@@ -547,11 +556,19 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
           ? "Drag a skill onto the hotbar — drag a slot off the bar (or right-click it) to remove it. Double-click a field skill to use it. Dodge is bound to Shift while moving, not a hotbar slot."
           : "Skills unlock as your jobs level up. Drag them onto the hotbar — use them in combat to raise skill level."}
       </p>
-      <div className="cm-item-list cm-item-list--grid-3">
-        {skills.map((sk) => (
-          <SkillRow key={sk.id} sk={sk} byId={byId} engaged={engaged} />
-        ))}
-      </div>
+      {sections.map((section) => (
+        <section key={section.title}>
+          <h3 className="cm-section-label">{section.title}</h3>
+          <div className="cm-item-list cm-item-list--grid-3">
+            {section.skills.map((sk) => (
+              <SkillRow key={sk.id} sk={sk} byId={byId} engaged={engaged} />
+            ))}
+            {section.skills.length === 0 && (
+              <p className="hint cm-item-list-empty">No {section.title.toLowerCase()} available.</p>
+            )}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
@@ -573,15 +590,15 @@ function SkillRow({
         type="button"
         className="cm-item-row"
         aria-disabled={!sk.unlocked}
-        draggable={sk.unlocked}
+        draggable={sk.unlocked && !sk.passive}
         onDragStart={(e) => {
-          if (!sk.unlocked) return;
+          if (!sk.unlocked || sk.passive) return;
           writeHotbarDrag(e, { kind: "skill", id: sk.id });
         }}
         onDoubleClick={() => {
           // Field skills fire straight from the list (return/port open their
           // picker dialogs inside activateWorldSkill); still combat-gated.
-          if (sk.unlocked && sk.world_only && !engaged) net.activateWorldSkill(sk.id);
+          if (sk.unlocked && sk.world_only && !sk.passive && !engaged) net.activateWorldSkill(sk.id);
         }}
       >
         <span className="cm-item-row-icon">
@@ -603,8 +620,8 @@ function SkillRow({
           {sk.name}
           {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
         </span>
-        <span className={`cm-tree-tag ${sk.world_only ? "field" : "battle"}`}>
-          {sk.world_only ? "Field" : "Battle"}
+        <span className={`cm-tree-tag ${sk.passive ? "passive" : sk.world_only ? "field" : "battle"}`}>
+          {sk.passive ? "Passive" : sk.world_only ? "Field" : "Battle"}
         </span>
       </button>
     </div>

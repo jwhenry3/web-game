@@ -6,13 +6,13 @@ import (
 
 // Pipoya tileset firstgid layout (matches assets samplemap.tmx + Dirt overlay).
 const (
-	PipoyaFirstWaterFall  = 1
-	PipoyaFirstBaseChip   = 577
-	PipoyaFirstGrassAnim  = 1641
-	PipoyaFirstWaterAnim  = 2169
-	PipoyaFirstFlower     = 5241
-	PipoyaFirstLongGrass  = 5289 // Dirt_pipo in sample grass-layer GIDs
-	PipoyaFirstDirt       = 5289
+	PipoyaFirstWaterFall = 1
+	PipoyaFirstBaseChip  = 577
+	PipoyaFirstGrassAnim = 1641
+	PipoyaFirstWaterAnim = 2169
+	PipoyaFirstFlower    = 5241
+	PipoyaFirstLongGrass = 5289 // Dirt_pipo in sample grass-layer GIDs
+	PipoyaFirstDirt      = 5289
 )
 
 // Pipoya visual layer names (bottom → top). collision/objects are game-specific.

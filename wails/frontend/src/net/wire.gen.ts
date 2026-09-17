@@ -53,6 +53,7 @@ export type MessageType =
   "camp_state" |
   "house_state" |
   "house_return" |
+  "region_changed" |
   "error" |
   "map_config";
 
@@ -176,7 +177,10 @@ export interface SkillInfo {
   usage?: number;
   usage_to_next?: number;
   cast_time_ms?: number;
+  cooldown_ms?: number;
   world_only?: boolean;
+  passive?: boolean;
+  combo_length?: number;
 }
 
 export interface JobProgressInfo {
@@ -496,6 +500,11 @@ export interface HouseFurniture {
 
 export interface HouseReturnPayload {
   reason?: string;
+}
+
+export interface RegionChangedPayload {
+  region_id: string;
+  name?: string;
 }
 
 export interface EntityStatePayload {

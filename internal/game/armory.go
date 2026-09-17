@@ -81,6 +81,44 @@ const (
 	AllySkillRange     = 280
 )
 
+// SkillAspect identifies the behavior family passive effects can target.
+type SkillAspect string
+
+const (
+	AspectPhysical SkillAspect = "physical"
+	AspectMagic    SkillAspect = "magic"
+	AspectHeal     SkillAspect = "heal"
+	AspectBuff     SkillAspect = "buff"
+	AspectRanged   SkillAspect = "ranged"
+	AspectCombo    SkillAspect = "combo"
+)
+
+// PassiveEffect describes always-on modifiers granted by an unlocked passive
+// skill. Numeric fields are ratios: 0.10 is +10%, 0.25 is 25%.
+type PassiveEffect struct {
+	SkillTypes        []SkillAspect `json:"skill_types,omitempty"`
+	EffectMultiplier  float64       `json:"effect_multiplier,omitempty"`
+	ReflectChance     float64       `json:"reflect_chance,omitempty"`
+	ReflectRatio      float64       `json:"reflect_ratio,omitempty"`
+	CooldownReduction float64       `json:"cooldown_reduction,omitempty"`
+	MinComboStack     int           `json:"min_combo_stack,omitempty"`
+	TargetHPBelow     float64       `json:"target_hp_below,omitempty"`
+}
+
+// ComboVariant is one step in a repeatable skill chain.
+type ComboVariant struct {
+	Name          string            `json:"name,omitempty"`
+	Power         float64           `json:"power,omitempty"`
+	StatusEffects []StatusEffectDef `json:"status_effects,omitempty"`
+}
+
+// ComboDef makes a skill cycle through variants while its status stack is live.
+type ComboDef struct {
+	Status   StatusKind     `json:"status"`
+	Duration int            `json:"duration"` // battle ticks (200ms each)
+	Variants []ComboVariant `json:"variants"`
+}
+
 type Skill struct {
 	ID          string
 	Name        string
@@ -98,12 +136,25 @@ type Skill struct {
 	Cost        int
 	Description string
 	CastTimeMs  int
+	CooldownMs  int
 	WorldOnly   bool
+	Passive     *PassiveEffect
+	Combo       *ComboDef
 }
 
 var BasicAttack = Skill{
 	ID: "attack", Name: "Attack", Power: 1.0,
-	Description: "A basic weapon strike.",
+	Description: "A basic weapon strike. Repeating it chains through four attacks.",
+	Combo: &ComboDef{
+		Status:   "combo_attack",
+		Duration: 15,
+		Variants: []ComboVariant{
+			{Name: "Attack", Power: 1.0},
+			{Name: "Attack II", Power: 1.15},
+			{Name: "Attack III", Power: 1.35},
+			{Name: "Attack IV", Power: 1.70},
+		},
+	},
 }
 
 // ActionIDDodge is the universal dash: every class has it from level 1. It

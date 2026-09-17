@@ -232,6 +232,7 @@ func (h *Hub) handleLeaveHouse(c *Client) {
 		if e := h.playerEnt(c.ID); e != nil {
 			e.X, e.Y = camp.X, camp.Y
 			h.persistWorldLocation(c, e, true)
+			h.refreshRegionOwnership(c, e)
 			h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 				ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
 			}))

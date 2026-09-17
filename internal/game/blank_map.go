@@ -50,7 +50,7 @@ func NewBlankMapConfig(cols, rows, tileSize int) (*MapConfig, error) {
 		JobChangers: nil,
 		NPCs:        nil,
 		Exits:       nil,
-	Objects: []OverrideObject{
+		Objects: []OverrideObject{
 			{
 				ID:     1,
 				Name:   "main",

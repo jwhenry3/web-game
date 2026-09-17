@@ -50,6 +50,10 @@ type StatusSnapshot struct {
 	Battles   int              `json:"battles"`
 	Exp       StatusExpRates   `json:"exp"`
 	Maps      []StatusMapEntry `json:"maps"`
+	// WorldMode is true when the cluster runs a single world node instead of
+	// the legacy per-map servers. In that mode Maps contains the world entry
+	// only; legacy map specs stay in the registry but are not running.
+	WorldMode bool `json:"world_mode,omitempty"`
 }
 
 type statusEnvelope struct {
@@ -62,6 +66,14 @@ func (p *Proxy) buildStatusSnapshot() StatusSnapshot {
 	nodes := make(map[string]*mapnode.Node, len(p.maps))
 	for id, n := range p.maps {
 		nodes[id] = n
+	}
+	world := p.world
+	worldMode := p.cfg.HasWorld() || world != nil
+	worldID, worldName := "", ""
+	if world != nil {
+		worldID, worldName = world.Spec.ID, world.Spec.Name
+	} else if p.cfg.World != nil {
+		worldID, worldName = p.cfg.World.ID, p.cfg.World.Name
 	}
 	specs := append([]cluster.MapSpec(nil), p.cfg.Maps...)
 	name := strings.TrimSpace(p.cfg.Proxy.Name)
@@ -81,7 +93,27 @@ func (p *Proxy) buildStatusSnapshot() StatusSnapshot {
 			MainPercent: exp.MainPercent,
 			SubPercent:  exp.SubPercent,
 		},
-		Maps: make([]StatusMapEntry, 0, len(specs)),
+		Maps:      make([]StatusMapEntry, 0, len(specs)),
+		WorldMode: worldMode,
+	}
+	if worldMode {
+		// Singular-world mode: one status entry for the world node. Legacy map
+		// specs remain in the registry but none of them run in this mode.
+		entry := StatusMapEntry{
+			ID:      worldID,
+			Name:    worldName,
+			Enabled: true,
+			Running: world != nil,
+		}
+		if world != nil {
+			players, battles := world.StatusCounts()
+			entry.Players = players
+			entry.Battles = battles
+			out.Players += players
+			out.Battles += battles
+		}
+		out.Maps = append(out.Maps, entry)
+		return out
 	}
 	for _, spec := range specs {
 		entry := StatusMapEntry{

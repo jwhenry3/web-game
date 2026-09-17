@@ -89,7 +89,7 @@ func (h *AdminMapsHandler) handleMaps(w http.ResponseWriter, r *http.Request) {
 			list = append(list, info)
 		}
 		writeAdminJSON(w, list)
-		case http.MethodPost:
+	case http.MethodPost:
 		if !h.checkAuth(w, r) {
 			return
 		}
@@ -293,8 +293,14 @@ func (h *AdminMapsHandler) handleOverrides(w http.ResponseWriter, r *http.Reques
 func (h *AdminMapsHandler) reloadMap(mapID string) error {
 	h.Proxy.mu.Lock()
 	n := h.Proxy.maps[mapID]
+	worldMode := h.Proxy.cfg.HasWorld()
 	h.Proxy.mu.Unlock()
 	if n == nil {
+		if worldMode {
+			// No legacy map nodes run in singular-world mode; the override is
+			// already persisted and applies on the next legacy-mode boot.
+			return nil
+		}
 		return fmt.Errorf("map node %q not running", mapID)
 	}
 	return n.ReloadOverworld()
@@ -310,21 +316,21 @@ func (h *AdminMapsHandler) findMap(id string) (cluster.MapSpec, bool) {
 }
 
 type adminMapInfo struct {
-	ID                string                `json:"id"`
-	Name              string                `json:"name"`
-	Overworld         string                `json:"overworld"`
-	Cols              int                   `json:"cols"`
-	Rows              int                   `json:"rows"`
-	TileSize          int                   `json:"tile_size"`
-	Enabled           bool                  `json:"enabled"`
-	Running           bool                  `json:"running"`
-	Default           bool                  `json:"default"`
-	BaseTerrainLayers *terrainLayersPayload `json:"base_terrain_layers"`
-	TerrainLayers     *terrainLayersPayload `json:"terrain_layers"`
-	BaseObjects       []game.OverrideObject `json:"base_objects"`
-	Objects           []game.OverrideObject `json:"objects"`
+	ID                string                 `json:"id"`
+	Name              string                 `json:"name"`
+	Overworld         string                 `json:"overworld"`
+	Cols              int                    `json:"cols"`
+	Rows              int                    `json:"rows"`
+	TileSize          int                    `json:"tile_size"`
+	Enabled           bool                   `json:"enabled"`
+	Running           bool                   `json:"running"`
+	Default           bool                   `json:"default"`
+	BaseTerrainLayers *terrainLayersPayload  `json:"base_terrain_layers"`
+	TerrainLayers     *terrainLayersPayload  `json:"terrain_layers"`
+	BaseObjects       []game.OverrideObject  `json:"base_objects"`
+	Objects           []game.OverrideObject  `json:"objects"`
 	Overrides         *game.MapTileOverrides `json:"overrides,omitempty"`
-	HasOverride       bool                  `json:"has_override"`
+	HasOverride       bool                   `json:"has_override"`
 }
 
 type terrainLayersPayload struct {

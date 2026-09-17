@@ -21,6 +21,14 @@ func TestMaterializeWritesMissingFiles(t *testing.T) {
 	if _, err := os.Stat(mapPath); err != nil {
 		t.Fatalf("expected greenwood map: %v", err)
 	}
+	worldPath := filepath.Join(root, "data", "world", "clara_mundi.server.json")
+	if _, err := os.Stat(worldPath); err != nil {
+		t.Fatalf("expected world server config: %v", err)
+	}
+	worldManifest := filepath.Join(root, "data", "world", "clara_mundi.world.json")
+	if _, err := os.Stat(worldManifest); err != nil {
+		t.Fatalf("expected world manifest: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(root, "data", "accounts.json")); !os.IsNotExist(err) {
 		t.Fatal("accounts.json must not be seeded from the binary")
 	}

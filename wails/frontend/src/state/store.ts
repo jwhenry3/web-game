@@ -72,6 +72,7 @@ interface GameState {
   camps: Record<string, WorldCamp>;
   house: HouseStatePayload | null;
   overworld: OverworldMap | null;
+  currentRegion: { id: string; name: string } | null;
   mapInfo: {
     id: string;
     name: string;
@@ -174,6 +175,7 @@ const initial = {
   camps: {},
   house: null,
   overworld: null,
+  currentRegion: null,
   mapInfo: null,
   chat: [] as ChatLine[],
   chatTab: "general" as ChatChannel,

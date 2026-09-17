@@ -27,6 +27,7 @@ import type {
   SocialStatePayload,
   WelcomePayload,
   MapConfigPayload,
+  RegionChangedPayload,
   SavePoint,
   JobChanger,
   WorldEntity,
@@ -678,6 +679,11 @@ export function handleMessage(env: Envelope) {
     case "map_config": {
       const p = env.payload as MapConfigPayload;
       if (p.map) applyMapSnapshotToGame(p.map);
+      break;
+    }
+    case "region_changed": {
+      const p = env.payload as RegionChangedPayload;
+      g.setState({ currentRegion: p.region_id ? { id: p.region_id, name: p.name ?? p.region_id } : null });
       break;
     }
     case "world_state": {

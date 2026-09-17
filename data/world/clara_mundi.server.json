@@ -1,0 +1,10 @@
+{
+  "server": {
+    "accounts": "data/accounts.json",
+    "addr": ":8080",
+    "data": "data/profiles.json",
+    "name": "Clara Mundi",
+    "overworld": "data/world/clara_mundi.world.json",
+    "static": ""
+  }
+}

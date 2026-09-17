@@ -5,6 +5,11 @@
     "sub_percent": 25,
     "subjob_unlock_level": 5
   },
+  "world": {
+    "config": "data/world/clara_mundi.server.json",
+    "id": "clara_mundi",
+    "name": "Clara Mundi"
+  },
   "maps": [
     {
       "addr": ":8091",

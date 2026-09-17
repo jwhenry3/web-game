@@ -17,6 +17,7 @@ import (
 //
 //go:embed cluster.json
 //go:embed maps
+//go:embed world
 //go:embed content
 var FS embed.FS
 

@@ -55,9 +55,10 @@ type Proxy struct {
 	adminSecret string
 	startedAt   time.Time
 
-	mu   sync.Mutex
-	maps map[string]*mapnode.Node
-	sess map[string]*session
+	mu    sync.Mutex
+	maps  map[string]*mapnode.Node
+	world *mapnode.Node
+	sess  map[string]*session
 }
 
 func New(cfg cluster.Config, cfgPath string, tokens *auth.TokenIssuer, accounts *store.AccountStore, profiles *store.Store, adminSecret string) *Proxy {
@@ -88,11 +89,24 @@ func (p *Proxy) RegisterMap(n *mapnode.Node) {
 	p.mu.Unlock()
 }
 
+func (p *Proxy) RegisterWorld(n *mapnode.Node) {
+	n.Forward = func(clientID string, msg []byte) {
+		p.sendToClient(clientID, msg)
+	}
+	// World mode uses a single node; map-to-map transfers are not applicable.
+	p.mu.Lock()
+	p.world = n
+	p.mu.Unlock()
+}
+
 func (p *Proxy) KickByCharacterName(name string) {
 	p.mu.Lock()
-	nodes := make([]*mapnode.Node, 0, len(p.maps))
+	nodes := make([]*mapnode.Node, 0, len(p.maps)+1)
 	for _, n := range p.maps {
 		nodes = append(nodes, n)
+	}
+	if p.world != nil {
+		nodes = append(nodes, p.world)
 	}
 	p.mu.Unlock()
 	for _, n := range nodes {
@@ -139,6 +153,8 @@ func (p *Proxy) handleAtlas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p.mu.Lock()
+	world := p.world
+	worldMode := p.cfg.HasWorld() || world != nil
 	nodes := make(map[string]*mapnode.Node, len(p.maps))
 	for id, n := range p.maps {
 		nodes[id] = n
@@ -146,15 +162,23 @@ func (p *Proxy) handleAtlas(w http.ResponseWriter, r *http.Request) {
 	specs := append([]cluster.MapSpec(nil), p.cfg.Maps...)
 	p.mu.Unlock()
 	maps := make([]protocol.AtlasMap, 0, len(specs))
-	for _, spec := range specs {
-		if !spec.IsEnabled() {
-			continue
+	if worldMode {
+		// Singular-world mode: the atlas is exactly the world node's terrain.
+		// Legacy map specs stay in the registry but are not running.
+		if world != nil {
+			maps = append(maps, world.AtlasMap())
 		}
-		n := nodes[spec.ID]
-		if n == nil {
-			continue
+	} else {
+		for _, spec := range specs {
+			if !spec.IsEnabled() {
+				continue
+			}
+			n := nodes[spec.ID]
+			if n == nil {
+				continue
+			}
+			maps = append(maps, n.AtlasMap())
 		}
-		maps = append(maps, n.AtlasMap())
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(protocol.AtlasPayload{Maps: maps})
@@ -268,6 +292,23 @@ func (p *Proxy) writePump(s *session) {
 }
 
 func (p *Proxy) route(s *session, env protocol.Envelope) {
+	if p.world != nil {
+		if env.Type == protocol.TypeJoinWorld && s.mapID == "" {
+			s.mapID = p.world.Spec.ID
+			if !p.attach(s, s.mapID, cluster.AttachRequest{
+				ClientID: s.id, AccountID: s.acctID, Username: s.user,
+			}) {
+				p.sendToClient(s.id, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "World server unavailable."}))
+				return
+			}
+		}
+		if s.mapID == "" {
+			p.sendToClient(s.id, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Join the world first."}))
+			return
+		}
+		p.world.Handle(s.id, env)
+		return
+	}
 	if env.Type == protocol.TypeJoinWorld && s.mapID == "" {
 		mapID := p.pickMap(s, env)
 		if !p.attach(s, mapID, cluster.AttachRequest{
@@ -309,6 +350,9 @@ func (p *Proxy) pickMap(s *session, env protocol.Envelope) string {
 func (p *Proxy) attach(s *session, mapID string, req cluster.AttachRequest) bool {
 	p.mu.Lock()
 	n := p.maps[mapID]
+	if n == nil && p.world != nil && p.world.Spec.ID == mapID {
+		n = p.world
+	}
 	p.mu.Unlock()
 	if n == nil {
 		return false
@@ -398,6 +442,9 @@ func (p *Proxy) drop(s *session) {
 	p.mu.Lock()
 	delete(p.sess, s.id)
 	n := p.maps[s.mapID]
+	if n == nil && p.world != nil && p.world.Spec.ID == s.mapID {
+		n = p.world
+	}
 	p.mu.Unlock()
 	if n != nil {
 		n.Detach(s.id)

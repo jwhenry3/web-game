@@ -40,9 +40,9 @@ type Event struct {
 }
 
 // Hub is the central orchestrator: it routes client messages and owns the
-// persistent open-world layer including realtime combat. All world state is
-// owned by the Run goroutine — there are no separate battle rooms or locks on
-// entity state.
+// persistent open-world layer including realtime combat. Player/pet state is
+// owned by the Run goroutine; in singular-world mode each NPC is owned by one
+// region worker and mirrored here only as an immutable projection.
 type Hub struct {
 	mu      sync.RWMutex // guards clients map (read by senders outside Run)
 	clients map[string]*Client
@@ -76,9 +76,19 @@ type Hub struct {
 	houses           map[string]*houseRoom // owner character name -> instance
 
 	overworld  *game.Overworld
+	world      *game.WorldDefinition // non-nil selects singular-world ownership mode
 	mapID      string
 	mapName    string
 	OnTransfer func(clientID string, dest TransferDest)
+
+	// Singular-world NPC workers own mutable NPC entities. Hub.entities keeps
+	// projection copies for targeting and wire output. npcEffects is non-nil
+	// only on the private simulation façade used inside a worker goroutine.
+	npcWorkers     map[string]*npcWorker
+	npcWorkerOrder []string
+	npcOwners      map[string]string
+	npcWorkerSeq   uint64
+	npcEffects     *npcSimEffects
 
 	// World-space placement of this map inside the border-graph layout, sent
 	// in map_snapshot so clients can overlay neighbors in one scene.
@@ -146,11 +156,31 @@ func (h *Hub) Unregister(c *Client) { h.unregister <- c }
 func (h *Hub) PushEvent(ev Event) { h.events <- ev }
 
 func (h *Hub) SetMap(id, name string, ow *game.Overworld) {
+	if h.npcWorkers != nil {
+		h.stopNPCWorkers()
+	}
+	h.world = nil
 	h.mapID = id
 	h.mapName = name
 	if ow != nil {
 		h.overworld = ow
 		game.RegisterSavePoints(id, name, ow.SavePoints)
+	}
+}
+
+// SetWorld configures a hub to simulate one continuous world. Unlike SetMap,
+// region boundaries only change authoritative ownership; they never transfer a
+// client to another hub.
+func (h *Hub) SetWorld(id, name string, world *game.WorldDefinition) {
+	if h.npcWorkers != nil {
+		h.stopNPCWorkers()
+	}
+	h.world = world
+	h.mapID = id
+	h.mapName = name
+	if world != nil {
+		h.overworld = world.Overworld
+		game.RegisterSavePoints(id, name, world.SavePoints)
 	}
 }
 
@@ -183,7 +213,16 @@ func (h *Hub) ApplyOverworldReload(id, name string, ow *game.Overworld) {
 }
 
 func (h *Hub) reloadOverworld(id, name string, ow *game.Overworld) {
-	h.SetMap(id, name, ow)
+	if h.world != nil {
+		world, err := game.NewWorldDefinition(ow, h.world.SimulationRegions)
+		if err != nil {
+			log.Printf("world %s reload rejected: %v", id, err)
+			return
+		}
+		h.SetWorld(id, name, world)
+	} else {
+		h.SetMap(id, name, ow)
+	}
 	h.reseedNPCsPreservingCombat(npcCount)
 	h.BroadcastMapConfig()
 	h.broadcastWorldState()
@@ -324,7 +363,9 @@ func (h *Hub) KickByCharacterName(name string) {
 
 func (h *Hub) Run() {
 	defer close(h.done)
+	defer h.stopNPCWorkers()
 	h.initSocial()
+	h.ensureNPCWorkers()
 	h.seedNPCs(npcCount)
 	ticker := time.NewTicker(time.Duration(npcTickSec * float64(time.Second)))
 	defer ticker.Stop()
@@ -376,7 +417,19 @@ func (h *Hub) Stop() {
 // ---- hub-goroutine internals ----
 
 func (h *Hub) sendRaw(c *Client, msg []byte) {
-	if msg == nil {
+	if c == nil || msg == nil {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	h.sendRawLocked(c, msg)
+}
+
+// sendRawLocked sends while clients membership is protected by h.mu. Holding
+// the read lock across the non-blocking send prevents handleDisconnect from
+// closing c.Send between the membership check and the channel operation.
+func (h *Hub) sendRawLocked(c *Client, msg []byte) {
+	if h.clients[c.ID] != c {
 		return
 	}
 	select {
@@ -399,7 +452,7 @@ func (h *Hub) broadcastAll(msg []byte) {
 	defer h.mu.RUnlock()
 	for _, c := range h.clients {
 		if c.Joined {
-			h.sendRaw(c, msg)
+			h.sendRawLocked(c, msg)
 		}
 	}
 }
@@ -585,6 +638,7 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 		h.grantBattleImmunity(e)
 	}
 	h.persistWorldLocation(c, e, true)
+	h.refreshRegionOwnership(c, e)
 	h.syncPetEntities()
 
 	h.sendWelcome(c, profile)
@@ -629,7 +683,7 @@ func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facin
 		}
 		return c.SpawnX, c.SpawnY, c.SpawnFacing
 	}
-	if profile.HasWorldPos && h.canResumeAt(profile.WorldX, profile.WorldY) {
+	if profile.HasWorldPos && h.persistedPosInThisWorld(profile) && h.canResumeAt(profile.WorldX, profile.WorldY) {
 		return profile.WorldX, profile.WorldY, profile.Facing.Radians()
 	}
 	if h.overworld != nil {
@@ -638,6 +692,20 @@ func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facin
 		x, y = game.SpawnPosition(profile.SavePointID)
 	}
 	return x, y, game.FacingYawDefault
+}
+
+// persistedPosInThisWorld reports whether the profile's saved coordinates were
+// recorded inside this hub's world. Only enforced in singular-world mode: a
+// stale legacy MapID must not veto resuming (persisted MapID never controls
+// world selection), while a position saved in a different world must not
+// teleport the hero across worlds. Legacy map hubs keep trusting the saved
+// position — the proxy already routed the client to prof.MapID.
+func (h *Hub) persistedPosInThisWorld(p store.Profile) bool {
+	if h.world == nil {
+		return true
+	}
+	loc := p.PersistedWorldID()
+	return loc == "" || loc == h.mapID
 }
 
 func (h *Hub) canResumeAt(x, y float64) bool {
@@ -652,9 +720,49 @@ func (h *Hub) persistWorldLocation(c *Client, e *entity, flush bool) {
 		return
 	}
 	doFlush := flush || time.Since(c.lastWorldSave) >= worldPosSaveInterval
-	h.store.SetWorldLocation(c.Name, h.mapID, e.X, e.Y, e.Facing, doFlush)
+	if h.world != nil {
+		// Singular world: record the world id in WorldID without churning the
+		// legacy MapID/PrevMapID fields used by multi-map routing.
+		h.store.SetWorldLocationInWorld(c.Name, h.mapID, e.X, e.Y, e.Facing, doFlush)
+	} else {
+		h.store.SetWorldLocation(c.Name, h.mapID, e.X, e.Y, e.Facing, doFlush)
+	}
 	if doFlush {
 		c.lastWorldSave = time.Now()
+	}
+}
+
+// regionIDAt returns the simulation region ID that owns (x, y) in singular-world
+// mode, or "" when no region covers the coordinate. It does not require a Client
+// so it can be used for NPCs and pets as well as players.
+func (h *Hub) regionIDAt(x, y float64) string {
+	if h.world == nil {
+		return ""
+	}
+	tileSize := h.world.TileSizePx()
+	if tileSize <= 0 {
+		return ""
+	}
+	col, row := int(math.Floor(x/float64(tileSize))), int(math.Floor(y/float64(tileSize)))
+	if region, ok := h.world.SimulationRegionAt(col, row); ok {
+		return region.ID
+	}
+	return ""
+}
+
+// refreshRegionOwnership derives ownership from the entity's accepted server
+// position. When c is non-nil, notifications are private to the affected player.
+func (h *Hub) refreshRegionOwnership(c *Client, e *entity) {
+	if h.world == nil || e == nil {
+		return
+	}
+	regionID := h.regionIDAt(e.X, e.Y)
+	if e.regionID == regionID {
+		return
+	}
+	e.regionID = regionID
+	if c != nil {
+		h.send(c, protocol.TypeRegionChanged, protocol.RegionChangedPayload{RegionID: regionID})
 	}
 }
 
@@ -695,7 +803,8 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 		h.interruptCast(e)
 	}
 	h.persistWorldLocation(c, e, false)
-	if h.OnTransfer != nil && h.overworld != nil {
+	h.refreshRegionOwnership(c, e)
+	if h.world == nil && h.OnTransfer != nil && h.overworld != nil {
 		if destMap, edge, t, ok := h.overworld.BorderCrossingAt(e.X, e.Y); ok && destMap != h.mapID {
 			h.OnTransfer(c.ID, TransferDest{
 				Map: destMap, Edge: edge.Opposite(), EdgeT: t, Facing: e.Facing,
@@ -728,7 +837,7 @@ func (h *Hub) broadcastPlayerMoved(moverID string, e *entity) {
 		}
 		p := h.entities[c.ID]
 		if c.ID == moverID || (p != nil && dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist) {
-			h.sendRaw(c, msg)
+			h.sendRawLocked(c, msg)
 		} else {
 			h.movedPlayers[moverID] = true
 		}
@@ -770,7 +879,7 @@ func (h *Hub) flushFarSync() {
 					Entities: h.serverEntitySnapshots(),
 				})
 			}
-			h.sendRaw(c, msg)
+			h.sendRawLocked(c, msg)
 		}
 		clear(h.farEntityClients)
 	}
@@ -793,7 +902,7 @@ func (h *Hub) flushFarSync() {
 			if p != nil && dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist {
 				continue // near clients already stream these in real time
 			}
-			h.sendRaw(c, protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
+			h.sendRawLocked(c, protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 				ID: id, X: e.X, Y: e.Y, Facing: e.Facing,
 			}))
 		}
@@ -961,6 +1070,10 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 	toInfo := func(s game.Skill) protocol.SkillInfo {
 		lvl := loadout.SkillLevels[s.ID]
 		unlocked := game.SkillAlwaysUnlocked(s.ID) || lvl > 0
+		comboLength := 0
+		if s.Combo != nil {
+			comboLength = len(s.Combo.Variants)
+		}
 		return protocol.SkillInfo{
 			ID: s.ID, Name: s.Name, MPCost: s.MPCost, Heals: s.Heals, Buffs: s.Buffs,
 			Description: s.Description, Category: string(s.Category),
@@ -972,7 +1085,10 @@ func profileInfo(p store.Profile) protocol.ProfileInfo {
 			Usage:       loadout.SkillUsage[s.ID],
 			UsageToNext: game.SkillUsesToNextLevel(lvl),
 			CastTimeMs:  game.SkillCastTime(s),
+			CooldownMs:  s.CooldownMs,
 			WorldOnly:   s.WorldOnly,
+			Passive:     s.Passive != nil,
+			ComboLength: comboLength,
 		}
 	}
 	skills := []protocol.SkillInfo{toInfo(game.BasicAttack), toInfo(game.SkillCapture), toInfo(game.SkillDodge)}

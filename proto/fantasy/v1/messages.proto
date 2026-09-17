@@ -150,6 +150,11 @@ message HouseReturnPayload {
   string reason = 1;
 }
 
+message RegionChangedPayload {
+  string region_id = 1;
+  optional string name = 2;
+}
+
 // ---- Server → Client ----
 
 message WelcomePayload {

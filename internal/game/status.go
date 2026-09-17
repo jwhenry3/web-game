@@ -1,5 +1,10 @@
 package game
 
+import (
+	"fmt"
+	"strings"
+)
+
 // StatusKind identifies a combat buff or debuff.
 type StatusKind string
 
@@ -17,10 +22,10 @@ const (
 
 // StatusEffectDef is applied when a skill resolves successfully.
 type StatusEffectDef struct {
-	Kind     StatusKind
-	Duration int     // battle ticks (200ms each)
-	Potency  float64 // meaning depends on kind
-	OnCaster bool    // apply to actor instead of skill target
+	Kind     StatusKind `json:"kind"`
+	Duration int        `json:"duration"`            // battle ticks (200ms each)
+	Potency  float64    `json:"potency"`             // meaning depends on kind
+	OnCaster bool       `json:"on_caster,omitempty"` // apply to actor instead of skill target
 }
 
 // ActiveStatus is a live buff/debuff on a combatant.
@@ -92,10 +97,20 @@ func StatusesForSkill(skillID string) []StatusEffectDef {
 	return SkillStatusEffects[skillID]
 }
 
+const comboStatusPrefix = "combo_"
+
+// ComboStatus reports whether a status kind carries a combo stack.
+func ComboStatus(kind StatusKind) bool {
+	return strings.HasPrefix(string(kind), comboStatusPrefix)
+}
+
 // StatusDisplayName is a short label for UI badges.
 func StatusDisplayName(kind StatusKind) string {
 	if d := lookupDef(kind); d != nil {
 		return d.DisplayName
+	}
+	if ComboStatus(kind) {
+		return "Combo"
 	}
 	return string(kind)
 }
@@ -103,6 +118,10 @@ func StatusDisplayName(kind StatusKind) string {
 // StatusDescribe builds tooltip text for an active status.
 func StatusDescribe(s ActiveStatus) string {
 	name := StatusDisplayName(s.Kind)
+	if ComboStatus(s.Kind) {
+		secs := (s.Remaining * 200) / 1000
+		return fmt.Sprintf("%s — stack %.0f (%ds)", name, s.Potency, secs)
+	}
 	if d := lookupDef(s.Kind); d != nil && d.DescribeFn != nil {
 		secs := (s.Remaining * 200) / 1000
 		return d.DescribeFn(name, s, secs)

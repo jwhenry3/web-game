@@ -246,6 +246,47 @@ func TestProtobufRoundTripPetID(t *testing.T) {
 	}
 }
 
+func TestRegionChangedCodecParity(t *testing.T) {
+	frame := protocol.Encode(protocol.TypeRegionChanged, protocol.RegionChangedPayload{
+		RegionID: "greenwood-north",
+		Name:     "Greenwood North",
+	})
+	bin, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := protocol.DecodeFrame(protocol.CodecProtobuf, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Type != protocol.TypeRegionChanged {
+		t.Fatalf("type %s", env.Type)
+	}
+	var changed protocol.RegionChangedPayload
+	if err := json.Unmarshal(env.Payload, &changed); err != nil {
+		t.Fatal(err)
+	}
+	if changed.RegionID != "greenwood-north" || changed.Name != "Greenwood North" {
+		t.Fatalf("got %+v", changed)
+	}
+
+	withoutName := protocol.Encode(protocol.TypeRegionChanged, protocol.RegionChangedPayload{RegionID: "greenwood"})
+	var jsonEnv protocol.Envelope
+	if err := json.Unmarshal(withoutName, &jsonEnv); err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(jsonEnv.Payload, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if raw["region_id"] != "greenwood" {
+		t.Fatalf("region_id missing: %#v", raw)
+	}
+	if _, ok := raw["name"]; ok {
+		t.Fatalf("optional name should be omitted: %#v", raw)
+	}
+}
+
 func TestJSONCodecPassthrough(t *testing.T) {
 	frame := protocol.Encode(protocol.TypeChat, protocol.ChatPayload{Message: "hi"})
 	out, err := protocol.EncodeFrame(protocol.CodecJSON, frame)

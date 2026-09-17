@@ -57,21 +57,26 @@ func npcCombatProfile(p game.Patrol) (kind string, level, maxHP int, dropPoolID 
 // removeNPCs drops every NPC entity from the world.
 func (h *Hub) removeNPCs() {
 	for id, e := range h.entities {
-		if e.Kind == kindNPC {
-			delete(h.entities, id)
+		if e.Kind != kindNPC {
+			continue
 		}
+		if w := h.npcWorkerFor(e); w != nil {
+			w.call(npcCommand{Kind: npcCmdRemove, TargetID: id})
+		}
+		delete(h.entities, id)
+		delete(h.npcOwners, id)
 	}
 }
 
-func (h *Hub) seedNPCs(count int) {
-	h.removeNPCs()
+func (h *Hub) buildNPCs(count int) []*entity {
 	if count <= 0 {
-		return
+		return nil
 	}
 	patrols := game.NPCPatrols
 	if h.overworld != nil {
 		patrols = h.overworld.NPCPatrols
 	}
+	npcs := make([]*entity, 0, min(count, len(patrols)))
 	for i, p := range patrols {
 		if i >= count {
 			break
@@ -84,7 +89,16 @@ func (h *Hub) seedNPCs(count int) {
 		}
 		p.Home = h.nudgePatrolHome(p.Home, reg)
 		n := newNPCEntity(p, reg, h.overworld)
-		h.entities[n.ID] = n
+		h.refreshRegionOwnership(nil, n)
+		npcs = append(npcs, n)
+	}
+	return npcs
+}
+
+func (h *Hub) seedNPCs(count int) {
+	h.removeNPCs()
+	for _, n := range h.buildNPCs(count) {
+		h.installNPC(n)
 	}
 }
 
@@ -129,36 +143,43 @@ func absInt(v int) int {
 func (h *Hub) reseedNPCsPreservingCombat(count int) {
 	prev := map[string]*entity{}
 	h.eachEntity(kindNPC, func(e *entity) { prev[e.ID] = e })
-	h.seedNPCs(count)
-	h.eachEntity(kindNPC, func(n *entity) {
-		old, ok := prev[n.ID]
-		if !ok || !engagedNPC(old) {
-			return
+	next := h.buildNPCs(count)
+	h.removeNPCs()
+	installed := map[string]bool{}
+	for _, n := range next {
+		if old := prev[n.ID]; old != nil && engagedNPC(old) {
+			restoreNPCCombat(n, old)
 		}
-		ng, og := npcEngageOf(n), npcEngageOf(old)
-		ng.engaged = true
-		n.targetID = old.targetID
-		n.contributors = old.contributors
-		n.hp = old.hp
-		n.X, n.Y = old.X, old.Y
-		ng.leashX, ng.leashY, ng.leashSet = og.leashX, og.leashY, og.leashSet
-		n.hidden = old.hidden
-		n.alive = old.alive
-		if nr, or := respawnOf(n), respawnOf(old); nr != nil && or != nil {
-			nr.respawnAt = or.respawnAt
-		}
-	})
+		h.installNPC(n)
+		installed[n.ID] = true
+	}
 	for id, old := range prev {
-		if !engagedNPC(old) && !old.hidden {
-			continue
-		}
-		if _, ok := h.entities[id]; ok {
+		if installed[id] || (!engagedNPC(old) && !old.hidden) {
 			continue
 		}
 		if w := old.components.wander; w != nil {
 			w.ow = h.overworld
 		}
-		h.entities[id] = old
+		h.installNPC(cloneEntity(old, true))
+	}
+}
+
+func restoreNPCCombat(n, old *entity) {
+	ng, og := npcEngageOf(n), npcEngageOf(old)
+	if ng == nil || og == nil {
+		return
+	}
+	ng.engaged = true
+	n.targetID = old.targetID
+	n.contributors = cloneIntMap(old.contributors)
+	n.enmity = cloneIntMap(old.enmity)
+	n.hp = old.hp
+	n.X, n.Y = old.X, old.Y
+	ng.leashX, ng.leashY, ng.leashSet = og.leashX, og.leashY, og.leashSet
+	n.hidden = old.hidden
+	n.alive = old.alive
+	if nr, or := respawnOf(n), respawnOf(old); nr != nil && or != nil {
+		nr.respawnAt = or.respawnAt
 	}
 }
 
@@ -177,7 +198,7 @@ func (h *Hub) broadcastEntityState() {
 		}
 		p := h.entities[c.ID]
 		if p != nil && h.nearServerEntity(p) {
-			h.sendRaw(c, msg)
+			h.sendRawLocked(c, msg)
 		} else {
 			h.farEntityClients[c.ID] = true
 		}

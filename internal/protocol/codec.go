@@ -80,6 +80,7 @@ var payloadRegistry = map[MessageType]func() proto.Message{
 	TypeCampState:            func() proto.Message { return &pb.CampStatePayload{} },
 	TypeHouseState:           func() proto.Message { return &pb.HouseStatePayload{} },
 	TypeHouseReturn:          func() proto.Message { return &pb.HouseReturnPayload{} },
+	TypeRegionChanged:        func() proto.Message { return &pb.RegionChangedPayload{} },
 	TypeAction:               func() proto.Message { return &pb.ActionPayload{} },
 	TypeSetTarget:            func() proto.Message { return &pb.SetTargetPayload{} },
 	TypeSetSavePoint:         func() proto.Message { return &pb.SetSavePointPayload{} },

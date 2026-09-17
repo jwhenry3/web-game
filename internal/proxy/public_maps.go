@@ -28,9 +28,15 @@ func (h *PublicMapsHandler) handleMaps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Proxy.mu.Lock()
-	out := make([]protocol.MapSnapshot, 0, len(h.Proxy.maps))
+	out := make([]protocol.MapSnapshot, 0, len(h.Proxy.maps)+1)
 	for _, n := range h.Proxy.maps {
 		if snap := n.Hub.MapSnapshot(); snap != nil {
+			out = append(out, *snap)
+		}
+	}
+	// In singular-world mode the world node is the only running map server.
+	if h.Proxy.world != nil {
+		if snap := h.Proxy.world.Hub.MapSnapshot(); snap != nil {
 			out = append(out, *snap)
 		}
 	}
@@ -51,6 +57,9 @@ func (h *PublicMapsHandler) handleMapByID(w http.ResponseWriter, r *http.Request
 	}
 	h.Proxy.mu.Lock()
 	n := h.Proxy.maps[id]
+	if n == nil && h.Proxy.world != nil && h.Proxy.world.Spec.ID == id {
+		n = h.Proxy.world
+	}
 	h.Proxy.mu.Unlock()
 	if n == nil {
 		http.NotFound(w, r)

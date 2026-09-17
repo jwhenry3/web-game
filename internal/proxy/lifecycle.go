@@ -37,6 +37,9 @@ func (p *Proxy) ClusterMaps() []cluster.MapSpec {
 func (p *Proxy) mapRunning(id string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.world != nil && p.world.Spec.ID == id {
+		return true
+	}
 	return p.maps[id] != nil
 }
 
@@ -46,6 +49,13 @@ func (p *Proxy) persistCluster() error {
 
 func (p *Proxy) startMapLocked(spec cluster.MapSpec) error {
 	if p.maps[spec.ID] != nil {
+		return nil
+	}
+	if p.cfg.HasWorld() {
+		// Singular-world mode runs only the world node; legacy map specs never
+		// start a map server here. Registry changes still persist so the map
+		// is staged for a future legacy-mode boot.
+		log.Printf("proxy: world mode — map %s (%s) registered but no map server started", spec.ID, spec.Name)
 		return nil
 	}
 	n, err := mapnode.Start(spec, p.profiles, p.accounts, p.cfg.WorldLayout)
@@ -73,6 +83,8 @@ func (p *Proxy) stopMapLocked(id string) {
 }
 
 // CreateMap writes blank map + server config, registers in cluster, and starts the node.
+// In singular-world mode the registry entry is still created but no map server
+// is started — only the world node runs.
 func (p *Proxy) CreateMap(req CreateMapRequest) (cluster.MapSpec, error) {
 	id := strings.TrimSpace(strings.ToLower(req.ID))
 	name := strings.TrimSpace(req.Name)
@@ -148,7 +160,9 @@ func (p *Proxy) CreateMap(req CreateMapRequest) (cluster.MapSpec, error) {
 	return spec, nil
 }
 
-// EnableMap marks a map enabled and starts its server if needed.
+// EnableMap marks a map enabled and starts its server if needed. In
+// singular-world mode it only updates the persisted registry flag; the map
+// remains registered-but-not-running until a legacy-mode boot.
 func (p *Proxy) EnableMap(id string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -316,6 +330,8 @@ func (p *Proxy) UpdateMapServer(id string, patch MapServerUpdate) (MapServerInfo
 }
 
 // DisableMap evacuates players, stops the map server, and marks it disabled.
+// In singular-world mode no map server is running, so this only updates the
+// persisted registry flag.
 func (p *Proxy) DisableMap(id string) error {
 	return p.disableOrRemove(id, false)
 }

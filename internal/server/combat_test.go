@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"math"
+	"math/rand"
 	"strings"
 	"testing"
 	"time"
@@ -737,6 +738,126 @@ func TestGCDSwallowsSecondAction(t *testing.T) {
 	h.handleAction(c, raw)
 	if n.hp >= hpAfterFirst {
 		t.Fatal("attack after the GCD should land")
+	}
+}
+
+func TestGCDIsOneSecond(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	n.hp, n.maxHP = 10000, 10000
+
+	started := time.Now()
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID, TargetID: n.ID})
+	h.handleAction(c, raw)
+	got := pe.gcdReadyAt.Sub(started)
+	if got < 950*time.Millisecond || got > 1050*time.Millisecond {
+		t.Fatalf("GCD = %v, want about 1s", got)
+	}
+}
+
+func TestSkillCooldownAddsAfterGCD(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	n.hp, n.maxHP = 10000, 10000
+	skill, ok := game.FindSkill("van_impetus_acies")
+	if !ok || skill.CooldownMs != 2000 {
+		t.Fatal("Line Hold should have a 2s configured cooldown")
+	}
+	if _, msg := h.store.UnlockSkill(c.Name, skill.ID); msg != "" {
+		t.Fatal(msg)
+	}
+	h.refreshCombatStats(c, pe)
+	pe.mp = pe.maxMP
+
+	started := time.Now()
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: skill.ID, TargetID: n.ID})
+	h.handleAction(c, raw)
+	if hp := n.hp; hp >= n.maxHP {
+		t.Fatal("skill should land")
+	}
+	skillReady := cc.skillReadyAt[skill.ID].Sub(started)
+	want := gcdDuration + time.Duration(skill.CooldownMs)*time.Millisecond
+	if skillReady < want-50*time.Millisecond || skillReady > want+50*time.Millisecond {
+		t.Fatalf("skill ready delay = %v, want %v", skillReady, want)
+	}
+
+	pe.gcdReadyAt = time.Now().Add(-time.Millisecond)
+	hpBefore := n.hp
+	drainClient(c)
+	h.handleAction(c, raw)
+	if n.hp != hpBefore {
+		t.Fatal("skill should remain blocked by its own cooldown after the GCD")
+	}
+	evs := combatEvents(drainClient(c))
+	if len(evs) == 0 || !strings.Contains(evs[len(evs)-1].Message, "recharging") {
+		t.Fatalf("expected a recharging combat event, got %+v", evs)
+	}
+}
+
+func TestPassiveReflectsDamage(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	if _, msg := h.store.UnlockSkill(c.Name, "van_ripostis"); msg != "" {
+		t.Fatal(msg)
+	}
+	h.refreshCombatStats(c, pe)
+	for seed := int64(0); ; seed++ {
+		r := rand.New(rand.NewSource(seed))
+		if r.Float64() < 0.15 {
+			h.rng = r
+			break
+		}
+	}
+
+	before := n.hp
+	h.applyDamage(n, pe, 20, protocol.CombatEventPayload{ActionID: "test_hit"})
+	if pe.hp != pe.maxHP-20 {
+		t.Fatalf("incoming hp = %d, want %d", pe.hp, pe.maxHP-20)
+	}
+	if n.hp != before-5 {
+		t.Fatalf("reflected damage should cost attacker 5 hp, got %d", before-n.hp)
+	}
+	found := false
+	for _, ev := range combatEvents(drainClient(c)) {
+		if ev.ActionID == "reflect" && ev.Damage == 5 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("expected a reflect combat event")
+	}
+}
+
+func TestAttackComboUsesStatusVariants(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	n.hp, n.maxHP = 10000, 10000
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID, TargetID: n.ID})
+	names := []string{"Attack", "Attack II", "Attack III", "Attack IV", "Attack"}
+
+	for i, want := range names {
+		drainClient(c)
+		h.handleAction(c, raw)
+		evs := combatEvents(drainClient(c))
+		if len(evs) == 0 || evs[len(evs)-1].ActionName != want {
+			t.Fatalf("combo action %d name = %q, want %q", i+1, evs[len(evs)-1].ActionName, want)
+		}
+		if i < 3 && game.ComboStack(pe.statuses, game.BasicAttack.Combo) != i+1 {
+			t.Fatalf("combo stack = %d, want %d", game.ComboStack(pe.statuses, game.BasicAttack.Combo), i+1)
+		}
+		if i == 3 && game.ComboStack(pe.statuses, game.BasicAttack.Combo) != 0 {
+			t.Fatal("fourth combo variant should clear its status")
+		}
+		pe.gcdReadyAt = time.Now().Add(-time.Millisecond)
 	}
 }
 

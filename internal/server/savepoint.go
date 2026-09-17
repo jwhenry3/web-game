@@ -268,12 +268,21 @@ func (h *Hub) completeWorldCast(c *Client) {
 }
 
 func (h *Hub) resolveSavePointDest(id string) (mapID, name string, x, y float64, ok bool) {
-	if rec, found := game.LookupSavePoint(id); found {
-		return rec.MapID, rec.Name, rec.X, rec.Y, true
-	}
+	// Crystals physically on this map/world always resolve locally, even when
+	// the cluster registry lists the id under a different map — save points
+	// are scoped to the world that owns them and never trigger a transfer
+	// inside their own world.
 	if sp, found := h.savePointByID(id); found {
 		c := game.TileCenter(sp.Tile)
 		return h.mapID, sp.Name, c.X, c.Y, true
+	}
+	if h.world != nil {
+		// Singular-world mode: every save point lives inside this world, so an
+		// id missing locally is unknown — never a cross-map transfer.
+		return "", "", 0, 0, false
+	}
+	if rec, found := game.LookupSavePoint(id); found {
+		return rec.MapID, rec.Name, rec.X, rec.Y, true
 	}
 	return "", "", 0, 0, false
 }
@@ -293,6 +302,7 @@ func (h *Hub) warpToSavePoint(c *Client, e *entity, destID, notice string) bool 
 	}
 	e.X, e.Y = x, y
 	h.persistWorldLocation(c, e, true)
+	h.refreshRegionOwnership(c, e)
 	h.grantBattleImmunity(e)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
@@ -348,6 +358,7 @@ func (h *Hub) respawnAtSavePoint(clientID string) {
 	}
 	if c, ok := h.clients[clientID]; ok {
 		h.persistWorldLocation(c, e, true)
+		h.refreshRegionOwnership(c, e)
 	}
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 		ID: clientID, X: e.X, Y: e.Y, Facing: e.Facing,

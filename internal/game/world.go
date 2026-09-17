@@ -57,25 +57,26 @@ const BorderBandTiles = 2
 
 // Overworld is one map's terrain, spawns, and exits. Each map server holds its own.
 type Overworld struct {
-	Path          string
-	TiledMap      string // client asset path, e.g. maps/greenwood.tmj
-	Cols          int
-	Rows          int
-	TileSize      int
-	WorldW        int
-	WorldH        int
-	Regions       []Region
-	NPCPatrols    []Patrol
-	Cells         []string
-	SavePoints    []SavePoint
-	JobChangers   []JobChanger
-	Wander        wanderSettings
-	Exits         []MapExit
-	Borders       []MapBorder       // edge adjacency; validated symmetric at boot
-	Ground        []int             // composed ground GIDs after overrides
-	Collision     []int             // composed collision layer after overrides
-	TileOverrides *MapTileOverrides // sparse tile patches applied on top of the base config
-	Objects       []OverrideObject  // composed object layer (base config + override)
+	Path              string
+	TiledMap          string // client asset path, e.g. maps/greenwood.tmj
+	Cols              int
+	Rows              int
+	TileSize          int
+	WorldW            int
+	WorldH            int
+	Regions           []Region
+	SimulationRegions []Region // optional ownership boundaries; falls back to one full-map region
+	NPCPatrols        []Patrol
+	Cells             []string
+	SavePoints        []SavePoint
+	JobChangers       []JobChanger
+	Wander            wanderSettings
+	Exits             []MapExit
+	Borders           []MapBorder       // edge adjacency; validated symmetric at boot
+	Ground            []int             // composed ground GIDs after overrides
+	Collision         []int             // composed collision layer after overrides
+	TileOverrides     *MapTileOverrides // sparse tile patches applied on top of the base config
+	Objects           []OverrideObject  // composed object layer (base config + override)
 }
 
 var loadedOverworld *Overworld

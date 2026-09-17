@@ -129,7 +129,6 @@ func parseTiledTileLayers(raw tiledMapFile, cols, rows int) (collision, ground [
 	return collision, ground, nil
 }
 
-
 func buildCellsFromLayers(collision, ground []int, cols, rows int) []string {
 	out := make([]string, rows)
 	for r := 0; r < rows; r++ {
@@ -281,8 +280,8 @@ func parseTiledObjectLayers(raw tiledMapFile, ow *Overworld) error {
 				ow.Exits = append(ow.Exits, MapExit{
 					DestMap: normalizeDestMap(dest),
 					MinC:    minC, MinR: minR,
-					MaxC:    maxC, MaxR: maxR,
-					DestX:   destX, DestY: destY,
+					MaxC: maxC, MaxR: maxR,
+					DestX: destX, DestY: destY,
 				})
 			}
 		}

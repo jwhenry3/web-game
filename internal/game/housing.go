@@ -103,7 +103,7 @@ func HouseSpawnCenter() (x, y float64) {
 	col0, row0 := HouseWalkOrigin()
 	col := col0 + HouseWalkCols/2
 	row := row0 + HouseWalkRows/2
-	return (float64(col)+0.5)*HouseTileSize, (float64(row)+0.5)*HouseTileSize
+	return (float64(col) + 0.5) * HouseTileSize, (float64(row) + 0.5) * HouseTileSize
 }
 
 // ClampHousePos keeps a foot-anchored player position inside the walkable island.

@@ -48,10 +48,10 @@ func ValidEquipSlot(slot string) bool {
 
 // Item kinds: gear that is equipped vs. consumables used in battle vs. housing goods.
 const (
-	KindEquipment   = "equipment"
-	KindConsumable  = "consumable"
-	KindDecoration  = "decoration"
-	KindCrafting    = "crafting"
+	KindEquipment  = "equipment"
+	KindConsumable = "consumable"
+	KindDecoration = "decoration"
+	KindCrafting   = "crafting"
 )
 
 type Item struct {

@@ -11,10 +11,10 @@ import (
 
 // BaseChip terrain indices (match terraintypes order in data/maps/base_chip.tsx).
 const (
-	BaseChipTerrainGrass   = 0
-	BaseChipTerrainDirt    = 1
-	BaseChipTerrainCliff    = 2
-	BaseChipTerrainCobble  = 3
+	BaseChipTerrainGrass  = 0
+	BaseChipTerrainDirt   = 1
+	BaseChipTerrainCliff  = 2
+	BaseChipTerrainCobble = 3
 )
 
 // BaseChipConfig is parsed from data/maps/base_chip.tsx — terrain centers, tile props, dimensions.
@@ -275,15 +275,15 @@ func autotile8Offset(mask int) int {
 }
 
 type tsxTilesetXML struct {
-	XMLName      xml.Name          `xml:"tileset"`
-	Name         string            `xml:"name,attr"`
-	TileWidth    int               `xml:"tilewidth,attr"`
-	TileHeight   int               `xml:"tileheight,attr"`
-	TileCount    int               `xml:"tilecount,attr"`
-	Columns      int               `xml:"columns,attr"`
-	Image        tsxImageXML       `xml:"image"`
-	TerrainTypes tsxTerrainsXML    `xml:"terraintypes"`
-	Tiles        []tsxTileXML      `xml:"tile"`
+	XMLName      xml.Name       `xml:"tileset"`
+	Name         string         `xml:"name,attr"`
+	TileWidth    int            `xml:"tilewidth,attr"`
+	TileHeight   int            `xml:"tileheight,attr"`
+	TileCount    int            `xml:"tilecount,attr"`
+	Columns      int            `xml:"columns,attr"`
+	Image        tsxImageXML    `xml:"image"`
+	TerrainTypes tsxTerrainsXML `xml:"terraintypes"`
+	Tiles        []tsxTileXML   `xml:"tile"`
 }
 
 type tsxImageXML struct {
@@ -302,9 +302,9 @@ type tsxTerrainXML struct {
 }
 
 type tsxTileXML struct {
-	ID         int            `xml:"id,attr"`
-	Terrain    string         `xml:"terrain,attr"`
-	Properties tsxPropsXML    `xml:"properties"`
+	ID         int         `xml:"id,attr"`
+	Terrain    string      `xml:"terrain,attr"`
+	Properties tsxPropsXML `xml:"properties"`
 }
 
 type tsxPropsXML struct {

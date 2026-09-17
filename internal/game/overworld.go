@@ -27,13 +27,13 @@ var (
 // Tile kinds for the shared overworld. Walkable: H . , R
 // Blocked: # ~ T
 const (
-	TileHaven  = 'H'
-	TileGrass  = '.'
-	TilePath   = ','
-	TileRuins  = 'R'
-	TileTree   = 'T'
-	TileRock   = '#'
-	TileWater  = '~'
+	TileHaven = 'H'
+	TileGrass = '.'
+	TilePath  = ','
+	TileRuins = 'R'
+	TileTree  = 'T'
+	TileRock  = '#'
+	TileWater = '~'
 )
 
 type Tile struct {
@@ -258,7 +258,10 @@ func pathfindWith(walkable func(c, r int) bool, from, to Tile, region Region) []
 	came := map[Tile]Tile{}
 	bestG := map[Tile]float64{from: 0}
 
-	dirs := []struct{ dc, dr int; cost float64 }{
+	dirs := []struct {
+		dc, dr int
+		cost   float64
+	}{
 		{-1, 0, 1}, {1, 0, 1}, {0, -1, 1}, {0, 1, 1},
 		{-1, -1, math.Sqrt2}, {1, -1, math.Sqrt2}, {-1, 1, math.Sqrt2}, {1, 1, math.Sqrt2},
 	}

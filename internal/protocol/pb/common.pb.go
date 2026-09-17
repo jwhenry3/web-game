@@ -326,6 +326,9 @@ type SkillInfo struct {
 	UsageToNext   int32                  `protobuf:"varint,16,opt,name=usage_to_next,json=usageToNext,proto3" json:"usage_to_next,omitempty"`
 	CastTimeMs    int32                  `protobuf:"varint,17,opt,name=cast_time_ms,json=castTimeMs,proto3" json:"cast_time_ms,omitempty"`
 	WorldOnly     bool                   `protobuf:"varint,18,opt,name=world_only,json=worldOnly,proto3" json:"world_only,omitempty"`
+	CooldownMs    int32                  `protobuf:"varint,19,opt,name=cooldown_ms,json=cooldownMs,proto3" json:"cooldown_ms,omitempty"`
+	Passive       bool                   `protobuf:"varint,20,opt,name=passive,proto3" json:"passive,omitempty"`
+	ComboLength   int32                  `protobuf:"varint,21,opt,name=combo_length,json=comboLength,proto3" json:"combo_length,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -484,6 +487,27 @@ func (x *SkillInfo) GetWorldOnly() bool {
 		return x.WorldOnly
 	}
 	return false
+}
+
+func (x *SkillInfo) GetCooldownMs() int32 {
+	if x != nil {
+		return x.CooldownMs
+	}
+	return 0
+}
+
+func (x *SkillInfo) GetPassive() bool {
+	if x != nil {
+		return x.Passive
+	}
+	return false
+}
+
+func (x *SkillInfo) GetComboLength() int32 {
+	if x != nil {
+		return x.ComboLength
+	}
+	return 0
 }
 
 type JobProgressInfo struct {
@@ -2780,7 +2804,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
 	"\apotency\x18\x02 \x01(\x01R\apotency\x12\x1c\n" +
 	"\tremaining\x18\x03 \x01(\x05R\tremaining\x12\x1b\n" +
-	"\tshield_hp\x18\x04 \x01(\x05R\bshieldHp\"\xe8\x03\n" +
+	"\tshield_hp\x18\x04 \x01(\x05R\bshieldHp\"\xc6\x04\n" +
 	"\tSkillInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -2803,7 +2827,11 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\fcast_time_ms\x18\x11 \x01(\x05R\n" +
 	"castTimeMs\x12\x1d\n" +
 	"\n" +
-	"world_only\x18\x12 \x01(\bR\tworldOnly\"\xa2\x01\n" +
+	"world_only\x18\x12 \x01(\bR\tworldOnly\x12\x1f\n" +
+	"\vcooldown_ms\x18\x13 \x01(\x05R\n" +
+	"cooldownMs\x12\x18\n" +
+	"\apassive\x18\x14 \x01(\bR\apassive\x12!\n" +
+	"\fcombo_length\x18\x15 \x01(\x05R\vcomboLength\"\xa2\x01\n" +
 	"\x0fJobProgressInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +

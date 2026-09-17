@@ -19,6 +19,7 @@ type clientControl struct {
 	mainJob, subJob   game.JobID
 	skillLevels       map[string]int
 	pendingSkillUses  map[string]int
+	skillReadyAt      map[string]time.Time
 
 	stamina          float64
 	staminaAt        time.Time
@@ -53,6 +54,7 @@ func newClientControl() *clientControl {
 		staminaAt:        time.Now(),
 		skillLevels:      map[string]int{},
 		pendingSkillUses: map[string]int{},
+		skillReadyAt:     map[string]time.Time{},
 	}
 }
 
@@ -226,11 +228,18 @@ func npcEngageOf(e *entity) *npcEngage {
 
 // engage pulls e (and nearby pack-mates) into a fight against target.
 func (h *Hub) engage(e, target *entity) {
+	if h.npcWorkerFor(e) != nil && target != nil {
+		h.commandNPCEngage(e.ID, target.ID)
+		return
+	}
 	ng := npcEngageOf(e)
 	if ng == nil || !h.canAttack(e, target) {
 		return
 	}
 	if !ng.engaged {
+		if h.npcEffects != nil {
+			h.npcEffects.recordEngagement(e, target)
+		}
 		ng.engaged = true
 		e.targetID = target.ID
 		ng.leashX, ng.leashY = e.X, e.Y
@@ -256,6 +265,9 @@ func (h *Hub) engage(e, target *entity) {
 			return
 		}
 		if dist(m.X, m.Y, e.X, e.Y) <= assistRadius {
+			if h.npcEffects != nil {
+				h.npcEffects.recordEngagement(m, target)
+			}
 			mg.engaged = true
 			m.targetID = target.ID
 			mg.leashX, mg.leashY = m.X, m.Y
@@ -275,9 +287,16 @@ func (h *Hub) engage(e, target *entity) {
 // disengage releases an NPC from combat. leashed=true resets it to full
 // health and snaps it back to the leash anchor (or patrol home).
 func (h *Hub) disengage(e *entity, leashed bool) {
+	if h.npcWorkerFor(e) != nil {
+		h.commandNPCDisengage(e.ID, leashed)
+		return
+	}
 	ng := npcEngageOf(e)
 	if ng == nil || !ng.engaged {
 		return
+	}
+	if h.npcEffects != nil {
+		h.npcEffects.recordDisengagement(e)
 	}
 	ng.engaged = false
 	e.targetID = ""
@@ -537,7 +556,10 @@ func (r *respawn) OnDeath(h *Hub, e *entity, killer *entity) {
 	if ch := e.components.chaseTarget; ch != nil {
 		ch.path = nil
 	}
-	if r.captured {
+	captured := r.captured
+	if h.npcEffects != nil {
+		h.npcEffects.recordDeath(e, captured)
+	} else if captured {
 		h.awardKillXPOnly(e)
 	} else {
 		h.awardKill(e)

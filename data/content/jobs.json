@@ -1,6 +1,6 @@
 {
   "kind": "jobs",
-  "updated_at": "2026-09-04T16:15:55.327Z",
+  "updated_at": "2026-09-17T18:19:09.872Z",
   "data": [
     {
       "id": "VAN",
@@ -30,6 +30,10 @@
         {
           "skill_id": "van_impetus_acies",
           "prereq_skill_id": "van_clamor_castra"
+        },
+        {
+          "skill_id": "van_ripostis",
+          "prereq_skill_id": "van_impetus_acies"
         }
       ]
     },
@@ -62,6 +66,10 @@
         {
           "skill_id": "san_expello_impurum",
           "prereq_skill_id": "san_lux_mitis"
+        },
+        {
+          "skill_id": "san_meditatio",
+          "prereq_skill_id": "san_expello_impurum"
         }
       ]
     },
@@ -93,6 +101,10 @@
         {
           "skill_id": "brw_intentio_pugna",
           "prereq_skill_id": "brw_robur_manus"
+        },
+        {
+          "skill_id": "brw_fluctus",
+          "prereq_skill_id": "brw_intentio_pugna"
         }
       ]
     },
@@ -124,6 +136,10 @@
         {
           "skill_id": "hex_ignis_maius",
           "prereq_skill_id": "hex_gelu_hex"
+        },
+        {
+          "skill_id": "hex_attunement",
+          "prereq_skill_id": "hex_ignis_maius"
         }
       ]
     },
@@ -155,6 +171,10 @@
         {
           "skill_id": "cut_dolus_finis",
           "prereq_skill_id": "cut_praeda_manus"
+        },
+        {
+          "skill_id": "cut_opportunus",
+          "prereq_skill_id": "cut_dolus_finis"
         }
       ]
     },
@@ -191,6 +211,10 @@
         {
           "skill_id": "can_studium_finale",
           "prereq_skill_id": "can_carmen_ferox"
+        },
+        {
+          "skill_id": "can_resonantia",
+          "prereq_skill_id": "can_studium_finale"
         }
       ]
     },
@@ -222,6 +246,10 @@
         {
           "skill_id": "aeg_lumen_ferrum",
           "prereq_skill_id": "aeg_custodia_ferrea"
+        },
+        {
+          "skill_id": "aeg_echo_umbonis",
+          "prereq_skill_id": "aeg_lumen_ferrum"
         }
       ]
     },
@@ -253,6 +281,10 @@
         {
           "skill_id": "rvr_tempestas_ferri",
           "prereq_skill_id": "rvr_ruina"
+        },
+        {
+          "skill_id": "rvr_impetus",
+          "prereq_skill_id": "rvr_tempestas_ferri"
         }
       ]
     },
@@ -284,6 +316,10 @@
         {
           "skill_id": "lnc_saltus_maximus",
           "prereq_skill_id": "lnc_saltus_caelum"
+        },
+        {
+          "skill_id": "lnc_peritia_hastae",
+          "prereq_skill_id": "lnc_saltus_maximus"
         }
       ]
     },
@@ -315,6 +351,10 @@
         {
           "skill_id": "ron_arcus_gladii",
           "prereq_skill_id": "ron_altum_custos"
+        },
+        {
+          "skill_id": "ron_finis",
+          "prereq_skill_id": "ron_arcus_gladii"
         }
       ]
     }

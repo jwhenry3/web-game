@@ -48,6 +48,43 @@ export interface JobDef {
   skill_tree: JobSkillNode[];
 }
 
+export type SkillAspect =
+  | "physical"
+  | "magic"
+  | "heal"
+  | "buff"
+  | "ranged"
+  | "combo";
+
+export interface PassiveEffectDef {
+  skill_types?: SkillAspect[];
+  effect_multiplier?: number;
+  reflect_chance?: number;
+  reflect_ratio?: number;
+  cooldown_reduction?: number;
+  min_combo_stack?: number;
+  target_hp_below?: number;
+}
+
+export interface ComboVariantDef {
+  name?: string;
+  power?: number;
+  status_effects?: StatusEffectDef[];
+}
+
+export interface StatusEffectDef {
+  kind: string;
+  duration: number;
+  potency: number;
+  on_caster?: boolean;
+}
+
+export interface ComboDef {
+  status: string;
+  duration: number;
+  variants: ComboVariantDef[];
+}
+
 export interface SkillDef {
   id: string;
   name: string;
@@ -62,6 +99,11 @@ export interface SkillDef {
   ranged: boolean;
   world_only: boolean;
   cast_time_ms: number;
+  cooldown_ms?: number;
+  passive?: boolean;
+  passive_effect?: PassiveEffectDef;
+  combo_length?: number;
+  combo?: ComboDef;
   description: string;
 }
 

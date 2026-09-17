@@ -39,8 +39,8 @@ type CatalogItemDef struct {
 }
 
 var (
-	contentMu   sync.RWMutex
-	dropPools   = map[string]DropPoolDef{}
+	contentMu    sync.RWMutex
+	dropPools    = map[string]DropPoolDef{}
 	catalogItems = map[string]CatalogItemDef{}
 )
 

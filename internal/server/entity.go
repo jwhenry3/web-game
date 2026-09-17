@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"clara-mundi/internal/game"
@@ -40,6 +41,10 @@ type entity struct {
 	Facing  float64
 	Faction faction
 	OwnerID string // pets only
+
+	// regionID is the server-authoritative simulation owner in singular-world
+	// mode. It is intentionally not part of the public entity projection.
+	regionID string
 
 	// Shared combat core.
 	hp, maxHP, mp, maxMP int
@@ -250,6 +255,7 @@ func (h *Hub) clearTargeting(id string) {
 			}
 		}
 	}
+	h.broadcastNPCActorRemoved(id)
 }
 
 // rewardID is the ID credited for damage dealt by `src` (pets credit owner).
@@ -268,6 +274,10 @@ func rewardID(src *entity) string {
 // its own ID (pets tank for themselves even though XP credits the owner).
 func (h *Hub) addEnmity(dst, src *entity, amount int) {
 	if dst == nil || src == nil || dst.Kind != kindNPC || amount <= 0 {
+		return
+	}
+	if w := h.npcWorkerFor(dst); w != nil {
+		h.commandNPC(dst.ID, npcCommand{Kind: npcCmdEnmity, Source: cloneEntity(src, false), Enmity: amount})
 		return
 	}
 	if dst.enmity == nil {
@@ -294,8 +304,18 @@ func (h *Hub) applyDamage(src, dst *entity, dmg int, ev protocol.CombatEventPayl
 // fmt.Sprintf template taking (attacker name, target name, dealt damage);
 // empty uses the default "%s struck %s" melee text.
 func (h *Hub) applyDamageMsg(src, dst *entity, dmg int, ev protocol.CombatEventPayload, msgFmt string) int {
+	return h.applyDamageMsgReflectable(src, dst, dmg, ev, msgFmt, true)
+}
+
+func (h *Hub) applyDamageMsgReflectable(src, dst *entity, dmg int, ev protocol.CombatEventPayload, msgFmt string, reflectable bool) int {
 	if dst == nil || !dst.alive {
 		return 0
+	}
+	if h.npcEffects != nil && dst.Kind != kindNPC {
+		return h.npcEffects.recordAttack(src, dst, dmg, ev, msgFmt)
+	}
+	if h.npcWorkerFor(dst) != nil {
+		return h.commandNPCDamage(src, dst, dmg, ev, msgFmt)
 	}
 	dmg = game.ModifyDamageTaken(&dst.statuses, dmg)
 	if dmg < 0 {
@@ -331,6 +351,18 @@ func (h *Hub) applyDamageMsg(src, dst *entity, dmg int, ev protocol.CombatEventP
 		}
 	}
 	h.sendCombatEvent(ev, x, y)
+	if reflectable && src != nil && src != dst && src.alive && dst.alive {
+		if cc := clientControlOf(dst); cc != nil {
+			if chance, ratio := game.PassiveReflect(cc.skillLevels); chance > 0 && h.rng.Float64() < chance {
+				reflected := max(1, int(float64(dmg)*ratio))
+				h.applyDamageMsgReflectable(dst, src, reflected, protocol.CombatEventPayload{
+					ActionID:   "reflect",
+					ActionName: "Reflect",
+					Message:    fmt.Sprintf("%s reflects %d damage", dst.Name, reflected),
+				}, "", false)
+			}
+		}
+	}
 	for _, system := range dst.pipeline {
 		if hook, ok := system.(damagedHook); ok {
 			hook.OnDamaged(h, dst, src, dmg)
@@ -355,6 +387,15 @@ func (h *Hub) applyHeal(dst *entity, amount int) int {
 // kind-specific death hooks (rewards/despawn/respawn/defeat).
 func (h *Hub) kill(e, killer *entity) {
 	if e == nil || !e.alive {
+		return
+	}
+	if h.npcWorkerFor(e) != nil {
+		captured := false
+		if r := respawnOf(e); r != nil {
+			captured = r.captured
+		}
+		h.commandNPC(e.ID, npcCommand{Kind: npcCmdKill, Source: cloneEntity(killer, false), Captured: captured})
+		h.clearTargeting(e.ID)
 		return
 	}
 	e.alive = false
@@ -410,13 +451,13 @@ func (h *Hub) tickEntityStatuses(e *entity) {
 func (h *Hub) tickEntities(now time.Time) {
 	dt := combatTickInterval.Seconds()
 	h.syncPetEntities()
-	for _, e := range h.entities {
-		for _, system := range e.pipeline {
-			system.Tick(h, e, now, dt)
-		}
-		h.tickEntityStatuses(e)
-		h.advanceCast(e, now)
+
+	if h.world != nil {
+		h.tickEntitiesWorld(now, dt)
+	} else {
+		h.tickEntitiesLegacy(now, dt)
 	}
+
 	if h.entityDirty {
 		h.entityDirty = false
 		h.broadcastEntityState()
@@ -429,6 +470,79 @@ func (h *Hub) tickEntities(now time.Time) {
 	}
 	h.updateCombatFlags(now)
 	h.broadcastCombatTick()
+}
+
+// tickEntitiesLegacy preserves the original map-iteration order for legacy maps.
+func (h *Hub) tickEntitiesLegacy(now time.Time, dt float64) {
+	for _, e := range h.entities {
+		h.tickEntity(e, now, dt)
+	}
+}
+
+// tickEntitiesWorld runs hub-owned actors (players and pets) in deterministic
+// region buckets while region workers concurrently tick their owned NPCs. NPC
+// state crosses the boundary only as actor snapshots in and committed
+// snapshots/intents out.
+func (h *Hub) tickEntitiesWorld(now time.Time, dt float64) {
+	h.assignEntityRegionOwnership()
+	pendingNPCs := h.startNPCWorkerTicks(now, dt)
+
+	partitions := make(map[string][]*entity, len(h.world.SimulationRegions)+1)
+	for _, e := range h.entities {
+		if e.Kind == kindNPC {
+			if _, owned := h.npcOwners[e.ID]; owned {
+				continue
+			}
+		}
+		partitions[e.regionID] = append(partitions[e.regionID], e)
+	}
+	for _, bucket := range partitions {
+		sort.Slice(bucket, func(i, j int) bool { return bucket[i].ID < bucket[j].ID })
+	}
+	for _, reg := range h.world.SimulationRegions {
+		for _, e := range partitions[reg.ID] {
+			h.tickEntity(e, now, dt)
+		}
+	}
+	for _, e := range partitions[""] {
+		h.tickEntity(e, now, dt)
+	}
+
+	h.finishNPCWorkerTicks(pendingNPCs)
+	h.refreshServerEntityRegionOwnership()
+}
+
+// tickEntity runs one entity's full pipeline for a single simulation step.
+func (h *Hub) tickEntity(e *entity, now time.Time, dt float64) {
+	for _, system := range e.pipeline {
+		system.Tick(h, e, now, dt)
+	}
+	h.tickEntityStatuses(e)
+	h.advanceCast(e, now)
+}
+
+// assignEntityRegionOwnership updates regionID for every world entity from its
+// current coordinates. It does not send player notifications.
+func (h *Hub) assignEntityRegionOwnership() {
+	for _, e := range h.entities {
+		e.regionID = h.regionIDAt(e.X, e.Y)
+	}
+}
+
+// refreshServerEntityRegionOwnership re-derives region ownership for NPCs and
+// pets after their systems have moved them. Player ownership is refreshed by the
+// move/dodge/respawn handlers that carry the owning Client.
+func (h *Hub) refreshServerEntityRegionOwnership() {
+	for _, e := range h.entities {
+		if e.Kind == kindNPC {
+			if _, owned := h.npcOwners[e.ID]; owned {
+				continue
+			}
+		}
+		if e.Kind == kindNPC || e.Kind == kindPet {
+			h.refreshRegionOwnership(nil, e)
+		}
+	}
 }
 
 // combatActive reports whether any fight/cast/status is live anywhere.

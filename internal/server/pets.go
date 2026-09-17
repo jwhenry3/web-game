@@ -161,9 +161,11 @@ func (h *Hub) syncPetEntities() {
 			want[petID] = true
 			if e := h.entities[petID]; e != nil {
 				e.OwnerID = owner.ID
+				h.refreshRegionOwnership(nil, e)
 				continue
 			}
 			h.entities[petID] = newPetEntity(rec, owner)
+			h.refreshRegionOwnership(nil, h.entities[petID])
 			h.entityDirty = true
 		}
 	})

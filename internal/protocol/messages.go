@@ -69,6 +69,7 @@ const (
 	TypeCampState        MessageType = "camp_state"
 	TypeHouseState       MessageType = "house_state"
 	TypeHouseReturn      MessageType = "house_return"
+	TypeRegionChanged    MessageType = "region_changed"
 	TypeError            MessageType = "error"
 	TypeMapConfig        MessageType = "map_config"
 )
@@ -210,7 +211,10 @@ type SkillInfo struct {
 	Usage       int    `json:"usage,omitempty"`
 	UsageToNext int    `json:"usage_to_next,omitempty"`
 	CastTimeMs  int    `json:"cast_time_ms,omitempty"`
+	CooldownMs  int    `json:"cooldown_ms,omitempty"`
 	WorldOnly   bool   `json:"world_only,omitempty"`
+	Passive     bool   `json:"passive,omitempty"`
+	ComboLength int    `json:"combo_length,omitempty"`
 }
 
 type JobProgressInfo struct {
@@ -513,6 +517,12 @@ type HouseStatePayload struct {
 
 type HouseReturnPayload struct {
 	Reason string `json:"reason,omitempty"`
+}
+
+// RegionChangedPayload identifies the region the client has entered.
+type RegionChangedPayload struct {
+	RegionID string `json:"region_id"`
+	Name     string `json:"name,omitempty"`
 }
 
 // EntityStatePayload carries incremental world-entity updates (movement,

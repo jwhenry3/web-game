@@ -17,14 +17,14 @@ type jobSkillTreeExport struct {
 }
 
 type jobExport struct {
-	ID             string               `json:"id"`
-	Name           string               `json:"name"`
-	Abbr           string               `json:"abbr"`
-	Role           string               `json:"role"`
-	Style          string               `json:"style"`
-	Category       string               `json:"category"`
-	Weapon         string               `json:"weapon"`
-	AllowedWeapons []string             `json:"allowed_weapons,omitempty"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Abbr           string   `json:"abbr"`
+	Role           string   `json:"role"`
+	Style          string   `json:"style"`
+	Category       string   `json:"category"`
+	Weapon         string   `json:"weapon"`
+	AllowedWeapons []string `json:"allowed_weapons,omitempty"`
 	StatMults      struct {
 		HP  float64 `json:"hp,omitempty"`
 		MP  float64 `json:"mp,omitempty"`
@@ -37,37 +37,42 @@ type jobExport struct {
 }
 
 type skillExport struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Category    string  `json:"category,omitempty"`
-	WeaponReq   string  `json:"weapon_req,omitempty"`
-	MPCost      int     `json:"mp_cost"`
-	Power       float64 `json:"power"`
-	Magic       bool    `json:"magic"`
-	Heals       bool    `json:"heals"`
-	Buffs       bool    `json:"buffs"`
-	Loot        bool    `json:"loot"`
-	Ranged      bool    `json:"ranged"`
-	WorldOnly   bool    `json:"world_only"`
-	CastTimeMs  int     `json:"cast_time_ms"`
-	Description string  `json:"description"`
+	ID            string              `json:"id"`
+	Name          string              `json:"name"`
+	Category      string              `json:"category,omitempty"`
+	WeaponReq     string              `json:"weapon_req,omitempty"`
+	MPCost        int                 `json:"mp_cost"`
+	Power         float64             `json:"power"`
+	Magic         bool                `json:"magic"`
+	Heals         bool                `json:"heals"`
+	Buffs         bool                `json:"buffs"`
+	Loot          bool                `json:"loot"`
+	Ranged        bool                `json:"ranged"`
+	WorldOnly     bool                `json:"world_only"`
+	CastTimeMs    int                 `json:"cast_time_ms"`
+	CooldownMs    int                 `json:"cooldown_ms,omitempty"`
+	Passive       bool                `json:"passive,omitempty"`
+	PassiveEffect *game.PassiveEffect `json:"passive_effect,omitempty"`
+	ComboLength   int                 `json:"combo_length,omitempty"`
+	Combo         *game.ComboDef      `json:"combo,omitempty"`
+	Description   string              `json:"description"`
 }
 
 type itemExport struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Kind          string         `json:"kind"`
-	Description   string         `json:"description,omitempty"`
-	Target        string         `json:"target,omitempty"`
-	Effects       *itemEffects   `json:"effects,omitempty"`
-	Stackable     bool           `json:"stackable,omitempty"`
-	MaxStack      int            `json:"max_stack,omitempty"`
-	Slot          string         `json:"slot,omitempty"`
-	AllowedSlots  []string       `json:"allowed_slots,omitempty"`
-	WeaponType    string         `json:"weapon_type,omitempty"`
-	Rarity        string         `json:"rarity,omitempty"`
-	Level         int            `json:"level,omitempty"`
-	Stats         map[string]int `json:"stats,omitempty"`
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	Kind         string         `json:"kind"`
+	Description  string         `json:"description,omitempty"`
+	Target       string         `json:"target,omitempty"`
+	Effects      *itemEffects   `json:"effects,omitempty"`
+	Stackable    bool           `json:"stackable,omitempty"`
+	MaxStack     int            `json:"max_stack,omitempty"`
+	Slot         string         `json:"slot,omitempty"`
+	AllowedSlots []string       `json:"allowed_slots,omitempty"`
+	WeaponType   string         `json:"weapon_type,omitempty"`
+	Rarity       string         `json:"rarity,omitempty"`
+	Level        int            `json:"level,omitempty"`
+	Stats        map[string]int `json:"stats,omitempty"`
 }
 
 type itemEffects struct {
@@ -194,21 +199,33 @@ func exportSkills() []skillExport {
 
 func exportSkill(sk game.Skill) skillExport {
 	return skillExport{
-		ID:          sk.ID,
-		Name:        sk.Name,
-		Category:    string(sk.Category),
-		WeaponReq:   string(sk.WeaponReq),
-		MPCost:      sk.MPCost,
-		Power:       sk.Power,
-		Magic:       sk.UsesMagic,
-		Heals:       sk.Heals,
-		Buffs:       sk.Buffs,
-		Loot:        sk.LootBonus,
-		Ranged:      sk.Ranged,
-		WorldOnly:   sk.WorldOnly,
-		CastTimeMs:  sk.CastTimeMs,
-		Description: sk.Description,
+		ID:            sk.ID,
+		Name:          sk.Name,
+		Category:      string(sk.Category),
+		WeaponReq:     string(sk.WeaponReq),
+		MPCost:        sk.MPCost,
+		Power:         sk.Power,
+		Magic:         sk.UsesMagic,
+		Heals:         sk.Heals,
+		Buffs:         sk.Buffs,
+		Loot:          sk.LootBonus,
+		Ranged:        sk.Ranged,
+		WorldOnly:     sk.WorldOnly,
+		CastTimeMs:    sk.CastTimeMs,
+		CooldownMs:    sk.CooldownMs,
+		Passive:       sk.Passive != nil,
+		PassiveEffect: sk.Passive,
+		ComboLength:   comboLength(sk),
+		Combo:         sk.Combo,
+		Description:   sk.Description,
 	}
+}
+
+func comboLength(sk game.Skill) int {
+	if sk.Combo == nil {
+		return 0
+	}
+	return len(sk.Combo.Variants)
 }
 
 func writeJSON(path string, v any) error {

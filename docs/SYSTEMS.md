@@ -52,6 +52,9 @@ All combat is **realtime** and fought **directly in the overworld** — there ar
 - Combat intents: `action` (`action_id`, optional `target_id` / `item_id`), `set_target`, `dodge`.
 - **Dodge** is a universal action bound to **Shift** (not a hotbar slot): works in and out of combat, requires recent movement (250ms grace), costs **25 stamina** (max 100, regens 35/s), 500ms cooldown after the dash, and interrupts casting.
 - Skills with cast times report progress; moving or dodging interrupts the cast.
+- Combat actions use a 1s global cooldown. Skills may configure an additional per-skill cooldown that begins after the GCD; passive effects can conditionally reduce that skill cooldown, but never shorten the GCD.
+- Passive job skills unlock through the normal skill tree and apply automatically. Passive rules are data-driven and can boost matching skill aspects (physical, magic, healing, buffs, ranged, combo), reflect part of incoming damage, or conditionally reduce configured skill cooldowns.
+- Combo skills use short-lived status stacks (3s) instead of a separate combo system. `attack` cycles through four variants and resets after the fourth hit or when the stack expires.
 
 ### Defeat & rewards
 
@@ -89,7 +92,7 @@ Buffs/debuffs (`internal/game/status.go`) tick inside the combat sim: defense/at
 - **10 core classes** with clear roles (Tank / Healer / Support / DPS) and **one primary weapon each** across nine implements: sword, hammer, axe, spear, katana, knuckles, staff, wand, dagger. Six are starters; Aegis, Reaver, Lancer, and Ronin unlock later.
 - **Combo aliases** (Spellblade, Nightveil, …) are named main+sub pairs — display labels and loadout presets, not separate skill trees.
 - New characters pick **main only**; `profile.unlocked_jobs` starts as the six starters. Subclass requires main level ≥ `exp.subjob_unlock_level` (default **5**).
-- Each core has a **four-skill tree**; skills unlock at class levels 1 / 5 / 9 / 13 and train through use (up to skill level 5).
+- Each core has a **five-skill tree**: four active skills plus a passive; skills unlock at class levels 1 / 5 / 9 / 13 / 17 and active skills train through use (up to skill level 5).
 - Equipment, hotbars, and skill progress are stored **per main/sub combo** (`store` loadouts). Eight equipment slots: main, sub, six armor.
 - Each loadout keeps a single **hotbar** of **24 slots** (1–8, ctrl+1–8, shift+1–8) shared by field skills (Return, Port, Camp), combat skills, and consumables. `set_hotbar` binds a slot directly — there is no `bar` field. The Skills window assigns onto the one bar.
 - Only **equipped** items contribute combat stats.

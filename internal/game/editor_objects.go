@@ -56,8 +56,8 @@ func synthesizeEditorObjects(
 	for _, sp := range saves {
 		out = append(out, OverrideObject{
 			ID: nextID, Name: sp.ID, Type: "save_point",
-			X: (float64(sp.Tile[0]) + 0.5) * ts,
-			Y: (float64(sp.Tile[1]) + 0.5) * ts,
+			X:     (float64(sp.Tile[0]) + 0.5) * ts,
+			Y:     (float64(sp.Tile[1]) + 0.5) * ts,
 			Point: true,
 			Properties: []tiledProp{
 				{Name: "id", Type: "string", Value: sp.ID},
@@ -70,8 +70,8 @@ func synthesizeEditorObjects(
 	for _, jc := range jobs {
 		out = append(out, OverrideObject{
 			ID: nextID, Name: jc.ID, Type: "job_changer",
-			X: (float64(jc.Tile[0]) + 0.5) * ts,
-			Y: (float64(jc.Tile[1]) + 0.5) * ts,
+			X:     (float64(jc.Tile[0]) + 0.5) * ts,
+			Y:     (float64(jc.Tile[1]) + 0.5) * ts,
 			Point: true,
 			Properties: []tiledProp{
 				{Name: "id", Type: "string", Value: jc.ID},
@@ -84,8 +84,8 @@ func synthesizeEditorObjects(
 	for _, n := range npcs {
 		out = append(out, OverrideObject{
 			ID: nextID, Name: n.ID, Type: "npc",
-			X: (float64(n.Home[0]) + 0.5) * ts,
-			Y: (float64(n.Home[1]) + 0.5) * ts,
+			X:     (float64(n.Home[0]) + 0.5) * ts,
+			Y:     (float64(n.Home[1]) + 0.5) * ts,
 			Point: true,
 			Properties: []tiledProp{
 				{Name: "id", Type: "string", Value: n.ID},

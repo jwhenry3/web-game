@@ -1,6 +1,6 @@
 {
   "kind": "items",
-  "updated_at": "2026-09-04T16:15:55.327Z",
+  "updated_at": "2026-09-17T18:19:09.872Z",
   "data": [
     {
       "id": "aether",
@@ -283,96 +283,6 @@
       "stats": {
         "mag": 2
       }
-    },
-    {
-      "id": "decor_woven_rug",
-      "name": "Woven Rug",
-      "kind": "decoration",
-      "description": "A soft floor rug for camp interiors.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 20
-    },
-    {
-      "id": "decor_oil_lamp",
-      "name": "Oil Lamp",
-      "kind": "decoration",
-      "description": "Warm light for a house corner.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 20
-    },
-    {
-      "id": "decor_storage_crate",
-      "name": "Storage Crate",
-      "kind": "decoration",
-      "description": "Decorative crate. Looks sturdy enough to sit on.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 20
-    },
-    {
-      "id": "decor_oak_chair",
-      "name": "Oak Chair",
-      "kind": "decoration",
-      "description": "Simple seating for guests.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 20
-    },
-    {
-      "id": "decor_wall_banner",
-      "name": "Wall Banner",
-      "kind": "decoration",
-      "description": "A faded campaign banner.",
-      "rarity": "rare",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 10
-    },
-    {
-      "id": "craft_lumber",
-      "name": "Lumber",
-      "kind": "crafting",
-      "description": "Cut timber for furniture and repairs.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 99
-    },
-    {
-      "id": "craft_cloth_scrap",
-      "name": "Cloth Scrap",
-      "kind": "crafting",
-      "description": "Remnants of fabric for cushions and banners.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 99
-    },
-    {
-      "id": "craft_iron_nail",
-      "name": "Iron Nail",
-      "kind": "crafting",
-      "description": "Basic fasteners for camp carpentry.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 99
-    },
-    {
-      "id": "craft_resin",
-      "name": "Pine Resin",
-      "kind": "crafting",
-      "description": "Sticky resin used in adhesives and finishes.",
-      "rarity": "common",
-      "level": 1,
-      "stackable": true,
-      "max_stack": 99
     }
   ]
 }

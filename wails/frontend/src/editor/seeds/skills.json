@@ -11,7 +11,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
-    "description": "A basic weapon strike."
+    "combo_length": 4,
+    "combo": {
+      "status": "combo_attack",
+      "duration": 15,
+      "variants": [
+        {
+          "name": "Attack",
+          "power": 1
+        },
+        {
+          "name": "Attack II",
+          "power": 1.15
+        },
+        {
+          "name": "Attack III",
+          "power": 1.35
+        },
+        {
+          "name": "Attack IV",
+          "power": 1.7
+        }
+      ]
+    },
+    "description": "A basic weapon strike. Repeating it chains through four attacks."
   },
   {
     "id": "return",
@@ -53,7 +76,7 @@
     "ranged": false,
     "world_only": true,
     "cast_time_ms": 1500,
-    "description": "Pitch your camp here. Interact with the tent to enter your house. Only one camp can be active at a time."
+    "description": "Pitch your camp nearby. Interact with the tent to enter your house. Only one camp can be active at a time."
   },
   {
     "id": "van_cuneus",
@@ -117,7 +140,28 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "cooldown_ms": 2000,
     "description": "An unstoppable rush into an iron stance."
+  },
+  {
+    "id": "van_ripostis",
+    "name": "Iron Riposte",
+    "category": "swordplay",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "reflect_chance": 0.15,
+      "reflect_ratio": 0.25
+    },
+    "description": "Passive: chance to reflect part of incoming damage."
   },
   {
     "id": "san_sanare",
@@ -181,7 +225,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "cooldown_ms": 2500,
     "description": "Drive unclean presence from the field."
+  },
+  {
+    "id": "san_meditatio",
+    "name": "Sacred Mending",
+    "category": "devotion",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "heal"
+      ],
+      "effect_multiplier": 0.15
+    },
+    "description": "Passive: healing skill effects are increased by 15%."
   },
   {
     "id": "brw_pugnum",
@@ -245,7 +312,31 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "cooldown_ms": 2500,
     "description": "A finishing strike born of discipline."
+  },
+  {
+    "id": "brw_fluctus",
+    "name": "Combo Flow",
+    "category": "swordplay",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "physical"
+      ],
+      "cooldown_reduction": 0.25,
+      "min_combo_stack": 2
+    },
+    "description": "Passive: physical skill cooldowns are reduced while a combo stack is high."
   },
   {
     "id": "hex_ignis_hex",
@@ -309,7 +400,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "cooldown_ms": 3000,
     "description": "Unleash the brand as a roaring inferno."
+  },
+  {
+    "id": "hex_attunement",
+    "name": "Arcane Attunement",
+    "category": "sorcery",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "magic"
+      ],
+      "effect_multiplier": 0.12
+    },
+    "description": "Passive: magic skill effects are increased by 12%."
   },
   {
     "id": "cut_surripere",
@@ -373,7 +487,31 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "cooldown_ms": 2000,
     "description": "A deceptive finishing thrust."
+  },
+  {
+    "id": "cut_opportunus",
+    "name": "Opportunist",
+    "category": "stealth",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "physical"
+      ],
+      "effect_multiplier": 0.15,
+      "target_hp_below": 0.3
+    },
+    "description": "Passive: physical skill effects are increased against targets below 30% HP."
   },
   {
     "id": "can_carmen_tutus",
@@ -437,7 +575,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "cooldown_ms": 2500,
     "description": "A virtuoso chord that ends the phrase."
+  },
+  {
+    "id": "can_resonantia",
+    "name": "Resonant Hymn",
+    "category": "sorcery",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "buff"
+      ],
+      "effect_multiplier": 0.15
+    },
+    "description": "Passive: buff skill effects are increased by 15%."
   },
   {
     "id": "aeg_umbo",
@@ -501,7 +662,28 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "cooldown_ms": 2000,
     "description": "Sacred light along the hammer's face."
+  },
+  {
+    "id": "aeg_echo_umbonis",
+    "name": "Bulwark Echo",
+    "category": "swordplay",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "reflect_chance": 0.12,
+      "reflect_ratio": 0.2
+    },
+    "description": "Passive: chance to reflect part of incoming damage."
   },
   {
     "id": "rvr_secare",
@@ -565,7 +747,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "cooldown_ms": 2500,
     "description": "A storm of axe blows."
+  },
+  {
+    "id": "rvr_impetus",
+    "name": "Heavy Momentum",
+    "category": "swordplay",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "physical"
+      ],
+      "effect_multiplier": 0.1
+    },
+    "description": "Passive: physical skill effects are increased by 10%."
   },
   {
     "id": "lnc_saltus_hasta",
@@ -629,7 +834,30 @@
     "ranged": true,
     "world_only": false,
     "cast_time_ms": 0,
+    "cooldown_ms": 2500,
     "description": "Vanish upward, then crash down."
+  },
+  {
+    "id": "lnc_peritia_hastae",
+    "name": "Spear Mastery",
+    "category": "swordplay",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "ranged"
+      ],
+      "effect_multiplier": 0.1
+    },
+    "description": "Passive: ranged skill effects are increased by 10%."
   },
   {
     "id": "ron_oculus_ferrum",
@@ -693,6 +921,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "cooldown_ms": 2500,
     "description": "A masterful drawn arc of steel."
+  },
+  {
+    "id": "ron_finis",
+    "name": "Finishing Stance",
+    "category": "swordplay",
+    "mp_cost": 0,
+    "power": 0,
+    "magic": false,
+    "heals": false,
+    "buffs": false,
+    "loot": false,
+    "ranged": false,
+    "world_only": false,
+    "cast_time_ms": 0,
+    "passive": true,
+    "passive_effect": {
+      "skill_types": [
+        "physical"
+      ],
+      "cooldown_reduction": 0.3,
+      "target_hp_below": 0.3
+    },
+    "description": "Passive: physical skill cooldowns are reduced against targets below 30% HP."
   }
 ]

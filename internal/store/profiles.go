@@ -55,10 +55,14 @@ type Profile struct {
 	VisitedSavePoints      []string          `json:"visited_save_points,omitempty"`
 	MapID                  string            `json:"map_id,omitempty"`
 	PrevMapID              string            `json:"pdnc_map_id,omitempty"`
-	WorldX                 float64           `json:"world_x,omitempty"`
-	WorldY                 float64           `json:"world_y,omitempty"`
-	Facing                 game.FacingYaw    `json:"facing,omitempty"`
-	HasWorldPos            bool              `json:"has_world_pos,omitempty"`
+	// WorldID is the singular-world id that owns the persisted WorldX/Y
+	// position. In world mode it is written instead of MapID so the legacy
+	// map-routing fields (MapID/PrevMapID) stay untouched.
+	WorldID     string         `json:"world_id,omitempty"`
+	WorldX      float64        `json:"world_x,omitempty"`
+	WorldY      float64        `json:"world_y,omitempty"`
+	Facing      game.FacingYaw `json:"facing,omitempty"`
+	HasWorldPos bool           `json:"has_world_pos,omitempty"`
 
 	// Legacy fields migrated into Jobs/Loadouts on load.
 	Level          int                      `json:"level,omitempty"`
@@ -918,6 +922,7 @@ func (s *Store) SetMapID(name, mapID string) (Profile, bool) {
 // SetWorldLocation stores the hero's last map and overworld position.
 // Memory is always updated; the JSON file is written when flush is true.
 // When mapID changes, the previous MapID is retained in PrevMapID.
+// Singular-world hubs should use SetWorldLocationInWorld instead.
 func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing float64, flush bool) (Profile, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -939,6 +944,41 @@ func (s *Store) SetWorldLocation(name, mapID string, x, y float64, facing float6
 		s.save()
 	}
 	return *p, true
+}
+
+// SetWorldLocationInWorld stores the hero's overworld position inside a
+// singular world. Unlike SetWorldLocation it records worldID in WorldID and
+// leaves MapID/PrevMapID untouched — a world hub never transfers between maps,
+// so there is no previous map to retain and a stale legacy MapID must not
+// control world selection later.
+func (s *Store) SetWorldLocationInWorld(name, worldID string, x, y float64, facing float64, flush bool) (Profile, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.profiles[name]
+	if !ok {
+		return Profile{}, false
+	}
+	if worldID != "" {
+		p.WorldID = worldID
+	}
+	p.WorldX = x
+	p.WorldY = y
+	p.Facing = game.FacingYaw(facing)
+	p.HasWorldPos = true
+	if flush {
+		s.save()
+	}
+	return *p, true
+}
+
+// PersistedWorldID reports which world or map owns the saved WorldX/Y
+// position: WorldID when present (singular-world mode), else the legacy MapID
+// (written by older world-mode builds and by per-map hubs).
+func (p Profile) PersistedWorldID() string {
+	if p.WorldID != "" {
+		return p.WorldID
+	}
+	return p.MapID
 }
 
 func (s *Store) Get(name string) (Profile, bool) {

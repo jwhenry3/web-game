@@ -18,6 +18,11 @@ type Node struct {
 	Hub  *server.Hub
 	OW   *game.Overworld
 
+	// World is the loaded singular-world definition when this node was started
+	// via StartWorld; it is nil for legacy per-map nodes.
+	World     *game.WorldDefinition
+	WorldSpec cluster.WorldSpec
+
 	mu       sync.Mutex
 	sessions map[string]*server.Client
 
@@ -68,6 +73,41 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 	}
 	go hub.Run()
 	log.Printf("map %s (%s) overworld %s", spec.ID, spec.Name, ow.Path)
+	return n, nil
+}
+
+// StartWorld starts a singular-world node from a cluster WorldSpec. It loads
+// the server config, builds a WorldDefinition from the configured overworld,
+// and runs a single hub for the embedded overworld without wiring border
+// transfer callbacks.
+func StartWorld(spec cluster.WorldSpec, profiles *store.Store, accounts *store.AccountStore) (*Node, error) {
+	cfg, err := servercfg.Load(spec.Config)
+	if err != nil {
+		return nil, err
+	}
+	world, err := game.LoadWorldDefinition(cfg.Server.Overworld)
+	if err != nil {
+		return nil, err
+	}
+	hub, err := server.NewHub(profiles, accounts, nil)
+	if err != nil {
+		return nil, err
+	}
+	hub.SetWorld(spec.ID, spec.Name, world)
+	n := &Node{
+		Spec: cluster.MapSpec{
+			ID:     spec.ID,
+			Name:   spec.Name,
+			Config: spec.Config,
+		},
+		WorldSpec: spec,
+		World:     world,
+		Hub:       hub,
+		OW:        world.Overworld,
+		sessions:  map[string]*server.Client{},
+	}
+	go hub.Run()
+	log.Printf("world %s (%s) overworld %s", spec.ID, spec.Name, world.Overworld.Path)
 	return n, nil
 }
 

@@ -12,14 +12,25 @@ import (
 	"clara-mundi/internal/servercfg"
 )
 
-// Config is the cluster document: one global proxy and N map servers.
+// Config is the cluster document: one global proxy and either one singular
+// world server or N legacy map servers. When World is configured, the host
+// starts it instead of the legacy Maps list.
 type Config struct {
 	Proxy ProxyConfig   `json:"proxy"`
 	Exp   game.ExpRates `json:"exp"`
 	Maps  []MapSpec     `json:"maps"`
+	// World selects singular-world startup while Maps remain available as
+	// legacy content and migration metadata.
+	World *WorldSpec `json:"world,omitempty"`
 	// WorldLayout maps map id → world-space pixel origin, computed from the
 	// border graph at Validate time. Not persisted.
 	WorldLayout map[string][2]int `json:"-"`
+}
+
+type WorldSpec struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Config string `json:"config"`
 }
 
 type ProxyConfig struct {
@@ -171,6 +182,11 @@ func (c *Config) applyDefaults() {
 }
 
 func (c *Config) Validate() error {
+	if c.World != nil {
+		if err := c.validateWorld(); err != nil {
+			return err
+		}
+	}
 	if len(c.Maps) == 0 {
 		return fmt.Errorf("cluster: at least one map is required")
 	}
@@ -211,6 +227,26 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("cluster: at least one map must be enabled")
 	}
 	return c.validateBorders()
+}
+
+func (c *Config) validateWorld() error {
+	w := c.World
+	if w.ID == "" {
+		return fmt.Errorf("cluster: world id required")
+	}
+	if w.Name == "" {
+		return fmt.Errorf("cluster: world name required")
+	}
+	if w.Config == "" {
+		return fmt.Errorf("cluster: world %q missing config", w.ID)
+	}
+	if _, err := os.Stat(w.Config); err != nil {
+		return fmt.Errorf("cluster: world %q config %q: %w", w.ID, w.Config, err)
+	}
+	if _, err := servercfg.Load(w.Config); err != nil {
+		return fmt.Errorf("cluster: world %q: %w", w.ID, err)
+	}
+	return nil
 }
 
 // validateBorders checks the map border graph across every configured map:
@@ -327,4 +363,27 @@ func (c *Config) RemoveMapSpec(id string) bool {
 		}
 	}
 	return false
+}
+
+// HasWorld reports whether the cluster should use singular-world startup.
+func (c Config) HasWorld() bool {
+	return c.World != nil && c.World.ID != ""
+}
+
+// WorldSpec returns the configured world when present. The bool result is
+// false when the cluster is running in legacy map-only mode.
+func (c Config) WorldSpec() (WorldSpec, bool) {
+	if !c.HasWorld() {
+		return WorldSpec{}, false
+	}
+	return *c.World, true
+}
+
+// LoadWorldConfig loads and validates the world server config path using
+// the same servercfg.Load convention as MapSpec.Config.
+func (c Config) LoadWorldConfig() (servercfg.Config, error) {
+	if !c.HasWorld() {
+		return servercfg.Config{}, fmt.Errorf("cluster: no world configured")
+	}
+	return servercfg.Load(c.World.Config)
 }

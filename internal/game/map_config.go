@@ -10,15 +10,16 @@ import (
 
 // MapConfig is the server-authoritative map file (replaces runtime .tmj loading).
 type MapConfig struct {
-	TileSize    int              `json:"tile_size"`
-	Cols        int              `json:"cols"`
-	Rows        int              `json:"rows"`
-	Wander      wanderSettings   `json:"wander"`
-	Terrain     MapConfigTerrain `json:"terrain"`
-	Regions     []Region         `json:"regions"`
-	SavePoints  []savePointFile  `json:"save_points"`
-	JobChangers []jobChangerFile `json:"job_changers"`
-	NPCs        []patrolFile     `json:"npcs"`
+	TileSize          int              `json:"tile_size"`
+	Cols              int              `json:"cols"`
+	Rows              int              `json:"rows"`
+	Wander            wanderSettings   `json:"wander"`
+	Terrain           MapConfigTerrain `json:"terrain"`
+	Regions           []Region         `json:"regions"`
+	SimulationRegions []Region         `json:"simulation_regions,omitempty"`
+	SavePoints        []savePointFile  `json:"save_points"`
+	JobChangers       []jobChangerFile `json:"job_changers"`
+	NPCs              []patrolFile     `json:"npcs"`
 	// Borders maps an edge ("north"|"south"|"east"|"west") to the map id it
 	// adjoins. Edge crossings are derived from walkable border tiles — no
 	// rects needed. Symmetry is validated across the cluster at boot.
@@ -123,6 +124,11 @@ func LoadOverworldFromMapConfig(path string) (*Overworld, error) {
 	}
 
 	ow.Cells = buildCellsFromLayers(layerMap["collision"], layerMap["ground"], ow.Cols, ow.Rows)
+
+	ow.SimulationRegions = make([]Region, len(cfg.SimulationRegions))
+	for i, reg := range cfg.SimulationRegions {
+		ow.SimulationRegions[i] = reg.EnsurePolygon()
+	}
 
 	if err := applyMapConfigEntities(ow, cfg); err != nil {
 		return nil, err

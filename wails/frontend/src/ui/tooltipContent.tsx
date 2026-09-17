@@ -46,12 +46,14 @@ export function SkillTooltipContent({
     <div className="cm-tooltip-body">
       <div className="cm-tooltip-title">{sk.name}</div>
       <div className="cm-tooltip-meta">
-        {sk.world_only
-          ? "Field skill · 0 MP"
-          : sk.id === "attack" || sk.id === "dodge"
-            ? "0 MP · uses GCD"
-            : `${sk.mp_cost} MP${sk.cast_time_ms ? ` · ${(sk.cast_time_ms / 1000).toFixed(1)}s cast` : ""}${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
-        {!sk.world_only && sk.id !== "attack" && sk.id !== "dodge" && (
+        {sk.passive
+          ? "Passive"
+          : sk.world_only
+            ? "Field skill · 0 MP"
+            : sk.id === "attack" || sk.id === "dodge"
+              ? `0 MP · uses GCD${sk.combo_length ? ` · ${sk.combo_length}-step combo` : ""}`
+              : `${sk.mp_cost} MP${sk.cast_time_ms ? ` · ${(sk.cast_time_ms / 1000).toFixed(1)}s cast` : ""}${sk.cooldown_ms ? ` · +${(sk.cooldown_ms / 1000).toFixed(1)}s cooldown` : ""}${sk.weapon_req ? ` · ${sk.weapon_req}` : ""}`}
+        {!sk.world_only && !sk.passive && sk.id !== "attack" && sk.id !== "dodge" && (
           <>
             {" "}
             · Lv {sk.unlocked ? sk.level : 0}/{sk.max_level}
@@ -59,16 +61,17 @@ export function SkillTooltipContent({
           </>
         )}
         {!sk.unlocked && sk.prereq ? ` · requires ${prereq?.name ?? sk.prereq}` : ""}
-        {sk.unlocked && !sk.world_only && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
-        {sk.unlocked && !sk.world_only && usage > 0 && atMax ? ` · ${usage} uses` : ""}
+        {sk.unlocked && !sk.world_only && !sk.passive && !atMax && toNext > 0 ? ` · ${usage} / ${toNext} uses` : ""}
+        {sk.unlocked && !sk.world_only && !sk.passive && usage > 0 && atMax ? ` · ${usage} uses` : ""}
       </div>
       {sk.description && <div className="cm-tooltip-desc dim">{sk.description}</div>}
       {!sk.unlocked && <div className="cm-tooltip-hint dim">Level your job to unlock.</div>}
       {sk.world_only && sk.unlocked && (
         <div className="cm-tooltip-hint dim">Double-click to use, or drag onto the hotbar.</div>
       )}
-      {sk.unlocked && !sk.world_only && !atMax && <div className="cm-tooltip-hint dim">Use in battle to level up.</div>}
-      {sk.unlocked && !sk.world_only && atMax && <div className="cm-tooltip-hint dim">Max level.</div>}
+      {sk.unlocked && sk.passive && <div className="cm-tooltip-hint dim">Always active.</div>}
+      {sk.unlocked && !sk.world_only && !sk.passive && !atMax && <div className="cm-tooltip-hint dim">Use in battle to level up.</div>}
+      {sk.unlocked && !sk.world_only && !sk.passive && atMax && <div className="cm-tooltip-hint dim">Max level.</div>}
     </div>
   );
 }

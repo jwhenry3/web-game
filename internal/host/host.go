@@ -129,22 +129,39 @@ func Start(opts Options) (*Runtime, error) {
 	}
 
 	rt := &Runtime{Proxy: px, Config: cfg, profiles: profiles}
-	started := 0
-	for _, spec := range cfg.Maps {
-		if !spec.IsEnabled() {
-			if !opts.Quiet {
-				log.Printf("map %s (%s) disabled — not starting", spec.ID, spec.Name)
-			}
-			continue
-		}
-		n, err := mapnode.Start(spec, profiles, accounts, cfg.WorldLayout)
+	if cfg.HasWorld() {
+		w, _ := cfg.WorldSpec()
+		n, err := mapnode.StartWorld(w, profiles, accounts)
 		if err != nil {
 			rt.Close()
-			return nil, fmt.Errorf("map %s: %w", spec.ID, err)
+			return nil, fmt.Errorf("world %s: %w", w.ID, err)
 		}
-		px.RegisterMap(n)
+		px.RegisterWorld(n)
 		rt.nodes = append(rt.nodes, n)
-		started++
+		if !opts.Quiet {
+			log.Printf("world: %s (%s)", w.ID, w.Name)
+		}
+	} else {
+		started := 0
+		for _, spec := range cfg.Maps {
+			if !spec.IsEnabled() {
+				if !opts.Quiet {
+					log.Printf("map %s (%s) disabled — not starting", spec.ID, spec.Name)
+				}
+				continue
+			}
+			n, err := mapnode.Start(spec, profiles, accounts, cfg.WorldLayout)
+			if err != nil {
+				rt.Close()
+				return nil, fmt.Errorf("map %s: %w", spec.ID, err)
+			}
+			px.RegisterMap(n)
+			rt.nodes = append(rt.nodes, n)
+			started++
+		}
+		if !opts.Quiet {
+			log.Printf("cluster maps: %d running / %d registered (default %s)", started, len(cfg.Maps), cfg.DefaultMap().ID)
+		}
 	}
 
 	ln, err := net.Listen("tcp", cfg.Proxy.Addr)
@@ -158,7 +175,6 @@ func Start(opts Options) (*Runtime, error) {
 	rt.http = &http.Server{Handler: px.Handler()}
 
 	if !opts.Quiet {
-		log.Printf("cluster maps: %d running / %d registered (default %s)", started, len(cfg.Maps), cfg.DefaultMap().ID)
 		log.Printf("Clara Mundi proxy listening on %s", addr)
 	}
 

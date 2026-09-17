@@ -19,8 +19,8 @@ type overworldFile struct {
 }
 
 type exitFile struct {
-	DestMap string  `json:"destMap"`
-	Tiles   [4]int  `json:"tiles"` // minC, minR, maxC, maxR
+	DestMap string     `json:"destMap"`
+	Tiles   [4]int     `json:"tiles"` // minC, minR, maxC, maxR
 	Dest    [2]float64 `json:"dest"`
 }
 
@@ -47,13 +47,13 @@ type jobChangerFile struct {
 }
 
 type mapPaintFile struct {
-	BaseTile         string      `json:"baseTile"`
-	BorderTile       string      `json:"borderTile"`
-	Border           mapBorder   `json:"border"`
-	Fills            []mapRect   `json:"fills"`
-	Stamps           []mapPoint  `json:"stamps"`
-	Rings            []mapRect   `json:"rings"`
-	ReopenNPCHomes   bool        `json:"reopenNpcHomes"`
+	BaseTile       string     `json:"baseTile"`
+	BorderTile     string     `json:"borderTile"`
+	Border         mapBorder  `json:"border"`
+	Fills          []mapRect  `json:"fills"`
+	Stamps         []mapPoint `json:"stamps"`
+	Rings          []mapRect  `json:"rings"`
+	ReopenNPCHomes bool       `json:"reopenNpcHomes"`
 }
 
 type mapBorder struct {
@@ -137,7 +137,7 @@ func parseOverworld(raw overworldFile) (*Overworld, error) {
 		}
 		ow.NPCPatrols = append(ow.NPCPatrols, Patrol{
 			ID: n.ID, Kind: n.Kind, Name: n.Name, Level: n.Level, Region: n.Region,
-			Home: Tile{C: n.Home[0], R: n.Home[1]},
+			Home:      Tile{C: n.Home[0], R: n.Home[1]},
 			Encounter: encounterFromPatrolFile(n),
 		})
 	}
@@ -201,8 +201,8 @@ func parseOverworld(raw overworldFile) (*Overworld, error) {
 		ow.Exits = append(ow.Exits, MapExit{
 			DestMap: dest,
 			MinC:    minC, MinR: minR,
-			MaxC:    maxC, MaxR: maxR,
-			DestX:   e.Dest[0], DestY: e.Dest[1],
+			MaxC: maxC, MaxR: maxR,
+			DestX: e.Dest[0], DestY: e.Dest[1],
 		})
 	}
 	return ow, nil
