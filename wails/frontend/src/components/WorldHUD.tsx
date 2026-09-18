@@ -1,34 +1,55 @@
 import { useEffect, useRef, useState } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
-import { captureEligible, isEnemyEntity, type StatusSnapshot } from "../types";
+import {
+  captureEligible,
+  isEnemyEntity,
+  isPetEntity,
+  type StatusSnapshot,
+  type WorldEntity,
+} from "../types";
 import { StatusIcons } from "../ui/StatusIcons";
+import { JobIdentityBadges } from "../ui/JobIdentity";
+import { hudScaleKey, uiScaleFactor } from "../ui/uiScale";
+import { useWindowDrag } from "./DraggableWindow";
 import { Minimap } from "./Minimap";
 
 const STAMINA_MAX = 100;
 
-function ResourceBar({
+/** FFXI party-frame HP color: green → yellow → orange → red as HP drops. */
+function hpBarColor(pct: number): string {
+  if (pct > 75) return "#6fbf4a";
+  if (pct > 50) return "#cfc23c";
+  if (pct > 25) return "#e08a3c";
+  return "#e04b4b";
+}
+
+/** FFXI-style parameter gauge: label left, bar, current value at the right. */
+function ParamGauge({
   label,
   value,
   max,
   color,
+  thin,
 }: {
   label: string;
   value: number;
   max: number;
   color: string;
+  thin?: boolean;
 }) {
   const safeValue = Number.isFinite(value) ? value : 0;
   const safeMax = Number.isFinite(max) && max > 0 ? max : 0;
   const pct = safeMax > 0 ? Math.min(100, Math.max(0, (safeValue / safeMax) * 100)) : 0;
   return (
-    <div className="ff-gauge">
-      <span className="ff-gauge-label">{label}</span>
-      <div className="ff-gauge-track">
-        <div className="ff-gauge-fill" style={{ width: `${pct}%`, background: color }} />
-        <span className="ff-gauge-text">
-          {Math.round(safeValue)}/{safeMax}
-        </span>
+    <div
+      className={`ffxi-gauge${thin ? " ffxi-gauge--thin" : ""}`}
+      title={`${label} ${Math.round(safeValue)} / ${safeMax}`}
+    >
+      <span className="ffxi-gauge-label">{label}</span>
+      <div className="ffxi-gauge-track">
+        <div className="ffxi-gauge-fill" style={{ width: `${pct}%`, background: color }} />
+        <span className="ffxi-gauge-value">{Math.round(safeValue)}</span>
       </div>
     </div>
   );
@@ -56,6 +77,12 @@ export function WorldHUD() {
   const party = useGame((s) => s.party);
   const selected = useGame((s) => s.selectedAction);
   const commandPetId = useGame((s) => s.commandPetId);
+  const partyScale = useGame((s) => uiScaleFactor(s.options.uiScale, hudScaleKey("party")));
+  const { style: partyStyle, titlebarProps: partyDragProps } = useWindowDrag(
+    "party-window",
+    partyScale,
+  );
+  const { className: _partyDragClass, ...partyDrag } = partyDragProps;
   const [now, setNow] = useState(() => Date.now());
   const localCastStart = useRef(0);
   const localCastKey = useRef("");
@@ -100,11 +127,6 @@ export function WorldHUD() {
 
   if (!profile || !selfId) return null;
 
-  const hp = self?.hp ?? selfCombat?.hp ?? 0;
-  const maxHp = self?.max_hp ?? selfCombat?.max_hp ?? profile.stats?.hp ?? 0;
-  const mp = self?.mp ?? selfCombat?.mp ?? 0;
-  const maxMp = self?.max_mp ?? selfCombat?.max_mp ?? profile.stats?.mp ?? 0;
-  const stamina = self?.stamina ?? 0;
   const recovering = immuneUntil > now && !inCombat;
 
   // Focus target: the server-driven target_id, resolved against the unified
@@ -133,60 +155,135 @@ export function WorldHUD() {
   const canCapture =
     !!target && target.hostile && !!target.capturable && captureEligible(target);
 
+  // Pets out in the world, grouped by owning player id for nested party rows.
+  const petsByOwner = new Map<string, WorldEntity[]>();
+  for (const e of Object.values(entities)) {
+    if (!isPetEntity(e) || !e.owner_id) continue;
+    const list = petsByOwner.get(e.owner_id) ?? [];
+    list.push(e);
+    petsByOwner.set(e.owner_id, list);
+  }
+
+  // FFXI-style party window: always shows the local player, then party
+  // members in server order, with each member's pets nested underneath.
+  interface MemberView {
+    id: string;
+    name: string;
+    level?: number;
+    leader?: boolean;
+    in_combat?: boolean;
+  }
+  const members: MemberView[] = party?.members ?? [];
+  const memberViews: MemberView[] = members.some((m) => m.id === selfId)
+    ? members
+    : [{ id: selfId, name: profile.name, level: profile.level }, ...members];
+
+  const renderMember = (m: MemberView) => {
+    const isSelf = m.id === selfId;
+    const e = entities[m.id];
+    const inFight = !!combatIds[m.id];
+    const hp = isSelf ? (e?.hp ?? selfCombat?.hp ?? 0) : e?.hp;
+    const maxHp = isSelf
+      ? (e?.max_hp ?? selfCombat?.max_hp ?? profile.stats?.hp ?? 0)
+      : e?.max_hp;
+    const mp = isSelf ? (e?.mp ?? selfCombat?.mp ?? 0) : e?.mp;
+    const maxMp = isSelf
+      ? (e?.max_mp ?? selfCombat?.max_mp ?? profile.stats?.mp ?? 0)
+      : e?.max_mp;
+    const stamina = isSelf ? (e?.stamina ?? 0) : e?.stamina;
+    const pets = petsByOwner.get(m.id) ?? [];
+    return (
+      <div key={m.id} className="ff-party-frame">
+        <button
+          type="button"
+          tabIndex={-1}
+          className={`ff-party-row ${isSelf ? "ff-focused" : ""} ${inFight && e && !e.alive ? "entity-dead" : ""} ${selected?.heals ? "targetable" : ""}`}
+          onClick={() =>
+            net.clickEntity(
+              e
+                ? { ...e, alive: inFight ? e.alive : e.hp > 0 }
+                : {
+                    id: m.id,
+                    name: m.name,
+                    kind: "player",
+                    x: 0,
+                    y: 0,
+                    hp: 0,
+                    max_hp: 0,
+                    alive: true,
+                    is_ally: true,
+                  },
+            )
+          }
+        >
+          <div className="ff-party-name">
+            {isSelf && <JobIdentityBadges jobId={profile.main_job} iconOnly />}
+            {m.name}
+            {m.leader ? " ★" : ""}
+            {m.in_combat ? " ⚔" : ""}
+            {m.level != null && <span className="dim"> Lv{m.level}</span>}
+          </div>
+          <StatusIcons
+            statuses={inFight || isSelf ? e?.statuses : undefined}
+            className="status-icons--compact"
+          />
+          {hp != null && maxHp != null && (
+            <ParamGauge
+              label="HP"
+              value={hp}
+              max={maxHp}
+              color={hpBarColor(maxHp > 0 ? (hp / maxHp) * 100 : 0)}
+            />
+          )}
+          {mp != null && maxMp != null && maxMp > 0 && (
+            <ParamGauge label="MP" value={mp} max={maxMp} color="#4aa3e8" thin />
+          )}
+          {stamina != null && (
+            <ParamGauge label="ST" value={stamina} max={STAMINA_MAX} color="#8fd4c8" thin />
+          )}
+          {isSelf && recovering && (
+            <span className="dim hud-immune-note">
+              Invulnerable {((immuneUntil - now) / 1000).toFixed(1)}s
+            </span>
+          )}
+        </button>
+        {pets.map((p) => {
+          const pInFight = !!combatIds[p.id];
+          return (
+            <button
+              key={p.id}
+              type="button"
+              tabIndex={-1}
+              className={`ff-pet-row ${pInFight && !p.alive ? "entity-dead" : ""} ${selected?.heals ? "targetable" : ""}`}
+              onClick={() => net.clickEntity(p)}
+            >
+              <div className="ff-pet-name">{p.name}</div>
+              <ParamGauge
+                label="HP"
+                value={p.hp}
+                max={p.max_hp}
+                color={hpBarColor(p.max_hp > 0 ? (p.hp / p.max_hp) * 100 : 0)}
+              />
+              {p.max_mp != null && p.max_mp > 0 && (
+                <ParamGauge label="MP" value={p.mp ?? 0} max={p.max_mp} color="#4aa3e8" thin />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="hud world-hud">
-      <div className="cm-hud-left">
-        {party && party.members.length > 0 && (
-          <div className="cm-panel">
-            <div className="cm-panel-head">Party</div>
-            {party.members.map((m) => {
-              const e = entities[m.id];
-              const inFight = !!combatIds[m.id];
-              const mhp = e?.hp;
-              const mmax = e?.max_hp;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  tabIndex={-1}
-                  className={`ff-party-row ${m.id === selfId ? "ff-focused" : ""} ${inFight && e && !e.alive ? "entity-dead" : ""} ${selected?.heals ? "targetable" : ""}`}
-                  onClick={() =>
-                    net.clickEntity(
-                      e
-                        ? { ...e, alive: inFight ? e.alive : e.hp > 0 }
-                        : {
-                            id: m.id,
-                            name: m.name,
-                            kind: "player",
-                            x: 0,
-                            y: 0,
-                            hp: 0,
-                            max_hp: 0,
-                            alive: true,
-                            is_ally: true,
-                          },
-                    )
-                  }
-                >
-                  <div className="ff-party-name">
-                    {m.name}
-                    {m.leader ? " ★" : ""}
-                    {m.in_combat ? " ⚔" : ""}
-                  </div>
-                  <StatusIcons statuses={inFight ? e?.statuses : undefined} className="status-icons--compact" />
-                  {mhp != null && mmax != null && (
-                    <ResourceBar
-                      label="HP"
-                      value={mhp}
-                      max={mmax}
-                      color={mmax > 0 && mhp / mmax <= 0.35 ? "#e04b4b" : "#3dcc6e"}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        )}
+      <div
+        className="ff-party-window"
+        style={partyStyle}
+        {...partyDrag}
+        onMouseDown={(e) => e.stopPropagation()}
+        title="Drag to move"
+      >
+        {memberViews.map(renderMember)}
       </div>
 
       {target && (
@@ -198,14 +295,14 @@ export function WorldHUD() {
             </strong>
             {target.level != null && <span className="dim">Lv {target.level}</span>}
           </div>
-          <ResourceBar
+          <ParamGauge
             label="HP"
             value={target.hp}
             max={target.max_hp}
-            color={target.hostile ? "#c94a4a" : "#3dcc6e"}
+            color={hpBarColor(target.max_hp > 0 ? (target.hp / target.max_hp) * 100 : 0)}
           />
           {!target.hostile && target.mp != null && target.max_mp != null && (
-            <ResourceBar label="MP" value={target.mp} max={target.max_mp} color="#4aa3e8" />
+            <ParamGauge label="MP" value={target.mp} max={target.max_mp} color="#4aa3e8" thin />
           )}
           <StatusIcons statuses={target.statuses} />
           {canCapture && (
@@ -221,15 +318,6 @@ export function WorldHUD() {
           )}
         </div>
       )}
-
-      <div className="cm-param-world">
-        <ResourceBar label="HP" value={hp} max={maxHp} color="#3dcc6e" />
-        <ResourceBar label="MP" value={mp} max={maxMp} color="#4aa3e8" />
-        <ResourceBar label="ST" value={stamina} max={STAMINA_MAX} color="#e8c96a" />
-        {recovering && (
-          <span className="dim hud-immune-note">Invulnerable {((immuneUntil - now) / 1000).toFixed(1)}s</span>
-        )}
-      </div>
 
       {casting && (
         <div className="cm-world-cast" role="status" aria-label={`${castName} casting`}>

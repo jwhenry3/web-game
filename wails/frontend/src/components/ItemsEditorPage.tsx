@@ -21,7 +21,7 @@ interface Props {
 function itemDetailLabel(item: ItemDef): string {
   if (item.kind === "consumable") return item.target ?? "—";
   if (item.slot === "weapon" || item.slot === "sub_weapon") return item.weapon_type ?? item.slot;
-  return item.slot ?? "—";
+  return [item.armor_class, item.slot].filter(Boolean).join(" ") || "—";
 }
 
 export function ItemsEditorPage({ items, onItemsChange, status, error, onStatus }: Props) {

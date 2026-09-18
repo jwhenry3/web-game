@@ -65,36 +65,21 @@ func Snapshots(list []ActiveStatus) []StatusSnapshot {
 	return out
 }
 
-// SkillStatusEffects maps skill ids to status effects applied on success.
-var SkillStatusEffects = map[string][]StatusEffectDef{
-	"can_carmen_tutus":    {{Kind: StatusDefenseUp, Duration: 40, Potency: 0.30, OnCaster: false}},
-	"can_carmen_ferox":    {{Kind: StatusAttackUp, Duration: 35, Potency: 0.25, OnCaster: false}},
-	"van_clamor_castra":   {{Kind: StatusDefenseUp, Duration: 30, Potency: 0.30, OnCaster: true}},
-	"van_furor_linea":     {{Kind: StatusDefenseUp, Duration: 25, Potency: 0.20, OnCaster: true}},
-	"aeg_custodia_ferrea": {{Kind: StatusDefenseUp, Duration: 30, Potency: 0.35, OnCaster: true}},
-	"aeg_tegimen":         {{Kind: StatusDefenseUp, Duration: 25, Potency: 0.40, OnCaster: false}},
-	"aeg_umbo":            {{Kind: StatusStun, Duration: 8, Potency: 1, OnCaster: false}},
-	"san_lux_mitis":       {{Kind: StatusDefenseDown, Duration: 40, Potency: 0.20, OnCaster: false}},
-	"brw_robur_manus":     {{Kind: StatusAttackUp, Duration: 25, Potency: 0.20, OnCaster: true}},
-	"ron_altum_custos":    {{Kind: StatusDefenseUp, Duration: 20, Potency: 0.15, OnCaster: true}},
-}
-
-// SkillTargetsAlly reports whether a skill should be aimed at a friendly player.
+// SkillTargetsAlly reports whether a skill should be aimed at a friendly
+// entity — ally or self target rules both resolve through the friendly path.
 func SkillTargetsAlly(skill Skill) bool {
-	if skill.Heals || skill.Buffs {
-		return true
-	}
-	for _, d := range SkillStatusEffects[skill.ID] {
-		if !d.OnCaster {
-			return true
-		}
-	}
-	return false
+	rule := skill.TargetRule()
+	return rule == TargetAlly || rule == TargetSelf
 }
 
-// StatusesForSkill returns configured effects for a skill id.
+// StatusesForSkill returns the status payloads in a skill's effect list
+// (inline Effects, or the list synthesized for legacy defs).
 func StatusesForSkill(skillID string) []StatusEffectDef {
-	return SkillStatusEffects[skillID]
+	skill, ok := FindSkill(skillID)
+	if !ok {
+		return nil
+	}
+	return StatusEffectsFor(skill)
 }
 
 const comboStatusPrefix = "combo_"

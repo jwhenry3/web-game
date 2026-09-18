@@ -115,6 +115,7 @@ interface GameState {
   setSelectedAction: (a: SelectedAction | null) => void;
   setCommandPetId: (id: string | null) => void;
   toggleWindow: (w: WindowId) => void;
+  selectWindow: (w: WindowId) => void;
   closeWindow: () => void;
   setBindSlot: (slot: string | null) => void;
   setHotbarDrag: (d: GameState["hotbarDrag"]) => void;
@@ -246,6 +247,7 @@ export const useGame = create<GameState>((set) => ({
       }
       return { openWindow: s.openWindow === w ? null : w, bindSlot: null };
     }),
+  selectWindow: (w) => set({ openWindow: w, bindSlot: null }),
   closeWindow: () => set({ openWindow: null, bindSlot: null }),
   setBindSlot: (slot) => set({ bindSlot: slot }),
   setHotbarDrag: (d) => set({ hotbarDrag: d }),
@@ -388,13 +390,15 @@ function combatTone(p: CombatEventPayload): ChatTone | undefined {
 
 let combatEventSeq = 0;
 
-/** Record a combat_event: merge entity snapshots, append message, push VFX event. */
+/** Record a combat_event: replace entity snapshots, append message, push VFX event. */
 export function applyCombatEvent(p: CombatEventPayload) {
   useGame.setState((s) => {
     const entities = { ...s.entities };
     const combatIds = { ...s.combatIds };
     for (const e of p.entities ?? []) {
-      entities[e.id] = { ...entities[e.id], ...e };
+      // Full projections: replace, don't spread — omitempty fields (engaged,
+      // casting, statuses) are absent when cleared and must not linger.
+      entities[e.id] = e;
       combatIds[e.id] = true;
     }
     const ev: CombatEvent = { ...p, seq: ++combatEventSeq };
@@ -420,15 +424,34 @@ export function applyCombatEvent(p: CombatEventPayload) {
   });
 }
 
-/** Merge combat participant snapshots and replace the in-combat id set
- *  (empty array ends combat tracking). */
-export function applyCombatTick(p: { entities?: WorldEntity[] }) {
+/** Replace combat participant snapshots and the in-combat id set (empty
+ *  array ends combat tracking). Entities that left the set get no more
+ *  projections — clear their combat-only fields so stale engaged/cast state
+ *  doesn't linger. */
+export function applyCombatTick(p?: { entities?: WorldEntity[] }) {
   useGame.setState((s) => {
     const entities = { ...s.entities };
     const combatIds: Record<string, true> = {};
-    for (const e of p.entities ?? []) {
-      entities[e.id] = { ...entities[e.id], ...e };
+    for (const e of p?.entities ?? []) {
+      entities[e.id] = e;
       combatIds[e.id] = true;
+    }
+    for (const id of Object.keys(s.combatIds)) {
+      if (combatIds[id]) continue;
+      const prev = entities[id];
+      if (!prev) continue;
+      entities[id] = {
+        ...prev,
+        engaged: false,
+        target_id: undefined,
+        statuses: undefined,
+        casting_skill_id: undefined,
+        cast_target_id: undefined,
+        cast_progress: undefined,
+        cast_time_ms: undefined,
+        cast_ends_at: undefined,
+        has_queued_action: undefined,
+      };
     }
     return { entities, combatIds };
   });

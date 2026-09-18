@@ -25,7 +25,7 @@ func (s *Store) AddPet(name string, kind, petName string, level int) (Profile, g
 	return *p, rec, ""
 }
 
-// ReleasePet removes a pet and clears follow/battle slots if they pointed at it.
+// ReleasePet removes a pet and clears active/mount slots if they pointed at it.
 func (s *Store) ReleasePet(name, petID string) (Profile, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -50,50 +50,37 @@ func (s *Store) ReleasePet(name, petID string) (Profile, string) {
 	if p.BattlePetID == petID {
 		p.BattlePetID = ""
 	}
+	if p.MountPetID == petID {
+		p.MountPetID = ""
+	}
 	s.save()
 	return *p, ""
 }
 
-// SetFollowPet sets which pet follows in the overworld (empty clears).
-func (s *Store) SetFollowPet(name, petID string) (Profile, string) {
+// setPetSlot assigns petID to the given profile slot (empty clears).
+func (s *Store) setPetSlot(name, petID string, slot func(p *Profile, id string)) (Profile, string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p, ok := s.profiles[name]
 	if !ok {
 		return Profile{}, "Character not found."
 	}
-	if petID == "" {
-		p.FollowPetID = ""
-		s.save()
-		return *p, ""
-	}
-	if !p.hasPet(petID) {
+	if petID != "" && !p.hasPet(petID) {
 		return *p, "Pet not found."
 	}
-	p.FollowPetID = petID
+	slot(p, petID)
 	s.save()
 	return *p, ""
 }
 
-// SetBattlePet sets which pet joins as a battle ally (empty clears).
+// SetBattlePet sets the active pet that follows and joins fights (empty clears).
 func (s *Store) SetBattlePet(name, petID string) (Profile, string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	p, ok := s.profiles[name]
-	if !ok {
-		return Profile{}, "Character not found."
-	}
-	if petID == "" {
-		p.BattlePetID = ""
-		s.save()
-		return *p, ""
-	}
-	if !p.hasPet(petID) {
-		return *p, "Pet not found."
-	}
-	p.BattlePetID = petID
-	s.save()
-	return *p, ""
+	return s.setPetSlot(name, petID, func(p *Profile, id string) { p.BattlePetID = id })
+}
+
+// SetMountPet sets the pet the mount keybind will ride (empty clears).
+func (s *Store) SetMountPet(name, petID string) (Profile, string) {
+	return s.setPetSlot(name, petID, func(p *Profile, id string) { p.MountPetID = id })
 }
 
 // UpdatePet replaces the stored PetRecord with the same ID (used for XP/level).

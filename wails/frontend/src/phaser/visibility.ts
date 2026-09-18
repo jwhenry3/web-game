@@ -2,7 +2,7 @@ import Phaser from "phaser";
 
 /**
  * Line-of-sight visibility for tile maps: per-tile LOS raycast + a camera
- * PostFX (custom render node) that blurs/dims pixels whose world position is
+ * PostFX (custom render node) that dims pixels whose world position is
  * outside the visible mask. Applies to everything the camera draws — terrain,
  * entities, markers — but not DOM overlays.
  */
@@ -86,13 +86,12 @@ const FRAG = [
   "uniform vec4 uWorldView;",   // camera worldView: x, y, w, h in world px
   "uniform vec2 uMaskOrigin;", // world px origin of the mask
   "uniform vec2 uMaskSize;",   // world px size covered by the mask
-  "uniform vec2 uBlur;",       // max blur radius in texture-UV units
   "uniform float uDim;",       // darken strength 0..1
   "uniform float uEnabled;",
   "varying vec2 outTexCoord;",
   "void main ()",
   "{",
-  "    vec4 sharp = texture2D(uMainSampler, outTexCoord);",
+  "    vec4 col = texture2D(uMainSampler, outTexCoord);",
   "    float vis = 1.0;",
   "    if (uEnabled > 0.5)",
   "    {",
@@ -103,22 +102,6 @@ const FRAG = [
   "        else vis = texture2D(uMask, muv).r;",
   "    }",
   "    float occ = 1.0 - vis;",
-  "    if (occ <= 0.001)",
-  "    {",
-  "        gl_FragColor = sharp;",
-  "        return;",
-  "    }",
-  "    vec2 rad = uBlur * occ;",
-  "    vec4 sum = sharp;",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2( rad.x, 0.0));",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2(-rad.x, 0.0));",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2(0.0,  rad.y));",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2(0.0, -rad.y));",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2( rad.x,  rad.y) * 0.7);",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2(-rad.x,  rad.y) * 0.7);",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2( rad.x, -rad.y) * 0.7);",
-  "    sum += texture2D(uMainSampler, outTexCoord + vec2(-rad.x, -rad.y) * 0.7);",
-  "    vec4 col = mix(sharp, sum / 9.0, min(1.0, occ * 1.5));",
   "    float gray = dot(col.rgb, vec3(0.299, 0.587, 0.114));",
   "    col.rgb = mix(col.rgb, vec3(gray) * 0.3, occ * uDim);",
   "    gl_FragColor = col;",
@@ -141,17 +124,13 @@ function ensureVisibilityNode(renderer: any): boolean {
     setupTextures: function (this: any, controller: any, textures: any[]) {
       textures[1] = controller.losMask ?? controller.losWhite;
     },
-    setupUniforms: function (this: any, controller: any, drawingContext: any) {
+    setupUniforms: function (this: any, controller: any, _drawingContext: any) {
       const pm = this.programManager;
       const wv = controller.camera.worldView;
       pm.setUniform("uMask", 1);
       pm.setUniform("uWorldView", [wv.x, wv.y, wv.width, wv.height]);
       pm.setUniform("uMaskOrigin", controller.losOrigin);
       pm.setUniform("uMaskSize", controller.losSize);
-      pm.setUniform("uBlur", [
-        controller.losBlurPx / drawingContext.width,
-        controller.losBlurPx / drawingContext.height,
-      ]);
       pm.setUniform("uDim", controller.losDim);
       pm.setUniform("uEnabled", controller.losMask ? 1 : 0);
     },
@@ -164,8 +143,6 @@ function ensureVisibilityNode(renderer: any): boolean {
 export interface VisibilityFXOptions {
   /** Sight radius in tiles; <= 0 for unlimited (occlusion only). */
   radiusTiles?: number;
-  /** Max blur radius in screen px for fully occluded areas. */
-  blurPx?: number;
   /** Darken strength 0..1 for fully occluded areas. */
   dim?: number;
 }
@@ -195,7 +172,6 @@ export class VisibilityFX {
     ctrl.losWhite = scene.textures.getFrame("__WHITE")?.glTexture ?? null;
     ctrl.losOrigin = [0, 0];
     ctrl.losSize = [1, 1];
-    ctrl.losBlurPx = opts.blurPx ?? 7;
     ctrl.losDim = opts.dim ?? 0.85;
     this.ctrl = ctrl;
     scene.cameras.main.filters.external.add(ctrl);

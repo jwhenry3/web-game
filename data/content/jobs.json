@@ -1,362 +1,364 @@
-{
-  "kind": "jobs",
-  "updated_at": "2026-09-17T18:19:09.872Z",
-  "data": [
-    {
-      "id": "VAN",
-      "name": "Vanguard",
-      "abbr": "VAN",
-      "role": "tank",
-      "style": "melee",
-      "category": "swordplay",
-      "weapon": "sword",
-      "stat_mults": {
-        "hp": 1.18,
-        "str": 1.08
-      },
-      "starting": true,
-      "skill_tree": [
-        {
-          "skill_id": "van_cuneus"
-        },
-        {
-          "skill_id": "van_clamor_castra",
-          "prereq_skill_id": "van_cuneus"
-        },
-        {
-          "skill_id": "van_furor_linea",
-          "prereq_skill_id": "van_cuneus"
-        },
-        {
-          "skill_id": "van_impetus_acies",
-          "prereq_skill_id": "van_clamor_castra"
-        },
-        {
-          "skill_id": "van_ripostis",
-          "prereq_skill_id": "van_impetus_acies"
-        }
-      ]
+[
+  {
+    "id": "VAN",
+    "name": "Vanguard",
+    "abbr": "VAN",
+    "role": "tank",
+    "style": "melee",
+    "category": "swordplay",
+    "weapon": "sword",
+    "stat_mults": {
+      "hp": 1.18,
+      "str": 1.08,
+      "vit": 1.12
     },
-    {
-      "id": "SAN",
-      "name": "Sanctifier",
-      "abbr": "SAN",
-      "role": "healer",
-      "style": "magic",
-      "category": "devotion",
-      "weapon": "wand",
-      "stat_mults": {
-        "hp": 1.04,
-        "mp": 1.16,
-        "mag": 1.12
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "van_cuneus"
       },
-      "starting": true,
-      "skill_tree": [
-        {
-          "skill_id": "san_sanare"
-        },
-        {
-          "skill_id": "san_lux_mitis",
-          "prereq_skill_id": "san_sanare"
-        },
-        {
-          "skill_id": "san_sanare_maius",
-          "prereq_skill_id": "san_sanare"
-        },
-        {
-          "skill_id": "san_expello_impurum",
-          "prereq_skill_id": "san_lux_mitis"
-        },
-        {
-          "skill_id": "san_meditatio",
-          "prereq_skill_id": "san_expello_impurum"
-        }
-      ]
+      {
+        "skill_id": "van_clamor_castra",
+        "prereq_skill_id": "van_cuneus"
+      },
+      {
+        "skill_id": "van_furor_linea",
+        "prereq_skill_id": "van_cuneus"
+      },
+      {
+        "skill_id": "van_impetus_acies",
+        "prereq_skill_id": "van_clamor_castra"
+      },
+      {
+        "skill_id": "van_ripostis",
+        "prereq_skill_id": "van_impetus_acies"
+      }
+    ]
+  },
+  {
+    "id": "SAN",
+    "name": "Sanctifier",
+    "abbr": "SAN",
+    "role": "healer",
+    "style": "magic",
+    "category": "devotion",
+    "weapon": "wand",
+    "stat_mults": {
+      "hp": 1.04,
+      "mp": 1.16,
+      "int": 1.04,
+      "md": 1.16
     },
-    {
-      "id": "BRW",
-      "name": "Brawler",
-      "abbr": "BRW",
-      "role": "dps",
-      "style": "melee",
-      "category": "swordplay",
-      "weapon": "knuckles",
-      "stat_mults": {
-        "str": 1.16,
-        "agi": 1.1
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "san_sanare"
       },
-      "starting": true,
-      "skill_tree": [
-        {
-          "skill_id": "brw_pugnum"
-        },
-        {
-          "skill_id": "brw_robur_manus",
-          "prereq_skill_id": "brw_pugnum"
-        },
-        {
-          "skill_id": "brw_humerus",
-          "prereq_skill_id": "brw_pugnum"
-        },
-        {
-          "skill_id": "brw_intentio_pugna",
-          "prereq_skill_id": "brw_robur_manus"
-        },
-        {
-          "skill_id": "brw_fluctus",
-          "prereq_skill_id": "brw_intentio_pugna"
-        }
-      ]
+      {
+        "skill_id": "san_lux_mitis",
+        "prereq_skill_id": "san_sanare"
+      },
+      {
+        "skill_id": "san_sanare_maius",
+        "prereq_skill_id": "san_sanare"
+      },
+      {
+        "skill_id": "san_expello_impurum",
+        "prereq_skill_id": "san_lux_mitis"
+      },
+      {
+        "skill_id": "san_meditatio",
+        "prereq_skill_id": "san_expello_impurum"
+      }
+    ]
+  },
+  {
+    "id": "BRW",
+    "name": "Brawler",
+    "abbr": "BRW",
+    "role": "dps",
+    "style": "melee",
+    "category": "swordplay",
+    "weapon": "knuckles",
+    "stat_mults": {
+      "str": 1.16,
+      "dex": 1.1
     },
-    {
-      "id": "HEX",
-      "name": "Hexwright",
-      "abbr": "HEX",
-      "role": "dps",
-      "style": "magic",
-      "category": "sorcery",
-      "weapon": "staff",
-      "stat_mults": {
-        "mp": 1.1,
-        "mag": 1.22
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "brw_pugnum"
       },
-      "starting": true,
-      "skill_tree": [
-        {
-          "skill_id": "hex_ignis_hex"
-        },
-        {
-          "skill_id": "hex_fulmen_hex",
-          "prereq_skill_id": "hex_ignis_hex"
-        },
-        {
-          "skill_id": "hex_gelu_hex",
-          "prereq_skill_id": "hex_ignis_hex"
-        },
-        {
-          "skill_id": "hex_ignis_maius",
-          "prereq_skill_id": "hex_gelu_hex"
-        },
-        {
-          "skill_id": "hex_attunement",
-          "prereq_skill_id": "hex_ignis_maius"
-        }
-      ]
+      {
+        "skill_id": "brw_robur_manus",
+        "prereq_skill_id": "brw_pugnum"
+      },
+      {
+        "skill_id": "brw_humerus",
+        "prereq_skill_id": "brw_pugnum"
+      },
+      {
+        "skill_id": "brw_intentio_pugna",
+        "prereq_skill_id": "brw_robur_manus"
+      },
+      {
+        "skill_id": "brw_fluctus",
+        "prereq_skill_id": "brw_intentio_pugna"
+      }
+    ]
+  },
+  {
+    "id": "HEX",
+    "name": "Hexwright",
+    "abbr": "HEX",
+    "role": "dps",
+    "style": "magic",
+    "category": "sorcery",
+    "weapon": "staff",
+    "stat_mults": {
+      "mp": 1.1,
+      "int": 1.22,
+      "md": 1.06
     },
-    {
-      "id": "CUT",
-      "name": "Cutpurse",
-      "abbr": "CUT",
-      "role": "dps",
-      "style": "melee",
-      "category": "stealth",
-      "weapon": "dagger",
-      "stat_mults": {
-        "str": 1.04,
-        "agi": 1.2
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "hex_ignis_hex"
       },
-      "starting": true,
-      "skill_tree": [
-        {
-          "skill_id": "cut_surripere"
-        },
-        {
-          "skill_id": "cut_praeda_manus",
-          "prereq_skill_id": "cut_surripere"
-        },
-        {
-          "skill_id": "cut_insidiae_nox",
-          "prereq_skill_id": "cut_surripere"
-        },
-        {
-          "skill_id": "cut_dolus_finis",
-          "prereq_skill_id": "cut_praeda_manus"
-        },
-        {
-          "skill_id": "cut_opportunus",
-          "prereq_skill_id": "cut_dolus_finis"
-        }
-      ]
+      {
+        "skill_id": "hex_fulmen_hex",
+        "prereq_skill_id": "hex_ignis_hex"
+      },
+      {
+        "skill_id": "hex_gelu_hex",
+        "prereq_skill_id": "hex_ignis_hex"
+      },
+      {
+        "skill_id": "hex_ignis_maius",
+        "prereq_skill_id": "hex_gelu_hex"
+      },
+      {
+        "skill_id": "hex_attunement",
+        "prereq_skill_id": "hex_ignis_maius"
+      }
+    ]
+  },
+  {
+    "id": "CUT",
+    "name": "Cutpurse",
+    "abbr": "CUT",
+    "role": "dps",
+    "style": "melee",
+    "category": "stealth",
+    "weapon": "dagger",
+    "stat_mults": {
+      "str": 1.04,
+      "dex": 1.2
     },
-    {
-      "id": "CAN",
-      "name": "Cantor",
-      "abbr": "CAN",
-      "role": "support",
-      "style": "magic",
-      "category": "sorcery",
-      "weapon": "wand",
-      "allowed_weapons": [
-        "wand",
-        "staff"
-      ],
-      "stat_mults": {
-        "mp": 1.1,
-        "mag": 1.08,
-        "agi": 1.08
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "cut_surripere"
       },
-      "starting": true,
-      "skill_tree": [
-        {
-          "skill_id": "can_carmen_tutus"
-        },
-        {
-          "skill_id": "can_carmen_ferox",
-          "prereq_skill_id": "can_carmen_tutus"
-        },
-        {
-          "skill_id": "can_carmen_acutus",
-          "prereq_skill_id": "can_carmen_tutus"
-        },
-        {
-          "skill_id": "can_studium_finale",
-          "prereq_skill_id": "can_carmen_ferox"
-        },
-        {
-          "skill_id": "can_resonantia",
-          "prereq_skill_id": "can_studium_finale"
-        }
-      ]
+      {
+        "skill_id": "cut_praeda_manus",
+        "prereq_skill_id": "cut_surripere"
+      },
+      {
+        "skill_id": "cut_insidiae_nox",
+        "prereq_skill_id": "cut_surripere"
+      },
+      {
+        "skill_id": "cut_dolus_finis",
+        "prereq_skill_id": "cut_praeda_manus"
+      },
+      {
+        "skill_id": "cut_opportunus",
+        "prereq_skill_id": "cut_dolus_finis"
+      }
+    ]
+  },
+  {
+    "id": "CAN",
+    "name": "Cantor",
+    "abbr": "CAN",
+    "role": "support",
+    "style": "magic",
+    "category": "sorcery",
+    "weapon": "wand",
+    "allowed_weapons": [
+      "wand",
+      "staff"
+    ],
+    "stat_mults": {
+      "mp": 1.1,
+      "dex": 1.08,
+      "int": 1.06,
+      "md": 1.1
     },
-    {
-      "id": "AEG",
-      "name": "Aegis",
-      "abbr": "AEG",
-      "role": "tank",
-      "style": "melee",
-      "category": "swordplay",
-      "weapon": "hammer",
-      "stat_mults": {
-        "hp": 1.2,
-        "str": 1.06
+    "starting": true,
+    "skill_tree": [
+      {
+        "skill_id": "can_carmen_tutus"
       },
-      "starting": false,
-      "skill_tree": [
-        {
-          "skill_id": "aeg_umbo"
-        },
-        {
-          "skill_id": "aeg_custodia_ferrea",
-          "prereq_skill_id": "aeg_umbo"
-        },
-        {
-          "skill_id": "aeg_tegimen",
-          "prereq_skill_id": "aeg_umbo"
-        },
-        {
-          "skill_id": "aeg_lumen_ferrum",
-          "prereq_skill_id": "aeg_custodia_ferrea"
-        },
-        {
-          "skill_id": "aeg_echo_umbonis",
-          "prereq_skill_id": "aeg_lumen_ferrum"
-        }
-      ]
+      {
+        "skill_id": "can_carmen_ferox",
+        "prereq_skill_id": "can_carmen_tutus"
+      },
+      {
+        "skill_id": "can_carmen_acutus",
+        "prereq_skill_id": "can_carmen_tutus"
+      },
+      {
+        "skill_id": "can_studium_finale",
+        "prereq_skill_id": "can_carmen_ferox"
+      },
+      {
+        "skill_id": "can_resonantia",
+        "prereq_skill_id": "can_studium_finale"
+      }
+    ]
+  },
+  {
+    "id": "AEG",
+    "name": "Aegis",
+    "abbr": "AEG",
+    "role": "tank",
+    "style": "melee",
+    "category": "swordplay",
+    "weapon": "hammer",
+    "stat_mults": {
+      "hp": 1.2,
+      "str": 1.06,
+      "vit": 1.16
     },
-    {
-      "id": "RVR",
-      "name": "Reaver",
-      "abbr": "RVR",
-      "role": "dps",
-      "style": "melee",
-      "category": "swordplay",
-      "weapon": "axe",
-      "stat_mults": {
-        "hp": 1.06,
-        "str": 1.18
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "aeg_umbo"
       },
-      "starting": false,
-      "skill_tree": [
-        {
-          "skill_id": "rvr_secare"
-        },
-        {
-          "skill_id": "rvr_ruina",
-          "prereq_skill_id": "rvr_secare"
-        },
-        {
-          "skill_id": "rvr_fractura",
-          "prereq_skill_id": "rvr_secare"
-        },
-        {
-          "skill_id": "rvr_tempestas_ferri",
-          "prereq_skill_id": "rvr_ruina"
-        },
-        {
-          "skill_id": "rvr_impetus",
-          "prereq_skill_id": "rvr_tempestas_ferri"
-        }
-      ]
+      {
+        "skill_id": "aeg_custodia_ferrea",
+        "prereq_skill_id": "aeg_umbo"
+      },
+      {
+        "skill_id": "aeg_tegimen",
+        "prereq_skill_id": "aeg_umbo"
+      },
+      {
+        "skill_id": "aeg_lumen_ferrum",
+        "prereq_skill_id": "aeg_custodia_ferrea"
+      },
+      {
+        "skill_id": "aeg_echo_umbonis",
+        "prereq_skill_id": "aeg_lumen_ferrum"
+      }
+    ]
+  },
+  {
+    "id": "RVR",
+    "name": "Reaver",
+    "abbr": "RVR",
+    "role": "dps",
+    "style": "melee",
+    "category": "swordplay",
+    "weapon": "axe",
+    "stat_mults": {
+      "hp": 1.06,
+      "str": 1.18,
+      "vit": 1.06
     },
-    {
-      "id": "LNC",
-      "name": "Lancer",
-      "abbr": "LNC",
-      "role": "dps",
-      "style": "ranged",
-      "category": "swordplay",
-      "weapon": "spear",
-      "stat_mults": {
-        "str": 1.14,
-        "agi": 1.08
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "rvr_secare"
       },
-      "starting": false,
-      "skill_tree": [
-        {
-          "skill_id": "lnc_saltus_hasta"
-        },
-        {
-          "skill_id": "lnc_saltus_caelum",
-          "prereq_skill_id": "lnc_saltus_hasta"
-        },
-        {
-          "skill_id": "lnc_quinque_ictus",
-          "prereq_skill_id": "lnc_saltus_hasta"
-        },
-        {
-          "skill_id": "lnc_saltus_maximus",
-          "prereq_skill_id": "lnc_saltus_caelum"
-        },
-        {
-          "skill_id": "lnc_peritia_hastae",
-          "prereq_skill_id": "lnc_saltus_maximus"
-        }
-      ]
+      {
+        "skill_id": "rvr_ruina",
+        "prereq_skill_id": "rvr_secare"
+      },
+      {
+        "skill_id": "rvr_fractura",
+        "prereq_skill_id": "rvr_secare"
+      },
+      {
+        "skill_id": "rvr_tempestas_ferri",
+        "prereq_skill_id": "rvr_ruina"
+      },
+      {
+        "skill_id": "rvr_impetus",
+        "prereq_skill_id": "rvr_tempestas_ferri"
+      }
+    ]
+  },
+  {
+    "id": "LNC",
+    "name": "Lancer",
+    "abbr": "LNC",
+    "role": "dps",
+    "style": "ranged",
+    "category": "swordplay",
+    "weapon": "spear",
+    "stat_mults": {
+      "str": 1.14,
+      "dex": 1.1
     },
-    {
-      "id": "RON",
-      "name": "Ronin",
-      "abbr": "RON",
-      "role": "dps",
-      "style": "melee",
-      "category": "swordplay",
-      "weapon": "katana",
-      "stat_mults": {
-        "str": 1.16,
-        "agi": 1.08
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "lnc_saltus_hasta"
       },
-      "starting": false,
-      "skill_tree": [
-        {
-          "skill_id": "ron_oculus_ferrum"
-        },
-        {
-          "skill_id": "ron_altum_custos",
-          "prereq_skill_id": "ron_oculus_ferrum"
-        },
-        {
-          "skill_id": "ron_quies_icta",
-          "prereq_skill_id": "ron_oculus_ferrum"
-        },
-        {
-          "skill_id": "ron_arcus_gladii",
-          "prereq_skill_id": "ron_altum_custos"
-        },
-        {
-          "skill_id": "ron_finis",
-          "prereq_skill_id": "ron_arcus_gladii"
-        }
-      ]
-    }
-  ]
-}
+      {
+        "skill_id": "lnc_saltus_caelum",
+        "prereq_skill_id": "lnc_saltus_hasta"
+      },
+      {
+        "skill_id": "lnc_quinque_ictus",
+        "prereq_skill_id": "lnc_saltus_hasta"
+      },
+      {
+        "skill_id": "lnc_saltus_maximus",
+        "prereq_skill_id": "lnc_saltus_caelum"
+      },
+      {
+        "skill_id": "lnc_peritia_hastae",
+        "prereq_skill_id": "lnc_saltus_maximus"
+      }
+    ]
+  },
+  {
+    "id": "RON",
+    "name": "Ronin",
+    "abbr": "RON",
+    "role": "dps",
+    "style": "melee",
+    "category": "swordplay",
+    "weapon": "katana",
+    "stat_mults": {
+      "str": 1.16,
+      "dex": 1.08
+    },
+    "starting": false,
+    "skill_tree": [
+      {
+        "skill_id": "ron_oculus_ferrum"
+      },
+      {
+        "skill_id": "ron_altum_custos",
+        "prereq_skill_id": "ron_oculus_ferrum"
+      },
+      {
+        "skill_id": "ron_quies_icta",
+        "prereq_skill_id": "ron_oculus_ferrum"
+      },
+      {
+        "skill_id": "ron_arcus_gladii",
+        "prereq_skill_id": "ron_altum_custos"
+      },
+      {
+        "skill_id": "ron_finis",
+        "prereq_skill_id": "ron_arcus_gladii"
+      }
+    ]
+  }
+]

@@ -73,8 +73,6 @@ func WeaponCategory(w WeaponType) Category {
 const (
 	LevelCap           = 20
 	weaponSynergyBonus = 1.15
-	SkillMaxLevel      = 5
-	SkillUsagePerLevel = 15
 	skillLevelPotency  = 0.08
 	DefaultCastTimeMs  = 1000
 	SpellSkillRange    = 320
@@ -105,26 +103,23 @@ type PassiveEffect struct {
 	TargetHPBelow     float64       `json:"target_hp_below,omitempty"`
 }
 
-// ComboVariant is one step in a repeatable skill chain.
-type ComboVariant struct {
-	Name          string            `json:"name,omitempty"`
-	Power         float64           `json:"power,omitempty"`
-	StatusEffects []StatusEffectDef `json:"status_effects,omitempty"`
-}
-
-// ComboDef makes a skill cycle through variants while its status stack is live.
+// ComboDef makes a skill advance a status stack on each execution. The stack
+// selects among the skill's conditional Branches via ctx.ComboStep — combo
+// behavior is just the condition system applied to a live stack.
 type ComboDef struct {
-	Status   StatusKind     `json:"status"`
-	Duration int            `json:"duration"` // battle ticks (200ms each)
-	Variants []ComboVariant `json:"variants"`
+	Status   StatusKind `json:"status"`
+	Duration int        `json:"duration"` // battle ticks (200ms each)
+	Steps    int        `json:"steps"`    // stack values before the chain resets
 }
 
 type Skill struct {
-	ID          string
-	Name        string
-	Job         JobID
-	Category    Category
-	WeaponReq   WeaponType
+	ID       string
+	Name     string
+	Job      JobID
+	Category Category
+	// WeaponReqs lists the weapon types the skill can be executed with.
+	// Empty means the skill works with any (or no) weapon.
+	WeaponReqs  []WeaponType
 	MPCost      int
 	Power       float64
 	UsesMagic   bool
@@ -140,6 +135,16 @@ type Skill struct {
 	WorldOnly   bool
 	Passive     *PassiveEffect
 	Combo       *ComboDef
+	// Target is the explicit targeting rule; empty defers to the legacy
+	// inference in TargetRule().
+	Target TargetRule `json:"target,omitempty"`
+	// Effects is the skill's component list — ordered effect components
+	// resolved by registered handlers. Empty synthesizes an equivalent list
+	// from the legacy flags via SkillEffects.
+	Effects []SkillEffect `json:"effects,omitempty"`
+	// Branches are conditional effect lists evaluated in order — the first
+	// match replaces Effects for that execution (combos, execute phases).
+	Branches []SkillBranch `json:"branches,omitempty"`
 }
 
 var BasicAttack = Skill{
@@ -148,12 +153,13 @@ var BasicAttack = Skill{
 	Combo: &ComboDef{
 		Status:   "combo_attack",
 		Duration: 15,
-		Variants: []ComboVariant{
-			{Name: "Attack", Power: 1.0},
-			{Name: "Attack II", Power: 1.15},
-			{Name: "Attack III", Power: 1.35},
-			{Name: "Attack IV", Power: 1.70},
-		},
+		Steps:    4,
+	},
+	// Step 0 falls through to the base damage component at skill power.
+	Branches: []SkillBranch{
+		{Name: "Attack II", When: &EffectCondition{ComboStep: intp(1)}, Effects: []SkillEffect{{Kind: EffectDamage, Power: 1.15}}},
+		{Name: "Attack III", When: &EffectCondition{ComboStep: intp(2)}, Effects: []SkillEffect{{Kind: EffectDamage, Power: 1.35}}},
+		{Name: "Attack IV", When: &EffectCondition{ComboStep: intp(3)}, Effects: []SkillEffect{{Kind: EffectDamage, Power: 1.70}}},
 	},
 }
 
@@ -167,6 +173,7 @@ var SkillDodge = Skill{
 	ID:          ActionIDDodge,
 	Name:        "Dodge",
 	Description: "Dash two squares in your movement direction. Usable while casting — interrupts the cast. Does nothing while standing still.",
+	Target:      TargetNone,
 }
 
 // Catalog is populated in job_skills.go (init).
@@ -208,29 +215,11 @@ func SkillUnlockLevel(id string) int {
 	return 1 + SkillTier(id)*4
 }
 
-func SkillUsesToNextLevel(currentLevel int) int {
-	if currentLevel < 1 || currentLevel >= SkillMaxLevel {
-		return 0
-	}
-	return SkillUsagePerLevel * currentLevel
-}
-
-func SkillUpgradeCost(currentLevel int) int {
-	if currentLevel < 1 {
-		return 1
-	}
-	return currentLevel
-}
-
 func SkillLevelPotency(level int) float64 {
 	if level < 1 {
 		level = 1
 	}
 	return 1.0 + skillLevelPotency*float64(level-1)
-}
-
-func SkillCost(id string) int {
-	return 0
 }
 
 func SkillPrereq(id string) string {
@@ -248,7 +237,7 @@ func SkillCastTime(s Skill) int {
 }
 
 func SkillIsRanged(s Skill) bool {
-	if s.ID == BasicAttack.ID {
+	if s.ID == BasicAttack.ID || s.TargetRule() == TargetNone {
 		return false
 	}
 	if s.Ranged || s.UsesMagic || s.Heals || s.Buffs {
@@ -294,15 +283,12 @@ func FindSkill(id string) (Skill, bool) {
 	return Skill{}, false
 }
 
-func ComputeStats(level int, equipped []Item) (hp, mp, str, mag, agi int) {
-	hp, mp, str, mag, agi = BaseStats(level)
+func ComputeStats(level int, equipped []Item) Stats {
+	s := BaseStats(level)
 	for _, item := range equipped {
-		str += item.Stats["str"]
-		mag += item.Stats["mag"]
-		agi += item.Stats["agi"]
-		hp += item.Stats["hp"]
+		s.AddItemStats(item.Stats)
 	}
-	return
+	return s
 }
 
 func WeaponSynergy(cat Category, weapon WeaponType) float64 {
@@ -313,9 +299,21 @@ func WeaponSynergy(cat Category, weapon WeaponType) float64 {
 	return 1.0
 }
 
-func BaseStats(level int) (hp, mp, str, mag, agi int) {
+func BaseStats(level int) Stats {
 	g := level - 1
-	return 115 + 18*g, 45 + 7*g, 11 + 2*g, 11 + 2*g, 14 + g
+	s := Stats{
+		Str: 11 + 2*g,
+		Dex: 14 + g,
+		Vit: 10 + g,
+		Int: 10 + g,
+		MD:  10 + g,
+		HP:  40 + 8*g,
+		MP:  5 + 3*g,
+	}
+	// Vit/int grow the resource pools — level 1 ≈ 120 HP / 45 MP.
+	s.HP += s.Vit * vitPoolFactor
+	s.MP += s.Int * intPoolFactor
+	return s
 }
 
 func XPToNext(level int) int {
@@ -341,9 +339,12 @@ func isMagicWeapon(w WeaponType) bool {
 
 func StarterWeapon(w WeaponType) Item {
 	w = NormalizeWeapon(string(w))
-	stats := map[string]int{"str": 2}
-	if isMagicWeapon(w) {
-		stats = map[string]int{"mag": 2}
+	stats := map[string]int{StatStr: 2}
+	switch {
+	case isMagicWeapon(w):
+		stats = map[string]int{StatInt: 2}
+	case w == WeaponDagger || w == WeaponKnuckles:
+		stats = map[string]int{StatDex: 2}
 	}
 	return Item{
 		ID:     "starter-" + string(w),

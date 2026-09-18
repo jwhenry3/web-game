@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { useCatalogEditor } from "../editor/catalogEditorHooks";
 import { createDefaultJob, normalizeJobDef } from "../editor/jobCatalogHelpers";
 import { persistJobs, type JobDef, type SkillDef } from "../editor/contentStore";
-import { JOB_CATEGORIES, WEAPON_TYPES } from "../editor/gameContentTypes";
+import { JOB_CATEGORIES } from "../editor/gameContentTypes";
+import { JobRoleBadge, WeaponTypeBadge } from "../ui/JobIdentity";
 import {
   CatalogEditorShell,
   type CatalogTableColumn,
@@ -38,9 +39,15 @@ export function JobsEditorPage({ items, skills, onItemsChange, onSkillsChange, s
         render: (j) => JOB_CATEGORIES.find((c) => c.id === j.category)?.label ?? j.category,
       },
       {
+        id: "role",
+        label: "Role",
+        width: "84px",
+        render: (j) => <JobRoleBadge role={j.role} />,
+      },
+      {
         id: "weapon",
         label: "Weapon",
-        render: (j) => WEAPON_TYPES.find((w) => w.id === j.weapon)?.label ?? j.weapon,
+        render: (j) => <WeaponTypeBadge weapon={j.weapon} role={j.role} />,
       },
       {
         id: "skills",

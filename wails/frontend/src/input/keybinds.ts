@@ -41,6 +41,7 @@ export type KeybindAction =
   | "move_left"
   | "move_right"
   | "interact"
+  | "mount"
   | `hotbar:${HotbarSlotId}`
   | `window:${WindowId}`;
 
@@ -61,6 +62,7 @@ const KNOWN_ACTIONS = new Set<string>([
   "move_left",
   "move_right",
   "interact",
+  "mount",
   "window:character",
   "window:equipment",
   "window:inventory",
@@ -78,6 +80,7 @@ export function defaultKeybinds(): KeybindMap {
     move_left: "a",
     move_right: "d",
     interact: "Space",
+    mount: "r",
     "window:character": "c",
     "window:equipment": "e",
     "window:inventory": "i",
@@ -161,6 +164,8 @@ export function actionLabel(action: string): string {
       return "Move Right";
     case "interact":
       return "Confirm / Interact";
+    case "mount":
+      return "Toggle Mount";
     case "window:character":
       return "Character Window";
     case "window:equipment":
@@ -197,7 +202,7 @@ export const KEYBIND_SECTIONS: { title: string; actions: string[] }[] = [
   },
   {
     title: "Interact",
-    actions: ["interact"],
+    actions: ["interact", "mount"],
   },
   {
     title: "Hotbar Row 1",

@@ -130,14 +130,14 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 	}
 
 	destID := p.SavePointID
-	switch skill.ID {
-	case game.SkillIDReturn:
+	switch worldSkillAction(skill) {
+	case "return":
 		destID = profile.SavePointID
 		if destID == "" {
 			h.sendError(c, "Set a save crystal first.")
 			return
 		}
-	case game.SkillIDPort:
+	case "port":
 		if destID == "" {
 			h.sendError(c, "Choose a destination crystal.")
 			return
@@ -146,7 +146,7 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 			h.sendError(c, "You have not attuned to that crystal.")
 			return
 		}
-	case game.SkillIDCamp:
+	case "camp":
 		destID = ""
 	default:
 		h.sendError(c, "Unknown field skill.")
@@ -158,7 +158,7 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.cancelWorldCast(c, e, "")
-	if skill.ID == game.SkillIDCamp {
+	if worldSkillAction(skill) == "camp" {
 		h.placeCamp(c, e)
 		c.lastWorldSkill = time.Now()
 		return
@@ -167,6 +167,23 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 		return
 	}
 	c.lastWorldSkill = time.Now()
+}
+
+// worldSkillAction names the field action a skill performs — the EffectWorld
+// component's payload, or the legacy skill id for defs without components.
+func worldSkillAction(skill game.Skill) string {
+	if action := game.WorldSkillAction(skill); action != "" {
+		return action
+	}
+	switch skill.ID {
+	case game.SkillIDReturn:
+		return "return"
+	case game.SkillIDPort:
+		return "port"
+	case game.SkillIDCamp:
+		return "camp"
+	}
+	return ""
 }
 
 const worldCastMoveCancel = 3.0
@@ -182,7 +199,7 @@ func (h *Hub) beginWorldCast(c *Client, e *entity, skill game.Skill, destID stri
 		cc.fieldCastTimeMs = ms
 		cc.fieldCastEndsAt = c.worldCastReady.UnixMilli()
 	}
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+	h.sendPlayerSync(e)
 }
 
 func (h *Hub) clearWorldCast(c *Client, e *entity) {
@@ -205,7 +222,7 @@ func (h *Hub) cancelWorldCast(c *Client, e *entity, notice string) {
 		h.send(c, protocol.TypeChatMsg, protocol.ChatMessagePayload{FromName: "System", Message: notice})
 	}
 	if e != nil {
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+		h.sendPlayerSync(e)
 	}
 }
 
@@ -245,23 +262,23 @@ func (h *Hub) completeWorldCast(c *Client) {
 	cc := clientControlOf(e)
 	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
 		if e != nil {
-			h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+			h.sendPlayerSync(e)
 		}
 		return
 	}
 	skill, ok := game.FindSkill(skillID)
 	if !ok {
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+		h.sendPlayerSync(e)
 		return
 	}
-	if skill.ID == game.SkillIDCamp {
+	if worldSkillAction(skill) == "camp" {
 		h.placeCamp(c, e)
 		c.lastWorldSkill = time.Now()
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+		h.sendPlayerSync(e)
 		return
 	}
 	if !h.warpToSavePoint(c, e, destID, skill.Name+": "+savePointName(destID)+".") {
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+		h.sendPlayerSync(e)
 		return
 	}
 	c.lastWorldSkill = time.Now()
@@ -307,7 +324,7 @@ func (h *Hub) warpToSavePoint(c *Client, e *entity, destID, notice string) bool 
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
 		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
 	}))
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+	h.sendPlayerSync(e)
 	return true
 }
 

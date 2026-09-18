@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
+	"strings"
 	"time"
 
 	"clara-mundi/internal/game"
@@ -51,8 +53,12 @@ const (
 	dodgeDashDist      = 64.0
 	dodgeLandingWindow = 600 * time.Millisecond
 	staminaMax         = 100.0
-	staminaRegenRate   = 35.0 // per second
 	dodgeStaminaCost   = 25.0
+	// Recovery rates per second, shared by hp/mp/stamina: 10 per 5s in the
+	// field — slow enough that resources matter — and 50 per 5s on sanctuary
+	// tiles so retreating to a crystal is worth the trip.
+	regenPerSec          = 2.0
+	regenPerSecSanctuary = 10.0
 )
 
 var enemyTemplates = map[string]int{ // kind -> base hp
@@ -61,14 +67,8 @@ var enemyTemplates = map[string]int{ // kind -> base hp
 	"stone_imp": 95,
 }
 
-var petTemplates = map[string]struct{ hp, str, agi int }{
+var petTemplates = map[string]struct{ hp, str, dex int }{
 	"goblin": {70, 9, 11}, "dire_wolf": {55, 8, 17}, "stone_imp": {95, 11, 8},
-}
-
-type activeCast struct {
-	SkillID  string
-	TargetID string
-	Progress float64
 }
 
 // ---- player entity lifecycle ----
@@ -99,20 +99,20 @@ func (h *Hub) refreshCombatStats(c *Client, e *entity) {
 		return
 	}
 	loadout := profile.ActiveLoadout()
-	hp, mp, str, mag, agi := game.ComputeJobStats(
+	stats := game.ComputeJobStats(
 		game.JobID(profile.MainJob), profile.MainJobLevel(),
 		game.JobID(profile.SubJob), profile.SubJobEffectiveLevel(),
 		profile.EquippedItems(),
 	)
 	e.Level = profile.MainJobLevel()
-	e.maxHP, e.maxMP = hp, mp
-	if e.hp <= 0 || e.hp > hp {
-		e.hp = hp
+	e.maxHP, e.maxMP = stats.HP, stats.MP
+	if e.hp <= 0 || e.hp > stats.HP {
+		e.hp = stats.HP
 	}
-	if e.mp > mp {
-		e.mp = mp
+	if e.mp > stats.MP {
+		e.mp = stats.MP
 	}
-	e.str, e.mag, e.agi = str, mag, agi
+	e.str, e.dex, e.vit, e.int, e.md = stats.Str, stats.Dex, stats.Vit, stats.Int, stats.MD
 	cc.weapon = profile.WeaponType()
 	cc.subWeapon = profile.SubWeaponType()
 	cc.mainJob = game.JobID(profile.MainJob)
@@ -121,408 +121,25 @@ func (h *Hub) refreshCombatStats(c *Client, e *entity) {
 	for id, lvl := range loadout.SkillLevels {
 		cc.skillLevels[id] = lvl
 	}
-	if cc.pendingSkillUses == nil {
-		cc.pendingSkillUses = map[string]int{}
+	cc.profLevels = map[string]int{}
+	for prof, lvl := range loadout.ProfLevels {
+		cc.profLevels[prof] = lvl
+	}
+	if cc.pendingProfGrowth == nil {
+		cc.pendingProfGrowth = map[string]int{}
 	}
 }
 
 // flushSkillUsage persists accumulated battle training for a player.
 func (h *Hub) flushSkillUsage(e *entity) {
 	cc := clientControlOf(e)
-	if cc == nil || len(cc.pendingSkillUses) == 0 {
+	if cc == nil || len(cc.pendingProfGrowth) == 0 {
 		return
 	}
 	if c := h.clients[e.ID]; c != nil && c.Name != "" {
-		h.store.AddBattleTraining(c.Name, cc.pendingSkillUses)
+		h.store.AddBattleTraining(c.Name, cc.pendingProfGrowth)
 	}
-	cc.pendingSkillUses = map[string]int{}
-}
-
-// entitySync adapts a player entity to the wire WorldEntity for join/sync.
-func (h *Hub) entitySync(e *entity) protocol.WorldEntity {
-	return h.projector.project(e, time.Now())
-}
-
-func (h *Hub) sendPlayerSync(e *entity) {
-	if e == nil {
-		return
-	}
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
-}
-
-// markPlayerCombat recomputes a player's combat stats on first engagement.
-func (h *Hub) markPlayerCombat(clientID string) {
-	if h.npcEffects != nil {
-		h.npcEffects.playerCombat[clientID] = true
-		return
-	}
-	h.mu.RLock()
-	c := h.clients[clientID]
-	h.mu.RUnlock()
-	if c == nil || !c.Joined {
-		return
-	}
-	e := h.ensurePlayer(c)
-	cc := clientControlOf(e)
-	if cc != nil && !cc.inCombat {
-		h.refreshCombatStats(c, e)
-		cc.inCombat = true
-		h.sendPlayerSync(e)
-	}
-}
-
-// checkAggroAt starts fights when a hostile NPC sits within aggro range of a
-// vulnerable player position (called on player movement).
-func (h *Hub) checkAggroAt(clientID string, x, y float64) {
-	p := h.playerEnt(clientID)
-	if p == nil || !p.presentAndAlive() || battleImmuneEnt(p) {
-		return
-	}
-	if h.overworld != nil && h.overworld.SanctuaryAtWorld(x, y) {
-		return
-	}
-	h.eachEntity(kindNPC, func(n *entity) {
-		ng := npcEngageOf(n)
-		if ng == nil || ng.engaged || !h.canAttack(n, p) {
-			return
-		}
-		if dist(x, y, n.X, n.Y) <= aggroRadius {
-			h.engage(n, p)
-		}
-	})
-}
-
-// ---- NPC movement helpers (used by chaseTarget) ----
-
-func engagedNPC(o *entity) bool {
-	if o.Kind != kindNPC || !o.onWorld() {
-		return false
-	}
-	ng := npcEngageOf(o)
-	return ng != nil && ng.engaged
-}
-
-// npcHardOverlap reports whether e deeply overlaps another engaged NPC.
-func (h *Hub) npcHardOverlap(e *entity) bool {
-	_, _, deep := h.npcHardOverlapVec(e)
-	return deep
-}
-
-func (h *Hub) npcHardOverlapVec(e *entity) (float64, float64, bool) {
-	limit := enemyRadiusW*2 - npcOverlapPadW
-	var sx, sy float64
-	deep := false
-	for _, o := range h.entities {
-		if o == e || !engagedNPC(o) {
-			continue
-		}
-		d := dist(e.X, e.Y, o.X, o.Y)
-		if d >= limit || d < 0.01 {
-			continue
-		}
-		deep = true
-		w := (limit - d) / limit
-		sx += (e.X - o.X) / d * w
-		sy += (e.Y - o.Y) / d * w
-	}
-	return sx, sy, deep
-}
-
-func (h *Hub) npcBlocksPath(e *entity, fx, fy float64) bool {
-	const blockRange = enemyRadiusW * 3.2
-	const cone = 0.55
-	for _, o := range h.entities {
-		if o == e || !engagedNPC(o) {
-			continue
-		}
-		ox, oy := o.X-e.X, o.Y-e.Y
-		d := math.Hypot(ox, oy)
-		if d >= blockRange || d < 0.01 {
-			continue
-		}
-		if (ox*fx+oy*fy)/d >= cone {
-			return true
-		}
-	}
-	return false
-}
-
-// npcUnstick slides an in-melee NPC sideways when it overlaps a pack-mate.
-func (h *Hub) npcUnstick(e, t *entity, step float64) {
-	ox, oy, deep := h.npcHardOverlapVec(e)
-	if !deep || t == nil {
-		return
-	}
-	dx, dy := t.X-e.X, t.Y-e.Y
-	d := math.Hypot(dx, dy)
-	if d < 0.01 {
-		return
-	}
-	side := 1.0
-	if ng := npcEngageOf(e); ng != nil && ng.avoidSide != 0 {
-		side = ng.avoidSide
-	}
-	rx, ry := dx/d, dy/d
-	radial := ox*rx + oy*ry
-	tx, ty := ox-radial*rx, oy-radial*ry
-	tm := math.Hypot(tx, ty)
-	if tm < 0.15 {
-		tx, ty = -ry*side, rx*side
-		tm = 1
-	}
-	slide := step * 0.45
-	nx, ny := e.X+tx/tm*slide, e.Y+ty/tm*slide
-	if h.walkableAt(nx, ny) {
-		e.X, e.Y = nx, ny
-	}
-}
-
-func (h *Hub) walkableAt(x, y float64) bool {
-	if h.overworld != nil {
-		return h.overworld.WalkableAt(x, y)
-	}
-	return game.WalkableAt(x, y)
-}
-
-// chaseRepathInterval throttles A* recomputation while pursuing a target.
-const chaseRepathInterval = 350 * time.Millisecond
-
-// chaseAlongPath moves an entity along an A* route when the direct chase
-// step is terrain-blocked. Paths use NPCWalkableTile, so a target standing in
-// a sanctuary is unreachable and the caller disengages.
-func (h *Hub) chaseAlongPath(e *entity, ch *chaseTarget, t *entity, step float64) bool {
-	if h.overworld == nil {
-		return false
-	}
-	now := time.Now()
-	from := h.overworld.WorldToTile(e.X, e.Y)
-	goal := h.overworld.WorldToTile(t.X, t.Y)
-	if len(ch.path) == 0 || (ch.goal != goal && now.After(ch.repathAt)) {
-		ch.path = h.overworld.Pathfind(from, goal, game.Region{})
-		ch.pathI = 0
-		ch.goal = goal
-		ch.repathAt = now.Add(chaseRepathInterval)
-		// The first node is the entity's own tile — don't walk back to its center.
-		if len(ch.path) > 1 {
-			ch.pathI = 1
-		}
-	}
-	for ch.pathI < len(ch.path) {
-		w := ch.path[ch.pathI]
-		dx, dy := w.X-e.X, w.Y-e.Y
-		d := math.Hypot(dx, dy)
-		if d <= step {
-			if h.walkableAt(w.X, w.Y) {
-				e.X, e.Y = w.X, w.Y
-			}
-			ch.pathI++
-			continue
-		}
-		nx, ny := e.X+dx/d*step, e.Y+dy/d*step
-		if !h.walkableAt(nx, ny) {
-			ch.path = nil // waypoint became blocked; repath next tick
-			return true
-		}
-		e.X, e.Y = nx, ny
-		return true
-	}
-	ch.path = nil // exhausted; next blocked step recomputes
-	return false
-}
-
-// ---- combat flags ----
-
-// playerEngaged reports whether any engaged NPC is fighting this player
-// (targeting them, damaged by them, or targeting one of their pets).
-func (h *Hub) playerEngaged(p *entity) bool {
-	for _, n := range h.entities {
-		if !engagedNPC(n) {
-			continue
-		}
-		if n.targetID == p.ID || n.contributors[p.ID] > 0 {
-			return true
-		}
-		if t := h.ent(n.targetID); t != nil && t.Kind == kindPet && t.OwnerID == p.ID {
-			return true
-		}
-	}
-	return false
-}
-
-// updateCombatFlags recomputes in_combat per player and broadcasts
-// player_sync on transitions.
-func (h *Hub) updateCombatFlags(now time.Time) {
-	h.eachEntity(kindPlayer, func(e *entity) {
-		cc := clientControlOf(e)
-		if cc == nil {
-			return
-		}
-		engaged := e.casting != nil || h.playerEngaged(e)
-		if !e.alive {
-			engaged = false
-		}
-		if engaged == cc.inCombat {
-			return
-		}
-		cc.inCombat = engaged
-		if !engaged {
-			h.flushSkillUsage(e)
-			h.fireLeaveCombat(e)
-			h.eachEntity(kindPet, func(pet *entity) {
-				if pet.OwnerID == e.ID {
-					h.fireLeaveCombat(pet)
-				}
-			})
-		}
-		h.sendPlayerSync(e)
-		if partyID, ok := h.clientParty[e.ID]; ok {
-			h.broadcastPartySocial(h.parties[partyID])
-		}
-	})
-}
-
-func (h *Hub) fireLeaveCombat(e *entity) {
-	for _, system := range e.pipeline {
-		if hook, ok := system.(leaveCombatHook); ok {
-			hook.OnLeaveCombat(h, e)
-		}
-	}
-}
-
-// ---- AoI broadcast ----
-
-// playerActive: the player is actively fighting (target, GCD, cast, statuses,
-// or engaged) — not just the inCombat flag.
-func (h *Hub) playerActive(e *entity, now time.Time) bool {
-	cc := clientControlOf(e)
-	return (cc != nil && cc.inCombat) || e.targetID != "" || e.casting != nil ||
-		len(e.statuses) > 0 || !e.gcdReady(now)
-}
-
-// combatSnapshots builds the entity list for AoI clients: engaged NPCs,
-// fighting players, and their pets.
-func (h *Hub) combatSnapshots(now time.Time) []protocol.WorldEntity {
-	out := []protocol.WorldEntity{}
-	activeOwners := map[string]bool{}
-	for _, e := range h.entities {
-		switch e.Kind {
-		case kindNPC:
-			if !engagedNPC(e) {
-				continue
-			}
-			out = append(out, h.projector.project(e, now))
-		case kindPlayer:
-			if e.hidden || !h.playerActive(e, now) {
-				continue
-			}
-			activeOwners[e.ID] = true
-			out = append(out, h.projector.project(e, now))
-		}
-	}
-	h.eachEntity(kindPet, func(e *entity) {
-		if e.hidden || !activeOwners[e.OwnerID] {
-			return
-		}
-		out = append(out, h.projector.project(e, now))
-	})
-	return out
-}
-
-// broadcastCombatTick sends snapshots only to clients whose AoI overlaps a
-// fight; clients leaving the AoI get one empty tick so their HUD clears.
-func (h *Hub) broadcastCombatTick() {
-	now := time.Now()
-	entities := h.combatSnapshots(now)
-	if len(entities) == 0 {
-		h.clearAoI()
-		return
-	}
-	newAoI := map[string]bool{}
-	msg := protocol.Encode(protocol.TypeCombatTick, protocol.CombatTickPayload{Entities: entities})
-	h.eachEntity(kindPlayer, func(p *entity) {
-		if p.hidden {
-			return
-		}
-		in := h.playerActive(p, now)
-		if !in {
-			for _, e := range entities {
-				if dist(p.X, p.Y, e.X, e.Y) <= combatAoIDist {
-					in = true
-					break
-				}
-			}
-		}
-		if !in {
-			return
-		}
-		newAoI[p.ID] = true
-		h.mu.RLock()
-		c := h.clients[p.ID]
-		h.mu.RUnlock()
-		if c != nil && c.Joined {
-			h.sendRaw(c, msg)
-		}
-	})
-	// Clients that left the AoI get one empty tick so their combat UI clears.
-	if len(h.aoi) > 0 {
-		var empty []byte
-		for id := range h.aoi {
-			if newAoI[id] {
-				continue
-			}
-			if empty == nil {
-				empty = protocol.Encode(protocol.TypeCombatTick, protocol.CombatTickPayload{})
-			}
-			h.mu.RLock()
-			c := h.clients[id]
-			h.mu.RUnlock()
-			if c != nil && c.Joined {
-				h.sendRaw(c, empty)
-			}
-		}
-	}
-	h.aoi = newAoI
-}
-
-func (h *Hub) clearAoI() {
-	if len(h.aoi) == 0 {
-		return
-	}
-	empty := protocol.Encode(protocol.TypeCombatTick, protocol.CombatTickPayload{})
-	for id := range h.aoi {
-		h.mu.RLock()
-		c := h.clients[id]
-		h.mu.RUnlock()
-		if c != nil && c.Joined {
-			h.sendRaw(c, empty)
-		}
-	}
-	h.aoi = nil
-}
-
-// sendCombatEvent delivers an action event to every client in the AoI (set)
-// plus anyone within radius of the event origin who isn't tracked yet.
-func (h *Hub) sendCombatEvent(ev protocol.CombatEventPayload, x, y float64) {
-	if h.npcEffects != nil {
-		h.npcEffects.events = append(h.npcEffects.events, npcCombatEvent{Event: ev, X: x, Y: y})
-		return
-	}
-	ev.Entities = h.combatSnapshots(time.Now())
-	msg := protocol.Encode(protocol.TypeCombatEvent, ev)
-	h.eachEntity(kindPlayer, func(p *entity) {
-		if p.hidden {
-			return
-		}
-		if !h.aoi[p.ID] && dist(p.X, p.Y, x, y) > combatAoIDist {
-			return
-		}
-		h.mu.RLock()
-		c := h.clients[p.ID]
-		h.mu.RUnlock()
-		if c != nil && c.Joined {
-			h.sendRaw(c, msg)
-		}
-	})
+	cc.pendingProfGrowth = map[string]int{}
 }
 
 // ---- player actions ----
@@ -541,11 +158,22 @@ func (h *Hub) handleAction(c *Client, raw json.RawMessage) {
 
 func (h *Hub) handleSetTarget(c *Client, raw json.RawMessage) {
 	var p protocol.SetTargetPayload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return
+	// Protobuf encodes target_id:"" as an empty message; decodeProtobuf then
+	// delivers no JSON payload. For set_target, absent payload means untarget.
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &p); err != nil {
+			return
+		}
 	}
 	if e := h.ensurePlayer(c); e != nil {
 		e.targetID = p.TargetID
+		if p.TargetID == "" {
+			// Dropping focus also releases the committed attack so pets heel;
+			// a mob still attacking us is re-acquired by their defensive scan.
+			e.engageID = ""
+		}
+		// Echo the authoritative value so the client converges on it.
+		h.send(c, protocol.TypeSetTarget, protocol.SetTargetPayload{TargetID: e.targetID})
 	}
 }
 
@@ -596,6 +224,7 @@ func (h *Hub) resolveDodge(c *Client, e *entity) {
 	} else {
 		e.X, e.Y = game.SlideMovePlayer(prevX, prevY, tx, ty)
 	}
+	h.spatialInvalidate()
 	e.Facing = game.ResolveFacingYaw(e.X-prevX, e.Y-prevY, 0, false, e.Facing)
 
 	h.send(c, protocol.TypePlayerSync, h.entitySync(e))
@@ -674,8 +303,12 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
-	if skill.WeaponReq != "" && skill.WeaponReq != cc.weaponForSkill(skill) {
-		res.Message = "Requires a " + string(skill.WeaponReq) + "."
+	if len(skill.WeaponReqs) > 0 && !slices.Contains(skill.WeaponReqs, cc.weaponForSkill(skill)) {
+		names := make([]string, len(skill.WeaponReqs))
+		for i, w := range skill.WeaponReqs {
+			names[i] = string(w)
+		}
+		res.Message = "Requires a " + strings.Join(names, " or ") + "."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
@@ -687,9 +320,10 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 
 	var t *entity
 	if game.SkillTargetsAlly(skill) {
-		// Ally-targeted: any same-faction entity (players, pets), self when empty.
+		// Ally-targeted: any same-faction entity (players, pets), self when
+		// empty — and always self for TargetSelf skills.
 		tgtID := action.TargetID
-		if tgtID == "" {
+		if tgtID == "" || skill.TargetRule() == game.TargetSelf {
 			tgtID = c.ID
 		}
 		t = h.ent(tgtID)
@@ -704,60 +338,49 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 			return
 		}
 	} else {
-		// Enemy-targeted: the given target if attackable, else auto-target.
+		// Enemy-targeted: the given target if attackable, else the player's
+		// currently selected target. No nearest-enemy acquisition — skill
+		// execution requires an explicit target selection. A friendly focus
+		// isn't attackable but stays selected.
 		t = h.ent(action.TargetID)
 		if !h.canAttack(e, t) {
-			t = h.autoTarget(e)
+			t = h.focusTarget(e)
 		}
 		if t == nil {
 			res.Message = "No valid target."
 			h.sendCombatEvent(res, e.X, e.Y)
 			return
 		}
-		e.targetID = t.ID
-		e.engageID = t.ID // committing an attack — pets may follow it
 		if !h.skillHits(e, t, skill) {
 			res.Message = "Target out of range."
 			res.TargetID = t.ID
 			h.sendCombatEvent(res, e.X, e.Y)
 			return
 		}
+		e.targetID = t.ID
+		e.engageID = t.ID // committing an attack — pets may follow it
 	}
 	res.TargetID = t.ID
 	if game.SkillCastTime(skill) > 0 {
 		e.mp -= skill.MPCost
 		h.startSkillCooldown(e, t, skill, now)
-		e.casting = &activeCast{SkillID: skill.ID, TargetID: t.ID}
+		e.casting = &activeCast{
+			SkillID:  skill.ID,
+			TargetID: t.ID,
+			EndsAt:   now.UnixMilli() + int64(game.SkillCastTime(skill)),
+		}
 		e.castX, e.castY = e.X, e.Y
 		res.Success = true
 		res.CastStarted = true
 		h.sendCombatEvent(res, e.X, e.Y)
+		if e.Kind == kindPlayer {
+			// Push the projection now so the caster's own bar shows before
+			// they enter the combat set — it animates from cast_ends_at.
+			h.sendPlayerSync(e)
+		}
 		return
 	}
 	h.applySkillTo(e, t, skill, res)
-}
-
-// autoTarget keeps a valid current target, else picks the nearest attackable
-// entity within drop range — the client only offers on-screen targets, so a
-// far-away fallback would target something the player can't see.
-func (h *Hub) autoTarget(e *entity) *entity {
-	if t := h.validTarget(e); t != nil {
-		return t
-	}
-	best := h.nearestAttackable(e, dropRange)
-	if best != nil {
-		e.targetID = best.ID
-	}
-	return best
-}
-
-// passiveContext supplies situational predicates for learned passive skills.
-func passiveContext(e, target *entity) game.PassiveContext {
-	ctx := game.PassiveContext{ComboStack: game.HighestComboStack(e.statuses)}
-	if target != nil && target.maxHP > 0 {
-		ctx.TargetHPFraction = float64(target.hp) / float64(target.maxHP)
-	}
-	return ctx
 }
 
 // startSkillCooldown starts the shared GCD and, when configured, the skill's
@@ -780,25 +403,7 @@ func (h *Hub) startSkillCooldown(e, target *entity, skill game.Skill, now time.T
 	cd := time.Duration(skill.CooldownMs) * time.Millisecond
 	reduction := game.PassiveCooldownReduction(cc.skillLevels, skill, passiveContext(e, target))
 	cd = time.Duration(float64(cd) * (1 - reduction))
-	cc.skillReadyAt[skill.ID] = now.Add(gcdDuration + cd)
-}
-
-// resolveComboSkill advances the status-backed combo and returns the effective
-// variant for this execution. The original skill remains the tracked identity.
-func (h *Hub) resolveComboSkill(caster *entity, skill game.Skill) (game.Skill, []game.StatusEffectDef) {
-	if skill.Combo == nil || len(skill.Combo.Variants) == 0 {
-		return skill, nil
-	}
-	step := game.AdvanceCombo(&caster.statuses, skill.Combo, caster.ID)
-	variant := skill.Combo.Variants[step]
-	resolved := skill
-	if variant.Name != "" {
-		resolved.Name = variant.Name
-	}
-	if variant.Power > 0 {
-		resolved.Power = variant.Power
-	}
-	return resolved, variant.StatusEffects
+	cc.skillReadyAt[skill.ID] = now.Add(e.gcdLen() + cd)
 }
 
 func (h *Hub) skillHits(e, t *entity, skill game.Skill) bool {
@@ -810,155 +415,6 @@ func (h *Hub) skillHits(e, t *entity, skill game.Skill) bool {
 }
 
 const allySkillRangeW = game.AllySkillRange
-
-// splashEnmity credits threat on every engaged enemy that considers `e`
-// attackable — self/ally actions (cures, buffs, items) raise enmity with the
-// whole fight, not just one target.
-func (h *Hub) splashEnmity(e *entity, amount int) {
-	if e == nil || amount <= 0 {
-		return
-	}
-	h.eachEntity(kindNPC, func(n *entity) {
-		ng := npcEngageOf(n)
-		if ng == nil || !ng.engaged || !h.canAttack(n, e) {
-			return
-		}
-		h.addEnmity(n, e, amount)
-	})
-}
-
-// topEnmity returns the attackable entity holding the most threat on e's
-// enmity table, or nil when the table is empty or fully stale.
-func (h *Hub) topEnmity(e *entity) *entity {
-	var best *entity
-	bestV := 0
-	for id, v := range e.enmity {
-		t := h.ent(id)
-		if !h.canAttack(e, t) {
-			continue
-		}
-		if v > bestV || best == nil {
-			best, bestV = t, v
-		}
-	}
-	return best
-}
-
-// applySkillTo resolves an instant or finished-cast skill from caster onto
-// target — heals/buffs for ally skills, damage for enemy skills. The caster
-// must be a player (skills are player abilities).
-func (h *Hub) applySkillTo(caster, target *entity, skill game.Skill, res protocol.CombatEventPayload) {
-	now := time.Now()
-	cc := clientControlOf(caster)
-	if cc == nil {
-		return
-	}
-	ally := game.SkillTargetsAlly(skill)
-	if caster.casting == nil && game.SkillCastTime(skill) == 0 {
-		caster.mp -= skill.MPCost
-		h.startSkillCooldown(caster, target, skill, now)
-	}
-	res.Success = true
-	resolved, comboEffects := h.resolveComboSkill(caster, skill)
-	res.ActionName = resolved.Name
-	amount := h.rollDamage(caster, target, resolved)
-	amount = game.ModifyDamageDealt(caster.statuses, amount)
-	if ally {
-		healed := 0
-		if skill.Heals {
-			healed = h.applyHeal(target, amount)
-			res.Heal = amount
-		}
-		h.applyStatuses(caster, target, resolved, comboEffects...)
-		h.trackSkillUse(caster, skill)
-		// Helping your side raises threat with everything fighting it.
-		h.splashEnmity(caster, enmityAllyBase+healed/2)
-		res.Message = fmt.Sprintf("%s heals %s for %d", caster.Name, target.Name, amount)
-		h.sendCombatEvent(res, caster.X, caster.Y)
-		if target.Kind == kindPlayer {
-			h.sendPlayerSync(target)
-		}
-		return
-	}
-	h.applyDamageMsg(caster, target, amount, res, "%s hits %s for %d")
-	if refreshed := h.ent(target.ID); refreshed != nil {
-		target = refreshed
-	}
-	if target.alive {
-		h.applyStatuses(caster, target, resolved, comboEffects...)
-	}
-	h.trackSkillUse(caster, skill)
-}
-
-func (h *Hub) rollDamage(e, target *entity, skill game.Skill) int {
-	cc := clientControlOf(e)
-	stat := e.str
-	if skill.UsesMagic {
-		stat = e.mag
-	}
-	power := skill.Power
-	skillLvl := 1
-	if cc != nil {
-		if lvl := cc.skillLevels[skill.ID]; lvl > 1 {
-			skillLvl = lvl
-		}
-	}
-	power *= game.SkillLevelPotency(skillLvl)
-	if cc != nil {
-		if skill.Job != "" && skill.Job == cc.subJob && skill.Job != cc.mainJob {
-			power *= game.SubjobEffectRatio
-		}
-		cat := skill.Category
-		if skill.ID == game.BasicAttack.ID {
-			cat = game.WeaponCategory(cc.weapon)
-		}
-		if cat != "" {
-			power *= game.WeaponSynergy(cat, cc.weaponForSkill(skill))
-		}
-		power *= game.PassiveSkillMultiplier(cc.skillLevels, skill, passiveContext(e, target))
-	}
-	dmg := int(float64(stat) * power * (0.85 + h.rng.Float64()*0.3))
-	if dmg < 1 {
-		dmg = 1
-	}
-	return dmg
-}
-
-// applyStatuses attaches a skill's configured effects to the target (or the
-// caster for OnCaster effects), plus any variant-specific combo effects.
-func (h *Hub) applyStatuses(caster, target *entity, skill game.Skill, extra ...game.StatusEffectDef) {
-	defs := append([]game.StatusEffectDef{}, game.StatusesForSkill(skill.ID)...)
-	defs = append(defs, extra...)
-	remote := []game.StatusEffectDef{}
-	remoteShield := 0
-	for _, def := range defs {
-		list := &target.statuses
-		if def.OnCaster {
-			list = &caster.statuses
-		} else if h.npcWorkerFor(target) != nil {
-			remote = append(remote, def)
-			if def.Kind == game.StatusShield {
-				remoteShield = max(remoteShield, max(1, int(float64(caster.mag)*skill.Power*2)))
-			}
-			continue
-		}
-		shield := 0
-		if def.Kind == game.StatusShield {
-			shield = max(1, int(float64(caster.mag)*skill.Power*2))
-		}
-		game.ApplyStatus(list, def, caster.ID, shield)
-	}
-	h.commandNPCStatuses(caster, target, remote, remoteShield)
-}
-
-func (h *Hub) trackSkillUse(e *entity, skill game.Skill) {
-	if game.SkillAlwaysUnlocked(skill.ID) {
-		return
-	}
-	if cc := clientControlOf(e); cc != nil {
-		cc.pendingSkillUses[skill.ID]++
-	}
-}
 
 // resolveItemUse consumes a potion-type item on self or an ally.
 func (h *Hub) resolveItemUse(c *Client, e *entity, action protocol.ActionPayload) {
@@ -1024,9 +480,10 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 	}
 	n := h.ent(action.TargetID)
 	if n == nil || n.Kind != kindNPC || !h.canAttack(e, n) {
-		// No usable target in the payload — pick the closest attackable foe,
-		// same as every other enemy-targeted skill.
-		n = h.autoTarget(e)
+		// No usable target in the payload — fall back to the player's
+		// selected target. Capturing never auto-acquires a foe, and a
+		// friendly focus stays selected.
+		n = h.focusTarget(e)
 	}
 	r := respawnOf(n)
 	if n == nil || n.Kind != kindNPC || r == nil {
@@ -1040,6 +497,7 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
+	e.targetID = n.ID
 	if !game.EligibleForCapture(r.capturable, true, n.hp, n.maxHP) {
 		res.Message = "Target is not weak enough to capture."
 		h.sendCombatEvent(res, e.X, e.Y)
@@ -1088,283 +546,9 @@ func (h *Hub) captureNPC(n, by *entity) {
 	h.kill(n, by)
 }
 
-// defeatPlayer respawns a fallen player at their save point and drops them
-// from every fight. Invoked from clientControl.OnDeath (via h.kill).
-func (h *Hub) defeatPlayer(clientID string) {
-	e := h.playerEnt(clientID)
-	cc := clientControlOf(e)
-	if e == nil || cc == nil {
-		return
-	}
-	h.sendCombatEvent(protocol.CombatEventPayload{
-		AttackerID: clientID, TargetID: clientID,
-		Message: fmt.Sprintf("%s was defeated", e.Name),
-	}, e.X, e.Y)
-	e.casting = nil
-	e.statuses = nil
-	e.targetID = ""
-	e.engageID = ""
-	cc.inCombat = false
-	h.flushSkillUsage(e)
-	for _, n := range h.entities {
-		if n.Kind == kindNPC {
-			delete(n.contributors, clientID)
-			delete(n.enmity, clientID)
-		}
-	}
-	// Restore and respawn.
-	e.alive = true
-	e.hp = e.maxHP
-	e.mp = e.maxMP
-	cc.stamina = staminaMax
-	cc.staminaAt = time.Now()
-	h.respawnAtSavePoint(clientID)
-	h.grantBattleImmunity(e)
-	h.sendPlayerSync(e)
-	h.mu.RLock()
-	c := h.clients[clientID]
-	h.mu.RUnlock()
-	if c != nil {
-		if profile, ok := h.store.Get(c.Name); ok {
-			h.sendWelcome(c, profile)
-		}
-	}
-}
-
-// advanceCast progresses an entity's cast; on completion the skill resolves.
-func (h *Hub) advanceCast(e *entity, now time.Time) {
-	if e.casting == nil {
-		return
-	}
-	if !e.alive || e.hidden {
-		e.casting = nil
-		return
-	}
-	skill, ok := game.FindSkill(e.casting.SkillID)
-	if !ok || game.SkillCastTime(skill) <= 0 {
-		e.casting = nil
-		return
-	}
-	castMs := game.SkillCastTime(skill)
-	e.casting.Progress += 100.0 * combatTickInterval.Seconds() / (float64(castMs) / 1000.0)
-	if e.casting.Progress < 100 {
-		return
-	}
-	cast := e.casting
-	e.casting = nil
-	res := protocol.CombatEventPayload{
-		AttackerID: e.ID, ActionID: skill.ID, ActionName: skill.Name,
-		TargetID: cast.TargetID, Success: true,
-	}
-	t := h.ent(cast.TargetID)
-	if game.SkillTargetsAlly(skill) {
-		if !h.canAssist(e, t) {
-			return
-		}
-	} else if !h.canAttack(e, t) {
-		return
-	}
-	h.applySkillTo(e, t, skill, res)
-}
-
-// interruptCast cancels an in-progress cast, refunding MP and GCD.
-func (h *Hub) interruptCast(e *entity) {
-	if e.casting == nil {
-		return
-	}
-	skillID := e.casting.SkillID
-	if skill, ok := game.FindSkill(skillID); ok {
-		e.mp += skill.MPCost
-		if e.mp > e.maxMP {
-			e.mp = e.maxMP
-		}
-	}
-	e.casting = nil
-	e.gcdReadyAt = time.Time{}
-	if cc := clientControlOf(e); cc != nil {
-		delete(cc.skillReadyAt, skillID)
-	}
-	name := skillID
-	if skill, ok := game.FindSkill(skillID); ok {
-		name = skill.Name
-	}
-	h.sendCombatEvent(protocol.CombatEventPayload{
-		AttackerID:    e.ID,
-		ActionID:      skillID,
-		ActionName:    name,
-		CastCancelled: true,
-		Message:       fmt.Sprintf("%s's %s was interrupted", e.Name, name),
-	}, e.X, e.Y)
-}
-
 func (h *Hub) nameOf(id string) string {
 	if e := h.ent(id); e != nil {
 		return e.Name
 	}
 	return id
-}
-
-// ---- rewards ----
-
-// awardKill splits XP/loot among everyone who damaged the NPC, plus a passive
-// share for nearby party members who stayed out of the fight.
-func (h *Hub) awardKill(n *entity) {
-	h.awardKillInternal(n, true)
-}
-
-func (h *Hub) awardKillXPOnly(n *entity) {
-	h.awardKillInternal(n, false)
-}
-
-func (h *Hub) awardKillInternal(n *entity, loot bool) {
-	if len(n.contributors) == 0 {
-		return
-	}
-	totalXP := 20 + n.Level*15
-	contributors := make([]string, 0, len(n.contributors))
-	for id := range n.contributors {
-		contributors = append(contributors, id)
-	}
-	share := totalXP / len(contributors)
-	if share < 1 {
-		share = 1
-	}
-
-	// Party bonus: 2+ members of one party contributing.
-	partyCount := map[string]int{}
-	for _, id := range contributors {
-		if p := h.clientParty[id]; p != "" {
-			partyCount[p]++
-		}
-	}
-	bonusParty := ""
-	for p, n2 := range partyCount {
-		if n2 >= 2 {
-			bonusParty = p
-			break
-		}
-	}
-
-	var pools []string
-	if r := respawnOf(n); loot && r != nil && r.dropPoolID != "" {
-		pools = []string{r.dropPoolID}
-	}
-
-	for _, id := range contributors {
-		h.mu.RLock()
-		c := h.clients[id]
-		h.mu.RUnlock()
-		if c == nil {
-			continue
-		}
-		xp := share
-		if bonusParty != "" && h.clientParty[id] == bonusParty {
-			xp = share * (100 + partyInCombatBonusPercent) / 100
-		}
-		hasSub := false
-		if profile, ok := h.store.Get(c.Name); ok && profile.SubJob != "" {
-			hasSub = true
-		}
-		mainXP, subXP := game.DistributeJobXP(xp, hasSub)
-		items := game.GenerateVictoryLoot(h.rng, n.Level, 0, pools)
-		updated, _, _ := h.store.AwardJobVictory(c.Name, mainXP, subXP, items)
-		h.sendWelcome(c, updated)
-		msg := fmt.Sprintf("Defeated %s — +%d EXP", n.Name, xp)
-		if len(items) > 0 {
-			msg += fmt.Sprintf(", found %s", items[0].Name)
-		}
-		h.send(c, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
-			XP: xp, Victory: true, Message: msg,
-		})
-		// Refresh world level after a level-up.
-		if p := h.playerEnt(id); p != nil {
-			p.Level = updated.MainJobLevel()
-		}
-		// Award XP to the battle pet (same base share as the player).
-		h.awardPetXP(c, xp)
-	}
-
-	// Passive party share for nearby members who didn't fight.
-	partyIDs := map[string]bool{}
-	for _, id := range contributors {
-		if p := h.clientParty[id]; p != "" {
-			partyIDs[p] = true
-		}
-	}
-	fought := map[string]bool{}
-	for _, id := range contributors {
-		fought[id] = true
-	}
-	passiveXP := share * partyPassiveXPPercent / 100
-	if passiveXP < 1 {
-		passiveXP = 1
-	}
-	for pid := range partyIDs {
-		party := h.parties[pid]
-		if party == nil {
-			continue
-		}
-		for _, memberID := range party.MemberIDs {
-			if fought[memberID] {
-				continue
-			}
-			p := h.playerEnt(memberID)
-			if p == nil || p.hidden || dist(p.X, p.Y, n.X, n.Y) > partyBattleRange {
-				continue
-			}
-			h.mu.RLock()
-			mc := h.clients[memberID]
-			h.mu.RUnlock()
-			if mc == nil {
-				continue
-			}
-			hasSub := false
-			if profile, ok := h.store.Get(mc.Name); ok && profile.SubJob != "" {
-				hasSub = true
-			}
-			pm, ps := game.DistributeJobXP(passiveXP, hasSub)
-			updated, _, _ := h.store.AwardJobVictory(mc.Name, pm, ps, nil)
-			h.sendWelcome(mc, updated)
-			h.send(mc, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
-				XP: pm, Passive: true, Victory: true,
-				Message: fmt.Sprintf("Party victory — +%d passive EXP (you stayed out of combat).", pm),
-			})
-		}
-	}
-}
-
-// outOfCombatRegen slowly restores hp/mp/stamina for players not fighting.
-// Runs on the 250ms tick so idle players don't need the combat tick.
-func (h *Hub) outOfCombatRegen() {
-	now := time.Now()
-	h.eachEntity(kindPlayer, func(e *entity) {
-		cc := clientControlOf(e)
-		if cc == nil || e.hidden {
-			return
-		}
-		changed := false
-		prev := cc.stamina
-		stam := cc.staminaNow(now)
-		if math.Abs(stam-prev) >= 0.5 {
-			changed = true
-		}
-		if !cc.inCombat && e.alive && (e.hp < e.maxHP || e.mp < e.maxMP) {
-			cc.regenAcc += npcTickSec
-			if cc.regenAcc >= 1 {
-				cc.regenAcc = 0
-				e.hp = min(e.maxHP, e.hp+max(1, e.maxHP/12))
-				e.mp = min(e.maxMP, e.mp+max(1, e.maxMP/12))
-				changed = true
-			}
-		}
-		if changed || now.Sub(cc.lastResourceSync) >= resourceSyncInterval {
-			h.mu.RLock()
-			c := h.clients[e.ID]
-			h.mu.RUnlock()
-			if c != nil && c.Joined {
-				h.send(c, protocol.TypePlayerSync, h.entitySync(e))
-				cc.lastResourceSync = now
-			}
-		}
-	})
 }

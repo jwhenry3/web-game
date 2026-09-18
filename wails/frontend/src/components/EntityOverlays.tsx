@@ -8,17 +8,22 @@ import {
   type WorldOverlayFrame,
 } from "../world/entityOverlayBridge";
 import { StatusIcons } from "../ui/StatusIcons";
+import { JobIdentityBadges } from "../ui/JobIdentity";
+import { useGame } from "../state/store";
 
 function useWorldOverlays(): WorldOverlayFrame {
   return useSyncExternalStore(subscribeEntityOverlays, getWorldOverlays, getWorldOverlays);
 }
 
-function Nameplate({ mark }: { mark: EntityOverlayMark }) {
+function Nameplate({ mark, selfJob }: { mark: EntityOverlayMark; selfJob?: string }) {
   return (
     <div
       className={`cm-nameplate cm-nameplate--${mark.variant}`}
       style={{ left: mark.nameX, top: mark.nameY }}
     >
+      {mark.variant === "self" && selfJob && (
+        <JobIdentityBadges jobId={selfJob} iconOnly className="job-identity--nameplate" />
+      )}
       {mark.label}
     </div>
   );
@@ -89,6 +94,7 @@ function InteractPrompt({ mark }: { mark: InteractPromptMark }) {
 /** Nameplates, cast bars, POI labels, and interact prompts above the Phaser canvas. */
 export function EntityOverlays() {
   const { entities, pois, interacts } = useWorldOverlays();
+  const selfJob = useGame((s) => s.profile?.main_job);
   if (entities.length === 0 && pois.length === 0 && interacts.length === 0) return null;
   return (
     <div className="cm-entity-overlays" aria-hidden>
@@ -96,7 +102,7 @@ export function EntityOverlays() {
         <PoiLabel key={`poi-${mark.id}`} mark={mark} />
       ))}
       {entities.map((mark) => (
-        <Nameplate key={`name-${mark.id}`} mark={mark} />
+        <Nameplate key={`name-${mark.id}`} mark={mark} selfJob={selfJob} />
       ))}
       {entities.map((mark) =>
         mark.targeted ? <TargetArrow key={`ta-${mark.id}`} mark={mark} /> : null,

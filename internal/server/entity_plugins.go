@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"time"
@@ -18,11 +19,14 @@ type clientControl struct {
 	weapon, subWeapon game.WeaponType
 	mainJob, subJob   game.JobID
 	skillLevels       map[string]int
-	pendingSkillUses  map[string]int
+	profLevels        map[string]int
+	pendingProfGrowth map[string]int // hundredths of growth per discipline
 	skillReadyAt      map[string]time.Time
+	mounted           bool // mount stub: toggled by mount_toggle, not yet rendered
 
 	stamina          float64
 	staminaAt        time.Time
+	staminaRate      float64 // per-second regen; refreshed per tick from sanctuary state
 	dodgeReadyAt     time.Time
 	dodgedAt         time.Time
 	lastMoveAt       time.Time
@@ -50,11 +54,13 @@ type clientControl struct {
 
 func newClientControl() *clientControl {
 	return &clientControl{
-		stamina:          staminaMax,
-		staminaAt:        time.Now(),
-		skillLevels:      map[string]int{},
-		pendingSkillUses: map[string]int{},
-		skillReadyAt:     map[string]time.Time{},
+		stamina:           staminaMax,
+		staminaAt:         time.Now(),
+		staminaRate:       regenPerSec,
+		skillLevels:       map[string]int{},
+		profLevels:        map[string]int{},
+		pendingProfGrowth: map[string]int{},
+		skillReadyAt:      map[string]time.Time{},
 	}
 }
 
@@ -63,9 +69,24 @@ func (cc *clientControl) staminaNow(now time.Time) float64 {
 	if cc.staminaAt.IsZero() {
 		return cc.stamina
 	}
-	cc.stamina = math.Min(staminaMax, cc.stamina+staminaRegenRate*now.Sub(cc.staminaAt).Seconds())
+	rate := cc.staminaRate
+	if rate <= 0 {
+		rate = regenPerSec
+	}
+	cc.stamina = math.Min(staminaMax, cc.stamina+rate*now.Sub(cc.staminaAt).Seconds())
 	cc.staminaAt = now
 	return cc.stamina
+}
+
+// proficiencyLevel returns the caster's level in the discipline a skill
+// trains with the currently equipped weapon (0 when untrained or untrained-
+// able). Weapon skills resolve against the weapon actually used; spells
+// resolve against their magic school.
+func (cc *clientControl) proficiencyLevel(skill game.Skill) int {
+	if cc == nil {
+		return 0
+	}
+	return cc.profLevels[string(game.SkillProficiency(skill, cc.weaponForSkill(skill)))]
 }
 
 func (cc *clientControl) weaponForSkill(skill game.Skill) game.WeaponType {
@@ -77,6 +98,10 @@ func (cc *clientControl) weaponForSkill(skill game.Skill) game.WeaponType {
 
 func (cc *clientControl) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	e.hidden = cc.inHouse
+	cc.staminaRate = regenPerSec
+	if h.inSanctuary(e) {
+		cc.staminaRate = regenPerSecSanctuary
+	}
 	cc.staminaNow(now)
 }
 
@@ -413,7 +438,7 @@ func (h *Hub) retarget(e *entity) *entity {
 
 // chaseTarget moves toward the current target until within stopDist.
 // pathfind enables pack-mate avoidance, unstick and A* around terrain (NPCs);
-// pets take the straight line to petAttackPos.
+// pets path toward petAttackPos the same way, minus the pack behavior.
 type chaseTarget struct {
 	speed    float64
 	stopDist float64
@@ -440,7 +465,19 @@ func (ch *chaseTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 		if owner := h.ownerOf(e); owner != nil {
 			gx, gy = petAttackPos(owner.X, owner.Y, t.X, t.Y)
 		}
-		moveToward(e, gx, gy, step)
+		if !ch.pathfind {
+			moveToward(e, gx, gy, step)
+			return
+		}
+		if dist(e.X, e.Y, gx, gy) < 0.01 {
+			return // already standing on the attack spot
+		}
+		if !h.stepWalkable(e, ch, gx, gy, step) {
+			// Unreachable attack spot — release the target so the pet falls
+			// back to following its owner instead of standing pinned.
+			e.targetID = ""
+			ch.path = nil
+		}
 		return
 	}
 	dx, dy := t.X-e.X, t.Y-e.Y
@@ -478,12 +515,12 @@ func (ch *chaseTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	}
 	nx, ny := e.X+vx/vm*move, e.Y+vy/vm*move
 	// Once on an A* route, commit to it.
-	if len(ch.path) > 0 && h.chaseAlongPath(e, ch, t, step) {
+	if len(ch.path) > 0 && h.chaseAlongPath(e, ch, t.X, t.Y, step) {
 		return
 	}
 	if h.walkableAt(nx, ny) {
 		e.X, e.Y = nx, ny
-	} else if h.chaseAlongPath(e, ch, t, step) {
+	} else if h.chaseAlongPath(e, ch, t.X, t.Y, step) {
 		// terrain-blocked: A* around it
 	} else if h.walkableAt(nx, e.Y) {
 		e.X = nx
@@ -527,7 +564,15 @@ func (at *attackTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	} else if !h.inMelee(e, t) {
 		return
 	}
-	e.attackCD = now.Add(at.cooldown)
+	e.attackCD = now.Add(time.Duration(float64(at.cooldown) * game.AttackSpeedScale(e.dex)))
+	if h.rng.Float64() >= game.HitChance(e.dex, t.dex) {
+		ev := basicAttackEvent()
+		ev.AttackerID, ev.TargetID = e.ID, t.ID
+		ev.Success = true
+		ev.Message = fmt.Sprintf("%s misses %s", e.Name, t.Name)
+		h.sendCombatEvent(ev, e.X, e.Y)
+		return
+	}
 	h.applyDamage(e, t, at.damage(h, e, t), basicAttackEvent())
 }
 
@@ -591,8 +636,13 @@ func (r *respawn) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 // ---------------------------------------------------------------- pet
 
 // followOwner derives the pet's target from its owner each tick and, when it
-// has none, keeps the pet within its leash radius.
-type followOwner struct{}
+// has none, keeps the pet within its leash radius. bestDist/unreachTicks
+// track progress toward the owner so a pet that stops closing in — pinned on
+// a wall, sliding along one, or cut off entirely — can teleport instead.
+type followOwner struct {
+	unreachTicks int
+	bestDist     float64
+}
 
 func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	owner := h.ownerOf(e)
@@ -632,15 +682,42 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 		}
 	}
 	if e.targetID != "" {
+		f.unreachTicks, f.bestDist = 0, 0
 		return // chaseTarget/attackTarget take over
 	}
 	d := dist(e.X, e.Y, owner.X, owner.Y)
 	if d <= petFollowDist {
+		f.unreachTicks, f.bestDist = 0, 0
 		return
 	}
 	step := math.Min(petFollowSpeed(d)*dt, d-petFollowDist)
-	if moveToward(e, owner.X, owner.Y, step) > 0 {
+	// Respect terrain: straight step when walkable, A* around walls
+	// otherwise — the chase path state is idle while following.
+	moved := false
+	ch := e.components.chaseTarget
+	if ch != nil && ch.pathfind {
+		moved = h.stepWalkable(e, ch, owner.X, owner.Y, step)
+	} else if moveToward(e, owner.X, owner.Y, step) > 0 {
+		moved = true
+	}
+	if moved {
 		h.entityDirty = true
+	}
+	// Teleport when the pet stops closing in for a while — covers being
+	// pinned on a wall, sliding along one, or a sealed pocket alike. The
+	// combat chase branch never teleports: it drops the target instead.
+	if d2 := dist(e.X, e.Y, owner.X, owner.Y); f.bestDist == 0 || d2 < f.bestDist-0.5 {
+		f.bestDist, f.unreachTicks = d2, 0
+	} else {
+		f.unreachTicks++
+		if f.unreachTicks >= petTeleportTicks {
+			f.unreachTicks, f.bestDist = 0, 0
+			if ch != nil {
+				ch.path = nil
+			}
+			h.petTeleportTo(e, owner)
+			h.entityDirty = true
+		}
 	}
 	e.Facing = owner.Facing
 }
@@ -649,7 +726,7 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 // max HP in step, and restores the pet when the owner leaves combat.
 type petLevelSync struct{}
 
-func petTemplate(kind string) struct{ hp, str, agi int } {
+func petTemplate(kind string) struct{ hp, str, dex int } {
 	if tpl, ok := petTemplates[kind]; ok {
 		return tpl
 	}
@@ -658,7 +735,7 @@ func petTemplate(kind string) struct{ hp, str, agi int } {
 
 func petStr(h *Hub, e, t *entity) int {
 	tpl := petTemplate(e.Sprite)
-	_, s, _ := game.PetCombatStats(tpl.hp, tpl.str, tpl.agi, e.Level)
+	_, s, _ := game.PetCombatStats(tpl.hp, tpl.str, tpl.dex, e.Level)
 	return max(1, s)
 }
 
@@ -687,7 +764,9 @@ func (p *petLevelSync) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	e.Name = rec.Name
 	e.Sprite = rec.Kind
 	tpl := petTemplate(rec.Kind)
-	newMax, _, _ := game.PetCombatStats(tpl.hp, tpl.str, tpl.agi, eff)
+	newMax, pStr, pDex := game.PetCombatStats(tpl.hp, tpl.str, tpl.dex, eff)
+	e.str, e.dex = pStr, pDex
+	e.vit, e.md = 4+eff/2, 4+eff/2
 	switch {
 	case e.maxHP == 0:
 		e.hp, e.maxHP = newMax, newMax
@@ -737,7 +816,7 @@ var archetypeFactories = map[entityKind]func() *entity{
 	kindPet: func() *entity {
 		fo := &followOwner{}
 		ls := &petLevelSync{}
-		ch := &chaseTarget{speed: petSpeed, stopDist: petStandoff, pathfind: false}
+		ch := &chaseTarget{speed: petSpeed, stopDist: petStandoff, pathfind: true}
 		at := &attackTarget{cooldown: enemyAttackCDW, damage: petStr, inRange: meleeStopDistW + 30}
 		return &entity{
 			Kind: kindPet, Faction: factionAlly, alive: true,
@@ -774,6 +853,9 @@ func newNPCEntity(p game.Patrol, reg game.Region, ow *game.Overworld) *entity {
 	e.ID, e.Name, e.Sprite, e.Level = p.ID, p.Name, kind, level
 	e.X, e.Y, e.Faction = start.X, start.Y, fac
 	e.hp, e.maxHP = maxHP, maxHP
+	// Level-scaled affinities so accuracy/defense apply to NPCs too.
+	e.str, e.dex, e.int = 8+level, 8+level, 4+level
+	e.vit, e.md = 4+level, 4+level
 	w := e.components.wander
 	w.patrol, w.region, w.ow = p, reg, ow
 	e.components.respawn.dropPoolID = dropPoolID

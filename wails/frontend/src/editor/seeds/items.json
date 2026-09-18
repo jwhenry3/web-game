@@ -39,6 +39,1878 @@
     "max_stack": 99
   },
   {
+    "id": "bronze_axe",
+    "name": "Bronze Axe",
+    "kind": "equipment",
+    "description": "Axe weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "axe",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 3
+    }
+  },
+  {
+    "id": "bronze_barbute",
+    "name": "Bronze Barbute",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 2,
+      "vit": 3
+    }
+  },
+  {
+    "id": "bronze_blade",
+    "name": "Bronze Blade",
+    "kind": "equipment",
+    "description": "Sword weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "sword",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 3
+    }
+  },
+  {
+    "id": "bronze_cap",
+    "name": "Bronze Cap",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_cuisses",
+    "name": "Bronze Cuisses",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 2,
+      "vit": 3
+    }
+  },
+  {
+    "id": "bronze_hammer",
+    "name": "Bronze Hammer",
+    "kind": "equipment",
+    "description": "Hammer weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "hammer",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 3
+    }
+  },
+  {
+    "id": "bronze_hat",
+    "name": "Bronze Hat",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 2,
+      "md": 3
+    }
+  },
+  {
+    "id": "bronze_hauberk",
+    "name": "Bronze Hauberk",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 2,
+      "vit": 3
+    }
+  },
+  {
+    "id": "bronze_jerkin",
+    "name": "Bronze Jerkin",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_katana",
+    "name": "Bronze Katana",
+    "kind": "equipment",
+    "description": "Katana weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "katana",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 3
+    }
+  },
+  {
+    "id": "bronze_knuckles",
+    "name": "Bronze Knuckles",
+    "kind": "equipment",
+    "description": "Knuckles weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "knuckles",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_mitts",
+    "name": "Bronze Mitts",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 2,
+      "md": 3
+    }
+  },
+  {
+    "id": "bronze_pelt",
+    "name": "Bronze Pelt",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 2,
+      "vit": 3
+    }
+  },
+  {
+    "id": "bronze_sandals",
+    "name": "Bronze Sandals",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 2,
+      "md": 3
+    }
+  },
+  {
+    "id": "bronze_sash",
+    "name": "Bronze Sash",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 2,
+      "md": 3
+    }
+  },
+  {
+    "id": "bronze_shawl",
+    "name": "Bronze Shawl",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_spear",
+    "name": "Bronze Spear",
+    "kind": "equipment",
+    "description": "Spear weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "spear",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 3
+    }
+  },
+  {
+    "id": "bronze_staff",
+    "name": "Bronze Staff",
+    "kind": "equipment",
+    "description": "Staff weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "staff",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 3
+    }
+  },
+  {
+    "id": "bronze_tonban",
+    "name": "Bronze Tonban",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 2,
+      "md": 3
+    }
+  },
+  {
+    "id": "bronze_treads",
+    "name": "Bronze Treads",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_trousers",
+    "name": "Bronze Trousers",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_twin_dirks",
+    "name": "Bronze Twin Dirks",
+    "kind": "equipment",
+    "description": "Dagger weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "dagger",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "bronze_vambraces",
+    "name": "Bronze Vambraces",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 2,
+      "vit": 3
+    }
+  },
+  {
+    "id": "bronze_vestment",
+    "name": "Bronze Vestment",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 2,
+      "md": 3
+    }
+  },
+  {
+    "id": "bronze_wand",
+    "name": "Bronze Wand",
+    "kind": "equipment",
+    "description": "Wand weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "wand",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "int": 3
+    }
+  },
+  {
+    "id": "bronze_warboots",
+    "name": "Bronze Warboots",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "str": 2,
+      "vit": 3
+    }
+  },
+  {
+    "id": "bronze_wristguards",
+    "name": "Bronze Wristguards",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 4,
+    "stats": {
+      "dex": 3
+    }
+  },
+  {
+    "id": "iron_bandana",
+    "name": "Iron Bandana",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 4,
+      "str": 2
+    }
+  },
+  {
+    "id": "iron_baton",
+    "name": "Iron Baton",
+    "kind": "equipment",
+    "description": "Wand weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "wand",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 5
+    }
+  },
+  {
+    "id": "iron_brais",
+    "name": "Iron Brais",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 3,
+      "md": 4
+    }
+  },
+  {
+    "id": "iron_breeches",
+    "name": "Iron Breeches",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 4,
+      "int": 2
+    }
+  },
+  {
+    "id": "iron_bulwark_cape",
+    "name": "Iron Bulwark Cape",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 3,
+      "vit": 4
+    }
+  },
+  {
+    "id": "iron_cesti",
+    "name": "Iron Cesti",
+    "kind": "equipment",
+    "description": "Knuckles weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "knuckles",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 5
+    }
+  },
+  {
+    "id": "iron_cuffs",
+    "name": "Iron Cuffs",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 3,
+      "md": 4
+    }
+  },
+  {
+    "id": "iron_drape",
+    "name": "Iron Drape",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 4,
+      "int": 2
+    }
+  },
+  {
+    "id": "iron_gaiters",
+    "name": "Iron Gaiters",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 4,
+      "str": 2
+    }
+  },
+  {
+    "id": "iron_gown",
+    "name": "Iron Gown",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 3,
+      "md": 4
+    }
+  },
+  {
+    "id": "iron_greathelm",
+    "name": "Iron Greathelm",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 3,
+      "vit": 4
+    }
+  },
+  {
+    "id": "iron_hatchet",
+    "name": "Iron Hatchet",
+    "kind": "equipment",
+    "description": "Axe weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "axe",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 5
+    }
+  },
+  {
+    "id": "iron_lance",
+    "name": "Iron Lance",
+    "kind": "equipment",
+    "description": "Spear weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "spear",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 5
+    }
+  },
+  {
+    "id": "iron_maul",
+    "name": "Iron Maul",
+    "kind": "equipment",
+    "description": "Hammer weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "hammer",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 5
+    }
+  },
+  {
+    "id": "iron_mitre",
+    "name": "Iron Mitre",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 3,
+      "md": 4
+    }
+  },
+  {
+    "id": "iron_mufflers",
+    "name": "Iron Mufflers",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 3,
+      "vit": 4
+    }
+  },
+  {
+    "id": "iron_platelegs",
+    "name": "Iron Platelegs",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 3,
+      "vit": 4
+    }
+  },
+  {
+    "id": "iron_platemail",
+    "name": "Iron Platemail",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 3,
+      "vit": 4
+    }
+  },
+  {
+    "id": "iron_rod",
+    "name": "Iron Rod",
+    "kind": "equipment",
+    "description": "Staff weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "staff",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 5
+    }
+  },
+  {
+    "id": "iron_saber",
+    "name": "Iron Saber",
+    "kind": "equipment",
+    "description": "Sword weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "sword",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 5
+    }
+  },
+  {
+    "id": "iron_scarf",
+    "name": "Iron Scarf",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 3,
+      "md": 4
+    }
+  },
+  {
+    "id": "iron_slippers",
+    "name": "Iron Slippers",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "int": 3,
+      "md": 4
+    }
+  },
+  {
+    "id": "iron_sollerets",
+    "name": "Iron Sollerets",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 3,
+      "vit": 4
+    }
+  },
+  {
+    "id": "iron_tunic",
+    "name": "Iron Tunic",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 4,
+      "int": 2
+    }
+  },
+  {
+    "id": "iron_twin_kris",
+    "name": "Iron Twin Kris",
+    "kind": "equipment",
+    "description": "Dagger weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "dagger",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 5
+    }
+  },
+  {
+    "id": "iron_uchigatana",
+    "name": "Iron Uchigatana",
+    "kind": "equipment",
+    "description": "Katana weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "katana",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "str": 5
+    }
+  },
+  {
+    "id": "iron_wraps",
+    "name": "Iron Wraps",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "medium",
+    "rarity": "common",
+    "level": 8,
+    "stats": {
+      "dex": 4,
+      "str": 2
+    }
+  },
+  {
+    "id": "mythril_bandana",
+    "name": "Mythril Bandana",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "medium",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 7,
+      "str": 3
+    }
+  },
+  {
+    "id": "mythril_baton",
+    "name": "Mythril Baton",
+    "kind": "equipment",
+    "description": "Wand weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "wand",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 11,
+      "md": 2
+    }
+  },
+  {
+    "id": "mythril_brais",
+    "name": "Mythril Brais",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "light",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 6,
+      "md": 7,
+      "mp": 20
+    }
+  },
+  {
+    "id": "mythril_breeches",
+    "name": "Mythril Breeches",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "medium",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 7,
+      "int": 3
+    }
+  },
+  {
+    "id": "mythril_bulwark_cape",
+    "name": "Mythril Bulwark Cape",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "heavy",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "hp": 25,
+      "str": 6,
+      "vit": 7
+    }
+  },
+  {
+    "id": "mythril_cesti",
+    "name": "Mythril Cesti",
+    "kind": "equipment",
+    "description": "Knuckles weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "knuckles",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 11,
+      "str": 2
+    }
+  },
+  {
+    "id": "mythril_cuffs",
+    "name": "Mythril Cuffs",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "light",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 6,
+      "md": 7,
+      "mp": 20
+    }
+  },
+  {
+    "id": "mythril_drape",
+    "name": "Mythril Drape",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "medium",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 7,
+      "int": 3
+    }
+  },
+  {
+    "id": "mythril_gaiters",
+    "name": "Mythril Gaiters",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "medium",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 7,
+      "str": 3
+    }
+  },
+  {
+    "id": "mythril_gown",
+    "name": "Mythril Gown",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "light",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 6,
+      "md": 7,
+      "mp": 20
+    }
+  },
+  {
+    "id": "mythril_greathelm",
+    "name": "Mythril Greathelm",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "heavy",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "hp": 25,
+      "str": 6,
+      "vit": 7
+    }
+  },
+  {
+    "id": "mythril_hatchet",
+    "name": "Mythril Hatchet",
+    "kind": "equipment",
+    "description": "Axe weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "axe",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "str": 11,
+      "vit": 2
+    }
+  },
+  {
+    "id": "mythril_lance",
+    "name": "Mythril Lance",
+    "kind": "equipment",
+    "description": "Spear weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "spear",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "str": 11,
+      "vit": 2
+    }
+  },
+  {
+    "id": "mythril_maul",
+    "name": "Mythril Maul",
+    "kind": "equipment",
+    "description": "Hammer weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "hammer",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "str": 11,
+      "vit": 2
+    }
+  },
+  {
+    "id": "mythril_mitre",
+    "name": "Mythril Mitre",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "light",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 6,
+      "md": 7,
+      "mp": 20
+    }
+  },
+  {
+    "id": "mythril_mufflers",
+    "name": "Mythril Mufflers",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "heavy",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "hp": 25,
+      "str": 6,
+      "vit": 7
+    }
+  },
+  {
+    "id": "mythril_platelegs",
+    "name": "Mythril Platelegs",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "heavy",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "hp": 25,
+      "str": 6,
+      "vit": 7
+    }
+  },
+  {
+    "id": "mythril_platemail",
+    "name": "Mythril Platemail",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "heavy",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "hp": 25,
+      "str": 6,
+      "vit": 7
+    }
+  },
+  {
+    "id": "mythril_rod",
+    "name": "Mythril Rod",
+    "kind": "equipment",
+    "description": "Staff weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "staff",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 11,
+      "md": 2
+    }
+  },
+  {
+    "id": "mythril_saber",
+    "name": "Mythril Saber",
+    "kind": "equipment",
+    "description": "Sword weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "sword",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "str": 11,
+      "vit": 2
+    }
+  },
+  {
+    "id": "mythril_scarf",
+    "name": "Mythril Scarf",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "light",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 6,
+      "md": 7,
+      "mp": 20
+    }
+  },
+  {
+    "id": "mythril_slippers",
+    "name": "Mythril Slippers",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "light",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "int": 6,
+      "md": 7,
+      "mp": 20
+    }
+  },
+  {
+    "id": "mythril_sollerets",
+    "name": "Mythril Sollerets",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "heavy",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "hp": 25,
+      "str": 6,
+      "vit": 7
+    }
+  },
+  {
+    "id": "mythril_tunic",
+    "name": "Mythril Tunic",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "medium",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 7,
+      "int": 3
+    }
+  },
+  {
+    "id": "mythril_twin_kris",
+    "name": "Mythril Twin Kris",
+    "kind": "equipment",
+    "description": "Dagger weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "dagger",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 11,
+      "str": 2
+    }
+  },
+  {
+    "id": "mythril_uchigatana",
+    "name": "Mythril Uchigatana",
+    "kind": "equipment",
+    "description": "Katana weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "katana",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "str": 11,
+      "vit": 2
+    }
+  },
+  {
+    "id": "mythril_wraps",
+    "name": "Mythril Wraps",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "medium",
+    "rarity": "legendary",
+    "level": 20,
+    "stats": {
+      "dex": 7,
+      "str": 3
+    }
+  },
+  {
+    "id": "silver_axe",
+    "name": "Silver Axe",
+    "kind": "equipment",
+    "description": "Axe weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "axe",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "str": 9,
+      "vit": 1
+    }
+  },
+  {
+    "id": "silver_barbute",
+    "name": "Silver Barbute",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "heavy",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "hp": 20,
+      "str": 5,
+      "vit": 6
+    }
+  },
+  {
+    "id": "silver_blade",
+    "name": "Silver Blade",
+    "kind": "equipment",
+    "description": "Sword weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "sword",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "str": 9,
+      "vit": 1
+    }
+  },
+  {
+    "id": "silver_cap",
+    "name": "Silver Cap",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "medium",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 6,
+      "str": 3
+    }
+  },
+  {
+    "id": "silver_cuisses",
+    "name": "Silver Cuisses",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "heavy",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "hp": 20,
+      "str": 5,
+      "vit": 6
+    }
+  },
+  {
+    "id": "silver_hammer",
+    "name": "Silver Hammer",
+    "kind": "equipment",
+    "description": "Hammer weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "hammer",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "str": 9,
+      "vit": 1
+    }
+  },
+  {
+    "id": "silver_hat",
+    "name": "Silver Hat",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "light",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 5,
+      "md": 6,
+      "mp": 16
+    }
+  },
+  {
+    "id": "silver_hauberk",
+    "name": "Silver Hauberk",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "heavy",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "hp": 20,
+      "str": 5,
+      "vit": 6
+    }
+  },
+  {
+    "id": "silver_jerkin",
+    "name": "Silver Jerkin",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "medium",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 6,
+      "int": 3
+    }
+  },
+  {
+    "id": "silver_katana",
+    "name": "Silver Katana",
+    "kind": "equipment",
+    "description": "Katana weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "katana",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "str": 9,
+      "vit": 1
+    }
+  },
+  {
+    "id": "silver_knuckles",
+    "name": "Silver Knuckles",
+    "kind": "equipment",
+    "description": "Knuckles weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "knuckles",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 9,
+      "str": 1
+    }
+  },
+  {
+    "id": "silver_mitts",
+    "name": "Silver Mitts",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "light",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 5,
+      "md": 6,
+      "mp": 16
+    }
+  },
+  {
+    "id": "silver_pelt",
+    "name": "Silver Pelt",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "heavy",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "hp": 20,
+      "str": 5,
+      "vit": 6
+    }
+  },
+  {
+    "id": "silver_sandals",
+    "name": "Silver Sandals",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "light",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 5,
+      "md": 6,
+      "mp": 16
+    }
+  },
+  {
+    "id": "silver_sash",
+    "name": "Silver Sash",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "light",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 5,
+      "md": 6,
+      "mp": 16
+    }
+  },
+  {
+    "id": "silver_shawl",
+    "name": "Silver Shawl",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "medium",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 6,
+      "int": 3
+    }
+  },
+  {
+    "id": "silver_spear",
+    "name": "Silver Spear",
+    "kind": "equipment",
+    "description": "Spear weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "spear",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "str": 9,
+      "vit": 1
+    }
+  },
+  {
+    "id": "silver_staff",
+    "name": "Silver Staff",
+    "kind": "equipment",
+    "description": "Staff weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "staff",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 9,
+      "md": 1
+    }
+  },
+  {
+    "id": "silver_tonban",
+    "name": "Silver Tonban",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "light",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 5,
+      "md": 6,
+      "mp": 16
+    }
+  },
+  {
+    "id": "silver_treads",
+    "name": "Silver Treads",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "medium",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 6,
+      "str": 3
+    }
+  },
+  {
+    "id": "silver_trousers",
+    "name": "Silver Trousers",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "medium",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 6,
+      "int": 3
+    }
+  },
+  {
+    "id": "silver_twin_dirks",
+    "name": "Silver Twin Dirks",
+    "kind": "equipment",
+    "description": "Dagger weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "dagger",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 9,
+      "str": 1
+    }
+  },
+  {
+    "id": "silver_vambraces",
+    "name": "Silver Vambraces",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "heavy",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "hp": 20,
+      "str": 5,
+      "vit": 6
+    }
+  },
+  {
+    "id": "silver_vestment",
+    "name": "Silver Vestment",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "light",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 5,
+      "md": 6,
+      "mp": 16
+    }
+  },
+  {
+    "id": "silver_wand",
+    "name": "Silver Wand",
+    "kind": "equipment",
+    "description": "Wand weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "wand",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "int": 9,
+      "md": 1
+    }
+  },
+  {
+    "id": "silver_warboots",
+    "name": "Silver Warboots",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "heavy",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "hp": 20,
+      "str": 5,
+      "vit": 6
+    }
+  },
+  {
+    "id": "silver_wristguards",
+    "name": "Silver Wristguards",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "medium",
+    "rarity": "epic",
+    "level": 16,
+    "stats": {
+      "dex": 6,
+      "str": 3
+    }
+  },
+  {
     "id": "starter-axe",
     "name": "Notched Axe",
     "kind": "equipment",
@@ -57,28 +1929,30 @@
   },
   {
     "id": "starter-back",
-    "name": "Worn Cloak",
+    "name": "Worn Mantle",
     "kind": "equipment",
-    "description": "Basic worn armor template using common loot naming.",
+    "description": "Worn medium armor issued to new heroes.",
     "slot": "back",
     "allowed_slots": [
       "back"
     ],
+    "armor_class": "medium",
     "rarity": "common",
     "level": 1,
     "stats": {
-      "mag": 2
+      "md": 2
     }
   },
   {
     "id": "starter-chest",
-    "name": "Worn Cuirass",
+    "name": "Worn Vest",
     "kind": "equipment",
-    "description": "Basic worn armor template using common loot naming.",
+    "description": "Worn medium armor issued to new heroes.",
     "slot": "chest",
     "allowed_slots": [
       "chest"
     ],
+    "armor_class": "medium",
     "rarity": "common",
     "level": 1,
     "stats": {
@@ -99,22 +1973,23 @@
     "rarity": "common",
     "level": 1,
     "stats": {
-      "str": 2
+      "dex": 2
     }
   },
   {
     "id": "starter-feet",
     "name": "Worn Boots",
     "kind": "equipment",
-    "description": "Basic worn armor template using common loot naming.",
+    "description": "Worn medium armor issued to new heroes.",
     "slot": "feet",
     "allowed_slots": [
       "feet"
     ],
+    "armor_class": "medium",
     "rarity": "common",
     "level": 1,
     "stats": {
-      "agi": 2
+      "dex": 2
     }
   },
   {
@@ -136,13 +2011,14 @@
   },
   {
     "id": "starter-hands",
-    "name": "Worn Gauntlets",
+    "name": "Worn Bracers",
     "kind": "equipment",
-    "description": "Basic worn armor template using common loot naming.",
+    "description": "Worn medium armor issued to new heroes.",
     "slot": "hands",
     "allowed_slots": [
       "hands"
     ],
+    "armor_class": "medium",
     "rarity": "common",
     "level": 1,
     "stats": {
@@ -151,13 +2027,14 @@
   },
   {
     "id": "starter-head",
-    "name": "Worn Helm",
+    "name": "Worn Hood",
     "kind": "equipment",
-    "description": "Basic worn armor template using common loot naming.",
+    "description": "Worn medium armor issued to new heroes.",
     "slot": "head",
     "allowed_slots": [
       "head"
     ],
+    "armor_class": "medium",
     "rarity": "common",
     "level": 1,
     "stats": {
@@ -195,22 +2072,23 @@
     "rarity": "common",
     "level": 1,
     "stats": {
-      "str": 2
+      "dex": 2
     }
   },
   {
     "id": "starter-legs",
-    "name": "Worn Greaves",
+    "name": "Worn Chausses",
     "kind": "equipment",
-    "description": "Basic worn armor template using common loot naming.",
+    "description": "Worn medium armor issued to new heroes.",
     "slot": "legs",
     "allowed_slots": [
       "legs"
     ],
+    "armor_class": "medium",
     "rarity": "common",
     "level": 1,
     "stats": {
-      "agi": 2
+      "dex": 2
     }
   },
   {
@@ -244,7 +2122,7 @@
     "rarity": "common",
     "level": 1,
     "stats": {
-      "mag": 2
+      "int": 2
     }
   },
   {
@@ -278,7 +2156,682 @@
     "rarity": "common",
     "level": 1,
     "stats": {
-      "mag": 2
+      "int": 2
+    }
+  },
+  {
+    "id": "steel_boots",
+    "name": "Steel Boots",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "medium",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 5,
+      "str": 2
+    }
+  },
+  {
+    "id": "steel_bracers",
+    "name": "Steel Bracers",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "medium",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 5,
+      "str": 2
+    }
+  },
+  {
+    "id": "steel_cape",
+    "name": "Steel Cape",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "light",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 4,
+      "md": 5,
+      "mp": 12
+    }
+  },
+  {
+    "id": "steel_chausses",
+    "name": "Steel Chausses",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "medium",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 5,
+      "int": 2
+    }
+  },
+  {
+    "id": "steel_circlet",
+    "name": "Steel Circlet",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "light",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 4,
+      "md": 5,
+      "mp": 12
+    }
+  },
+  {
+    "id": "steel_claws",
+    "name": "Steel Claws",
+    "kind": "equipment",
+    "description": "Knuckles weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "knuckles",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 7
+    }
+  },
+  {
+    "id": "steel_claymore",
+    "name": "Steel Claymore",
+    "kind": "equipment",
+    "description": "Sword weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "sword",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "str": 7
+    }
+  },
+  {
+    "id": "steel_cuirass",
+    "name": "Steel Cuirass",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "heavy",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "hp": 15,
+      "str": 4,
+      "vit": 5
+    }
+  },
+  {
+    "id": "steel_focus",
+    "name": "Steel Focus",
+    "kind": "equipment",
+    "description": "Wand weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "wand",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 7
+    }
+  },
+  {
+    "id": "steel_gauntlets",
+    "name": "Steel Gauntlets",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "heavy",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "hp": 15,
+      "str": 4,
+      "vit": 5
+    }
+  },
+  {
+    "id": "steel_gloves",
+    "name": "Steel Gloves",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "light",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 4,
+      "md": 5,
+      "mp": 12
+    }
+  },
+  {
+    "id": "steel_greataxe",
+    "name": "Steel Greataxe",
+    "kind": "equipment",
+    "description": "Axe weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "axe",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "str": 7
+    }
+  },
+  {
+    "id": "steel_greatcloak",
+    "name": "Steel Greatcloak",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "heavy",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "hp": 15,
+      "str": 4,
+      "vit": 5
+    }
+  },
+  {
+    "id": "steel_greaves",
+    "name": "Steel Greaves",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "heavy",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "hp": 15,
+      "str": 4,
+      "vit": 5
+    }
+  },
+  {
+    "id": "steel_helm",
+    "name": "Steel Helm",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "heavy",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "hp": 15,
+      "str": 4,
+      "vit": 5
+    }
+  },
+  {
+    "id": "steel_hood",
+    "name": "Steel Hood",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "medium",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 5,
+      "str": 2
+    }
+  },
+  {
+    "id": "steel_leggings",
+    "name": "Steel Leggings",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "light",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 4,
+      "md": 5,
+      "mp": 12
+    }
+  },
+  {
+    "id": "steel_mantle",
+    "name": "Steel Mantle",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "medium",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 5,
+      "int": 2
+    }
+  },
+  {
+    "id": "steel_matched_stilettos",
+    "name": "Steel Matched Stilettos",
+    "kind": "equipment",
+    "description": "Dagger weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "dagger",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 7
+    }
+  },
+  {
+    "id": "steel_pike",
+    "name": "Steel Pike",
+    "kind": "equipment",
+    "description": "Spear weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "spear",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "str": 7
+    }
+  },
+  {
+    "id": "steel_robe",
+    "name": "Steel Robe",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "light",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 4,
+      "md": 5,
+      "mp": 12
+    }
+  },
+  {
+    "id": "steel_sabatons",
+    "name": "Steel Sabatons",
+    "kind": "equipment",
+    "description": "Heavy armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "heavy",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "hp": 15,
+      "str": 4,
+      "vit": 5
+    }
+  },
+  {
+    "id": "steel_scepter",
+    "name": "Steel Scepter",
+    "kind": "equipment",
+    "description": "Staff weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "staff",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 7
+    }
+  },
+  {
+    "id": "steel_shoes",
+    "name": "Steel Shoes",
+    "kind": "equipment",
+    "description": "Light armor.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "light",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "int": 4,
+      "md": 5,
+      "mp": 12
+    }
+  },
+  {
+    "id": "steel_tachi",
+    "name": "Steel Tachi",
+    "kind": "equipment",
+    "description": "Katana weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "katana",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "str": 7
+    }
+  },
+  {
+    "id": "steel_vest",
+    "name": "Steel Vest",
+    "kind": "equipment",
+    "description": "Medium armor.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "medium",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "dex": 5,
+      "int": 2
+    }
+  },
+  {
+    "id": "steel_warhammer",
+    "name": "Steel Warhammer",
+    "kind": "equipment",
+    "description": "Hammer weapon.",
+    "slot": "weapon",
+    "allowed_slots": [
+      "weapon",
+      "sub_weapon"
+    ],
+    "weapon_type": "hammer",
+    "rarity": "rare",
+    "level": 12,
+    "stats": {
+      "str": 7
+    }
+  },
+  {
+    "id": "worn_cape",
+    "name": "Worn Cape",
+    "kind": "equipment",
+    "description": "Worn light armor issued to new heroes.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "int": 1,
+      "md": 2
+    }
+  },
+  {
+    "id": "worn_circlet",
+    "name": "Worn Circlet",
+    "kind": "equipment",
+    "description": "Worn light armor issued to new heroes.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "int": 1,
+      "md": 2
+    }
+  },
+  {
+    "id": "worn_cuirass",
+    "name": "Worn Cuirass",
+    "kind": "equipment",
+    "description": "Worn heavy armor issued to new heroes.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 1,
+      "vit": 2
+    }
+  },
+  {
+    "id": "worn_gauntlets",
+    "name": "Worn Gauntlets",
+    "kind": "equipment",
+    "description": "Worn heavy armor issued to new heroes.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 1,
+      "vit": 2
+    }
+  },
+  {
+    "id": "worn_gloves",
+    "name": "Worn Gloves",
+    "kind": "equipment",
+    "description": "Worn light armor issued to new heroes.",
+    "slot": "hands",
+    "allowed_slots": [
+      "hands"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "int": 1,
+      "md": 2
+    }
+  },
+  {
+    "id": "worn_greatcloak",
+    "name": "Worn Greatcloak",
+    "kind": "equipment",
+    "description": "Worn heavy armor issued to new heroes.",
+    "slot": "back",
+    "allowed_slots": [
+      "back"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 1,
+      "vit": 2
+    }
+  },
+  {
+    "id": "worn_greaves",
+    "name": "Worn Greaves",
+    "kind": "equipment",
+    "description": "Worn heavy armor issued to new heroes.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 1,
+      "vit": 2
+    }
+  },
+  {
+    "id": "worn_helm",
+    "name": "Worn Helm",
+    "kind": "equipment",
+    "description": "Worn heavy armor issued to new heroes.",
+    "slot": "head",
+    "allowed_slots": [
+      "head"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 1,
+      "vit": 2
+    }
+  },
+  {
+    "id": "worn_leggings",
+    "name": "Worn Leggings",
+    "kind": "equipment",
+    "description": "Worn light armor issued to new heroes.",
+    "slot": "legs",
+    "allowed_slots": [
+      "legs"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "int": 1,
+      "md": 2
+    }
+  },
+  {
+    "id": "worn_robe",
+    "name": "Worn Robe",
+    "kind": "equipment",
+    "description": "Worn light armor issued to new heroes.",
+    "slot": "chest",
+    "allowed_slots": [
+      "chest"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "int": 1,
+      "md": 2
+    }
+  },
+  {
+    "id": "worn_sabatons",
+    "name": "Worn Sabatons",
+    "kind": "equipment",
+    "description": "Worn heavy armor issued to new heroes.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "heavy",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "str": 1,
+      "vit": 2
+    }
+  },
+  {
+    "id": "worn_shoes",
+    "name": "Worn Shoes",
+    "kind": "equipment",
+    "description": "Worn light armor issued to new heroes.",
+    "slot": "feet",
+    "allowed_slots": [
+      "feet"
+    ],
+    "armor_class": "light",
+    "rarity": "common",
+    "level": 1,
+    "stats": {
+      "int": 1,
+      "md": 2
     }
   }
 ]

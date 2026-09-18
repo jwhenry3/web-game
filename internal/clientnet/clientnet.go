@@ -128,25 +128,32 @@ func (c *Conn) Send(typeName string, payload any) error {
 		return fmt.Errorf("not connected")
 	}
 
-	jsonFrame := protocol.Encode(protocol.MessageType(typeName), payload)
-	if jsonFrame == nil {
-		// Encode logs and returns nil on marshal failure; also handles nil payload oddly.
-		env := protocol.Envelope{Type: protocol.MessageType(typeName)}
-		if payload != nil {
-			raw, err := json.Marshal(payload)
+	t := protocol.MessageType(typeName)
+	var frame []byte
+	var err error
+	if codec == protocol.CodecProtobuf {
+		// Marshal straight to wire format: skips the JSON envelope
+		// marshal + re-parse that Encode + EncodeFrame would perform.
+		frame, err = protocol.EncodeProtobuf(t, payload)
+	} else {
+		jsonFrame := protocol.Encode(t, payload)
+		if jsonFrame == nil {
+			// Encode logs and returns nil on marshal failure; also handles nil payload oddly.
+			env := protocol.Envelope{Type: t}
+			if payload != nil {
+				raw, merr := json.Marshal(payload)
+				if merr != nil {
+					return merr
+				}
+				env.Payload = raw
+			}
+			jsonFrame, err = json.Marshal(env)
 			if err != nil {
 				return err
 			}
-			env.Payload = raw
 		}
-		var err error
-		jsonFrame, err = json.Marshal(env)
-		if err != nil {
-			return err
-		}
+		frame, err = protocol.EncodeFrame(codec, jsonFrame)
 	}
-
-	frame, err := protocol.EncodeFrame(codec, jsonFrame)
 	if err != nil {
 		return err
 	}

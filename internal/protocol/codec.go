@@ -7,6 +7,7 @@ import (
 	"clara-mundi/internal/protocol/pb"
 
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -73,10 +74,11 @@ var payloadRegistry = map[MessageType]func() proto.Message{
 	TypeHousePlaceFurniture:  func() proto.Message { return &pb.HousePlaceFurniturePayload{} },
 	TypeHousePickFurniture:   func() proto.Message { return &pb.HousePickFurniturePayload{} },
 	TypeSetCampSkin:          func() proto.Message { return &pb.SetCampSkinPayload{} },
-	TypePetSetFollow:         func() proto.Message { return &pb.PetIDPayload{} },
 	TypePetSetBattle:         func() proto.Message { return &pb.PetIDPayload{} },
+	TypePetSetMount:          func() proto.Message { return &pb.PetIDPayload{} },
 	TypePetRelease:           func() proto.Message { return &pb.PetIDPayload{} },
 	TypePetCommand:           func() proto.Message { return &pb.PetCommandPayload{} },
+	TypeMountToggle:          func() proto.Message { return &pb.EmptyPayload{} },
 	TypeCampState:            func() proto.Message { return &pb.CampStatePayload{} },
 	TypeHouseState:           func() proto.Message { return &pb.HouseStatePayload{} },
 	TypeHouseReturn:          func() proto.Message { return &pb.HouseReturnPayload{} },
@@ -110,6 +112,60 @@ func newPayloadMessage(t MessageType) proto.Message {
 	return &pb.EmptyPayload{}
 }
 
+// jsonDirectTypes lists payload message descriptors that can be populated by
+// encoding/json instead of protojson. Generated pb structs carry
+// json:"proto_field_name" tags, and hub frames (protocol.Encode) always emit
+// proto field names, so plain JSON decoding is equivalent — and roughly 2x
+// faster with a fraction of the allocations — for messages whose fields use
+// only plain scalar/message/map encodings. Types needing protojson-specific
+// handling (enums, oneofs, well-known types, extensions, fields from other
+// proto packages) fall back to protoUnmarshal.
+var jsonDirectTypes = func() map[protoreflect.FullName]bool {
+	out := make(map[protoreflect.FullName]bool, len(payloadRegistry))
+	for _, makeFn := range payloadRegistry {
+		md := makeFn().ProtoReflect().Descriptor()
+		if jsonDirectOK(md, map[protoreflect.FullName]bool{}) {
+			out[md.FullName()] = true
+		}
+	}
+	return out
+}()
+
+func jsonDirectOK(md protoreflect.MessageDescriptor, seen map[protoreflect.FullName]bool) bool {
+	if seen[md.FullName()] {
+		return true
+	}
+	seen[md.FullName()] = true
+	fields := md.Fields()
+	for i := 0; i < fields.Len(); i++ {
+		fd := fields.Get(i)
+		// Synthetic oneofs are just proto3 `optional` scalars — generated as
+		// plain *T fields that encoding/json handles. Real oneofs are
+		// interface-typed and need protojson.
+		if od := fd.ContainingOneof(); od != nil && !od.IsSynthetic() {
+			return false
+		}
+		if fd.IsExtension() {
+			return false
+		}
+		switch fd.Kind() {
+		case protoreflect.EnumKind, protoreflect.GroupKind:
+			return false
+		case protoreflect.MessageKind:
+			sub := fd.Message()
+			// Only our own messages take the fast path; well-known types
+			// (Timestamp, Struct, Any, ...) have bespoke protojson encodings.
+			if sub.ParentFile().Package() != "fantasy.v1" {
+				return false
+			}
+			if !jsonDirectOK(sub, seen) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // DecodeFrame parses a WebSocket frame into an Envelope for the hub.
 func DecodeFrame(codec Codec, data []byte) (Envelope, error) {
 	if codec == CodecProtobuf {
@@ -123,22 +179,22 @@ func DecodeFrame(codec Codec, data []byte) (Envelope, error) {
 }
 
 func decodeProtobuf(data []byte) (Envelope, error) {
-	var wire pb.WireEnvelope
-	if err := proto.Unmarshal(data, &wire); err != nil {
+	t, payload, err := unmarshalWireEnvelope(data)
+	if err != nil {
 		return Envelope{}, fmt.Errorf("wire envelope: %w", err)
 	}
-	t := MessageType(wire.GetType())
+	// Truly empty client acks may omit payload; skip the proto/json hops.
+	if len(payload) == 0 {
+		return Envelope{Type: t}, nil
+	}
 	msg := newPayloadMessage(t)
-	if len(wire.GetPayload()) > 0 {
-		if err := proto.Unmarshal(wire.GetPayload(), msg); err != nil {
-			return Envelope{}, fmt.Errorf("payload %s: %w", t, err)
-		}
+	if err := proto.Unmarshal(payload, msg); err != nil {
+		return Envelope{}, fmt.Errorf("payload %s: %w", t, err)
 	}
 	raw, err := protoMarshal.Marshal(msg)
 	if err != nil {
 		return Envelope{}, err
 	}
-	// Truly empty client acks may omit payload.
 	if isEmptyProto(msg) {
 		return Envelope{Type: t}, nil
 	}
@@ -147,6 +203,75 @@ func decodeProtobuf(data []byte) (Envelope, error) {
 
 func isEmptyProto(msg proto.Message) bool {
 	return proto.Size(msg) == 0
+}
+
+// unmarshalWireEnvelope extracts type (field 1) and payload (field 2) from a
+// WireEnvelope without allocating the generated message. The returned payload
+// aliases data; last-wins semantics on duplicates match proto.Unmarshal.
+func unmarshalWireEnvelope(data []byte) (MessageType, []byte, error) {
+	var (
+		t       MessageType
+		payload []byte
+	)
+	for len(data) > 0 {
+		num, typ, n := protowire.ConsumeTag(data)
+		if n < 0 {
+			return "", nil, protowire.ParseError(n)
+		}
+		data = data[n:]
+		switch num {
+		case 1:
+			if typ != protowire.BytesType {
+				return "", nil, fmt.Errorf("field 1: unexpected wire type %d", typ)
+			}
+			v, n := protowire.ConsumeString(data)
+			if n < 0 {
+				return "", nil, protowire.ParseError(n)
+			}
+			t = MessageType(v)
+			data = data[n:]
+		case 2:
+			if typ != protowire.BytesType {
+				return "", nil, fmt.Errorf("field 2: unexpected wire type %d", typ)
+			}
+			v, n := protowire.ConsumeBytes(data)
+			if n < 0 {
+				return "", nil, protowire.ParseError(n)
+			}
+			payload = v
+			data = data[n:]
+		default:
+			n := protowire.ConsumeFieldValue(num, typ, data)
+			if n < 0 {
+				return "", nil, protowire.ParseError(n)
+			}
+			data = data[n:]
+		}
+	}
+	return t, payload, nil
+}
+
+// marshalWireEnvelope emits WireEnvelope wire format directly: identical bytes
+// to proto.Marshal(&pb.WireEnvelope{...}) — field 1 then field 2, proto3 empty
+// values omitted — without the generated-message alloc and reflection pass.
+func marshalWireEnvelope(t MessageType, payload []byte) []byte {
+	n := 0
+	if len(t) > 0 {
+		n += 1 + protowire.SizeVarint(uint64(len(t))) + len(t)
+	}
+	if len(payload) > 0 {
+		n += 1 + protowire.SizeVarint(uint64(len(payload))) + len(payload)
+	}
+	out := make([]byte, 0, n)
+	if len(t) > 0 {
+		out = protowire.AppendTag(out, 1, protowire.BytesType)
+		out = protowire.AppendString(out, string(t))
+	}
+	if len(payload) > 0 {
+		out = protowire.AppendTag(out, 2, protowire.BytesType)
+		out = protowire.AppendBytes(out, payload)
+	}
+	return out
 }
 
 // EncodeFrame encodes a hub JSON frame (from Encode) for the client codec.
@@ -158,20 +283,37 @@ func EncodeFrame(codec Codec, jsonFrame []byte) ([]byte, error) {
 	if err := json.Unmarshal(jsonFrame, &env); err != nil {
 		return nil, err
 	}
-	msg := newPayloadMessage(env.Type)
-	if len(env.Payload) > 0 && string(env.Payload) != "null" {
-		if err := protoUnmarshal.Unmarshal(env.Payload, msg); err != nil {
-			return nil, fmt.Errorf("payload %s: %w", env.Type, err)
+	return encodeProtobufFrame(env.Type, env.Payload)
+}
+
+// EncodeFramePayload encodes a hub message for the client codec when the
+// caller already holds the type and serialized payload, skipping the JSON
+// envelope round-trip EncodeFrame performs.
+func EncodeFramePayload(codec Codec, t MessageType, payloadJSON []byte) ([]byte, error) {
+	if codec != CodecProtobuf {
+		return json.Marshal(Envelope{Type: t, Payload: payloadJSON})
+	}
+	return encodeProtobufFrame(t, payloadJSON)
+}
+
+func encodeProtobufFrame(t MessageType, payloadJSON []byte) ([]byte, error) {
+	msg := newPayloadMessage(t)
+	if len(payloadJSON) > 0 && string(payloadJSON) != "null" {
+		var err error
+		if jsonDirectTypes[msg.ProtoReflect().Descriptor().FullName()] {
+			err = json.Unmarshal(payloadJSON, msg)
+		} else {
+			err = protoUnmarshal.Unmarshal(payloadJSON, msg)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("payload %s: %w", t, err)
 		}
 	}
 	payload, err := proto.Marshal(msg)
 	if err != nil {
 		return nil, err
 	}
-	return proto.Marshal(&pb.WireEnvelope{
-		Type:    string(env.Type),
-		Payload: payload,
-	})
+	return marshalWireEnvelope(t, payload), nil
 }
 
 // EncodeProtobuf marshals a typed payload directly to a binary WireEnvelope.
@@ -180,15 +322,7 @@ func EncodeProtobuf(t MessageType, payload any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	msg := newPayloadMessage(t)
-	if err := protoUnmarshal.Unmarshal(jsonPayload, msg); err != nil {
-		return nil, err
-	}
-	raw, err := proto.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-	return proto.Marshal(&pb.WireEnvelope{Type: string(t), Payload: raw})
+	return encodeProtobufFrame(t, jsonPayload)
 }
 
 // KnownMessageTypes lists every MessageType for contract tests / docs.

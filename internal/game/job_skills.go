@@ -16,23 +16,31 @@ type jobAbility struct {
 	Ranged     bool
 	CooldownMs int
 	Passive    *PassiveEffect
+	Target     TargetRule
+	Effects    []SkillEffect
 }
 
 var jobAbilityTrees = map[JobID][]jobAbility{
 	// Tank — sword
 	JobVAN: {
 		{Suffix: "cuneus", Name: "Wedge Guard", Desc: "Pin the foe's attention with a steel wedge.", MPCost: 5, Power: 1.6},
-		{Suffix: "clamor_castra", Name: "War Cry", Desc: "A shout that fortifies your stance.", MPCost: 8, Power: 1.8, Prereq: 0, Buffs: true},
-		{Suffix: "furor_linea", Name: "Bulwark Advance", Desc: "Advance behind heavy guard.", MPCost: 9, Power: 2.0, Prereq: 0},
+		{Suffix: "clamor_castra", Name: "War Cry", Desc: "A shout that fortifies your stance.", MPCost: 8, Power: 1.8, Prereq: 0, Buffs: true,
+			Effects: []SkillEffect{{Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseUp, Duration: 30, Potency: 0.30, OnCaster: true}}}},
+		{Suffix: "furor_linea", Name: "Bulwark Advance", Desc: "Advance behind heavy guard.", MPCost: 9, Power: 2.0, Prereq: 0,
+			Effects: []SkillEffect{{Kind: EffectDamage}, {Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseUp, Duration: 25, Potency: 0.20, OnCaster: true}}}},
 		{Suffix: "impetus_acies", Name: "Line Hold", Desc: "An unstoppable rush into an iron stance.", MPCost: 14, Power: 2.6, Prereq: 1, CooldownMs: 2000},
 		{Suffix: "ripostis", Name: "Iron Riposte", Desc: "Passive: chance to reflect part of incoming damage.", Prereq: 3,
 			Passive: &PassiveEffect{ReflectChance: 0.15, ReflectRatio: 0.25}},
 	},
 	// Tank — hammer
 	JobAEG: {
-		{Suffix: "umbo", Name: "Shield Bash", Desc: "Slam the hammer boss into the foe.", MPCost: 6, Power: 1.7},
-		{Suffix: "custodia_ferrea", Name: "Iron Guard", Desc: "A guarded smash that holds the line.", MPCost: 9, Power: 2.2, Prereq: 0},
-		{Suffix: "tegimen", Name: "Cover Ally", Desc: "Extend your ward over an ally.", MPCost: 8, Power: 1.0, Prereq: 0, Buffs: true},
+		{Suffix: "umbo", Name: "Shield Bash", Desc: "Slam the hammer boss into the foe.", MPCost: 6, Power: 1.7,
+			Target:  TargetEnemy,
+			Effects: []SkillEffect{{Kind: EffectDamage}, {Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusStun, Duration: 8, Potency: 1}}}},
+		{Suffix: "custodia_ferrea", Name: "Iron Guard", Desc: "A guarded smash that holds the line.", MPCost: 9, Power: 2.2, Prereq: 0,
+			Effects: []SkillEffect{{Kind: EffectDamage}, {Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseUp, Duration: 30, Potency: 0.35, OnCaster: true}}}},
+		{Suffix: "tegimen", Name: "Cover Ally", Desc: "Extend your ward over an ally.", MPCost: 8, Power: 1.0, Prereq: 0, Buffs: true,
+			Effects: []SkillEffect{{Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseUp, Duration: 25, Potency: 0.40}}}},
 		{Suffix: "lumen_ferrum", Name: "Holy Edge", Desc: "Sacred light along the hammer's face.", MPCost: 14, Power: 2.8, Prereq: 1, Magic: true, CooldownMs: 2000},
 		{Suffix: "echo_umbonis", Name: "Bulwark Echo", Desc: "Passive: chance to reflect part of incoming damage.", Prereq: 3,
 			Passive: &PassiveEffect{ReflectChance: 0.12, ReflectRatio: 0.20}},
@@ -40,7 +48,8 @@ var jobAbilityTrees = map[JobID][]jobAbility{
 	// Melee DPS — knuckles
 	JobBRW: {
 		{Suffix: "pugnum", Name: "Fist Chain", Desc: "A chained fist that never loses rhythm.", MPCost: 4, Power: 1.7},
-		{Suffix: "robur_manus", Name: "Power Fist", Desc: "Coil strength into the next blow.", MPCost: 7, Power: 2.1, Prereq: 0},
+		{Suffix: "robur_manus", Name: "Power Fist", Desc: "Coil strength into the next blow.", MPCost: 7, Power: 2.1, Prereq: 0,
+			Effects: []SkillEffect{{Kind: EffectDamage}, {Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusAttackUp, Duration: 25, Potency: 0.20, OnCaster: true}}}},
 		{Suffix: "humerus", Name: "Shoulder Charge", Desc: "Close distance with a punishing charge.", MPCost: 8, Power: 2.3, Prereq: 0},
 		{Suffix: "intentio_pugna", Name: "Focus Blow", Desc: "A finishing strike born of discipline.", MPCost: 13, Power: 3.0, Prereq: 1, CooldownMs: 2500},
 		{Suffix: "fluctus", Name: "Combo Flow", Desc: "Passive: physical skill cooldowns are reduced while a combo stack is high.", Prereq: 3,
@@ -67,7 +76,8 @@ var jobAbilityTrees = map[JobID][]jobAbility{
 	// Melee DPS — katana
 	JobRON: {
 		{Suffix: "oculus_ferrum", Name: "Read Opening", Desc: "Read the opening, then answer it.", MPCost: 5, Power: 1.7},
-		{Suffix: "altum_custos", Name: "High Guard", Desc: "High guard into a fierce cut.", MPCost: 8, Power: 2.2, Prereq: 0},
+		{Suffix: "altum_custos", Name: "High Guard", Desc: "High guard into a fierce cut.", MPCost: 8, Power: 2.2, Prereq: 0,
+			Effects: []SkillEffect{{Kind: EffectDamage}, {Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseUp, Duration: 20, Potency: 0.15, OnCaster: true}}}},
 		{Suffix: "quies_icta", Name: "Still Strike", Desc: "Still the mind, then strike true.", MPCost: 7, Power: 2.0, Prereq: 0},
 		{Suffix: "arcus_gladii", Name: "Blade Arc", Desc: "A masterful drawn arc of steel.", MPCost: 15, Power: 3.2, Prereq: 1, CooldownMs: 2500},
 		{Suffix: "finis", Name: "Finishing Stance", Desc: "Passive: physical skill cooldowns are reduced against targets below 30% HP.", Prereq: 3,
@@ -94,7 +104,9 @@ var jobAbilityTrees = map[JobID][]jobAbility{
 	// Healer — wand
 	JobSAN: {
 		{Suffix: "sanare", Name: "Heal", Desc: "Knit an ally's wounds with sacred craft.", MPCost: 6, Power: 2.3, Magic: true, Heals: true},
-		{Suffix: "lux_mitis", Name: "Holy Light", Desc: "Soft light that weakens hostile flesh.", MPCost: 8, Power: 1.8, Prereq: 0, Magic: true},
+		{Suffix: "lux_mitis", Name: "Holy Light", Desc: "Soft light that weakens hostile flesh.", MPCost: 8, Power: 1.8, Prereq: 0, Magic: true,
+			Target:  TargetEnemy,
+			Effects: []SkillEffect{{Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseDown, Duration: 40, Potency: 0.20}}}},
 		{Suffix: "sanare_maius", Name: "Greater Heal", Desc: "A greater miracle of restoration.", MPCost: 15, Power: 3.5, Prereq: 0, Magic: true, Heals: true},
 		{Suffix: "expello_impurum", Name: "Banish", Desc: "Drive unclean presence from the field.", MPCost: 14, Power: 2.7, Prereq: 1, Magic: true, CooldownMs: 2500},
 		{Suffix: "meditatio", Name: "Sacred Mending", Desc: "Passive: healing skill effects are increased by 15%.", Prereq: 3,
@@ -102,8 +114,10 @@ var jobAbilityTrees = map[JobID][]jobAbility{
 	},
 	// Support — wand
 	JobCAN: {
-		{Suffix: "carmen_tutus", Name: "Hymn of Resolve", Desc: "A hymn that hardens allies' resolve.", MPCost: 6, Power: 1.5, Magic: true, Buffs: true},
-		{Suffix: "carmen_ferox", Name: "Hymn of Fury", Desc: "A hymn that sharpens the party's attack.", MPCost: 9, Power: 1.8, Prereq: 0, Magic: true, Buffs: true},
+		{Suffix: "carmen_tutus", Name: "Hymn of Resolve", Desc: "A hymn that hardens allies' resolve.", MPCost: 6, Power: 1.5, Magic: true, Buffs: true,
+			Effects: []SkillEffect{{Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusDefenseUp, Duration: 40, Potency: 0.30}}}},
+		{Suffix: "carmen_ferox", Name: "Hymn of Fury", Desc: "A hymn that sharpens the party's attack.", MPCost: 9, Power: 1.8, Prereq: 0, Magic: true, Buffs: true,
+			Effects: []SkillEffect{{Kind: EffectStatus, Status: &StatusEffectDef{Kind: StatusAttackUp, Duration: 35, Potency: 0.25}}}},
 		{Suffix: "carmen_acutus", Name: "Cutting Notes", Desc: "Notes that cut as keenly as steel.", MPCost: 10, Power: 2.2, Prereq: 0, Magic: true},
 		{Suffix: "studium_finale", Name: "Finale", Desc: "A virtuoso chord that ends the phrase.", MPCost: 14, Power: 2.8, Prereq: 1, Magic: true, CooldownMs: 2500},
 		{Suffix: "resonantia", Name: "Resonant Hymn", Desc: "Passive: buff skill effects are increased by 15%.", Prereq: 3,
@@ -134,16 +148,16 @@ func buildJobCatalog() []Skill {
 			if prereqIdx >= 0 && prereqIdx < len(ids) {
 				prereq = ids[prereqIdx]
 			}
-			weaponReq := def.Weapon
+			weaponReqs := JobAllowedWeapons(def.ID)
 			if ab.Passive != nil {
-				weaponReq = ""
+				weaponReqs = nil
 			}
 			out = append(out, Skill{
 				ID:          id,
 				Name:        ab.Name,
 				Job:         def.ID,
 				Category:    def.Category,
-				WeaponReq:   weaponReq,
+				WeaponReqs:  weaponReqs,
 				MPCost:      ab.MPCost,
 				Power:       ab.Power,
 				UsesMagic:   ab.Magic,
@@ -156,6 +170,8 @@ func buildJobCatalog() []Skill {
 				CastTimeMs:  castTimeForAbility(ab),
 				CooldownMs:  ab.CooldownMs,
 				Passive:     ab.Passive,
+				Target:      ab.Target,
+				Effects:     ab.Effects,
 			})
 		}
 	}

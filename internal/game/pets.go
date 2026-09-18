@@ -21,6 +21,7 @@ var SkillCapture = Skill{
 	ID:          ActionIDCapture,
 	Name:        "Capture",
 	Description: "Attempt to capture a capturable foe below 20% HP. Success chance scales with your level vs theirs.",
+	Target:      TargetNone,
 }
 
 // PetRecord is one captured companion on a profile.
@@ -120,22 +121,22 @@ func PetAwardXP(pet *PetRecord, xp int) bool {
 }
 
 // PetCombatStats scales enemy template stats for a pet ally at the given level.
-func PetCombatStats(baseHP, baseStr, baseAgi, level int) (hp, str, agi int) {
+func PetCombatStats(baseHP, baseStr, baseDex, level int) (hp, str, dex int) {
 	if level < 1 {
 		level = 1
 	}
 	scale := 1.0 + float64(level-1)*0.18
 	hp = int(math.Round(float64(baseHP) * scale))
 	str = int(math.Round(float64(baseStr) * scale))
-	agi = baseAgi
+	dex = baseDex
 	if hp < 1 {
 		hp = 1
 	}
 	if str < 1 {
 		str = 1
 	}
-	if agi < 1 {
-		agi = 1
+	if dex < 1 {
+		dex = 1
 	}
 	return
 }

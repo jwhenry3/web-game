@@ -50,17 +50,18 @@ export function facingOf(
   return wp.facing === "left" || wp.facing === "right" ? wp.facing : fallback;
 }
 
-/** The slice of a WorldScene avatar the controller needs. */
+/** The ECS-owned local actor the controller is allowed to move. */
 export interface MovementAvatar {
+  id: string;
   wrapper: Phaser.GameObjects.Container;
   sprite: CharacterSprite;
 }
 
 /** Scene-side hooks the controller reads each frame. */
 export interface MovementHost {
-  avatar(id: string): MovementAvatar | undefined;
-  /** Entities mid jump-crash — position sync is paused while they fly. */
-  jumping: Set<string>;
+  self(): MovementAvatar | undefined;
+  /** True while an entity's jump-crash tween owns its position. */
+  isJumping(id: string): boolean;
   worldBounds(): { w: number; h: number };
 }
 
@@ -144,14 +145,28 @@ export class WorldMovement {
   reset() {
     this.dodgeCdGfx?.destroy();
     this.dodgeCdGfx = undefined;
+    this.moveKeys = {};
+    this.moveKeysSig = "";
+    this.clearMoveDir();
+    this.wasMoving = false;
+    this.lastSent = 0;
+    this.lastSentX = -1;
+    this.lastSentY = -1;
+    this.dodgeReadyAt = 0;
     this.dodging = false;
     this.shiftComboUsed = false;
     this.clearClickPath();
+    this.moveEpoch++;
+    this.pendingSlide = Promise.resolve();
   }
 
   /** A dodge or jump reset the movement timeline — pending slide results are stale. */
   invalidateSlides() {
     this.moveEpoch++;
+    this.dodging = false;
+    this.wasMoving = false;
+    this.clearMoveDir();
+    this.clearClickPath();
   }
 
   /** Rebind WASD keys when the player's keybinds change. */
@@ -180,12 +195,16 @@ export class WorldMovement {
     return this.moveKeys[action]?.isDown ?? false;
   }
 
+  private clearMoveDir() {
+    this.moveDir.x = 0;
+    this.moveDir.y = 0;
+  }
+
   /** Path the local player to a world point and flash the destination. */
   private startClickMove(wx: number, wy: number) {
-    const selfId = useGame.getState().selfId;
-    const av = selfId ? this.host.avatar(selfId) : undefined;
+    const av = this.host.self();
     const map = useGame.getState().overworld;
-    if (!av || !map || this.dodging) return;
+    if (!av || !map || this.dodging || this.host.isJumping(av.id)) return;
     const path = findPath(map, av.wrapper.x, av.wrapper.y, wx, wy);
     if (!path?.length) return;
     this.clickPath = path;
@@ -287,8 +306,7 @@ export class WorldMovement {
   /** Sweeping ring under self that refills over the dodge cooldown. */
   updateDodgeCooldown() {
     const remaining = this.dodgeReadyAt - this.scene.time.now;
-    const selfId = useGame.getState().selfId;
-    const av = selfId ? this.host.avatar(selfId) : undefined;
+    const av = this.host.self();
     if (remaining <= 0 || !av) {
       if (this.dodgeCdGfx) this.dodgeCdGfx.clear();
       return;
@@ -312,10 +330,10 @@ export class WorldMovement {
    */
   private performDodge() {
     const state = useGame.getState();
-    const selfId = state.selfId;
-    const av = selfId ? this.host.avatar(selfId) : undefined;
+    const av = this.host.self();
+    const selfId = av?.id;
     const wp = selfId ? state.entities[selfId] : undefined;
-    if (!selfId || !av || !wp || this.dodging || this.host.jumping.has(selfId)) return;
+    if (!selfId || !av || !wp || this.dodging || this.host.isJumping(selfId)) return;
     if (state.screen !== "world" || wp.in_house) return;
     const selfCe = state.combatIds[selfId] ? wp : undefined;
     if (selfCe && !selfCe.alive) return;
@@ -324,8 +342,7 @@ export class WorldMovement {
     if (this.scene.time.now < this.dodgeReadyAt) return;
     if ((wp.stamina ?? 100) < DODGE_STAMINA_COST) return;
     this.dodgeReadyAt = this.scene.time.now + DODGE_COOLDOWN_MS;
-    this.moveEpoch++; // invalidate any pre-dash slide callbacks
-    this.clearClickPath(); // the dash overrides click-to-move
+    this.invalidateSlides(); // invalidate pre-dash slides and click-to-move
     net.dodge();
     const casting = !!selfCe?.casting_skill_id || !!wp.casting_skill_id;
     if (casting) this.clearSelfCastLocal();
@@ -345,9 +362,16 @@ export class WorldMovement {
     const oy = av.wrapper.y;
     playDodgeVfx(this.scene, ox, oy - 8, DEFAULT_BATTLE_SPEED);
     this.dodging = true;
+    const epoch = this.moveEpoch;
     void applyPlayerSlide(state.overworld, ox, oy, rawX, rawY).then((slid) => {
-      const cur = this.host.avatar(selfId);
-      if (!cur) {
+      const cur = this.host.self();
+      if (
+        epoch !== this.moveEpoch ||
+        this.host.isJumping(selfId) ||
+        !cur ||
+        cur.id !== selfId ||
+        cur.wrapper !== av.wrapper
+      ) {
         this.dodging = false;
         return;
       }
@@ -365,6 +389,9 @@ export class WorldMovement {
           // so the client does not need to send a follow-up move.
         },
       });
+    }).catch((err) => {
+      this.dodging = false;
+      console.warn("dodge movement prediction failed", err);
     });
   }
 
@@ -392,17 +419,23 @@ export class WorldMovement {
   }
 
   /** Per-frame self movement: key input or click-path following. */
-  update(time: number, selfId: string, overworld: OverworldMap | null) {
-    const av = this.host.avatar(selfId);
-    const wp = useGame.getState().entities[selfId];
-    if (!av || !wp || !overworld) return;
+  update(time: number, overworld: OverworldMap | null) {
+    const av = this.host.self();
+    const selfId = av?.id;
+    const wp = selfId ? useGame.getState().entities[selfId] : undefined;
+    if (!selfId || !av || !wp || !overworld) {
+      this.clearMoveDir();
+      return;
+    }
     // The dodge dash tween owns the wrapper until it lands.
-    if (this.dodging || this.host.jumping.has(selfId)) return;
+    if (this.dodging || this.host.isJumping(selfId)) {
+      this.clearMoveDir();
+      return;
+    }
 
     if (uiOwnsKeyboard()) {
       av.sprite.setMoving(false);
-      this.moveDir.x = 0;
-      this.moveDir.y = 0;
+      this.clearMoveDir();
       return;
     }
 
@@ -491,13 +524,13 @@ export class WorldMovement {
     const epoch = this.moveEpoch;
     this.pendingSlide = this.pendingSlide.then(async () => {
       const slid = await applyPlayerSlide(overworld, ox, oy, nx, ny);
-      if (!this.host.avatar(selfId)) return;
+      const cur = this.host.self();
+      if (!cur || cur.id !== selfId || cur.wrapper !== av.wrapper) return;
       // A dodge or jump reset the movement timeline after this slide was
       // scheduled; its result is stale and would snap the player back.
       if (epoch !== this.moveEpoch) return;
       // The dodge dash tween owns the wrapper while it runs.
-      if (this.dodging || this.host.jumping.has(selfId)) return;
-      const cur = this.host.avatar(selfId)!;
+      if (this.dodging || this.host.isJumping(selfId)) return;
       cur.wrapper.x = slid.x;
       cur.wrapper.y = slid.y;
       setWorldLocalPos(slid.x, slid.y);
@@ -506,6 +539,8 @@ export class WorldMovement {
       const interruptCast = !!st.entities[selfId]?.casting_skill_id && moved;
       if (interruptCast) this.clearSelfCastLocal();
       this.sendPosition(time, slid.x, slid.y, interruptCast);
+    }).catch((err) => {
+      console.warn("movement slide failed", err);
     });
   }
 

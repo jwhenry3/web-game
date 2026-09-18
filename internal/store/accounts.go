@@ -29,7 +29,7 @@ type Account struct {
 }
 
 type AccountStore struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	path     string
 	accounts map[string]*Account // id -> account
 	byName   map[string]string   // lowercase username -> id
@@ -96,8 +96,8 @@ func (s *AccountStore) Register(username, password string) (Account, error) {
 }
 
 func (s *AccountStore) Login(username, password string) (Account, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	id, ok := s.byName[strings.ToLower(strings.TrimSpace(username))]
 	if !ok {
@@ -139,15 +139,15 @@ func (s *AccountStore) EnsureDefaultAdmin() {
 }
 
 func (s *AccountStore) IsAdmin(accountID string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	a, ok := s.accounts[accountID]
 	return ok && a.IsAdmin
 }
 
 func (s *AccountStore) Get(id string) (Account, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	a, ok := s.accounts[id]
 	if !ok {
 		return Account{}, false

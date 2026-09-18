@@ -1,7 +1,11 @@
+import { DEFAULT_THEME, isThemeId, type ThemeId } from "../ui/themes";
+
 export interface GameOptions {
   musicVolume: number;
   sfxVolume: number;
   confirmLogout: boolean;
+  /** UI theme id, applied as .theme-<id> on <html>. */
+  theme: ThemeId;
   /**
    * Per-element UI scale percentages (50–300). Sparse map keyed by
    * "win:<windowId>" or "hud:<group>"; missing keys render at 100%.
@@ -13,6 +17,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   musicVolume: 80,
   sfxVolume: 80,
   confirmLogout: true,
+  theme: DEFAULT_THEME,
   uiScale: {},
 };
 
@@ -23,6 +28,7 @@ export function loadOptions(): GameOptions {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_OPTIONS };
     const merged = { ...DEFAULT_OPTIONS, ...JSON.parse(raw) };
+    if (!isThemeId(merged.theme)) merged.theme = DEFAULT_THEME;
     if (
       typeof merged.uiScale !== "object" ||
       merged.uiScale === null ||

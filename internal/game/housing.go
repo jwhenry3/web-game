@@ -60,6 +60,8 @@ var SkillCamp = Skill{
 	Description: "Pitch your camp nearby. Interact with the tent to enter your house. Only one camp can be active at a time.",
 	WorldOnly:   true,
 	CastTimeMs:  1500,
+	Target:      TargetNone,
+	Effects:     []SkillEffect{{Kind: EffectWorld, World: "camp"}},
 }
 
 // HouseFurniture is a decoration (or future crafting unit) placed inside a house.

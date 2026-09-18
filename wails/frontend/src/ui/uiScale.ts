@@ -13,14 +13,12 @@ export const UI_SCALE_DEFAULT = 100;
  */
 export const HUD_SCALE_GROUPS: { key: string; label: string }[] = [
   { key: "hotbar", label: "Hotbar" },
-  { key: "petbar", label: "Pet Bar" },
   { key: "chat", label: "Chat Panel" },
   { key: "menubar", label: "Menu Buttons" },
   { key: "expbar", label: "EXP Bar" },
-  { key: "gauges", label: "HP / MP / ST Gauges" },
   { key: "castbar", label: "Cast Bar" },
   { key: "target", label: "Target Frame" },
-  { key: "party", label: "Party List" },
+  { key: "party", label: "Party Window" },
   { key: "minimap", label: "Minimap" },
   { key: "flytext", label: "Action Prompts" },
 ];
@@ -28,14 +26,13 @@ export const HUD_SCALE_GROUPS: { key: string; label: string }[] = [
 /** Floating game windows that can be scaled independently. */
 export const WINDOW_SCALE_GROUPS: { key: WindowId; label: string }[] = [
   { key: "character", label: "Character" },
-  { key: "equipment", label: "Equipment" },
-  { key: "inventory", label: "Inventory" },
-  { key: "skills", label: "Actions & Traits" },
   { key: "social", label: "Social" },
-  { key: "pets", label: "Pets" },
   { key: "map", label: "Map" },
   { key: "house_storage", label: "House Storage" },
 ];
+
+/** Scale key applied on top of every per-window and per-HUD scale. */
+export const GLOBAL_SCALE_KEY = "global";
 
 export function windowScaleKey(id: WindowId): string {
   return `win:${id}`;
@@ -55,12 +52,12 @@ export function uiScalePercent(
   return Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, v));
 }
 
-/** Scale factor (1 = 100%) for a scale key. */
+/** Scale factor (1 = 100%) for a scale key, with the global scale applied. */
 export function uiScaleFactor(
   map: Record<string, number> | undefined,
   key: string,
 ): number {
-  return uiScalePercent(map, key) / 100;
+  return (uiScalePercent(map, key) / 100) * (uiScalePercent(map, GLOBAL_SCALE_KEY) / 100);
 }
 
 /** CSS custom properties on .game-stage that drive each HUD group's zoom. */

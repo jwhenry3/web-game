@@ -14,7 +14,6 @@ import { WorldSkillDialogs } from "./components/WorldSkillDialogs";
 import { NpcDialog } from "./components/NpcDialog";
 import { JobChangeDialog } from "./components/JobChangeDialog";
 import { Hotbar } from "./components/Hotbar";
-import { PetHotbar } from "./components/PetHotbar";
 import { HouseToolbar } from "./components/HouseToolbar";
 import { HousePlaceLayer } from "./components/HousePlaceLayer";
 import { GameHotkeys } from "./components/GameHotkeys";
@@ -24,6 +23,7 @@ import { ItemMenuProvider } from "./components/ItemContextMenu";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
 import { TitleScreen } from "./components/TitleScreen";
 import { hudScaleVars } from "./ui/uiScale";
+import { applyTheme, DEFAULT_THEME } from "./ui/themes";
 // Game Designer (2D map editor) currently disabled.
 // import { AdminLoginScreen } from "./components/AdminLoginScreen";
 // import { MapEditorScreen } from "./components/MapEditorScreen";
@@ -111,7 +111,6 @@ function AppBody() {
           {screen === "house" ? <HouseHUD /> : <WorldHUD />}
           <SidePanel />
           {screen === "house" ? <HouseToolbar /> : <Hotbar />}
-          {screen === "world" && <PetHotbar />}
           {screen === "house" && <HousePlaceLayer />}
           <ExpBar />
           <WindowBar />
@@ -128,6 +127,12 @@ function AppBody() {
 }
 
 export function App() {
+  const theme = useGame((s) => s.options.theme);
+
+  useEffect(() => {
+    applyTheme(theme ?? DEFAULT_THEME);
+  }, [theme]);
+
   useEffect(() => {
     // Suppress the native context menu app-wide; custom React menus and
     // right-click world deselect handle the gesture instead. Text inputs

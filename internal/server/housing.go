@@ -138,7 +138,12 @@ func (h *Hub) releaseFromHouse(clientID, reason string) {
 			h.entityDirty = true
 			i++
 		})
+		// Must reach every observer, not just owner+party: in_house on the
+		// shared entity record is the only channel that makes remote clients
+		// show this player's overworld avatar again (entity_state ignores
+		// players; combat_tick skips hidden ones).
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+		h.petSyncDirty = true
 		h.syncPetEntities()
 	}
 	if c != nil {
@@ -209,6 +214,9 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 	cc.houseOwner = owner
 	e.hidden = true
 	c.HouseOwner = owner
+	// Broadcast (not owner-scoped sendPlayerSync): remote clients hide this
+	// player's sprite via the in_house flag, and player_sync is the only
+	// message that carries it for player entities.
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 	h.sendHouseState(room)
 }

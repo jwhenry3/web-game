@@ -17,6 +17,7 @@ import {
 import { comboDisplayName } from "../types";
 import {
   HUD_SCALE_GROUPS,
+  GLOBAL_SCALE_KEY,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
   UI_SCALE_STEP,
@@ -25,6 +26,7 @@ import {
   uiScalePercent,
   windowScaleKey,
 } from "../ui/uiScale";
+import { THEMES, type ThemeId } from "../ui/themes";
 
 export function MainMenuTrigger() {
   const toggle = useGame((s) => s.toggleMainMenu);
@@ -194,8 +196,43 @@ function InterfaceContent() {
     saveOptions(next);
   };
 
+  const setTheme = (theme: ThemeId) => {
+    const next = { ...options, theme };
+    setOptions(next);
+    saveOptions(next);
+  };
+
   return (
     <div className="main-menu-scales">
+      <section className="main-menu-scale-group">
+        <h3 className="cm-section-label">Theme</h3>
+        <div className="theme-picker">
+          {THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`theme-card ${options.theme === t.id ? "on" : ""}`}
+              onClick={() => setTheme(t.id)}
+            >
+              <span className="theme-card-swatches">
+                {t.swatches.map((c) => (
+                  <span key={c} className="theme-card-swatch" style={{ background: c }} />
+                ))}
+              </span>
+              <span className="theme-card-name">{t.label}</span>
+              <span className="theme-card-hint">{t.hint}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+      <section className="main-menu-scale-group">
+        <h3 className="cm-section-label">Global</h3>
+        <ScaleSlider
+          label="UI Scale"
+          value={uiScalePercent(options.uiScale, GLOBAL_SCALE_KEY)}
+          onChange={(v) => setScale(GLOBAL_SCALE_KEY, v)}
+        />
+      </section>
       <section className="main-menu-scale-group">
         <h3 className="cm-section-label">Windows</h3>
         {WINDOW_SCALE_GROUPS.map((g) => (

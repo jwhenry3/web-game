@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"clara-mundi/internal/auth"
@@ -63,17 +64,39 @@ type Hub struct {
 	aoi         map[string]bool    // clientIDs currently receiving combat ticks
 	projector   *projector         // canonical entity -> protocol.WorldEntity projection
 
+	// Pet reconcile cadence: tickEntities runs syncPetEntities when
+	// petSyncDirty (a mutation needs an immediate resync) or once per
+	// petSyncInterval. lastPetSync is stamped by the tick path only, so the
+	// direct syncPetEntities calls in the join/disconnect/pet/house handlers
+	// stay immediate. See pets.go.
+	petSyncDirty bool
+	lastPetSync  time.Time
+
+	// spatial indexes entity positions for the hot radius queries (aggro,
+	// near-sync, combat AoI, NPC separation). Rebuilt lazily when spatialDirty
+	// is set — at the top of every Run pass, after hub-driven position writes,
+	// and at the start of the post-tick broadcast passes. See spatial.go.
+	spatial      spatialGrid
+	spatialDirty bool
+
 	// Far-sync: clients with no nearby entity activity get position updates on
 	// a 1s digest instead of the real-time stream.
 	farEntityClients map[string]bool // joined clientIDs owed a digest entity_state
 	movedPlayers     map[string]bool // player entity IDs moved since last digest
-	rng              *rand.Rand
-	parties          map[string]*hubParty
-	clientParty      map[string]string
-	partyInvites     map[string]*partyInvite
-	partySeq         int
-	camps            map[string]*worldCamp // owner character name -> camp
-	houses           map[string]*houseRoom // owner character name -> instance
+
+	// Send-buffer drop accounting (observability only — sendRawLocked still
+	// drops rather than block). dropTotal counts every dropped frame;
+	// dropCounts keeps a per-client tally so one slow consumer stands out.
+	// Atomic/sync.Map because senders can run outside the Run goroutine.
+	dropTotal    atomic.Uint64
+	dropCounts   sync.Map // clientID -> *atomic.Uint64
+	rng          *rand.Rand
+	parties      map[string]*hubParty
+	clientParty  map[string]string
+	partyInvites map[string]*partyInvite
+	partySeq     int
+	camps        map[string]*worldCamp // owner character name -> camp
+	houses       map[string]*houseRoom // owner character name -> instance
 
 	overworld  *game.Overworld
 	world      *game.WorldDefinition // non-nil selects singular-world ownership mode
@@ -143,8 +166,20 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		quit:             make(chan struct{}),
 		done:             make(chan struct{}),
 	}
-	if err := h.registerSocialModule(); err != nil {
-		return nil, err
+	// Feature modules register their routes and disconnect hooks here, in a
+	// fixed order, so dispatch is deterministic and the duplicate-route
+	// guard catches any overlap at construction time.
+	for _, registerModule := range []func() error{
+		h.registerSocialModule,
+		h.registerCombatModule,
+		h.registerLoadoutModule,
+		h.registerHousingModule,
+		h.registerPetsModule,
+		h.registerWorldModule,
+	} {
+		if err := registerModule(); err != nil {
+			return nil, err
+		}
 	}
 	return h, nil
 }
@@ -237,17 +272,6 @@ func (h *Hub) reloadOverworld(id, name string, ow *game.Overworld) {
 	log.Printf("map %s (%s) reloaded; streamed to %d client(s)", id, name, nClients)
 }
 
-func (h *Hub) broadcastWorldState() {
-	tile, cols, rows, cells := h.mapCells()
-	h.broadcastAll(protocol.Encode(protocol.TypeWorldState, protocol.WorldStatePayload{
-		Entities:    h.worldEntities(time.Now()),
-		Camps:       h.campList(),
-		SavePoints:  h.worldSavePoints(),
-		JobChangers: h.worldJobChangers(),
-		Map:         protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
-	}))
-}
-
 func (h *Hub) MapID() string { return h.mapID }
 
 // SetWorldOrigin records this map's position in the world layout plus the
@@ -255,89 +279,6 @@ func (h *Hub) MapID() string { return h.mapID }
 func (h *Hub) SetWorldOrigin(x, y float64, neighbors []protocol.MapNeighbor) {
 	h.worldOriginX, h.worldOriginY = x, y
 	h.neighbors = append([]protocol.MapNeighbor(nil), neighbors...)
-}
-
-// MapSnapshot returns the current map configuration for clients (REST + welcome).
-func (h *Hub) MapSnapshot() *protocol.MapSnapshot {
-	return h.mapSnapshot()
-}
-
-func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
-	if h.mapID == "" || h.overworld == nil {
-		return nil
-	}
-	tile, cols, rows, cells := h.overworld.MapPayload()
-	ts := float64(h.overworld.TileSizePx())
-	portals := make([]protocol.MapPortal, 0, len(h.overworld.Exits)+len(h.overworld.Borders))
-	for _, e := range h.overworld.Exits {
-		portals = append(portals, protocol.MapPortal{
-			X: float64(e.MinC) * ts,
-			Y: float64(e.MinR) * ts,
-			W: float64(e.MaxC-e.MinC+1) * ts,
-			H: float64(e.MaxR-e.MinR+1) * ts,
-		})
-	}
-	// Border crossings get their walkable band strips as portal rects.
-	for _, r := range h.overworld.BorderPortalRects() {
-		portals = append(portals, protocol.MapPortal{
-			X: float64(r[0]) * ts,
-			Y: float64(r[1]) * ts,
-			W: float64(r[2]-r[0]+1) * ts,
-			H: float64(r[3]-r[1]+1) * ts,
-		})
-	}
-	return &protocol.MapSnapshot{
-		ID:            h.mapID,
-		Name:          h.mapName,
-		Overworld:     protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},
-		TiledMap:      "",
-		Portals:       portals,
-		TileOverrides: tileOverridesPayload(h.overworld.TileOverrides),
-		TerrainLayers: terrainLayersPayload(h.overworld),
-		OriginX:       h.worldOriginX,
-		OriginY:       h.worldOriginY,
-		Neighbors:     append([]protocol.MapNeighbor(nil), h.neighbors...),
-	}
-}
-
-func terrainLayersPayload(ow *game.Overworld) *protocol.MapTerrainLayers {
-	if ow == nil || len(ow.Ground) == 0 || len(ow.Collision) == 0 {
-		return nil
-	}
-	return &protocol.MapTerrainLayers{
-		Ground:    ow.Ground,
-		Collision: ow.Collision,
-	}
-}
-
-func tileOverridesPayload(o *game.MapTileOverrides) *protocol.MapTileOverrides {
-	if o == nil || len(o.Layers) == 0 {
-		return nil
-	}
-	return &protocol.MapTileOverrides{
-		MapID:     o.MapID,
-		Layers:    o.Layers,
-		UpdatedAt: o.UpdatedAt,
-	}
-}
-
-func (h *Hub) welcomePayload(c *Client, profile store.Profile) protocol.WelcomePayload {
-	return protocol.WelcomePayload{
-		PlayerID: c.ID,
-		Profile:  profileInfo(profile),
-		Map:      h.mapSnapshot(),
-	}
-}
-
-func (h *Hub) sendWelcome(c *Client, profile store.Profile) {
-	h.send(c, protocol.TypeWelcome, h.welcomePayload(c, profile))
-}
-
-func (h *Hub) mapCells() (tile, cols, rows int, cells string) {
-	if h.overworld != nil {
-		return h.overworld.MapPayload()
-	}
-	return game.OverworldMapPayload()
 }
 
 func (h *Hub) KickByCharacterName(name string) {
@@ -374,6 +315,9 @@ func (h *Hub) Run() {
 	farTicker := time.NewTicker(farSyncInterval)
 	defer farTicker.Stop()
 	for {
+		// Every pass may move/spawn/remove entities (event handlers, entity
+		// ticks, tasks); the first spatial query of the pass rebuilds once.
+		h.spatialInvalidate()
 		select {
 		case <-h.quit:
 			return
@@ -416,47 +360,6 @@ func (h *Hub) Stop() {
 
 // ---- hub-goroutine internals ----
 
-func (h *Hub) sendRaw(c *Client, msg []byte) {
-	if c == nil || msg == nil {
-		return
-	}
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	h.sendRawLocked(c, msg)
-}
-
-// sendRawLocked sends while clients membership is protected by h.mu. Holding
-// the read lock across the non-blocking send prevents handleDisconnect from
-// closing c.Send between the membership check and the channel operation.
-func (h *Hub) sendRawLocked(c *Client, msg []byte) {
-	if h.clients[c.ID] != c {
-		return
-	}
-	select {
-	case c.Send <- msg:
-	default:
-		log.Printf("client %s send buffer full, dropping message", c.ID)
-	}
-}
-
-func (h *Hub) send(c *Client, t protocol.MessageType, payload any) {
-	h.sendRaw(c, protocol.Encode(t, payload))
-}
-
-func (h *Hub) sendError(c *Client, msg string) {
-	h.send(c, protocol.TypeError, protocol.ErrorPayload{Message: msg})
-}
-
-func (h *Hub) broadcastAll(msg []byte) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, c := range h.clients {
-		if c.Joined {
-			h.sendRawLocked(c, msg)
-		}
-	}
-}
-
 func (h *Hub) handleDisconnect(client *Client) {
 	h.mu.Lock()
 	if _, ok := h.clients[client.ID]; !ok {
@@ -477,12 +380,16 @@ func (h *Hub) handleDisconnect(client *Client) {
 	}
 	delete(h.aoi, client.ID)
 	delete(h.farEntityClients, client.ID)
-	h.onHousingDisconnect(client)
+	h.dropCounts.Delete(client.ID)
 	if joined {
+		h.petSyncDirty = true
 		delete(h.entities, client.ID)
 		h.syncPetEntities()
 		h.broadcastAll(protocol.Encode(protocol.TypePlayerLeft, protocol.PlayerLeftPayload{ID: client.ID}))
 	}
+	// Module disconnect hooks (social party cleanup, housing teardown) run
+	// after the entity is gone: their sends to the departed client are
+	// dropped by the h.clients membership check in sendRawLocked.
 	h.routes.disconnect(client)
 	log.Printf("client %s disconnected", client.ID)
 }
@@ -490,6 +397,8 @@ func (h *Hub) handleDisconnect(client *Client) {
 func (h *Hub) handleEvent(ev Event) {
 	c := ev.Sender
 
+	// join_world is special-cased: it gates c.Joined, so it must run before
+	// the join check and the module registry.
 	if ev.Type == protocol.TypeJoinWorld {
 		h.handleJoinWorld(c, ev.Payload)
 		return
@@ -502,55 +411,14 @@ func (h *Hub) handleEvent(ev Event) {
 		return
 	}
 
+	// Core routes only: move is the hot path (one message per input frame)
+	// and chat is the other generic session message. Everything
+	// feature-scoped lives in the module registry above.
 	switch ev.Type {
 	case protocol.TypeMove:
 		h.handleMove(c, ev.Payload)
 	case protocol.TypeChat:
 		h.handleChat(c, ev.Payload)
-	case protocol.TypeEquip:
-		h.handleEquip(c, ev.Payload)
-	case protocol.TypeUnequip:
-		h.handleUnequip(c, ev.Payload)
-	case protocol.TypeSetJobs:
-		h.handleSetJobs(c, ev.Payload)
-	case protocol.TypeSetHotbar:
-		h.handleSetHotbar(c, ev.Payload)
-	case protocol.TypeSetKeybinds:
-		h.handleSetKeybinds(c, ev.Payload)
-	case protocol.TypeAction:
-		h.handleAction(c, ev.Payload)
-	case protocol.TypeSetTarget:
-		h.handleSetTarget(c, ev.Payload)
-	case protocol.TypeDodge:
-		h.handleDodge(c)
-	case protocol.TypeSetSavePoint:
-		h.handleSetSavePoint(c, ev.Payload)
-	case protocol.TypeUseWorldSkill:
-		h.handleUseWorldSkill(c, ev.Payload)
-	case protocol.TypeEnterHouse:
-		h.handleEnterHouse(c, ev.Payload)
-	case protocol.TypeLeaveHouse:
-		h.handleLeaveHouse(c)
-	case protocol.TypeHouseInteract:
-		h.handleHouseInteract(c, ev.Payload)
-	case protocol.TypeHouseStorageDeposit:
-		h.handleHouseStorageDeposit(c, ev.Payload)
-	case protocol.TypeHouseStorageWithdraw:
-		h.handleHouseStorageWithdraw(c, ev.Payload)
-	case protocol.TypeHousePlaceFurniture:
-		h.handleHousePlaceFurniture(c, ev.Payload)
-	case protocol.TypeHousePickFurniture:
-		h.handleHousePickFurniture(c, ev.Payload)
-	case protocol.TypeSetCampSkin:
-		h.handleSetCampSkin(c, ev.Payload)
-	case protocol.TypePetSetFollow:
-		h.handlePetSetFollow(c, ev.Payload)
-	case protocol.TypePetSetBattle:
-		h.handlePetSetBattle(c, ev.Payload)
-	case protocol.TypePetRelease:
-		h.handlePetRelease(c, ev.Payload)
-	case protocol.TypePetCommand:
-		h.handlePetCommand(c, ev.Payload)
 	default:
 		h.sendError(c, fmt.Sprintf("Unknown message type %q.", ev.Type))
 	}
@@ -639,6 +507,7 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	}
 	h.persistWorldLocation(c, e, true)
 	h.refreshRegionOwnership(c, e)
+	h.petSyncDirty = true
 	h.syncPetEntities()
 
 	h.sendWelcome(c, profile)
@@ -673,99 +542,6 @@ func (h *Hub) applyProfilePresence(e *entity, profile store.Profile) {
 	e.Level = profile.MainJobLevel()
 }
 
-func (h *Hub) resumeSpawn(c *Client, profile store.Profile) (x, y float64, facing float64) {
-	if c.UseSpawn {
-		if c.SpawnEdge != "" && h.overworld != nil {
-			// EntryPoint already falls back to the map spawn when no
-			// walkable landing exists on that edge.
-			x, y = h.overworld.EntryPoint(c.SpawnEdge, c.SpawnEdgeT)
-			return x, y, c.SpawnFacing
-		}
-		return c.SpawnX, c.SpawnY, c.SpawnFacing
-	}
-	if profile.HasWorldPos && h.persistedPosInThisWorld(profile) && h.canResumeAt(profile.WorldX, profile.WorldY) {
-		return profile.WorldX, profile.WorldY, profile.Facing.Radians()
-	}
-	if h.overworld != nil {
-		x, y = h.overworld.SpawnPosition(profile.SavePointID)
-	} else {
-		x, y = game.SpawnPosition(profile.SavePointID)
-	}
-	return x, y, game.FacingYawDefault
-}
-
-// persistedPosInThisWorld reports whether the profile's saved coordinates were
-// recorded inside this hub's world. Only enforced in singular-world mode: a
-// stale legacy MapID must not veto resuming (persisted MapID never controls
-// world selection), while a position saved in a different world must not
-// teleport the hero across worlds. Legacy map hubs keep trusting the saved
-// position — the proxy already routed the client to prof.MapID.
-func (h *Hub) persistedPosInThisWorld(p store.Profile) bool {
-	if h.world == nil {
-		return true
-	}
-	loc := p.PersistedWorldID()
-	return loc == "" || loc == h.mapID
-}
-
-func (h *Hub) canResumeAt(x, y float64) bool {
-	if h.overworld != nil {
-		return h.overworld.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
-	}
-	return game.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
-}
-
-func (h *Hub) persistWorldLocation(c *Client, e *entity, flush bool) {
-	if c == nil || e == nil || c.Name == "" {
-		return
-	}
-	doFlush := flush || time.Since(c.lastWorldSave) >= worldPosSaveInterval
-	if h.world != nil {
-		// Singular world: record the world id in WorldID without churning the
-		// legacy MapID/PrevMapID fields used by multi-map routing.
-		h.store.SetWorldLocationInWorld(c.Name, h.mapID, e.X, e.Y, e.Facing, doFlush)
-	} else {
-		h.store.SetWorldLocation(c.Name, h.mapID, e.X, e.Y, e.Facing, doFlush)
-	}
-	if doFlush {
-		c.lastWorldSave = time.Now()
-	}
-}
-
-// regionIDAt returns the simulation region ID that owns (x, y) in singular-world
-// mode, or "" when no region covers the coordinate. It does not require a Client
-// so it can be used for NPCs and pets as well as players.
-func (h *Hub) regionIDAt(x, y float64) string {
-	if h.world == nil {
-		return ""
-	}
-	tileSize := h.world.TileSizePx()
-	if tileSize <= 0 {
-		return ""
-	}
-	col, row := int(math.Floor(x/float64(tileSize))), int(math.Floor(y/float64(tileSize)))
-	if region, ok := h.world.SimulationRegionAt(col, row); ok {
-		return region.ID
-	}
-	return ""
-}
-
-// refreshRegionOwnership derives ownership from the entity's accepted server
-// position. When c is non-nil, notifications are private to the affected player.
-func (h *Hub) refreshRegionOwnership(c *Client, e *entity) {
-	if h.world == nil || e == nil {
-		return
-	}
-	regionID := h.regionIDAt(e.X, e.Y)
-	if e.regionID == regionID {
-		return
-	}
-	e.regionID = regionID
-	if c != nil {
-		h.send(c, protocol.TypeRegionChanged, protocol.RegionChangedPayload{RegionID: regionID})
-	}
-}
-
 func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	e := h.playerEnt(c.ID)
 	if e == nil {
@@ -789,6 +565,7 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 		maxStep += dodgeDashDist
 	}
 	e.X, e.Y = h.clampMoveStep(e.X, e.Y, p.X, p.Y, maxStep)
+	h.spatialInvalidate()
 	e.Facing = game.ResolveFacingYaw(e.X-prevX, e.Y-prevY, derefFacing(p.Facing), p.Facing != nil, e.Facing)
 	h.interruptWorldCastOnMove(c, e)
 	// Combat: movement while casting a battle skill interrupts it past the
@@ -820,94 +597,6 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	}
 	h.broadcastPlayerMoved(c.ID, e)
 	h.checkAggroAt(c.ID, e.X, e.Y)
-}
-
-// broadcastPlayerMoved streams a move update to the mover and clients within
-// nearSyncDist immediately; distant clients pick the position up on the
-// once-a-second far-sync digest instead.
-func (h *Hub) broadcastPlayerMoved(moverID string, e *entity) {
-	msg := protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: moverID, X: e.X, Y: e.Y, Facing: e.Facing,
-	})
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, c := range h.clients {
-		if !c.Joined {
-			continue
-		}
-		p := h.entities[c.ID]
-		if c.ID == moverID || (p != nil && dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist) {
-			h.sendRawLocked(c, msg)
-		} else {
-			h.movedPlayers[moverID] = true
-		}
-	}
-}
-
-// nearServerEntity reports whether any server-driven entity (NPC/pet) is
-// within nearSyncDist of the player entity.
-func (h *Hub) nearServerEntity(p *entity) bool {
-	for _, e := range h.entities {
-		if e.Kind == kindPlayer || e.hidden {
-			continue
-		}
-		if dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist {
-			return true
-		}
-	}
-	return false
-}
-
-// flushFarSync runs on farSyncInterval: clients with no nearby server entity
-// get a full entity_state digest, and players that moved while out of a
-// client's near range get their latest position pushed as player_moved.
-func (h *Hub) flushFarSync() {
-	if len(h.farEntityClients) == 0 && len(h.movedPlayers) == 0 {
-		return
-	}
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if len(h.farEntityClients) > 0 {
-		var msg []byte
-		for id := range h.farEntityClients {
-			c := h.clients[id]
-			if c == nil || !c.Joined {
-				continue
-			}
-			if msg == nil {
-				msg = protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
-					Entities: h.serverEntitySnapshots(),
-				})
-			}
-			h.sendRawLocked(c, msg)
-		}
-		clear(h.farEntityClients)
-	}
-	if len(h.movedPlayers) == 0 {
-		return
-	}
-	for _, c := range h.clients {
-		if !c.Joined {
-			continue
-		}
-		p := h.entities[c.ID]
-		for id := range h.movedPlayers {
-			if id == c.ID {
-				continue
-			}
-			e := h.entities[id]
-			if e == nil || e.hidden {
-				continue
-			}
-			if p != nil && dist(p.X, p.Y, e.X, e.Y) <= nearSyncDist {
-				continue // near clients already stream these in real time
-			}
-			h.sendRawLocked(c, protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-				ID: id, X: e.X, Y: e.Y, Facing: e.Facing,
-			}))
-		}
-	}
-	clear(h.movedPlayers)
 }
 
 func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
@@ -1025,20 +714,6 @@ func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
 	h.sendWelcome(c, profile)
 }
 
-// worldEntities snapshots every world inhabitant for world_state. Players are
-// always listed (in_house flag tells clients to hide them); NPCs and pets are
-// omitted while hidden (despawned / owner off-world).
-func (h *Hub) worldEntities(now time.Time) []protocol.WorldEntity {
-	out := make([]protocol.WorldEntity, 0, len(h.entities))
-	for _, e := range h.entities {
-		if e.Kind != kindPlayer && e.hidden {
-			continue
-		}
-		out = append(out, h.projector.project(e, now))
-	}
-	return out
-}
-
 func (h *Hub) grantBattleImmunity(e *entity) {
 	cc := clientControlOf(e)
 	if cc == nil {
@@ -1054,143 +729,6 @@ func (h *Hub) StatusCounts() (players, engaged int) {
 	defer h.mu.RUnlock()
 	players = len(h.clients)
 	return
-}
-
-func profileInfo(p store.Profile) protocol.ProfileInfo {
-	loadout := p.ActiveLoadout()
-	activeJobs := p.ActiveJobIDs()
-	jobActive := func(job game.JobID) bool {
-		for _, j := range activeJobs {
-			if j == job {
-				return true
-			}
-		}
-		return false
-	}
-	toInfo := func(s game.Skill) protocol.SkillInfo {
-		lvl := loadout.SkillLevels[s.ID]
-		unlocked := game.SkillAlwaysUnlocked(s.ID) || lvl > 0
-		comboLength := 0
-		if s.Combo != nil {
-			comboLength = len(s.Combo.Variants)
-		}
-		return protocol.SkillInfo{
-			ID: s.ID, Name: s.Name, MPCost: s.MPCost, Heals: s.Heals, Buffs: s.Buffs,
-			Description: s.Description, Category: string(s.Category),
-			Job:       string(s.Job),
-			Prereq:    game.SkillPrereq(s.ID),
-			WeaponReq: string(s.WeaponReq), Unlocked: unlocked,
-			Level: lvl, MaxLevel: game.SkillMaxLevel,
-			UnlockLevel: game.SkillUnlockLevel(s.ID),
-			Usage:       loadout.SkillUsage[s.ID],
-			UsageToNext: game.SkillUsesToNextLevel(lvl),
-			CastTimeMs:  game.SkillCastTime(s),
-			CooldownMs:  s.CooldownMs,
-			WorldOnly:   s.WorldOnly,
-			Passive:     s.Passive != nil,
-			ComboLength: comboLength,
-		}
-	}
-	skills := []protocol.SkillInfo{toInfo(game.BasicAttack), toInfo(game.SkillCapture), toInfo(game.SkillDodge)}
-	for _, s := range game.Catalog {
-		if s.WorldOnly || jobActive(s.Job) {
-			skills = append(skills, toInfo(s))
-		}
-	}
-
-	equipped := loadout.Equipped
-	if equipped == nil {
-		equipped = map[string]string{}
-	}
-	hotbar := map[string]protocol.HotbarBinding{}
-	for slot, b := range loadout.Hotbar {
-		hotbar[slot] = protocol.HotbarBinding{Kind: b.Kind, ID: b.ID}
-	}
-	mainLvl := p.MainJobLevel()
-	subLvl := p.SubJobEffectiveLevel()
-	hp, mp, str, mag, agi := game.ComputeJobStats(
-		game.JobID(p.MainJob), mainLvl,
-		game.JobID(p.SubJob), subLvl,
-		p.EquippedItems(),
-	)
-
-	unlocked := append([]string(nil), p.UnlockedJobs...)
-	if len(unlocked) == 0 {
-		for _, j := range game.StartingJobs {
-			unlocked = append(unlocked, string(j))
-		}
-	}
-
-	jobs := make([]protocol.JobProgressInfo, 0, len(game.AllJobs()))
-	for _, def := range game.AllJobs() {
-		prog := p.Jobs[string(def.ID)]
-		if prog.Level < 1 {
-			prog.Level = 1
-		}
-		jobs = append(jobs, protocol.JobProgressInfo{
-			ID: string(def.ID), Name: def.Name, Abbr: def.Abbr,
-			Category: string(def.Category),
-			Level:    prog.Level, XP: prog.XP, MaxXP: game.XPToNext(prog.Level),
-		})
-	}
-
-	mainXP := 0
-	if prog, ok := p.Jobs[p.MainJob]; ok {
-		mainXP = prog.XP
-	}
-
-	return protocol.ProfileInfo{
-		Name:              p.Name,
-		Race:              p.Race,
-		Level:             mainLvl,
-		XP:                mainXP,
-		MaxXP:             game.XPToNext(mainLvl),
-		MainJob:           p.MainJob,
-		SubJob:            p.SubJob,
-		SubjobUnlock:      game.CurrentSubjobUnlockLevel(),
-		UnlockedJobs:      unlocked,
-		Appearance:        appearanceProto(p),
-		Jobs:              jobs,
-		Stats:             protocol.StatBlock{HP: hp, MP: mp, Str: str, Mag: mag, Agi: agi},
-		Inventory:         p.Inventory,
-		HouseStorage:      append([]game.Item(nil), p.HouseStorage...),
-		HouseStorageCap:   game.DefaultHouseStorageCapacity,
-		CampSkin:          game.NormalizeCampSkin(p.CampSkin),
-		Equipped:          equipped,
-		Hotbar:            hotbar,
-		Skills:            skills,
-		Friends:           append([]string(nil), p.Friends...),
-		SavePointID:       p.SavePointID,
-		SavePointName:     savePointName(p.SavePointID),
-		VisitedSavePoints: visitedSavePoints(p),
-		Keybinds:          p.KeybindMap(),
-		Pets:              append([]game.PetRecord(nil), p.Pets...),
-		FollowPetID:       p.FollowPetID,
-		BattlePetID:       p.BattlePetID,
-	}
-}
-
-func appearanceProto(p store.Profile) protocol.CharacterAppearance {
-	a := p.Appearance
-	if a.IsZero() {
-		a = store.DefaultAppearanceForRace(p.Race)
-	} else {
-		a = store.NormalizeAppearance(p.Race, a)
-	}
-	return protocol.CharacterAppearance{
-		Skin: a.Skin, Face: a.Face, Hair: a.Hair, HairColor: a.HairColor,
-		Cloth: a.Cloth, ClothColor: a.ClothColor, Weapon: a.Weapon, WeaponColor: a.WeaponColor,
-	}
-}
-
-func storeAppearanceFromPayload(p *protocol.CharacterAppearance) store.Appearance {
-	if p == nil {
-		return store.Appearance{}
-	}
-	return store.Appearance{
-		Skin: p.Skin, Face: p.Face, Hair: p.Hair, HairColor: p.HairColor,
-		Cloth: p.Cloth, ClothColor: p.ClothColor, Weapon: p.Weapon, WeaponColor: p.WeaponColor,
-	}
 }
 
 func clamp(v, lo, hi float64) float64 {

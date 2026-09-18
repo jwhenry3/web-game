@@ -1,5 +1,6 @@
 import type { ItemDef } from "../editor/contentStore";
 import {
+  ARMOR_CLASSES,
   EQUIP_SLOTS,
   ITEM_KINDS,
   ITEM_RARITIES,
@@ -158,6 +159,20 @@ export function EquipmentModuleForm({ draft, onChange }: ItemFormProps) {
           onChange={(weapon_type) => patch({ ...item, weapon_type })}
           options={WEAPON_TYPES}
         />
+      )}
+
+      {!isWeaponSlot(item.slot) && (
+        <>
+          <SelectField
+            label="Armor class"
+            value={item.armor_class ?? "medium"}
+            onChange={(armor_class) => patch({ ...item, armor_class })}
+            options={ARMOR_CLASSES}
+          />
+          <p className="dim map-editor-role-hint">
+            Weight class fixes the stat profile — heavy: STR/VIT, medium: DEX (STR/INT secondary), light: INT/MD.
+          </p>
+        </>
       )}
 
       <SelectField

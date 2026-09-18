@@ -69,6 +69,38 @@ func TestMigrateClaraMundiIDs(t *testing.T) {
 	}
 }
 
+// Legacy armor gets the weight class its base name implies under the new
+// taxonomy; house storage is migrated alongside inventory.
+func TestMigrateArmorClasses(t *testing.T) {
+	p := &Profile{
+		Inventory: []game.Item{
+			{ID: "i1", Kind: game.KindEquipment, Name: "Worn Helm", Slot: game.SlotHead},
+			{ID: "i2", Kind: game.KindEquipment, Name: "Fine Circlet", Slot: game.SlotHead},
+			{ID: "i3", Kind: game.KindEquipment, Name: "Odd Vest", Slot: game.SlotChest},
+			{ID: "i4", Kind: game.KindEquipment, Name: "Old Mace", Slot: game.SlotWeapon, Type: "mace"},
+		},
+		HouseStorage: []game.Item{
+			{ID: "h1", Kind: game.KindEquipment, Name: "Worn Greaves", Slot: game.SlotLegs},
+		},
+	}
+	p.migrateClaraMundiIDs()
+
+	want := map[string]string{
+		"i1": game.ArmorHeavy,
+		"i2": game.ArmorLight,
+		"i3": game.ArmorMedium,
+		"i4": "hammer",
+	}
+	for _, it := range p.Inventory {
+		if it.Type != want[it.ID] {
+			t.Fatalf("inventory %s type = %q, want %q", it.ID, it.Type, want[it.ID])
+		}
+	}
+	if p.HouseStorage[0].Type != game.ArmorHeavy {
+		t.Fatalf("house storage armor type = %q, want %q", p.HouseStorage[0].Type, game.ArmorHeavy)
+	}
+}
+
 func TestMigrateNicheAliasToCombo(t *testing.T) {
 	p := &Profile{
 		MainJob:      "NVE",

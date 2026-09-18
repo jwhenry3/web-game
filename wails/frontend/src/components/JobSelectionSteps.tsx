@@ -1,6 +1,7 @@
 import { ALL_JOBS, STARTING_JOBS } from "../types";
+import { JobRoleBadge, WeaponTypeBadge } from "../ui/JobIdentity";
 
-type JobOption = { id: string; name: string; color: string };
+type JobOption = { id: string; name: string };
 
 export function JobSelectionSteps({
   step,
@@ -25,8 +26,8 @@ export function JobSelectionSteps({
 }) {
   const unlocked = new Set((unlockedJobs ?? []).map((j) => j.toUpperCase()));
   const catalog: JobOption[] = startersOnly
-    ? STARTING_JOBS.map((j) => ({ id: j.id, name: j.name, color: j.color }))
-    : ALL_JOBS.map((j) => ({ id: j.id, name: j.name, color: j.color }));
+    ? STARTING_JOBS.map((j) => ({ id: j.id, name: j.name }))
+    : ALL_JOBS.map((j) => ({ id: j.id, name: j.name }));
 
   const isUnlocked = (id: string) => {
     if (startersOnly) return true;
@@ -50,9 +51,12 @@ export function JobSelectionSteps({
               title={locked ? "Not unlocked yet" : undefined}
               onClick={() => !locked && onMainJob(j.id)}
             >
-              <span className="job-swatch" style={{ background: j.color }} />
+              <WeaponTypeBadge jobId={j.id} showLabel={false} />
               <span className="job-name">{j.name}</span>
-              {locked && <span className="job-lock dim">Locked</span>}
+              <span className="job-card-meta">
+                <JobRoleBadge jobId={j.id} />
+                {locked && <span className="job-lock dim">Locked</span>}
+              </span>
             </button>
           );
         })}
@@ -84,9 +88,12 @@ export function JobSelectionSteps({
                 title={locked ? "Not unlocked yet" : undefined}
                 onClick={() => !locked && onSubJob(j.id)}
               >
-                <span className="job-swatch" style={{ background: j.color }} />
+                <WeaponTypeBadge jobId={j.id} showLabel={false} />
                 <span className="job-name">{j.name}</span>
-                {locked && <span className="job-lock dim">Locked</span>}
+                <span className="job-card-meta">
+                  <JobRoleBadge jobId={j.id} />
+                  {locked && <span className="job-lock dim">Locked</span>}
+                </span>
               </button>
             );
           })}

@@ -96,7 +96,7 @@ export function SkillsEditorPage({ items, onItemsChange, status, error, onStatus
     id: `skill_${Date.now()}`,
     name: "New Skill",
     category: "swordplay" as JobCategory,
-    weapon_req: "sword" as WeaponType,
+    weapon_reqs: ["sword"] as WeaponType[],
     mp_cost: 0,
     power: 1,
     magic: false,

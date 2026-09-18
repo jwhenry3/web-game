@@ -156,3 +156,28 @@ func TestEnsureLoadoutCreatesNewCombo(t *testing.T) {
 		t.Fatalf("slot 3 = %q, want %q", l.Hotbar["3"].ID, game.RootSkillID(game.JobSAN))
 	}
 }
+
+// Discipline growth accumulates in hundredths and levels on the linear curve.
+func TestProficiencyGrowthLevels(t *testing.T) {
+	l := JobLoadout{ProfLevels: map[string]int{}, ProfExp: map[string]int{}}
+	applyProficiencyGrowth(&l, "swords", 40)
+	if l.ProfLevels["swords"] != 0 || l.ProfExp["swords"] != 40 {
+		t.Fatalf("40 growth = lvl %d exp %d, want 0/40", l.ProfLevels["swords"], l.ProfExp["swords"])
+	}
+	// Crossing the untrained threshold (100) levels to 1 and carries the remainder.
+	applyProficiencyGrowth(&l, "swords", 80)
+	if l.ProfLevels["swords"] != 1 || l.ProfExp["swords"] != 20 {
+		t.Fatalf("120 total growth = lvl %d exp %d, want 1/20", l.ProfLevels["swords"], l.ProfExp["swords"])
+	}
+	// A big enough roll can skip multiple levels on the linear curve.
+	applyProficiencyGrowth(&l, "swords", 500)
+	if l.ProfLevels["swords"] != 3 || l.ProfExp["swords"] != 20 {
+		t.Fatalf("520+ growth = lvl %d exp %d, want 3/20", l.ProfLevels["swords"], l.ProfExp["swords"])
+	}
+	// Growth stops at the cap.
+	l.ProfLevels["swords"] = game.ProfMaxLevel
+	applyProficiencyGrowth(&l, "swords", 40)
+	if l.ProfExp["swords"] != 20 {
+		t.Fatalf("maxed discipline still banks exp: %d", l.ProfExp["swords"])
+	}
+}

@@ -210,6 +210,47 @@ export function formatWeaponList(types: readonly string[]): string {
 
 export const ARMOR_SLOTS = ["head", "chest", "hands", "legs", "feet", "back"] as const;
 
+/** Armor weight classes in canonical armoury order (heavy → medium → light). */
+export const ARMOR_CLASSES = [
+  { id: "heavy", label: "Heavy" },
+  { id: "medium", label: "Medium" },
+  { id: "light", label: "Light" },
+] as const;
+
+export function armorClassLabel(classId?: string): string {
+  return ARMOR_CLASSES.find((c) => c.id === classId)?.label ?? "Unclassified";
+}
+
+/** Display labels for the broad combat/magic disciplines skills train. */
+export const PROFICIENCY_LABELS: Record<string, string> = {
+  elemental: "Elemental",
+  healing: "Healing",
+  support: "Support",
+  weakening: "Weakening",
+  swords: "Swords",
+  maces: "Maces",
+  axes: "Axes",
+  spears: "Spears",
+  katanas: "Katanas",
+  staves: "Staves",
+  one_handed: "One-Handed",
+  two_handed: "Two-Handed",
+  shield: "Shields",
+  other: "Other Weapons",
+};
+
+export function proficiencyLabel(key?: string): string {
+  return (key && PROFICIENCY_LABELS[key]) ?? key ?? "";
+}
+
+export const PROF_MAX_LEVEL = 20;
+
+/** Disciplines grouped for the character window's Proficiencies tab. */
+export const PROFICIENCY_GROUPS: { label: string; profs: string[] }[] = [
+  { label: "Magic", profs: ["elemental", "healing", "support", "weakening"] },
+  { label: "Combat", profs: ["swords", "maces", "axes", "spears", "katanas", "staves", "one_handed", "two_handed", "shield", "other"] },
+];
+
 export const ARMOURY_TABS = [
   { id: "weapon", label: "Weapon" },
   { id: "head", label: "Head" },
@@ -260,8 +301,9 @@ export function weaponTypeForSkill(sk: SkillInfo, profile: ProfileInfo): string 
 }
 
 export function skillWeaponMatches(sk: SkillInfo, profile: ProfileInfo): boolean {
-  if (!sk.weapon_req) return true;
-  return weaponTypeForSkill(sk, profile) === sk.weapon_req;
+  if (!sk.weapon_reqs?.length) return true;
+  const equipped = weaponTypeForSkill(sk, profile);
+  return !!equipped && sk.weapon_reqs.includes(equipped);
 }
 
 export function isFriendlyEntity(e: Pick<WorldEntity, "kind" | "is_ally">): boolean {
@@ -324,6 +366,9 @@ export function skillFromAction(skills: SkillInfo[], id: string): SkillInfo | un
 }
 
 export function skillTargetsAlly(sk: SkillInfo): boolean {
+  // The server resolves the targeting rule authoritatively; the flags are a
+  // fallback for payloads that predate it.
+  if (sk.target) return sk.target === "ally" || sk.target === "self";
   return sk.heals || !!sk.buffs;
 }
 

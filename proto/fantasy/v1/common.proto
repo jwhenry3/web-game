@@ -50,18 +50,19 @@ message SkillInfo {
   string job = 7;
   string category = 8;
   string prereq = 9;
-  string weapon_req = 10;
+  repeated string weapon_reqs = 10;
   bool unlocked = 11;
   int32 level = 12;
   int32 max_level = 13;
   int32 unlock_level = 14;
-  int32 usage = 15;
-  int32 usage_to_next = 16;
+  int32 prof_exp = 15;
+  int32 prof_exp_next = 16;
   int32 cast_time_ms = 17;
   bool world_only = 18;
   int32 cooldown_ms = 19;
   bool passive = 20;
   int32 combo_length = 21;
+  string proficiency = 22;
 }
 
 message JobProgressInfo {
@@ -127,9 +128,15 @@ message ProfileInfo {
   repeated Item house_storage = 23;
   int32 house_storage_capacity = 24;
   repeated PetRecord pets = 25;
+  // follow_pet_id is retired: the single active pet (battle_pet_id) both
+  // follows and fights. Field 26 stays reserved for old saves/clients.
   string follow_pet_id = 26;
   string battle_pet_id = 27;
   reserved 28;
+  map<string, int32> prof_levels = 29;
+  map<string, int32> prof_exp = 30;
+  // Pet the mount keybind will ride once mounting is implemented.
+  string mount_pet_id = 31;
 }
 
 message OverworldMap {

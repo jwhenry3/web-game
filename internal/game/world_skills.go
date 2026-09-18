@@ -20,6 +20,8 @@ var SkillReturn = Skill{
 	Description: "Warp to your set save crystal. Takes 3 seconds; moving cancels the cast.",
 	WorldOnly:   true,
 	CastTimeMs:  FieldCastTimeMs,
+	Target:      TargetNone,
+	Effects:     []SkillEffect{{Kind: EffectWorld, World: "return"}},
 }
 
 // SkillPort opens fast travel to crystals the hero has attuned.
@@ -29,6 +31,8 @@ var SkillPort = Skill{
 	Description: "Fast travel to a save crystal you have attuned. Takes 3 seconds; moving cancels the cast.",
 	WorldOnly:   true,
 	CastTimeMs:  FieldCastTimeMs,
+	Target:      TargetNone,
+	Effects:     []SkillEffect{{Kind: EffectWorld, World: "port"}},
 }
 
 // RegisteredSavePoint is a crystal known to the cluster, including which map owns it.

@@ -1,6 +1,11 @@
 import type { HotbarBinding, ProfileInfo } from "../types";
 import type { Item } from "../types";
 import { ICONS } from "./icons";
+import { ITEM_ICON_IDS } from "./itemIcons.gen";
+import { SKILL_ICON_IDS } from "./skillIcons.gen";
+
+const SKILL_ICON_BASE = "/assets/skills";
+const ITEM_ICON_BASE = "/assets/items";
 
 export function itemStats(item: Item): string {
   if (!item.stats) return "";
@@ -9,15 +14,32 @@ export function itemStats(item: Item): string {
     .join("  ");
 }
 
-export function itemIconSrc(item: Item): string {
+/**
+ * Generated-icon keys for an item (scripts/gen-item-icons.mjs), tried in
+ * order. Equipment keys off type: weapon-<type> for weapons,
+ * armor-<slot>-<class> for armor (missing class defaults to medium,
+ * matching starter gear). Decor/craft items carry their def id in `type`,
+ * so they get per-item art (decor_woven_rug, craft_lumber, …) with the
+ * generic kind icon as fallback.
+ */
+function itemIconKeys(item: Item): string[] {
   if (item.kind === "consumable") {
-    return consumableIconSrc(item.consumable ?? "");
+    return item.consumable ? [`consumable-${item.consumable}`] : [];
   }
-  if (item.kind === "decoration") {
-    return ICONS.menuInventory;
+  if (item.kind === "decoration" || item.kind === "crafting" || item.kind === "material") {
+    const generic = item.kind === "decoration" ? "kind-decoration" : "kind-material";
+    return item.type ? [item.type, generic] : [generic];
   }
-  if (item.kind === "crafting" || item.kind === "material") {
-    return ICONS.default;
+  if (item.slot === "weapon" || item.slot === "sub_weapon") {
+    return item.type ? [`weapon-${item.type}`] : [];
+  }
+  if (item.slot) return [`armor-${item.slot}-${item.type || "medium"}`];
+  return [];
+}
+
+export function itemIconSrc(item: Item): string {
+  for (const key of itemIconKeys(item)) {
+    if (ITEM_ICON_IDS.has(key)) return `${ITEM_ICON_BASE}/${key}.png`;
   }
   switch (item.slot) {
     case "weapon":
@@ -42,15 +64,16 @@ export function itemIconSrc(item: Item): string {
 }
 
 export function consumableIconSrc(consumableId: string): string {
-  if (consumableId === "ether") return ICONS.ether;
-  if (consumableId === "hi_potion") return ICONS.hiPotion;
-  if (consumableId === "potion") return ICONS.potion;
+  const key = `consumable-${consumableId}`;
+  if (ITEM_ICON_IDS.has(key)) return `${ITEM_ICON_BASE}/${key}.png`;
   return ICONS.default;
 }
 
 export function skillIconSrc(skillId: string, unlocked = true): string {
-  if (skillId === "attack") return ICONS.attack;
-  if (skillId === "capture") return ICONS.hands;
+  // Generated per-skill art (scripts/gen-skill-icons.mjs); locked rows show
+  // the same glyph dimmed so the skill stays identifiable. Unknown ids fall
+  // back to the generic pack icons.
+  if (SKILL_ICON_IDS.has(skillId)) return `${SKILL_ICON_BASE}/${skillId}.png`;
   return unlocked ? ICONS.skillUnlocked : ICONS.skillLocked;
 }
 

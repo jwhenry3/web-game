@@ -1,6 +1,9 @@
 package store
 
-import "clara-mundi/internal/game"
+import (
+	"clara-mundi/internal/game"
+	"strings"
+)
 
 var legacyRaceIDs = map[string]string{
 	"hume":     string(game.RaceHumanus),
@@ -72,6 +75,44 @@ var legacyWeaponTypes = map[string]string{
 	"mace": "hammer",
 }
 
+// legacyArmorBaseClass maps pre-weight-class armor base names onto the class
+// the new naming taxonomy gives them, so old drops keep a sensible weight
+// identity instead of all collapsing to medium.
+var legacyArmorBaseClass = map[string]string{
+	"Helm": game.ArmorHeavy, "Hood": game.ArmorMedium, "Circlet": game.ArmorLight,
+	"Cuirass": game.ArmorHeavy, "Vest": game.ArmorMedium, "Robe": game.ArmorLight,
+	"Gauntlets": game.ArmorHeavy, "Bracers": game.ArmorMedium, "Gloves": game.ArmorLight,
+	"Greaves": game.ArmorHeavy, "Chausses": game.ArmorMedium, "Leggings": game.ArmorLight,
+	"Sabatons": game.ArmorHeavy, "Boots": game.ArmorMedium, "Treads": game.ArmorMedium,
+	"Cloak": game.ArmorHeavy, "Mantle": game.ArmorMedium, "Cape": game.ArmorLight,
+}
+
+// inferLegacyArmorClass reads the trailing base word of a generated armor
+// name ("Worn Helm" → Helm). Unknown bases fall back to medium — the old
+// uniform stat pool's closest match.
+func inferLegacyArmorClass(name string) string {
+	base := name
+	if i := strings.LastIndex(name, " "); i >= 0 {
+		base = name[i+1:]
+	}
+	if class, ok := legacyArmorBaseClass[base]; ok {
+		return class
+	}
+	return game.ArmorMedium
+}
+
+func (p *Profile) migrateItem(item *game.Item) {
+	if item.Consumable != "" {
+		item.Consumable = mapLegacyID(item.Consumable, legacySkillIDs)
+	}
+	if item.Type != "" {
+		item.Type = mapLegacyID(item.Type, legacyWeaponTypes)
+	}
+	if item.Type == "" && isArmorSlot(item.Slot) {
+		item.Type = inferLegacyArmorClass(item.Name)
+	}
+}
+
 func mapLegacyID(id string, table map[string]string) string {
 	if id == "" {
 		return id
@@ -80,6 +121,15 @@ func mapLegacyID(id string, table map[string]string) string {
 		return next
 	}
 	return id
+}
+
+func isArmorSlot(slot string) bool {
+	for _, s := range game.ArmorSlots {
+		if s == slot {
+			return true
+		}
+	}
+	return false
 }
 
 func mapLegacyJob(id string) (main string, unlockSub string) {
@@ -174,12 +224,10 @@ func (p *Profile) migrateClaraMundiIDs() {
 		p.UnlockedSkills[i] = mapLegacyID(p.UnlockedSkills[i], legacySkillIDs)
 	}
 	for i := range p.Inventory {
-		if p.Inventory[i].Consumable != "" {
-			p.Inventory[i].Consumable = mapLegacyID(p.Inventory[i].Consumable, legacySkillIDs)
-		}
-		if p.Inventory[i].Type != "" {
-			p.Inventory[i].Type = mapLegacyID(p.Inventory[i].Type, legacyWeaponTypes)
-		}
+		p.migrateItem(&p.Inventory[i])
+	}
+	for i := range p.HouseStorage {
+		p.migrateItem(&p.HouseStorage[i])
 	}
 }
 
@@ -266,5 +314,19 @@ func mergeLoadout(dst *JobLoadout, src JobLoadout) {
 	}
 	for k, v := range src.SkillUsage {
 		dst.SkillUsage[k] += v
+	}
+	if dst.ProfLevels == nil {
+		dst.ProfLevels = map[string]int{}
+	}
+	for k, v := range src.ProfLevels {
+		if v > dst.ProfLevels[k] {
+			dst.ProfLevels[k] = v
+		}
+	}
+	if dst.ProfExp == nil {
+		dst.ProfExp = map[string]int{}
+	}
+	for k, v := range src.ProfExp {
+		dst.ProfExp[k] += v
 	}
 }

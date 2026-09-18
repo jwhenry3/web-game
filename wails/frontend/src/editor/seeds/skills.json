@@ -15,25 +15,53 @@
     "combo": {
       "status": "combo_attack",
       "duration": 15,
-      "variants": [
-        {
-          "name": "Attack",
-          "power": 1
-        },
-        {
-          "name": "Attack II",
-          "power": 1.15
-        },
-        {
-          "name": "Attack III",
-          "power": 1.35
-        },
-        {
-          "name": "Attack IV",
-          "power": 1.7
-        }
-      ]
+      "steps": 4
     },
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1
+      }
+    ],
+    "branches": [
+      {
+        "name": "Attack II",
+        "when": {
+          "combo_step": 1
+        },
+        "effects": [
+          {
+            "kind": "damage",
+            "power": 1.15
+          }
+        ]
+      },
+      {
+        "name": "Attack III",
+        "when": {
+          "combo_step": 2
+        },
+        "effects": [
+          {
+            "kind": "damage",
+            "power": 1.35
+          }
+        ]
+      },
+      {
+        "name": "Attack IV",
+        "when": {
+          "combo_step": 3
+        },
+        "effects": [
+          {
+            "kind": "damage",
+            "power": 1.7
+          }
+        ]
+      }
+    ],
     "description": "A basic weapon strike. Repeating it chains through four attacks."
   },
   {
@@ -48,6 +76,13 @@
     "ranged": false,
     "world_only": true,
     "cast_time_ms": 3000,
+    "target": "none",
+    "effects": [
+      {
+        "kind": "world",
+        "world": "return"
+      }
+    ],
     "description": "Warp to your set save crystal. Takes 3 seconds; moving cancels the cast."
   },
   {
@@ -62,6 +97,13 @@
     "ranged": false,
     "world_only": true,
     "cast_time_ms": 3000,
+    "target": "none",
+    "effects": [
+      {
+        "kind": "world",
+        "world": "port"
+      }
+    ],
     "description": "Fast travel to a save crystal you have attuned. Takes 3 seconds; moving cancels the cast."
   },
   {
@@ -76,13 +118,22 @@
     "ranged": false,
     "world_only": true,
     "cast_time_ms": 1500,
+    "target": "none",
+    "effects": [
+      {
+        "kind": "world",
+        "world": "camp"
+      }
+    ],
     "description": "Pitch your camp nearby. Interact with the tent to enter your house. Only one camp can be active at a time."
   },
   {
     "id": "van_cuneus",
     "name": "Wedge Guard",
     "category": "swordplay",
-    "weapon_req": "sword",
+    "weapon_reqs": [
+      "sword"
+    ],
     "mp_cost": 5,
     "power": 1.6,
     "magic": false,
@@ -92,13 +143,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1.6
+      }
+    ],
     "description": "Pin the foe's attention with a steel wedge."
   },
   {
     "id": "van_clamor_castra",
     "name": "War Cry",
     "category": "swordplay",
-    "weapon_req": "sword",
+    "weapon_reqs": [
+      "sword"
+    ],
     "mp_cost": 8,
     "power": 1.8,
     "magic": false,
@@ -108,13 +168,27 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "ally",
+    "effects": [
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_up",
+          "duration": 30,
+          "potency": 0.3,
+          "on_caster": true
+        }
+      }
+    ],
     "description": "A shout that fortifies your stance."
   },
   {
     "id": "van_furor_linea",
     "name": "Bulwark Advance",
     "category": "swordplay",
-    "weapon_req": "sword",
+    "weapon_reqs": [
+      "sword"
+    ],
     "mp_cost": 9,
     "power": 2,
     "magic": false,
@@ -124,13 +198,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage"
+      },
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_up",
+          "duration": 25,
+          "potency": 0.2,
+          "on_caster": true
+        }
+      }
+    ],
     "description": "Advance behind heavy guard."
   },
   {
     "id": "van_impetus_acies",
     "name": "Line Hold",
     "category": "swordplay",
-    "weapon_req": "sword",
+    "weapon_reqs": [
+      "sword"
+    ],
     "mp_cost": 14,
     "power": 2.6,
     "magic": false,
@@ -141,6 +232,13 @@
     "world_only": false,
     "cast_time_ms": 0,
     "cooldown_ms": 2000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.6
+      }
+    ],
     "description": "An unstoppable rush into an iron stance."
   },
   {
@@ -161,13 +259,17 @@
       "reflect_chance": 0.15,
       "reflect_ratio": 0.25
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: chance to reflect part of incoming damage."
   },
   {
     "id": "san_sanare",
     "name": "Heal",
     "category": "devotion",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand"
+    ],
     "mp_cost": 6,
     "power": 2.3,
     "magic": true,
@@ -177,13 +279,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "ally",
+    "effects": [
+      {
+        "kind": "heal",
+        "power": 2.3
+      }
+    ],
     "description": "Knit an ally's wounds with sacred craft."
   },
   {
     "id": "san_lux_mitis",
     "name": "Holy Light",
     "category": "devotion",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand"
+    ],
     "mp_cost": 8,
     "power": 1.8,
     "magic": true,
@@ -193,13 +304,26 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_down",
+          "duration": 40,
+          "potency": 0.2
+        }
+      }
+    ],
     "description": "Soft light that weakens hostile flesh."
   },
   {
     "id": "san_sanare_maius",
     "name": "Greater Heal",
     "category": "devotion",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand"
+    ],
     "mp_cost": 15,
     "power": 3.5,
     "magic": true,
@@ -209,13 +333,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "ally",
+    "effects": [
+      {
+        "kind": "heal",
+        "power": 3.5
+      }
+    ],
     "description": "A greater miracle of restoration."
   },
   {
     "id": "san_expello_impurum",
     "name": "Banish",
     "category": "devotion",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand"
+    ],
     "mp_cost": 14,
     "power": 2.7,
     "magic": true,
@@ -226,6 +359,13 @@
     "world_only": false,
     "cast_time_ms": 1000,
     "cooldown_ms": 2500,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.7
+      }
+    ],
     "description": "Drive unclean presence from the field."
   },
   {
@@ -248,13 +388,17 @@
       ],
       "effect_multiplier": 0.15
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: healing skill effects are increased by 15%."
   },
   {
     "id": "brw_pugnum",
     "name": "Fist Chain",
     "category": "swordplay",
-    "weapon_req": "knuckles",
+    "weapon_reqs": [
+      "knuckles"
+    ],
     "mp_cost": 4,
     "power": 1.7,
     "magic": false,
@@ -264,13 +408,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1.7
+      }
+    ],
     "description": "A chained fist that never loses rhythm."
   },
   {
     "id": "brw_robur_manus",
     "name": "Power Fist",
     "category": "swordplay",
-    "weapon_req": "knuckles",
+    "weapon_reqs": [
+      "knuckles"
+    ],
     "mp_cost": 7,
     "power": 2.1,
     "magic": false,
@@ -280,13 +433,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage"
+      },
+      {
+        "kind": "status",
+        "status": {
+          "kind": "attack_up",
+          "duration": 25,
+          "potency": 0.2,
+          "on_caster": true
+        }
+      }
+    ],
     "description": "Coil strength into the next blow."
   },
   {
     "id": "brw_humerus",
     "name": "Shoulder Charge",
     "category": "swordplay",
-    "weapon_req": "knuckles",
+    "weapon_reqs": [
+      "knuckles"
+    ],
     "mp_cost": 8,
     "power": 2.3,
     "magic": false,
@@ -296,13 +466,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.3
+      }
+    ],
     "description": "Close distance with a punishing charge."
   },
   {
     "id": "brw_intentio_pugna",
     "name": "Focus Blow",
     "category": "swordplay",
-    "weapon_req": "knuckles",
+    "weapon_reqs": [
+      "knuckles"
+    ],
     "mp_cost": 13,
     "power": 3,
     "magic": false,
@@ -313,6 +492,13 @@
     "world_only": false,
     "cast_time_ms": 0,
     "cooldown_ms": 2500,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 3
+      }
+    ],
     "description": "A finishing strike born of discipline."
   },
   {
@@ -336,13 +522,17 @@
       "cooldown_reduction": 0.25,
       "min_combo_stack": 2
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: physical skill cooldowns are reduced while a combo stack is high."
   },
   {
     "id": "hex_ignis_hex",
     "name": "Fire Brand",
     "category": "sorcery",
-    "weapon_req": "staff",
+    "weapon_reqs": [
+      "staff"
+    ],
     "mp_cost": 6,
     "power": 2,
     "magic": true,
@@ -352,13 +542,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2
+      }
+    ],
     "description": "Brand the foe with living flame."
   },
   {
     "id": "hex_fulmen_hex",
     "name": "Thunder Brand",
     "category": "sorcery",
-    "weapon_req": "staff",
+    "weapon_reqs": [
+      "staff"
+    ],
     "mp_cost": 11,
     "power": 2.6,
     "magic": true,
@@ -368,13 +567,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.6
+      }
+    ],
     "description": "Call a bolt through the mark."
   },
   {
     "id": "hex_gelu_hex",
     "name": "Frost Brand",
     "category": "sorcery",
-    "weapon_req": "staff",
+    "weapon_reqs": [
+      "staff"
+    ],
     "mp_cost": 10,
     "power": 2.5,
     "magic": true,
@@ -384,13 +592,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.5
+      }
+    ],
     "description": "Freeze the brand into killing frost."
   },
   {
     "id": "hex_ignis_maius",
     "name": "Inferno",
     "category": "sorcery",
-    "weapon_req": "staff",
+    "weapon_reqs": [
+      "staff"
+    ],
     "mp_cost": 16,
     "power": 3.3,
     "magic": true,
@@ -401,6 +618,13 @@
     "world_only": false,
     "cast_time_ms": 1000,
     "cooldown_ms": 3000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 3.3
+      }
+    ],
     "description": "Unleash the brand as a roaring inferno."
   },
   {
@@ -423,13 +647,17 @@
       ],
       "effect_multiplier": 0.12
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: magic skill effects are increased by 12%."
   },
   {
     "id": "cut_surripere",
     "name": "Cut and Grab",
     "category": "stealth",
-    "weapon_req": "dagger",
+    "weapon_reqs": [
+      "dagger"
+    ],
     "mp_cost": 4,
     "power": 1.5,
     "magic": false,
@@ -439,13 +667,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1.5
+      }
+    ],
     "description": "Cut and snatch in one motion."
   },
   {
     "id": "cut_praeda_manus",
     "name": "Purse Strike",
     "category": "stealth",
-    "weapon_req": "dagger",
+    "weapon_reqs": [
+      "dagger"
+    ],
     "mp_cost": 8,
     "power": 2,
     "magic": false,
@@ -455,13 +692,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2
+      }
+    ],
     "description": "Strike hard enough to loosen purses."
   },
   {
     "id": "cut_insidiae_nox",
     "name": "Shadow Stab",
     "category": "stealth",
-    "weapon_req": "dagger",
+    "weapon_reqs": [
+      "dagger"
+    ],
     "mp_cost": 9,
     "power": 2.3,
     "magic": false,
@@ -471,13 +717,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.3
+      }
+    ],
     "description": "A stab from just outside the light."
   },
   {
     "id": "cut_dolus_finis",
     "name": "Feint Thrust",
     "category": "stealth",
-    "weapon_req": "dagger",
+    "weapon_reqs": [
+      "dagger"
+    ],
     "mp_cost": 13,
     "power": 2.9,
     "magic": false,
@@ -488,6 +743,13 @@
     "world_only": false,
     "cast_time_ms": 0,
     "cooldown_ms": 2000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.9
+      }
+    ],
     "description": "A deceptive finishing thrust."
   },
   {
@@ -511,13 +773,18 @@
       "effect_multiplier": 0.15,
       "target_hp_below": 0.3
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: physical skill effects are increased against targets below 30% HP."
   },
   {
     "id": "can_carmen_tutus",
     "name": "Hymn of Resolve",
     "category": "sorcery",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand",
+      "staff"
+    ],
     "mp_cost": 6,
     "power": 1.5,
     "magic": true,
@@ -527,13 +794,27 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "ally",
+    "effects": [
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_up",
+          "duration": 40,
+          "potency": 0.3
+        }
+      }
+    ],
     "description": "A hymn that hardens allies' resolve."
   },
   {
     "id": "can_carmen_ferox",
     "name": "Hymn of Fury",
     "category": "sorcery",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand",
+      "staff"
+    ],
     "mp_cost": 9,
     "power": 1.8,
     "magic": true,
@@ -543,13 +824,27 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "ally",
+    "effects": [
+      {
+        "kind": "status",
+        "status": {
+          "kind": "attack_up",
+          "duration": 35,
+          "potency": 0.25
+        }
+      }
+    ],
     "description": "A hymn that sharpens the party's attack."
   },
   {
     "id": "can_carmen_acutus",
     "name": "Cutting Notes",
     "category": "sorcery",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand",
+      "staff"
+    ],
     "mp_cost": 10,
     "power": 2.2,
     "magic": true,
@@ -559,13 +854,23 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 1000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.2
+      }
+    ],
     "description": "Notes that cut as keenly as steel."
   },
   {
     "id": "can_studium_finale",
     "name": "Finale",
     "category": "sorcery",
-    "weapon_req": "wand",
+    "weapon_reqs": [
+      "wand",
+      "staff"
+    ],
     "mp_cost": 14,
     "power": 2.8,
     "magic": true,
@@ -576,6 +881,13 @@
     "world_only": false,
     "cast_time_ms": 1000,
     "cooldown_ms": 2500,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.8
+      }
+    ],
     "description": "A virtuoso chord that ends the phrase."
   },
   {
@@ -598,13 +910,17 @@
       ],
       "effect_multiplier": 0.15
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: buff skill effects are increased by 15%."
   },
   {
     "id": "aeg_umbo",
     "name": "Shield Bash",
     "category": "swordplay",
-    "weapon_req": "hammer",
+    "weapon_reqs": [
+      "hammer"
+    ],
     "mp_cost": 6,
     "power": 1.7,
     "magic": false,
@@ -614,13 +930,29 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage"
+      },
+      {
+        "kind": "status",
+        "status": {
+          "kind": "stun",
+          "duration": 8,
+          "potency": 1
+        }
+      }
+    ],
     "description": "Slam the hammer boss into the foe."
   },
   {
     "id": "aeg_custodia_ferrea",
     "name": "Iron Guard",
     "category": "swordplay",
-    "weapon_req": "hammer",
+    "weapon_reqs": [
+      "hammer"
+    ],
     "mp_cost": 9,
     "power": 2.2,
     "magic": false,
@@ -630,13 +962,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage"
+      },
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_up",
+          "duration": 30,
+          "potency": 0.35,
+          "on_caster": true
+        }
+      }
+    ],
     "description": "A guarded smash that holds the line."
   },
   {
     "id": "aeg_tegimen",
     "name": "Cover Ally",
     "category": "swordplay",
-    "weapon_req": "hammer",
+    "weapon_reqs": [
+      "hammer"
+    ],
     "mp_cost": 8,
     "power": 1,
     "magic": false,
@@ -646,13 +995,26 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "ally",
+    "effects": [
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_up",
+          "duration": 25,
+          "potency": 0.4
+        }
+      }
+    ],
     "description": "Extend your ward over an ally."
   },
   {
     "id": "aeg_lumen_ferrum",
     "name": "Holy Edge",
     "category": "swordplay",
-    "weapon_req": "hammer",
+    "weapon_reqs": [
+      "hammer"
+    ],
     "mp_cost": 14,
     "power": 2.8,
     "magic": true,
@@ -663,6 +1025,13 @@
     "world_only": false,
     "cast_time_ms": 1000,
     "cooldown_ms": 2000,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.8
+      }
+    ],
     "description": "Sacred light along the hammer's face."
   },
   {
@@ -683,13 +1052,17 @@
       "reflect_chance": 0.12,
       "reflect_ratio": 0.2
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: chance to reflect part of incoming damage."
   },
   {
     "id": "rvr_secare",
     "name": "Cleaving Cut",
     "category": "swordplay",
-    "weapon_req": "axe",
+    "weapon_reqs": [
+      "axe"
+    ],
     "mp_cost": 5,
     "power": 1.9,
     "magic": false,
@@ -699,13 +1072,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1.9
+      }
+    ],
     "description": "A heavy axe cut through guard."
   },
   {
     "id": "rvr_ruina",
     "name": "Ruin Swing",
     "category": "swordplay",
-    "weapon_req": "axe",
+    "weapon_reqs": [
+      "axe"
+    ],
     "mp_cost": 9,
     "power": 2.4,
     "magic": false,
@@ -715,13 +1097,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.4
+      }
+    ],
     "description": "Commit fully to a ruinous swing."
   },
   {
     "id": "rvr_fractura",
     "name": "Bone Splitter",
     "category": "swordplay",
-    "weapon_req": "axe",
+    "weapon_reqs": [
+      "axe"
+    ],
     "mp_cost": 10,
     "power": 2.5,
     "magic": false,
@@ -731,13 +1122,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.5
+      }
+    ],
     "description": "Split armor and bone alike."
   },
   {
     "id": "rvr_tempestas_ferri",
     "name": "Iron Storm",
     "category": "swordplay",
-    "weapon_req": "axe",
+    "weapon_reqs": [
+      "axe"
+    ],
     "mp_cost": 15,
     "power": 3.2,
     "magic": false,
@@ -748,6 +1148,13 @@
     "world_only": false,
     "cast_time_ms": 0,
     "cooldown_ms": 2500,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 3.2
+      }
+    ],
     "description": "A storm of axe blows."
   },
   {
@@ -770,13 +1177,17 @@
       ],
       "effect_multiplier": 0.1
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: physical skill effects are increased by 10%."
   },
   {
     "id": "lnc_saltus_hasta",
     "name": "Spear Leap",
     "category": "swordplay",
-    "weapon_req": "spear",
+    "weapon_reqs": [
+      "spear"
+    ],
     "mp_cost": 6,
     "power": 1.9,
     "magic": false,
@@ -786,13 +1197,22 @@
     "ranged": true,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1.9
+      }
+    ],
     "description": "Leap and drive the spear home."
   },
   {
     "id": "lnc_saltus_caelum",
     "name": "Sky Dive",
     "category": "swordplay",
-    "weapon_req": "spear",
+    "weapon_reqs": [
+      "spear"
+    ],
     "mp_cost": 10,
     "power": 2.4,
     "magic": false,
@@ -802,13 +1222,22 @@
     "ranged": true,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.4
+      }
+    ],
     "description": "A soaring dive from above."
   },
   {
     "id": "lnc_quinque_ictus",
     "name": "Five Thrusts",
     "category": "swordplay",
-    "weapon_req": "spear",
+    "weapon_reqs": [
+      "spear"
+    ],
     "mp_cost": 11,
     "power": 2.3,
     "magic": false,
@@ -818,13 +1247,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2.3
+      }
+    ],
     "description": "Five rapid thrusts in one breath."
   },
   {
     "id": "lnc_saltus_maximus",
     "name": "Crash Dive",
     "category": "swordplay",
-    "weapon_req": "spear",
+    "weapon_reqs": [
+      "spear"
+    ],
     "mp_cost": 15,
     "power": 3.1,
     "magic": false,
@@ -835,6 +1273,13 @@
     "world_only": false,
     "cast_time_ms": 0,
     "cooldown_ms": 2500,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 3.1
+      }
+    ],
     "description": "Vanish upward, then crash down."
   },
   {
@@ -857,13 +1302,17 @@
       ],
       "effect_multiplier": 0.1
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: ranged skill effects are increased by 10%."
   },
   {
     "id": "ron_oculus_ferrum",
     "name": "Read Opening",
     "category": "swordplay",
-    "weapon_req": "katana",
+    "weapon_reqs": [
+      "katana"
+    ],
     "mp_cost": 5,
     "power": 1.7,
     "magic": false,
@@ -873,13 +1322,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 1.7
+      }
+    ],
     "description": "Read the opening, then answer it."
   },
   {
     "id": "ron_altum_custos",
     "name": "High Guard",
     "category": "swordplay",
-    "weapon_req": "katana",
+    "weapon_reqs": [
+      "katana"
+    ],
     "mp_cost": 8,
     "power": 2.2,
     "magic": false,
@@ -889,13 +1347,30 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage"
+      },
+      {
+        "kind": "status",
+        "status": {
+          "kind": "defense_up",
+          "duration": 20,
+          "potency": 0.15,
+          "on_caster": true
+        }
+      }
+    ],
     "description": "High guard into a fierce cut."
   },
   {
     "id": "ron_quies_icta",
     "name": "Still Strike",
     "category": "swordplay",
-    "weapon_req": "katana",
+    "weapon_reqs": [
+      "katana"
+    ],
     "mp_cost": 7,
     "power": 2,
     "magic": false,
@@ -905,13 +1380,22 @@
     "ranged": false,
     "world_only": false,
     "cast_time_ms": 0,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 2
+      }
+    ],
     "description": "Still the mind, then strike true."
   },
   {
     "id": "ron_arcus_gladii",
     "name": "Blade Arc",
     "category": "swordplay",
-    "weapon_req": "katana",
+    "weapon_reqs": [
+      "katana"
+    ],
     "mp_cost": 15,
     "power": 3.2,
     "magic": false,
@@ -922,6 +1406,13 @@
     "world_only": false,
     "cast_time_ms": 0,
     "cooldown_ms": 2500,
+    "target": "enemy",
+    "effects": [
+      {
+        "kind": "damage",
+        "power": 3.2
+      }
+    ],
     "description": "A masterful drawn arc of steel."
   },
   {
@@ -945,6 +1436,8 @@
       "cooldown_reduction": 0.3,
       "target_hp_below": 0.3
     },
+    "target": "enemy",
+    "effects": [],
     "description": "Passive: physical skill cooldowns are reduced against targets below 30% HP."
   }
 ]

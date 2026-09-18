@@ -4,7 +4,7 @@ import "testing"
 
 func TestCatalogEquipment(t *testing.T) {
 	items := CatalogEquipment()
-	want := len(WeaponTypes) + len(ArmorSlots)
+	want := len(WeaponTypes) + len(ArmorSlots) + len(EquipmentDefs())
 	if len(items) != want {
 		t.Fatalf("CatalogEquipment() len = %d, want %d", len(items), want)
 	}
@@ -17,13 +17,14 @@ func TestCatalogEquipment(t *testing.T) {
 			t.Fatalf("duplicate catalog id %q", item.ID)
 		}
 		seen[item.ID] = true
-		if item.Slot == SlotWeapon {
-			if item.Type == "" {
-				t.Fatalf("weapon %q missing type", item.ID)
-			}
-			if len(item.Stats) == 0 {
-				t.Fatalf("weapon %q missing stats", item.ID)
-			}
+		if len(item.Stats) == 0 {
+			t.Fatalf("%q missing stats", item.ID)
+		}
+		if item.Slot == SlotWeapon && item.Type == "" {
+			t.Fatalf("weapon %q missing type", item.ID)
+		}
+		if item.Slot != SlotWeapon && !ValidArmorClass(item.Type) {
+			t.Fatalf("armor %q missing weight class", item.ID)
 		}
 	}
 	if !seen["starter-sword"] || !seen["starter-chest"] {

@@ -1,59 +1,117 @@
+import { useState } from "react";
+import { ENEMY_KIND_LABELS, ENEMY_SPRITE_SRC, type EnemyKind } from "../characters/enemies";
 import { net } from "../net/socket";
-import type { ProfileInfo } from "../types";
+import { ICONS } from "../ui/icons";
+import { GameIcon } from "../ui/GameIcon";
+import { bindingToDisplay, mergeKeybinds } from "../input/keybinds";
+import type { PetRecord, ProfileInfo } from "../types";
 
-/** Pets collection: follow / battle ally / release. */
+function petSpriteSrc(kind: string): string {
+  return ENEMY_SPRITE_SRC[kind as EnemyKind] ?? ICONS.default;
+}
+
+function petKindLabel(kind: string): string {
+  return (
+    ENEMY_KIND_LABELS[kind as EnemyKind] ??
+    kind.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+  );
+}
+
+/** Pets collection: list on the left, sprite preview + actions on the right. */
 export function PetsPane({ profile }: { profile: ProfileInfo }) {
   const pets = profile.pets ?? [];
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const mountKey = bindingToDisplay(mergeKeybinds(profile.keybinds).mount ?? "r");
+  const selected = pets.find((p) => p.id === selectedId) ?? pets[0];
+
   if (pets.length === 0) {
     return (
       <div className="cm-pets">
         <p className="hint">
-          No pets yet. Weaken a capturable foe below 20% HP in battle and use the Capture skill (hotbar).
+          No pets yet. Weaken a capturable foe below 20% HP in battle and use the Capture skill
+          (hotbar).
         </p>
       </div>
     );
   }
+
+  const activeId = profile.battle_pet_id;
+  const mountId = profile.mount_pet_id;
+
   return (
-    <div className="cm-pets">
-      <p className="hint cm-bag-hint">
-        Follow appears beside you in the field. Battle ally joins fights with AI (you may queue one
-        command).
-      </p>
+    <div className="cm-pets cm-pets--split">
       <ul className="cm-pet-list">
-        {pets.map((pet) => {
-          const following = profile.follow_pet_id === pet.id;
-          const battling = profile.battle_pet_id === pet.id;
-          return (
-            <li key={pet.id} className="cm-pet-row">
-              <div className="cm-pet-info">
+        {pets.map((pet) => (
+          <li key={pet.id}>
+            <button
+              type="button"
+              className={`cm-pet-row ${selected?.id === pet.id ? "selected" : ""}`}
+              onClick={() => setSelectedId(pet.id)}
+            >
+              <GameIcon src={petSpriteSrc(pet.kind)} alt="" size={28} />
+              <span className="cm-pet-info">
                 <strong>{pet.name}</strong>
                 <span className="dim">
-                  {pet.kind} · Lv {pet.level}
+                  {petKindLabel(pet.kind)} · Lv {pet.level}
                 </span>
-              </div>
-              <div className="cm-pet-actions">
-                <button
-                  type="button"
-                  className={`cm-btn ${following ? "on" : ""}`}
-                  onClick={() => net.petSetFollow(following ? "" : pet.id)}
-                >
-                  {following ? "Following" : "Follow"}
-                </button>
-                <button
-                  type="button"
-                  className={`cm-btn ${battling ? "on" : ""}`}
-                  onClick={() => net.petSetBattle(battling ? "" : pet.id)}
-                >
-                  {battling ? "Battle Ally" : "Set Ally"}
-                </button>
-                <button type="button" className="cm-btn cm-btn-danger" onClick={() => net.petRelease(pet.id)}>
-                  Release
-                </button>
-              </div>
-            </li>
-          );
-        })}
+              </span>
+              <span className="cm-pet-badges">
+                {pet.id === activeId && <span className="cm-pet-badge">Active</span>}
+                {pet.id === mountId && <span className="cm-pet-badge cm-pet-badge--mount">Mount</span>}
+              </span>
+            </button>
+          </li>
+        ))}
       </ul>
+
+      {selected && (
+        <aside className="cm-pet-side">
+          <div className="cm-pet-preview">
+            <GameIcon
+              src={petSpriteSrc(selected.kind)}
+              alt={selected.name}
+              size={72}
+              className="cm-pet-sprite"
+            />
+            <div className="cm-pet-preview-name">{selected.name}</div>
+            <div className="dim">
+              {petKindLabel(selected.kind)} · Lv {selected.level}
+            </div>
+          </div>
+          <PetActions
+            pet={selected}
+            isActive={selected.id === activeId}
+            isMount={selected.id === mountId}
+          />
+          <p className="hint cm-pet-mount-hint">
+            Your active pet follows and fights beside you. Press {mountKey} to ride your mount.
+          </p>
+        </aside>
+      )}
+    </div>
+  );
+}
+
+function PetActions({ pet, isActive, isMount }: { pet: PetRecord; isActive: boolean; isMount: boolean }) {
+  return (
+    <div className="cm-pet-actions">
+      <button
+        type="button"
+        className={`cm-btn ${isActive ? "on" : ""}`}
+        onClick={() => net.petSetBattle(isActive ? "" : pet.id)}
+      >
+        {isActive ? "Active" : "Set Active"}
+      </button>
+      <button
+        type="button"
+        className={`cm-btn ${isMount ? "on" : ""}`}
+        onClick={() => net.petSetMount(isMount ? "" : pet.id)}
+      >
+        {isMount ? "Mount" : "Set Mount"}
+      </button>
+      <button type="button" className="cm-btn cm-btn-danger" onClick={() => net.petRelease(pet.id)}>
+        Release
+      </button>
     </div>
   );
 }

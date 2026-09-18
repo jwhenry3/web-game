@@ -47,7 +47,7 @@ func TestProjectorPlayerFields(t *testing.T) {
 
 	pe.hp, pe.maxHP, pe.mp, pe.maxMP = 80, 100, 30, 50
 	pe.targetID = "npc-1"
-	pe.str, pe.mag, pe.agi = 10, 12, 8
+	pe.str, pe.dex, pe.vit, pe.int, pe.md = 10, 8, 10, 12, 10
 
 	now := time.Now()
 	we := h.projector.project(pe, now)

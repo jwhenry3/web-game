@@ -45,6 +45,8 @@ export function normalizeItemDef(item: ItemDef): ItemDef {
         : isWeapon
           ? ["weapon", "sub_weapon"]
           : [slot],
+      weapon_type: isWeapon ? item.weapon_type : undefined,
+      armor_class: isWeapon ? undefined : (item.armor_class ?? "medium"),
       stats: { ...item.stats },
     };
   }
@@ -66,7 +68,7 @@ export function itemCatalogSubtitle(item: ItemDef): string {
   }
   const slot = item.slot ?? "gear";
   const stats = item.stats ? Object.entries(item.stats).filter(([, v]) => v).map(([k, v]) => `+${v} ${k.toUpperCase()}`) : [];
-  return [slot, item.rarity ?? "common", ...stats.slice(0, 2)].filter(Boolean).join(" · ");
+  return [slot, item.armor_class, item.rarity ?? "common", ...stats.slice(0, 2)].filter(Boolean).join(" · ");
 }
 
 export function patchItemEffects(item: ItemDef, patch: Partial<ItemEffects>): ItemDef {

@@ -317,18 +317,19 @@ type SkillInfo struct {
 	Job           string                 `protobuf:"bytes,7,opt,name=job,proto3" json:"job,omitempty"`
 	Category      string                 `protobuf:"bytes,8,opt,name=category,proto3" json:"category,omitempty"`
 	Prereq        string                 `protobuf:"bytes,9,opt,name=prereq,proto3" json:"prereq,omitempty"`
-	WeaponReq     string                 `protobuf:"bytes,10,opt,name=weapon_req,json=weaponReq,proto3" json:"weapon_req,omitempty"`
+	WeaponReqs    []string               `protobuf:"bytes,10,rep,name=weapon_reqs,json=weaponReqs,proto3" json:"weapon_reqs,omitempty"`
 	Unlocked      bool                   `protobuf:"varint,11,opt,name=unlocked,proto3" json:"unlocked,omitempty"`
 	Level         int32                  `protobuf:"varint,12,opt,name=level,proto3" json:"level,omitempty"`
 	MaxLevel      int32                  `protobuf:"varint,13,opt,name=max_level,json=maxLevel,proto3" json:"max_level,omitempty"`
 	UnlockLevel   int32                  `protobuf:"varint,14,opt,name=unlock_level,json=unlockLevel,proto3" json:"unlock_level,omitempty"`
-	Usage         int32                  `protobuf:"varint,15,opt,name=usage,proto3" json:"usage,omitempty"`
-	UsageToNext   int32                  `protobuf:"varint,16,opt,name=usage_to_next,json=usageToNext,proto3" json:"usage_to_next,omitempty"`
+	ProfExp       int32                  `protobuf:"varint,15,opt,name=prof_exp,json=profExp,proto3" json:"prof_exp,omitempty"`
+	ProfExpNext   int32                  `protobuf:"varint,16,opt,name=prof_exp_next,json=profExpNext,proto3" json:"prof_exp_next,omitempty"`
 	CastTimeMs    int32                  `protobuf:"varint,17,opt,name=cast_time_ms,json=castTimeMs,proto3" json:"cast_time_ms,omitempty"`
 	WorldOnly     bool                   `protobuf:"varint,18,opt,name=world_only,json=worldOnly,proto3" json:"world_only,omitempty"`
 	CooldownMs    int32                  `protobuf:"varint,19,opt,name=cooldown_ms,json=cooldownMs,proto3" json:"cooldown_ms,omitempty"`
 	Passive       bool                   `protobuf:"varint,20,opt,name=passive,proto3" json:"passive,omitempty"`
 	ComboLength   int32                  `protobuf:"varint,21,opt,name=combo_length,json=comboLength,proto3" json:"combo_length,omitempty"`
+	Proficiency   string                 `protobuf:"bytes,22,opt,name=proficiency,proto3" json:"proficiency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -426,11 +427,11 @@ func (x *SkillInfo) GetPrereq() string {
 	return ""
 }
 
-func (x *SkillInfo) GetWeaponReq() string {
+func (x *SkillInfo) GetWeaponReqs() []string {
 	if x != nil {
-		return x.WeaponReq
+		return x.WeaponReqs
 	}
-	return ""
+	return nil
 }
 
 func (x *SkillInfo) GetUnlocked() bool {
@@ -461,16 +462,16 @@ func (x *SkillInfo) GetUnlockLevel() int32 {
 	return 0
 }
 
-func (x *SkillInfo) GetUsage() int32 {
+func (x *SkillInfo) GetProfExp() int32 {
 	if x != nil {
-		return x.Usage
+		return x.ProfExp
 	}
 	return 0
 }
 
-func (x *SkillInfo) GetUsageToNext() int32 {
+func (x *SkillInfo) GetProfExpNext() int32 {
 	if x != nil {
-		return x.UsageToNext
+		return x.ProfExpNext
 	}
 	return 0
 }
@@ -508,6 +509,13 @@ func (x *SkillInfo) GetComboLength() int32 {
 		return x.ComboLength
 	}
 	return 0
+}
+
+func (x *SkillInfo) GetProficiency() string {
+	if x != nil {
+		return x.Proficiency
+	}
+	return ""
 }
 
 type JobProgressInfo struct {
@@ -895,6 +903,8 @@ type ProfileInfo struct {
 	Pets                 []*PetRecord              `protobuf:"bytes,25,rep,name=pets,proto3" json:"pets,omitempty"`
 	FollowPetId          string                    `protobuf:"bytes,26,opt,name=follow_pet_id,json=followPetId,proto3" json:"follow_pet_id,omitempty"`
 	BattlePetId          string                    `protobuf:"bytes,27,opt,name=battle_pet_id,json=battlePetId,proto3" json:"battle_pet_id,omitempty"`
+	ProfLevels           map[string]int32          `protobuf:"bytes,29,rep,name=prof_levels,json=profLevels,proto3" json:"prof_levels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ProfExp              map[string]int32          `protobuf:"bytes,30,rep,name=prof_exp,json=profExp,proto3" json:"prof_exp,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
@@ -1116,6 +1126,20 @@ func (x *ProfileInfo) GetBattlePetId() string {
 		return x.BattlePetId
 	}
 	return ""
+}
+
+func (x *ProfileInfo) GetProfLevels() map[string]int32 {
+	if x != nil {
+		return x.ProfLevels
+	}
+	return nil
+}
+
+func (x *ProfileInfo) GetProfExp() map[string]int32 {
+	if x != nil {
+		return x.ProfExp
+	}
+	return nil
 }
 
 type OverworldMap struct {
@@ -2804,7 +2828,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
 	"\apotency\x18\x02 \x01(\x01R\apotency\x12\x1c\n" +
 	"\tremaining\x18\x03 \x01(\x05R\tremaining\x12\x1b\n" +
-	"\tshield_hp\x18\x04 \x01(\x05R\bshieldHp\"\xc6\x04\n" +
+	"\tshield_hp\x18\x04 \x01(\x05R\bshieldHp\"\xef\x04\n" +
 	"\tSkillInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -2814,16 +2838,16 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\vdescription\x18\x06 \x01(\tR\vdescription\x12\x10\n" +
 	"\x03job\x18\a \x01(\tR\x03job\x12\x1a\n" +
 	"\bcategory\x18\b \x01(\tR\bcategory\x12\x16\n" +
-	"\x06prereq\x18\t \x01(\tR\x06prereq\x12\x1d\n" +
-	"\n" +
-	"weapon_req\x18\n" +
-	" \x01(\tR\tweaponReq\x12\x1a\n" +
+	"\x06prereq\x18\t \x01(\tR\x06prereq\x12\x1f\n" +
+	"\vweapon_reqs\x18\n" +
+	" \x03(\tR\n" +
+	"weaponReqs\x12\x1a\n" +
 	"\bunlocked\x18\v \x01(\bR\bunlocked\x12\x14\n" +
 	"\x05level\x18\f \x01(\x05R\x05level\x12\x1b\n" +
 	"\tmax_level\x18\r \x01(\x05R\bmaxLevel\x12!\n" +
-	"\funlock_level\x18\x0e \x01(\x05R\vunlockLevel\x12\x14\n" +
-	"\x05usage\x18\x0f \x01(\x05R\x05usage\x12\"\n" +
-	"\rusage_to_next\x18\x10 \x01(\x05R\vusageToNext\x12 \n" +
+	"\funlock_level\x18\x0e \x01(\x05R\vunlockLevel\x12\x19\n" +
+	"\bprof_exp\x18\x0f \x01(\x05R\aprofExp\x12\"\n" +
+	"\rprof_exp_next\x18\x10 \x01(\x05R\vprofExpNext\x12 \n" +
 	"\fcast_time_ms\x18\x11 \x01(\x05R\n" +
 	"castTimeMs\x12\x1d\n" +
 	"\n" +
@@ -2831,7 +2855,8 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\vcooldown_ms\x18\x13 \x01(\x05R\n" +
 	"cooldownMs\x12\x18\n" +
 	"\apassive\x18\x14 \x01(\bR\apassive\x12!\n" +
-	"\fcombo_length\x18\x15 \x01(\x05R\vcomboLength\"\xa2\x01\n" +
+	"\fcombo_length\x18\x15 \x01(\x05R\vcomboLength\x12 \n" +
+	"\vproficiency\x18\x16 \x01(\tR\vproficiency\"\xa2\x01\n" +
 	"\x0fJobProgressInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -2858,8 +2883,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
-	"\x05level\x18\x04 \x01(\x05R\x05level\"\xc3\n" +
-	"\n" +
+	"\x05level\x18\x04 \x01(\x05R\x05level\"\xc9\f\n" +
 	"\vProfileInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\x05R\x05level\x12\x0e\n" +
@@ -2890,7 +2914,10 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x16house_storage_capacity\x18\x18 \x01(\x05R\x14houseStorageCapacity\x12)\n" +
 	"\x04pets\x18\x19 \x03(\v2\x15.fantasy.v1.PetRecordR\x04pets\x12\"\n" +
 	"\rfollow_pet_id\x18\x1a \x01(\tR\vfollowPetId\x12\"\n" +
-	"\rbattle_pet_id\x18\x1b \x01(\tR\vbattlePetId\x1a;\n" +
+	"\rbattle_pet_id\x18\x1b \x01(\tR\vbattlePetId\x12H\n" +
+	"\vprof_levels\x18\x1d \x03(\v2'.fantasy.v1.ProfileInfo.ProfLevelsEntryR\n" +
+	"profLevels\x12?\n" +
+	"\bprof_exp\x18\x1e \x03(\v2$.fantasy.v1.ProfileInfo.ProfExpEntryR\aprofExp\x1a;\n" +
 	"\rEquippedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aT\n" +
@@ -2899,7 +2926,13 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x19.fantasy.v1.HotbarBindingR\x05value:\x028\x01\x1a;\n" +
 	"\rKeybindsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\x1c\x10\x1d\"`\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a=\n" +
+	"\x0fProfLevelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a:\n" +
+	"\fProfExpEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01J\x04\b\x1c\x10\x1d\"`\n" +
 	"\fOverworldMap\x12\x12\n" +
 	"\x04tile\x18\x01 \x01(\x05R\x04tile\x12\x12\n" +
 	"\x04cols\x18\x02 \x01(\x05R\x04cols\x12\x12\n" +
@@ -3072,7 +3105,7 @@ func file_fantasy_v1_common_proto_rawDescGZIP() []byte {
 	return file_fantasy_v1_common_proto_rawDescData
 }
 
-var file_fantasy_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_fantasy_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
 var file_fantasy_v1_common_proto_goTypes = []any{
 	(*CharacterAppearance)(nil), // 0: fantasy.v1.CharacterAppearance
 	(*Item)(nil),                // 1: fantasy.v1.Item
@@ -3106,7 +3139,9 @@ var file_fantasy_v1_common_proto_goTypes = []any{
 	nil,                         // 29: fantasy.v1.ProfileInfo.EquippedEntry
 	nil,                         // 30: fantasy.v1.ProfileInfo.HotbarEntry
 	nil,                         // 31: fantasy.v1.ProfileInfo.KeybindsEntry
-	(*structpb.Struct)(nil),     // 32: google.protobuf.Struct
+	nil,                         // 32: fantasy.v1.ProfileInfo.ProfLevelsEntry
+	nil,                         // 33: fantasy.v1.ProfileInfo.ProfExpEntry
+	(*structpb.Struct)(nil),     // 34: google.protobuf.Struct
 }
 var file_fantasy_v1_common_proto_depIdxs = []int32{
 	28, // 0: fantasy.v1.Item.stats:type_name -> fantasy.v1.Item.StatsEntry
@@ -3121,24 +3156,26 @@ var file_fantasy_v1_common_proto_depIdxs = []int32{
 	31, // 9: fantasy.v1.ProfileInfo.keybinds:type_name -> fantasy.v1.ProfileInfo.KeybindsEntry
 	1,  // 10: fantasy.v1.ProfileInfo.house_storage:type_name -> fantasy.v1.Item
 	8,  // 11: fantasy.v1.ProfileInfo.pets:type_name -> fantasy.v1.PetRecord
-	32, // 12: fantasy.v1.MapTileOverrides.layers:type_name -> google.protobuf.Struct
-	10, // 13: fantasy.v1.MapSnapshot.overworld:type_name -> fantasy.v1.OverworldMap
-	13, // 14: fantasy.v1.MapSnapshot.portals:type_name -> fantasy.v1.MapPortal
-	12, // 15: fantasy.v1.MapSnapshot.tile_overrides:type_name -> fantasy.v1.MapTileOverrides
-	11, // 16: fantasy.v1.MapSnapshot.terrain_layers:type_name -> fantasy.v1.MapTerrainLayers
-	14, // 17: fantasy.v1.MapSnapshot.neighbors:type_name -> fantasy.v1.MapNeighbor
-	2,  // 18: fantasy.v1.WorldEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
-	0,  // 19: fantasy.v1.WorldEntity.appearance:type_name -> fantasy.v1.CharacterAppearance
-	1,  // 20: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
-	20, // 21: fantasy.v1.HousePlayer.pets:type_name -> fantasy.v1.HousePet
-	1,  // 22: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
-	26, // 23: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
-	6,  // 24: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	32, // 12: fantasy.v1.ProfileInfo.prof_levels:type_name -> fantasy.v1.ProfileInfo.ProfLevelsEntry
+	33, // 13: fantasy.v1.ProfileInfo.prof_exp:type_name -> fantasy.v1.ProfileInfo.ProfExpEntry
+	34, // 14: fantasy.v1.MapTileOverrides.layers:type_name -> google.protobuf.Struct
+	10, // 15: fantasy.v1.MapSnapshot.overworld:type_name -> fantasy.v1.OverworldMap
+	13, // 16: fantasy.v1.MapSnapshot.portals:type_name -> fantasy.v1.MapPortal
+	12, // 17: fantasy.v1.MapSnapshot.tile_overrides:type_name -> fantasy.v1.MapTileOverrides
+	11, // 18: fantasy.v1.MapSnapshot.terrain_layers:type_name -> fantasy.v1.MapTerrainLayers
+	14, // 19: fantasy.v1.MapSnapshot.neighbors:type_name -> fantasy.v1.MapNeighbor
+	2,  // 20: fantasy.v1.WorldEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
+	0,  // 21: fantasy.v1.WorldEntity.appearance:type_name -> fantasy.v1.CharacterAppearance
+	1,  // 22: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
+	20, // 23: fantasy.v1.HousePlayer.pets:type_name -> fantasy.v1.HousePet
+	1,  // 24: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
+	26, // 25: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
+	6,  // 26: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
+	27, // [27:27] is the sub-list for method output_type
+	27, // [27:27] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_fantasy_v1_common_proto_init() }
@@ -3152,7 +3189,7 @@ func file_fantasy_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fantasy_v1_common_proto_rawDesc), len(file_fantasy_v1_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   32,
+			NumMessages:   34,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

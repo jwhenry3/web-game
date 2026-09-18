@@ -138,11 +138,7 @@ function castEnemySkill(actionId: string, self: WorldEntity | undefined) {
   // nearest attackable entity on its side.
   const targetId = target?.id ?? selfTargetId() ?? "";
   send("action", { action_id: actionId, target_id: targetId });
-  if (targetId && (selfTargetId() ?? self?.target_id) !== targetId) {
-    send("set_target", { target_id: targetId });
-  }
   useGame.setState({ selectedAction: null });
-  if (targetId) patchSelfTargetId(targetId);
 }
 
 let ws: WebSocket | null = null;
@@ -431,14 +427,18 @@ export const net = {
   setCampSkin(skin: string) {
     send("set_camp_skin", { skin });
   },
-  petSetFollow(petId: string) {
-    send("pet_set_follow", { pet_id: petId });
-  },
   petSetBattle(petId: string) {
     send("pet_set_battle", { pet_id: petId });
   },
+  petSetMount(petId: string) {
+    send("pet_set_mount", { pet_id: petId });
+  },
   petRelease(petId: string) {
     send("pet_release", { pet_id: petId });
+  },
+  /** Mount toggle keybind stub — server acks via reward_notice. */
+  mountToggle() {
+    send("mount_toggle", {});
   },
   /** Pet hotbar commands: "attack" sends pets at the focus target, "heel" calls them back. */
   petCommand(command: "attack" | "heel") {
@@ -458,7 +458,10 @@ export const net = {
       this.castSelectedOn(target);
       return;
     }
-    if (isEnemy(target)) this.setTarget(target.id);
+    // Any living entity can take focus — self, allies, pets, enemies.
+    // Clicking the focused entity again releases the target (untarget).
+    const focus = selfTargetId() ?? selfCombatEntity()?.target_id;
+    this.setTarget(focus === target.id ? "" : target.id);
   },
 
   castSelectedOn(target: WorldEntity): boolean {

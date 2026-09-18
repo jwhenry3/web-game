@@ -46,22 +46,25 @@ type entity struct {
 	// mode. It is intentionally not part of the public entity projection.
 	regionID string
 
-	// Shared combat core.
-	hp, maxHP, mp, maxMP int
-	str, mag, agi        int
-	statuses             []game.ActiveStatus
-	statusTick           int
-	targetID             string
-	engageID             string // players only: enemy the player committed an attack on (pets auto-engage it; target selection alone does not count)
-	attackCD             time.Time
-	casting              *activeCast
-	castX, castY         float64
-	gcdReadyAt           time.Time
-	contributors         map[string]int // rewarded entity ID -> damage dealt to me
-	enmity               map[string]int // NPCs only: entity ID -> threat held toward it
-	alive                bool
-	hidden               bool // not present on the world (npc despawned, player in house)
-	petHold              bool // pets only: heeled — never acquire a target, just follow
+	// Shared combat core. stats is the five-affinity block: str scales
+	// physical damage, dex accuracy/attack speed, vit physical defense and
+	// max HP, int elemental damage and max MP, md magic defense and healing.
+	hp, maxHP, mp, maxMP   int
+	str, dex, vit, int, md int
+	statuses               []game.ActiveStatus
+	statusTick             int
+	targetID               string
+	engageID               string // players only: enemy the player committed an attack on (pets auto-engage it; target selection alone does not count)
+	attackCD               time.Time
+	casting                *activeCast
+	castX, castY           float64
+	gcdReadyAt             time.Time
+	gcdDur                 time.Duration  // dex-scaled length of the last startGCD
+	contributors           map[string]int // rewarded entity ID -> damage dealt to me
+	enmity                 map[string]int // NPCs only: entity ID -> threat held toward it
+	alive                  bool
+	hidden                 bool // not present on the world (npc despawned, player in house)
+	petHold                bool // pets only: heeled — never acquire a target, just follow
 
 	components entityComponents
 	pipeline   []entitySystem
@@ -102,22 +105,33 @@ func (e *entity) onWorld() bool { return e != nil && !e.hidden }
 // presentAndAlive is the common "can participate in combat" gate.
 func (e *entity) presentAndAlive() bool { return e != nil && e.alive && !e.hidden }
 
+func (e *entity) gcdLen() time.Duration {
+	if e.gcdDur <= 0 {
+		return gcdDuration
+	}
+	return e.gcdDur
+}
+
 func (e *entity) gcdProgress(now time.Time) float64 {
 	if e.gcdReadyAt.IsZero() || !now.Before(e.gcdReadyAt) {
 		return 100
 	}
-	elapsed := gcdDuration - time.Until(e.gcdReadyAt)
+	elapsed := e.gcdLen() - time.Until(e.gcdReadyAt)
 	if elapsed < 0 {
 		return 0
 	}
-	return math.Min(100, 100*elapsed.Seconds()/gcdDuration.Seconds())
+	return math.Min(100, 100*elapsed.Seconds()/e.gcdLen().Seconds())
 }
 
 func (e *entity) gcdReady(now time.Time) bool {
 	return e.gcdReadyAt.IsZero() || !now.Before(e.gcdReadyAt)
 }
 
-func (e *entity) startGCD(now time.Time) { e.gcdReadyAt = now.Add(gcdDuration) }
+// startGCD starts the global cooldown scaled by dex — attack speed.
+func (e *entity) startGCD(now time.Time) {
+	e.gcdDur = time.Duration(float64(gcdDuration) * game.AttackSpeedScale(e.dex))
+	e.gcdReadyAt = now.Add(e.gcdDur)
+}
 
 // ---- lookup ----
 
@@ -218,6 +232,18 @@ func (h *Hub) validTarget(e *entity) *entity {
 	return t
 }
 
+// focusTarget resolves a player's selected focus to an attackable entity
+// without dropping the selection: a friendly or dead focus is still a valid
+// focus, it just can't be attacked. Departed entities are already cleared by
+// clearTargeting.
+func (h *Hub) focusTarget(e *entity) *entity {
+	t := h.ent(e.targetID)
+	if t == nil || !h.canAttack(e, t) {
+		return nil
+	}
+	return t
+}
+
 // nearestAttackable picks the closest entity `from` may attack within maxD.
 // Hostile attackers skip players standing in a sanctuary (unreachable).
 func (h *Hub) nearestAttackable(from *entity, maxD float64) *entity {
@@ -304,10 +330,27 @@ func (h *Hub) applyDamage(src, dst *entity, dmg int, ev protocol.CombatEventPayl
 // fmt.Sprintf template taking (attacker name, target name, dealt damage);
 // empty uses the default "%s struck %s" melee text.
 func (h *Hub) applyDamageMsg(src, dst *entity, dmg int, ev protocol.CombatEventPayload, msgFmt string) int {
-	return h.applyDamageMsgReflectable(src, dst, dmg, ev, msgFmt, true)
+	return h.applyDamageMsgReflectable(src, dst, dmg, ev, msgFmt, true, game.ClassPhysical)
 }
 
-func (h *Hub) applyDamageMsgReflectable(src, dst *entity, dmg int, ev protocol.CombatEventPayload, msgFmt string, reflectable bool) int {
+// applyDamageMsgClass is applyDamageMsg for a specific damage class: physical
+// is mitigated by the target's vit, elemental by md, true is unmitigated.
+func (h *Hub) applyDamageMsgClass(src, dst *entity, dmg int, ev protocol.CombatEventPayload, msgFmt, class string) int {
+	return h.applyDamageMsgReflectable(src, dst, dmg, ev, msgFmt, true, class)
+}
+
+// defenseStat returns the stat that mitigates the damage class.
+func defenseStat(e *entity, class string) int {
+	switch class {
+	case game.ClassElemental:
+		return e.md
+	case game.ClassPhysical:
+		return e.vit
+	}
+	return 0
+}
+
+func (h *Hub) applyDamageMsgReflectable(src, dst *entity, dmg int, ev protocol.CombatEventPayload, msgFmt string, reflectable bool, class string) int {
 	if dst == nil || !dst.alive {
 		return 0
 	}
@@ -315,10 +358,12 @@ func (h *Hub) applyDamageMsgReflectable(src, dst *entity, dmg int, ev protocol.C
 		return h.npcEffects.recordAttack(src, dst, dmg, ev, msgFmt)
 	}
 	if h.npcWorkerFor(dst) != nil {
-		return h.commandNPCDamage(src, dst, dmg, ev, msgFmt)
+		return h.commandNPCDamage(src, dst, dmg, ev, msgFmt, class)
 	}
 	dmg = game.ModifyDamageTaken(&dst.statuses, dmg)
-	if dmg < 0 {
+	if dmg > 0 {
+		dmg = max(1, dmg-int(float64(dmg)*game.Mitigation(defenseStat(dst, class))))
+	} else {
 		dmg = 0
 	}
 	dst.hp -= dmg
@@ -359,7 +404,7 @@ func (h *Hub) applyDamageMsgReflectable(src, dst *entity, dmg int, ev protocol.C
 					ActionID:   "reflect",
 					ActionName: "Reflect",
 					Message:    fmt.Sprintf("%s reflects %d damage", dst.Name, reflected),
-				}, "", false)
+				}, "", false, game.ClassTrue)
 			}
 		}
 	}
@@ -415,7 +460,7 @@ func (h *Hub) kill(e, killer *entity) {
 // ---- shared per-tick behaviour ----
 
 // tickEntityStatuses applies DoT/HoT on the 200ms ATB cadence (every 4th
-// 50ms tick). Players use (str+mag)/4 as tick power; NPCs/pets maxHP/20.
+// 50ms tick). Players use (str+int)/4 as tick power; NPCs/pets maxHP/20.
 func (h *Hub) tickEntityStatuses(e *entity) {
 	if !e.alive || len(e.statuses) == 0 {
 		return
@@ -426,7 +471,7 @@ func (h *Hub) tickEntityStatuses(e *entity) {
 	}
 	tickPower := max(1, e.maxHP/20)
 	if e.Kind == kindPlayer {
-		tickPower = max(1, (e.str+e.mag)/4)
+		tickPower = max(1, (e.str+e.int)/4)
 	}
 	heal, poison := game.TickStatuses(&e.statuses, e.maxHP, tickPower)
 	if heal > 0 {
@@ -450,7 +495,9 @@ func (h *Hub) tickEntityStatuses(e *entity) {
 // tickEntities is the single hub simulation step, run every combatTickInterval.
 func (h *Hub) tickEntities(now time.Time) {
 	dt := combatTickInterval.Seconds()
-	h.syncPetEntities()
+	if h.petSyncDue(now) {
+		h.syncPetEntities()
+	}
 
 	if h.world != nil {
 		h.tickEntitiesWorld(now, dt)

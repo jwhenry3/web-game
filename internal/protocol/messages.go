@@ -44,10 +44,11 @@ const (
 	TypeHousePlaceFurniture  MessageType = "house_place_furniture"
 	TypeHousePickFurniture   MessageType = "house_pick_furniture"
 	TypeSetCampSkin          MessageType = "set_camp_skin"
-	TypePetSetFollow         MessageType = "pet_set_follow"
 	TypePetSetBattle         MessageType = "pet_set_battle"
+	TypePetSetMount          MessageType = "pet_set_mount"
 	TypePetRelease           MessageType = "pet_release"
 	TypePetCommand           MessageType = "pet_command"
+	TypeMountToggle          MessageType = "mount_toggle"
 )
 
 // Server -> Client
@@ -194,27 +195,39 @@ type UseWorldSkillPayload struct {
 // ---- Server -> Client payloads ----
 
 type SkillInfo struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	MPCost      int    `json:"mp_cost"`
-	Heals       bool   `json:"heals"`
-	Buffs       bool   `json:"buffs"`
-	Description string `json:"description"`
-	Job         string `json:"job,omitempty"`
-	Category    string `json:"category,omitempty"`
-	Prereq      string `json:"prereq,omitempty"`
-	WeaponReq   string `json:"weapon_req,omitempty"`
-	Unlocked    bool   `json:"unlocked"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	MPCost      int      `json:"mp_cost"`
+	Heals       bool     `json:"heals"`
+	Buffs       bool     `json:"buffs"`
+	Description string   `json:"description"`
+	Job         string   `json:"job,omitempty"`
+	Category    string   `json:"category,omitempty"`
+	Prereq      string   `json:"prereq,omitempty"`
+	WeaponReqs  []string `json:"weapon_reqs,omitempty"`
+	Unlocked    bool     `json:"unlocked"`
+	// Level/MaxLevel are the level of this skill's discipline (see
+	// Proficiency), not a per-action level: attacking with a sword levels
+	// Swords, casting a heal levels Healing.
+	Proficiency string `json:"proficiency,omitempty"`
 	Level       int    `json:"level"`
 	MaxLevel    int    `json:"max_level"`
 	UnlockLevel int    `json:"unlock_level"`
-	Usage       int    `json:"usage,omitempty"`
-	UsageToNext int    `json:"usage_to_next,omitempty"`
-	CastTimeMs  int    `json:"cast_time_ms,omitempty"`
-	CooldownMs  int    `json:"cooldown_ms,omitempty"`
-	WorldOnly   bool   `json:"world_only,omitempty"`
-	Passive     bool   `json:"passive,omitempty"`
-	ComboLength int    `json:"combo_length,omitempty"`
+	// ProfExp/ProfExpNext are discipline growth progress in hundredths of a
+	// point and the threshold for the next level.
+	ProfExp     int  `json:"prof_exp,omitempty"`
+	ProfExpNext int  `json:"prof_exp_next,omitempty"`
+	CastTimeMs  int  `json:"cast_time_ms,omitempty"`
+	CooldownMs  int  `json:"cooldown_ms,omitempty"`
+	WorldOnly   bool `json:"world_only,omitempty"`
+	Passive     bool `json:"passive,omitempty"`
+	ComboLength int  `json:"combo_length,omitempty"`
+	// Target is the resolved targeting rule ("enemy" | "ally" | "self" |
+	// "none") — authoritative for client-side aim helpers.
+	Target string `json:"target,omitempty"`
+	// Effects is the skill's resolved component list (legacy flags are
+	// synthesized into equivalent components).
+	Effects []game.SkillEffect `json:"effects,omitempty"`
 }
 
 type JobProgressInfo struct {
@@ -227,12 +240,19 @@ type JobProgressInfo struct {
 	MaxXP    int    `json:"max_xp"`
 }
 
+// StatBlock carries the five-affinity stats. Mag/Agi remain populated as
+// legacy aliases of Int/Dex: protobuf clients discard the new fields
+// (DiscardUnknown) but still see a sensible block under the old names.
 type StatBlock struct {
 	HP  int `json:"hp"`
 	MP  int `json:"mp"`
 	Str int `json:"str"`
-	Mag int `json:"mag"`
-	Agi int `json:"agi"`
+	Dex int `json:"dex"`
+	Vit int `json:"vit"`
+	Int int `json:"int"`
+	MD  int `json:"md"`
+	Mag int `json:"mag,omitempty"`
+	Agi int `json:"agi,omitempty"`
 }
 
 type HotbarBinding struct {
@@ -260,15 +280,22 @@ type ProfileInfo struct {
 	Equipped        map[string]string        `json:"equipped"`
 	Hotbar          map[string]HotbarBinding `json:"hotbar"`
 
-	Skills            []SkillInfo        `json:"skills"`
+	Skills []SkillInfo `json:"skills"`
+	// ProfLevels maps each trained discipline to its level; ProfExp holds
+	// hundredths-of-growth progress toward the next level.
+	ProfLevels        map[string]int     `json:"prof_levels,omitempty"`
+	ProfExp           map[string]int     `json:"prof_exp,omitempty"`
 	Friends           []string           `json:"friends"`
 	SavePointID       string             `json:"save_point_id,omitempty"`
 	SavePointName     string             `json:"save_point_name,omitempty"`
 	VisitedSavePoints []VisitedSavePoint `json:"visited_save_points,omitempty"`
 	Keybinds          map[string]string  `json:"keybinds,omitempty"`
 	Pets              []game.PetRecord   `json:"pets,omitempty"`
-	FollowPetID       string             `json:"follow_pet_id,omitempty"`
-	BattlePetID       string             `json:"battle_pet_id,omitempty"`
+	// BattlePetID is the single active pet: it follows the owner and joins
+	// fights. MountPetID marks which pet the mount keybind will ride once
+	// mounting is implemented.
+	BattlePetID string `json:"battle_pet_id,omitempty"`
+	MountPetID  string `json:"mount_pet_id,omitempty"`
 }
 
 type VisitedSavePoint struct {

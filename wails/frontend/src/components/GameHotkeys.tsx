@@ -227,6 +227,13 @@ export function GameHotkeys() {
         return;
       }
 
+      if (bindingMatchesEvent(keybinds.mount ?? "r", e)) {
+        e.preventDefault();
+        if (dialogIsOpen(state)) return;
+        net.mountToggle();
+        return;
+      }
+
       const hotbarSlot = resolveHotbarSlot(e, keybinds);
       if (hotbarSlot) {
         if (dialogIsOpen(state)) return;

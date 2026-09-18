@@ -33,8 +33,8 @@ func TestPassiveCooldownReductionConditions(t *testing.T) {
 func TestComboStatusCyclesAndExpires(t *testing.T) {
 	var statuses []ActiveStatus
 	def := BasicAttack.Combo
-	if def == nil || len(def.Variants) != 4 {
-		t.Fatal("basic attack should define four combo variants")
+	if def == nil || ComboSteps(def) != 4 {
+		t.Fatal("basic attack should define a four-step combo")
 	}
 	for i := 0; i < 4; i++ {
 		if step := AdvanceCombo(&statuses, def, "player"); step != i {

@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -59,6 +60,13 @@ type Proxy struct {
 	maps  map[string]*mapnode.Node
 	world *mapnode.Node
 	sess  map[string]*session
+
+	// convCache deduplicates protobuf conversion for broadcasts: the hub
+	// marshals one JSON frame and the same slice reaches sendToClient once
+	// per client, so a single-entry cache converts it once per frame.
+	convMu  sync.Mutex
+	convSrc []byte
+	convDst []byte
 }
 
 func New(cfg cluster.Config, cfgPath string, tokens *auth.TokenIssuer, accounts *store.AccountStore, profiles *store.Store, adminSecret string) *Proxy {
@@ -424,7 +432,7 @@ func (p *Proxy) sendToClient(clientID string, msg []byte) {
 	}
 	out := msg
 	if s.codec == protocol.CodecProtobuf {
-		converted, err := protocol.EncodeFrame(protocol.CodecProtobuf, msg)
+		converted, err := p.convertFrame(msg)
 		if err != nil {
 			log.Printf("proxy: session %s protobuf encode: %v", clientID, err)
 			return
@@ -436,6 +444,29 @@ func (p *Proxy) sendToClient(clientID string, msg []byte) {
 	default:
 		log.Printf("proxy: session %s send buffer full", clientID)
 	}
+}
+
+// convertFrame JSON→protobuf converts a hub frame once per unique frame: map
+// broadcasts hand the identical slice to every protobuf session, so the
+// conversion result is cached keyed by the source bytes.
+func (p *Proxy) convertFrame(msg []byte) ([]byte, error) {
+	p.convMu.Lock()
+	if len(msg) > 0 && len(msg) == len(p.convSrc) &&
+		&msg[0] == &p.convSrc[0] && bytes.Equal(msg, p.convSrc) {
+		dst := p.convDst
+		p.convMu.Unlock()
+		return dst, nil
+	}
+	p.convMu.Unlock()
+
+	out, err := protocol.EncodeFrame(protocol.CodecProtobuf, msg)
+	if err != nil {
+		return nil, err
+	}
+	p.convMu.Lock()
+	p.convSrc, p.convDst = msg, out
+	p.convMu.Unlock()
+	return out, nil
 }
 
 func (p *Proxy) drop(s *session) {

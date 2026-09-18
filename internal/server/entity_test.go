@@ -102,6 +102,7 @@ func TestNPCRetargetsToPetAfterPlayerDeath(t *testing.T) {
 	}
 
 	// Off cooldown, the npc hits its new target.
+	h.rng = alwaysHitRNG()
 	n.attackCD = time.Now().Add(-time.Millisecond)
 	hpBefore := pet.hp
 	h.tickEntities(time.Now())
@@ -167,7 +168,7 @@ func TestPetLevelCap(t *testing.T) {
 		t.Fatalf("pet level should cap at owner level 3, got %d", pet.Level)
 	}
 	tpl := petTemplate("goblin")
-	wantHP, _, _ := game.PetCombatStats(tpl.hp, tpl.str, tpl.agi, 3)
+	wantHP, _, _ := game.PetCombatStats(tpl.hp, tpl.str, tpl.dex, 3)
 	if pet.maxHP != wantHP {
 		t.Fatalf("pet maxHP should match level-3 stats: got %d, want %d", pet.maxHP, wantHP)
 	}
@@ -202,6 +203,45 @@ func TestKillClearsTargets(t *testing.T) {
 		if !found {
 			t.Fatalf("client %s should receive a set_target release", c.ID)
 		}
+	}
+}
+
+// Deaths that happen inside a worker sim arrive as effects — they must drop
+// canonical target/engage/enmity references too, or the NPC resurfaces as a
+// still-selected target when it respawns.
+func TestWorkerReportedDeathClearsTargeting(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-dead", px+30, py)
+	pe.targetID = n.ID
+	pe.engageID = n.ID
+	pe.enmity = map[string]int{n.ID: 5}
+	drainClient(c)
+
+	h.applyNPCEffects(
+		npcSimEffects{deaths: []npcDeath{{Entity: cloneEntity(n, false)}}},
+		func(string) string { return "" },
+		func(string) bool { return false },
+	)
+
+	if pe.targetID != "" || pe.engageID != "" {
+		t.Fatalf("worker-reported death should clear player targeting, got target=%q engage=%q", pe.targetID, pe.engageID)
+	}
+	if _, ok := pe.enmity[n.ID]; ok {
+		t.Fatal("worker-reported death should clear the player's enmity entry")
+	}
+	found := false
+	for _, f := range drainClient(c) {
+		if f.Type != protocol.TypeSetTarget {
+			continue
+		}
+		var p protocol.SetTargetPayload
+		if json.Unmarshal(f.Payload, &p) == nil && p.TargetID == "" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("client should receive a set_target release on worker-reported death")
 	}
 }
 
@@ -389,5 +429,140 @@ func TestPetFollowsOwnerIntoCamp(t *testing.T) {
 	}
 	if d := dist(pet.X, pet.Y, pe.X, pe.Y); d > 120 {
 		t.Fatalf("pet should reappear beside the owner (dist %.1f)", d)
+	}
+}
+
+// Pets path around terrain like NPCs: a pet following or chasing across a
+// wall must never occupy an unwalkable tile — the straight-line step is
+// gated by walkableAt and falls back to A* (or holds) instead of clipping.
+func TestPetMovementRespectsWalls(t *testing.T) {
+	ow := game.Loaded()
+	ts := float64(ow.TileSizePx())
+	// Find a walkable tile adjacent to an unwalkable one.
+	var px, py, dx, dy float64
+	found := false
+	for r := 1; r < ow.Rows-1 && !found; r++ {
+		for c := 1; c < ow.Cols-1 && !found; c++ {
+			ax, ay := (float64(c)+0.5)*ts, (float64(r)+0.5)*ts
+			if !ow.WalkableAt(ax, ay) {
+				continue
+			}
+			for _, dir := range [][2]float64{{1, 0}, {0, 1}, {-1, 0}, {0, -1}} {
+				if ow.WalkableAt(ax+dir[0]*ts, ay+dir[1]*ts) {
+					continue
+				}
+				px, py, dx, dy = ax, ay, dir[0], dir[1]
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Skip("loaded map has no walkable tile adjacent to a wall")
+	}
+
+	h, _, owner := testHubWithPlayer(t, px, py)
+	h.SetMap("greenwood", "Greenwood", ow)
+	// Park the owner several tiles past the wall so the straight line to them
+	// crosses it.
+	owner.X, owner.Y = px+dx*ts*4, py+dy*ts*4
+
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
+	pet.X, pet.Y = px, py
+	h.entities[pet.ID] = pet
+
+	now := time.Now()
+	assertStaysWalkable := func(name string, tick func()) {
+		for i := 0; i < 40; i++ {
+			tick()
+			if !h.walkableAt(pet.X, pet.Y) {
+				t.Fatalf("%s: pet moved inside a wall at (%.1f,%.1f) on tick %d", name, pet.X, pet.Y, i)
+			}
+		}
+	}
+
+	assertStaysWalkable("follow", func() {
+		pet.components.followOwner.Tick(h, pet, now, 0.05)
+	})
+
+	// Chase: a target parked beyond the wall gets the same treatment.
+	n := hostileNPC(h, "wall-target", owner.X, owner.Y)
+	pet.targetID = n.ID
+	assertStaysWalkable("chase", func() {
+		pet.components.chaseTarget.Tick(h, pet, now, 0.05)
+	})
+}
+
+// sealedPocketMap builds a 24x24 map of open grass with the owner tile at
+// (12,12) walled off on all eight sides — unreachable by walking or A*.
+func sealedPocketMap() *game.Overworld {
+	cells := make([]string, 24)
+	for r := 0; r < 24; r++ {
+		row := make([]byte, 24)
+		for c := 0; c < 24; c++ {
+			row[c] = game.TileGrass
+		}
+		cells[r] = string(row)
+	}
+	for r := 11; r <= 13; r++ {
+		row := []byte(cells[r])
+		for c := 11; c <= 13; c++ {
+			row[c] = game.TileRock
+		}
+		cells[r] = string(row)
+	}
+	center := []byte(cells[12])
+	center[12] = game.TileGrass
+	cells[12] = string(center)
+	return &game.Overworld{Cols: 24, Rows: 24, TileSize: 32, Cells: cells}
+}
+
+func TestPetTeleportsToUnreachableOwner(t *testing.T) {
+	ow := sealedPocketMap()
+	h, _, owner := testHubWithPlayer(t, 400, 400)
+	h.SetMap("sealed", "Sealed", ow)
+	owner.X, owner.Y = 400, 400 // tile (12,12) center, inside the pocket
+
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
+	pet.X, pet.Y = (4.5)*32, 400 // open ground, ~8 tiles west
+	h.entities[pet.ID] = pet
+
+	fo := pet.components.followOwner
+	now := time.Now()
+	for i := 0; i < 160; i++ {
+		fo.Tick(h, pet, now, combatTickInterval.Seconds())
+		if !h.walkableAt(pet.X, pet.Y) {
+			t.Fatalf("pet occupied an unwalkable tile on tick %d at (%.1f,%.1f)", i, pet.X, pet.Y)
+		}
+	}
+	if got := dist(pet.X, pet.Y, owner.X, owner.Y); got > petFollowDist {
+		t.Fatalf("pet should teleport within follow range of a sealed owner, dist %v", got)
+	}
+}
+
+func TestPetDoesNotTeleportTowardCombatTarget(t *testing.T) {
+	ow := sealedPocketMap()
+	h, _, owner := testHubWithPlayer(t, 200, 400)
+	h.SetMap("sealed", "Sealed", ow)
+	owner.X, owner.Y = 200, 400 // outside the pocket, west of it
+
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
+	pet.X, pet.Y = 144, 400
+	h.entities[pet.ID] = pet
+	// A combat target inside the sealed pocket: followOwner defers entirely
+	// to chaseTarget, which releases unreachable targets rather than snapping.
+	n := hostileNPC(h, "sealed-target", 400, 400)
+	pet.targetID = n.ID
+
+	fo := pet.components.followOwner
+	now := time.Now()
+	bx, by := pet.X, pet.Y
+	for i := 0; i < 30; i++ {
+		fo.Tick(h, pet, now, combatTickInterval.Seconds())
+	}
+	if pet.X != bx || pet.Y != by {
+		t.Fatalf("followOwner should not move a pet with a combat target, moved to (%.1f,%.1f)", pet.X, pet.Y)
+	}
+	if fo.unreachTicks != 0 {
+		t.Fatalf("combat target should not accrue follow unreachability, got %d", fo.unreachTicks)
 	}
 }

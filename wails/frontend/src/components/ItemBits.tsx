@@ -115,7 +115,7 @@ export function ItemListRow({
         }}
       >
         <span className="cm-item-row-icon">
-          <GameIcon src={itemIconSrc(item)} alt="" size={20} />
+          <GameIcon src={itemIconSrc(item)} alt="" size={24} />
           {equipped && (
             <span className="cm-item-row-equipped" title="Equipped">
               E
@@ -168,7 +168,7 @@ export function ItemSlot({
       {item ? (
         <>
           <span className="cm-slot-glyph">
-            <GameIcon src={itemIconSrc(item)} alt="" size={16} />
+            <GameIcon src={itemIconSrc(item)} alt="" size={32} />
           </span>
           {stackable && <span className="cm-slot-ilvl">{qty}</span>}
         </>

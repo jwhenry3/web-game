@@ -200,8 +200,8 @@ func TestProtobufRoundTripWelcomePets(t *testing.T) {
 		PlayerID: "c1",
 		Profile: protocol.ProfileInfo{
 			Name:        "Hero",
-			FollowPetID: "pet-1",
 			BattlePetID: "pet-1",
+			MountPetID:  "pet-1",
 			Pets: []game.PetRecord{
 				{ID: "pet-1", Kind: "goblin", Name: "Goblin", Level: 3},
 			},
@@ -222,13 +222,13 @@ func TestProtobufRoundTripWelcomePets(t *testing.T) {
 	if len(welcome.Profile.Pets) != 1 || welcome.Profile.Pets[0].Kind != "goblin" {
 		t.Fatalf("pets stripped from welcome: %+v", welcome.Profile)
 	}
-	if welcome.Profile.FollowPetID != "pet-1" || welcome.Profile.BattlePetID != "pet-1" {
+	if welcome.Profile.BattlePetID != "pet-1" {
 		t.Fatalf("pet slots stripped: %+v", welcome.Profile)
 	}
 }
 
 func TestProtobufRoundTripPetID(t *testing.T) {
-	frame := protocol.Encode(protocol.TypePetSetFollow, protocol.PetIDPayload{PetID: "pet-9"})
+	frame := protocol.Encode(protocol.TypePetSetMount, protocol.PetIDPayload{PetID: "pet-9"})
 	bin, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)
 	if err != nil {
 		t.Fatal(err)
@@ -284,6 +284,46 @@ func TestRegionChangedCodecParity(t *testing.T) {
 	}
 	if _, ok := raw["name"]; ok {
 		t.Fatalf("optional name should be omitted: %#v", raw)
+	}
+}
+
+func TestEncodeFramePayload(t *testing.T) {
+	// Protobuf: same wire bytes as the envelope round-trip path.
+	frame := protocol.Encode(protocol.TypeChat, protocol.ChatPayload{Message: "hi"})
+	var env protocol.Envelope
+	if err := json.Unmarshal(frame, &env); err != nil {
+		t.Fatal(err)
+	}
+	direct, err := protocol.EncodeFramePayload(protocol.CodecProtobuf, env.Type, env.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	viaFrame, err := protocol.EncodeFrame(protocol.CodecProtobuf, frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(direct) != string(viaFrame) {
+		t.Fatal("payload variant produced different wire bytes")
+	}
+	// No payload → type-only envelope.
+	bin, err := protocol.EncodeFramePayload(protocol.CodecProtobuf, protocol.TypeDodge, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := protocol.DecodeFrame(protocol.CodecProtobuf, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Type != protocol.TypeDodge {
+		t.Fatalf("type %s", got.Type)
+	}
+	// JSON codec produces a complete envelope frame.
+	out, err := protocol.EncodeFramePayload(protocol.CodecJSON, env.Type, env.Payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(frame) {
+		t.Fatalf("json frame %s", out)
 	}
 }
 

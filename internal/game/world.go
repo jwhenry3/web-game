@@ -485,6 +485,12 @@ func (o *Overworld) Pathfind(from, to Tile, region Region) []Vec2 {
 	return pathfindWith(o.NPCWalkableTile, from, to, region)
 }
 
+// PetPathfind routes a companion under player walk rules: unlike NPCs, pets
+// may enter sanctuaries their owner retreats into.
+func (o *Overworld) PetPathfind(from, to Tile, region Region) []Vec2 {
+	return pathfindWith(o.WalkableTile, from, to, region)
+}
+
 func (o *Overworld) PickRandomWanderPath(id string, region Region, from Tile, step int) []Vec2 {
 	return pickWanderPath(o.NPCWalkableTile, o.Wander, id, region, from, step)
 }

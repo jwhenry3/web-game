@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"clara-mundi/internal/game"
 )
@@ -29,8 +30,10 @@ type jobExport struct {
 		HP  float64 `json:"hp,omitempty"`
 		MP  float64 `json:"mp,omitempty"`
 		STR float64 `json:"str,omitempty"`
-		MAG float64 `json:"mag,omitempty"`
-		AGI float64 `json:"agi,omitempty"`
+		DEX float64 `json:"dex,omitempty"`
+		VIT float64 `json:"vit,omitempty"`
+		INT float64 `json:"int,omitempty"`
+		MD  float64 `json:"md,omitempty"`
 	} `json:"stat_mults"`
 	Starting  bool                 `json:"starting"`
 	SkillTree []jobSkillTreeExport `json:"skill_tree"`
@@ -40,7 +43,7 @@ type skillExport struct {
 	ID            string              `json:"id"`
 	Name          string              `json:"name"`
 	Category      string              `json:"category,omitempty"`
-	WeaponReq     string              `json:"weapon_req,omitempty"`
+	WeaponReqs    []string            `json:"weapon_reqs,omitempty"`
 	MPCost        int                 `json:"mp_cost"`
 	Power         float64             `json:"power"`
 	Magic         bool                `json:"magic"`
@@ -55,6 +58,9 @@ type skillExport struct {
 	PassiveEffect *game.PassiveEffect `json:"passive_effect,omitempty"`
 	ComboLength   int                 `json:"combo_length,omitempty"`
 	Combo         *game.ComboDef      `json:"combo,omitempty"`
+	Target        string              `json:"target"`
+	Effects       []game.SkillEffect  `json:"effects"`
+	Branches      []game.SkillBranch  `json:"branches,omitempty"`
 	Description   string              `json:"description"`
 }
 
@@ -70,6 +76,7 @@ type itemExport struct {
 	Slot         string         `json:"slot,omitempty"`
 	AllowedSlots []string       `json:"allowed_slots,omitempty"`
 	WeaponType   string         `json:"weapon_type,omitempty"`
+	ArmorClass   string         `json:"armor_class,omitempty"`
 	Rarity       string         `json:"rarity,omitempty"`
 	Level        int            `json:"level,omitempty"`
 	Stats        map[string]int `json:"stats,omitempty"`
@@ -125,15 +132,33 @@ func exportEquipmentItem(item game.Item) itemExport {
 		row.WeaponType = item.Type
 	} else {
 		row.AllowedSlots = []string{item.Slot}
+		row.ArmorClass = item.Type
 	}
 	return row
 }
 
 func equipmentDescription(item game.Item) string {
 	if item.Slot == game.SlotWeapon {
-		return "Starter weapon issued to new heroes."
+		if item.Level <= 1 {
+			return "Starter weapon issued to new heroes."
+		}
+		return fmt.Sprintf("%s weapon.", titleCase(item.Type))
 	}
-	return "Basic worn armor template using common loot naming."
+	class := item.Type
+	if class == "" {
+		class = game.ArmorMedium
+	}
+	if item.Level <= 1 {
+		return fmt.Sprintf("Worn %s armor issued to new heroes.", class)
+	}
+	return fmt.Sprintf("%s armor.", titleCase(class))
+}
+
+func titleCase(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func exportItems() []itemExport {
@@ -175,8 +200,10 @@ func exportJobs() []jobExport {
 		row.StatMults.HP = def.HPMult
 		row.StatMults.MP = def.MPMult
 		row.StatMults.STR = def.STRMult
-		row.StatMults.MAG = def.MAGMult
-		row.StatMults.AGI = def.AGIMult
+		row.StatMults.DEX = def.DEXMult
+		row.StatMults.VIT = def.VITMult
+		row.StatMults.INT = def.INTMult
+		row.StatMults.MD = def.MDMult
 		for _, node := range game.JobSkillTree(def.ID) {
 			row.SkillTree = append(row.SkillTree, jobSkillTreeExport{
 				SkillID:       node.SkillID,
@@ -197,12 +224,23 @@ func exportSkills() []skillExport {
 	return out
 }
 
+func weaponReqStrings(ws []game.WeaponType) []string {
+	if len(ws) == 0 {
+		return nil
+	}
+	out := make([]string, len(ws))
+	for i, w := range ws {
+		out[i] = string(w)
+	}
+	return out
+}
+
 func exportSkill(sk game.Skill) skillExport {
 	return skillExport{
 		ID:            sk.ID,
 		Name:          sk.Name,
 		Category:      string(sk.Category),
-		WeaponReq:     string(sk.WeaponReq),
+		WeaponReqs:    weaponReqStrings(sk.WeaponReqs),
 		MPCost:        sk.MPCost,
 		Power:         sk.Power,
 		Magic:         sk.UsesMagic,
@@ -217,15 +255,15 @@ func exportSkill(sk game.Skill) skillExport {
 		PassiveEffect: sk.Passive,
 		ComboLength:   comboLength(sk),
 		Combo:         sk.Combo,
+		Target:        string(sk.TargetRule()),
+		Effects:       game.SkillEffects(sk),
+		Branches:      sk.Branches,
 		Description:   sk.Description,
 	}
 }
 
 func comboLength(sk game.Skill) int {
-	if sk.Combo == nil {
-		return 0
-	}
-	return len(sk.Combo.Variants)
+	return game.ComboSteps(sk.Combo)
 }
 
 func writeJSON(path string, v any) error {

@@ -62,8 +62,10 @@ type JobDef struct {
 	HPMult         float64
 	MPMult         float64
 	STRMult        float64
-	MAGMult        float64
-	AGIMult        float64
+	DEXMult        float64
+	VITMult        float64
+	INTMult        float64
+	MDMult         float64
 }
 
 type ComboAlias struct {
@@ -90,16 +92,16 @@ func CurrentSubjobUnlockLevel() int {
 }
 
 var Jobs = map[JobID]JobDef{
-	JobVAN: {ID: JobVAN, Name: "Vanguard", Abbr: "VAN", Role: RoleTank, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.18, STRMult: 1.08},
-	JobAEG: {ID: JobAEG, Name: "Aegis", Abbr: "AEG", Role: RoleTank, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponHammer, HPMult: 1.20, STRMult: 1.06},
-	JobBRW: {ID: JobBRW, Name: "Brawler", Abbr: "BRW", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponKnuckles, STRMult: 1.16, AGIMult: 1.10},
-	JobRVR: {ID: JobRVR, Name: "Reaver", Abbr: "RVR", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponAxe, STRMult: 1.18, HPMult: 1.06},
-	JobLNC: {ID: JobLNC, Name: "Lancer", Abbr: "LNC", Role: RoleDPS, Style: StyleRanged, Category: CatSwordplay, Weapon: WeaponSpear, STRMult: 1.14, AGIMult: 1.08},
-	JobRON: {ID: JobRON, Name: "Ronin", Abbr: "RON", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponKatana, STRMult: 1.16, AGIMult: 1.08},
-	JobHEX: {ID: JobHEX, Name: "Hexwright", Abbr: "HEX", Role: RoleDPS, Style: StyleMagic, Category: CatSorcery, Weapon: WeaponStaff, MAGMult: 1.22, MPMult: 1.10},
-	JobSAN: {ID: JobSAN, Name: "Sanctifier", Abbr: "SAN", Role: RoleHealer, Style: StyleMagic, Category: CatDevotion, Weapon: WeaponWand, MAGMult: 1.12, MPMult: 1.16, HPMult: 1.04},
-	JobCAN: {ID: JobCAN, Name: "Cantor", Abbr: "CAN", Role: RoleSupport, Style: StyleMagic, Category: CatSorcery, Weapon: WeaponWand, AllowedWeapons: []WeaponType{WeaponWand, WeaponStaff}, MAGMult: 1.08, AGIMult: 1.08, MPMult: 1.10},
-	JobCUT: {ID: JobCUT, Name: "Cutpurse", Abbr: "CUT", Role: RoleDPS, Style: StyleMelee, Category: CatStealth, Weapon: WeaponDagger, AGIMult: 1.20, STRMult: 1.04},
+	JobVAN: {ID: JobVAN, Name: "Vanguard", Abbr: "VAN", Role: RoleTank, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponSword, HPMult: 1.18, STRMult: 1.08, VITMult: 1.12},
+	JobAEG: {ID: JobAEG, Name: "Aegis", Abbr: "AEG", Role: RoleTank, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponHammer, HPMult: 1.20, STRMult: 1.06, VITMult: 1.16},
+	JobBRW: {ID: JobBRW, Name: "Brawler", Abbr: "BRW", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponKnuckles, STRMult: 1.16, DEXMult: 1.10},
+	JobRVR: {ID: JobRVR, Name: "Reaver", Abbr: "RVR", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponAxe, STRMult: 1.18, HPMult: 1.06, VITMult: 1.06},
+	JobLNC: {ID: JobLNC, Name: "Lancer", Abbr: "LNC", Role: RoleDPS, Style: StyleRanged, Category: CatSwordplay, Weapon: WeaponSpear, STRMult: 1.14, DEXMult: 1.10},
+	JobRON: {ID: JobRON, Name: "Ronin", Abbr: "RON", Role: RoleDPS, Style: StyleMelee, Category: CatSwordplay, Weapon: WeaponKatana, STRMult: 1.16, DEXMult: 1.08},
+	JobHEX: {ID: JobHEX, Name: "Hexwright", Abbr: "HEX", Role: RoleDPS, Style: StyleMagic, Category: CatSorcery, Weapon: WeaponStaff, INTMult: 1.22, MDMult: 1.06, MPMult: 1.10},
+	JobSAN: {ID: JobSAN, Name: "Sanctifier", Abbr: "SAN", Role: RoleHealer, Style: StyleMagic, Category: CatDevotion, Weapon: WeaponWand, MDMult: 1.16, INTMult: 1.04, MPMult: 1.16, HPMult: 1.04},
+	JobCAN: {ID: JobCAN, Name: "Cantor", Abbr: "CAN", Role: RoleSupport, Style: StyleMagic, Category: CatSorcery, Weapon: WeaponWand, AllowedWeapons: []WeaponType{WeaponWand, WeaponStaff}, MDMult: 1.10, INTMult: 1.06, DEXMult: 1.08, MPMult: 1.10},
+	JobCUT: {ID: JobCUT, Name: "Cutpurse", Abbr: "CUT", Role: RoleDPS, Style: StyleMelee, Category: CatStealth, Weapon: WeaponDagger, DEXMult: 1.20, STRMult: 1.04},
 }
 
 // StartingJobs are available at character creation (2 per mother city).
@@ -298,39 +300,41 @@ func applyJobMult(v int, mult float64) int {
 	return int(float64(v) * mult)
 }
 
-func JobBaseStats(job JobID, level int) (hp, mp, str, mag, agi int) {
-	hp, mp, str, mag, agi = BaseStats(level)
+func JobBaseStats(job JobID, level int) Stats {
+	base := BaseStats(level)
 	def, ok := Jobs[job]
 	if !ok {
-		return
+		return base
 	}
-	hp = applyJobMult(hp, def.HPMult)
-	mp = applyJobMult(mp, def.MPMult)
-	str = applyJobMult(str, def.STRMult)
-	mag = applyJobMult(mag, def.MAGMult)
-	agi = applyJobMult(agi, def.AGIMult)
-	return
+	s := Stats{
+		Str: applyJobMult(base.Str, def.STRMult),
+		Dex: applyJobMult(base.Dex, def.DEXMult),
+		Vit: applyJobMult(base.Vit, def.VITMult),
+		Int: applyJobMult(base.Int, def.INTMult),
+		MD:  applyJobMult(base.MD, def.MDMult),
+	}
+	// Pools scale with the multiplied vit/int, then the pool mult.
+	s.HP = applyJobMult(base.HP-base.Vit*vitPoolFactor+s.Vit*vitPoolFactor, def.HPMult)
+	s.MP = applyJobMult(base.MP-base.Int*intPoolFactor+s.Int*intPoolFactor, def.MPMult)
+	return s
 }
 
-func ComputeJobStats(mainJob JobID, mainLvl int, subJob JobID, subLvl int, equipped []Item) (hp, mp, str, mag, agi int) {
-	mainHP, mainMP, mainStr, mainMag, mainAgi := JobBaseStats(mainJob, mainLvl)
-	if subJob == "" || subLvl < 1 {
-		hp, mp, str, mag, agi = mainHP, mainMP, mainStr, mainMag, mainAgi
-	} else {
-		subHP, subMP, subStr, subMag, subAgi := JobBaseStats(subJob, subLvl)
-		hp = mainHP + subHP/2
-		mp = mainMP + subMP/2
-		str = mainStr + subStr/2
-		mag = mainMag + subMag/2
-		agi = mainAgi + subAgi/2
+func ComputeJobStats(mainJob JobID, mainLvl int, subJob JobID, subLvl int, equipped []Item) Stats {
+	s := JobBaseStats(mainJob, mainLvl)
+	if subJob != "" && subLvl >= 1 {
+		sub := JobBaseStats(subJob, subLvl)
+		s.HP += sub.HP / 2
+		s.MP += sub.MP / 2
+		s.Str += sub.Str / 2
+		s.Dex += sub.Dex / 2
+		s.Vit += sub.Vit / 2
+		s.Int += sub.Int / 2
+		s.MD += sub.MD / 2
 	}
 	for _, item := range equipped {
-		str += item.Stats["str"]
-		mag += item.Stats["mag"]
-		agi += item.Stats["agi"]
-		hp += item.Stats["hp"]
+		s.AddItemStats(item.Stats)
 	}
-	return
+	return s
 }
 
 func StarterWeaponForJob(job JobID) Item {

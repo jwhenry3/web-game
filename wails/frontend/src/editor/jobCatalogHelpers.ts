@@ -6,6 +6,8 @@ export function createDefaultJob(id = `JOB_${Date.now()}`): JobDef {
     name: "New Job",
     abbr: "NEW",
     category: "swordplay",
+    role: "dps",
+    style: "melee",
     weapon: "sword",
     stat_mults: {},
     starting: false,

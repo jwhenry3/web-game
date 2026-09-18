@@ -6,17 +6,26 @@ import { useGame } from "../state/store";
 import {
   equipSlotsForProfile,
   equippedSlotForItem,
+  ALL_JOBS,
   ARMOURY_TABS,
+  ARMOR_CLASSES,
+  armorClassLabel,
+  WEAPONS,
   type ArmouryTabId,
   jobColor,
   jobLabel,
   mainWeaponTypeFromProfile,
+  PROFICIENCY_GROUPS,
+  PROF_MAX_LEVEL,
+  proficiencyLabel,
   type Item,
   type ProfileInfo,
   type SkillInfo,
   type WindowId,
 } from "../types";
 import { GameIcon } from "../ui/GameIcon";
+import { JobIdentityBadges, ROLE_COLORS, WeaponTypeIcon, roleLabel, weaponLabel } from "../ui/JobIdentity";
+import { skillIconSrc } from "../ui/itemDisplay";
 import { ICONS } from "../ui/icons";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { SkillTooltipContent } from "../ui/tooltipContent";
@@ -39,18 +48,35 @@ import { uiScaleFactor, windowScaleKey } from "../ui/uiScale";
 
 const TITLES: Record<WindowId, string> = {
   character: "Character",
-  equipment: "Equipment",
-  inventory: "Inventory",
-  skills: "Actions & Traits",
+  equipment: "Character",
+  inventory: "Character",
+  skills: "Character",
   social: "Social",
   map: "Map",
   house_storage: "House Storage",
-  pets: "Pets",
+  pets: "Character",
 };
+
+// The single Character window: every tab is a WindowId so the existing
+// hotkeys (C/K/E/I/P) and toggleWindow semantics switch tabs for free.
+const CHAR_TABS: { id: WindowId; label: string; key: string; icon: string }[] = [
+  { id: "character", label: "About", key: "C", icon: ICONS.menuCharacter },
+  { id: "skills", label: "Actions", key: "K", icon: ICONS.menuSkills },
+  { id: "equipment", label: "Equipment", key: "E", icon: ICONS.menuEquipment },
+  { id: "inventory", label: "Inventory", key: "I", icon: ICONS.menuInventory },
+  { id: "pets", label: "Pets", key: "P", icon: "/assets/enemies/dire_wolf_icon.png" },
+];
+
+const CHAR_TAB_IDS = CHAR_TABS.map((t) => t.id);
+
+export function isCharWindowTab(open: WindowId | null): boolean {
+  return open !== null && CHAR_TAB_IDS.includes(open);
+}
 
 export function GameWindows() {
   const open = useGame((s) => s.openWindow);
   const close = useGame((s) => s.closeWindow);
+  const select = useGame((s) => s.selectWindow);
   const profile = useGame((s) => s.profile);
   const screen = useGame((s) => s.screen);
   const uiScale = useGame((s) => s.options.uiScale);
@@ -60,6 +86,53 @@ export function GameWindows() {
 
   if (open === "house_storage") {
     return <HouseStorageWindows profile={profile} onClose={close} />;
+  }
+
+  if (isCharWindowTab(open)) {
+    return (
+      <div className="cm-window-layer" onMouseDown={onBackdrop}>
+        <DraggableWindowShell
+          resetKey="character"
+          scale={uiScaleFactor(uiScale, windowScaleKey("character"))}
+          className="cm-window cm-window--charwin"
+          title="Character"
+          onClose={close}
+          bodyClassName="cm-body cm-body--charwin"
+        >
+          <div className="cm-charwin">
+            <nav className="cm-charwin-tabs">
+              {CHAR_TABS.map((t) => (
+                <HoverTooltip key={t.id} content={`${t.label} [${t.key}]`}>
+                  <button
+                    type="button"
+                    className={`cm-charwin-tab ${open === t.id ? "on" : ""}`}
+                    onClick={() => select(t.id)}
+                    aria-label={t.label}
+                  >
+                    <GameIcon src={t.icon} alt="" size={22} />
+                    <span className="cm-charwin-tab-label">{t.label}</span>
+                  </button>
+                </HoverTooltip>
+              ))}
+            </nav>
+            <div className="cm-charwin-content">
+              {open === "character" && <CharacterPane profile={profile} />}
+              {open === "skills" && <SkillsPane profile={profile} />}
+              {open === "equipment" && <EquipmentPane profile={profile} />}
+              {open === "inventory" && (
+                <BagPane
+                  profile={profile}
+                  bag="inventory"
+                  items={profile.inventory}
+                  transferEnabled={screen === "house"}
+                />
+              )}
+              {open === "pets" && <PetsPane profile={profile} />}
+            </div>
+          </div>
+        </DraggableWindowShell>
+      </div>
+    );
   }
 
   return (
@@ -72,20 +145,8 @@ export function GameWindows() {
         onClose={close}
         bodyClassName={`cm-body ${open === "map" ? "cm-body--map" : ""}`}
       >
-        {open === "character" && <CharacterPane profile={profile} />}
-        {open === "equipment" && <EquipmentPane profile={profile} />}
-        {open === "inventory" && (
-          <BagPane
-            profile={profile}
-            bag="inventory"
-            items={profile.inventory}
-            transferEnabled={screen === "house"}
-          />
-        )}
-        {open === "skills" && <SkillsPane profile={profile} />}
         {open === "social" && <SocialPane />}
         {open === "map" && <MapWindow />}
-        {open === "pets" && <PetsPane profile={profile} />}
       </DraggableWindowShell>
     </div>
   );
@@ -288,12 +349,29 @@ function BagPane({
 }
 
 function CharacterPane({ profile }: { profile: ProfileInfo }) {
-  const [tab, setTab] = useState<"overview" | "jobs">("overview");
+  const [tab, setTab] = useState<"overview" | "jobs" | "profs">("overview");
   const stats = profile.stats ?? { hp: 0, mp: 0, str: 0, mag: 0, agi: 0 };
   const xpPct = Math.min(100, (profile.xp / Math.max(profile.max_xp, 1)) * 100);
   const canSub = profile.level >= profile.subjob_unlock_level;
   const sortedJobs = [...(profile.jobs ?? [])].sort((a, b) => a.abbr.localeCompare(b.abbr));
   const subJobProgress = profile.jobs?.find((j) => j.id === profile.sub_job);
+  // Classes grouped by role (tank → healer → support → dps); jobs whose role
+  // isn't in ALL_JOBS land in a trailing "other" group.
+  const jobRoleGroups = (() => {
+    const ROLE_ORDER = ["tank", "healer", "support", "dps"];
+    const byRole = new Map<string, typeof sortedJobs>();
+    for (const j of sortedJobs) {
+      const role = ALL_JOBS.find((x) => x.id === j.id)?.role ?? "other";
+      const g = byRole.get(role);
+      if (g) g.push(j);
+      else byRole.set(role, [j]);
+    }
+    const rank = (r: string) => {
+      const i = ROLE_ORDER.indexOf(r);
+      return i === -1 ? ROLE_ORDER.length : i;
+    };
+    return [...byRole.entries()].sort((a, b) => rank(a[0]) - rank(b[0]));
+  })();
 
   return (
     <div className="cm-char">
@@ -322,6 +400,9 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
         <button type="button" className={`cm-tab ${tab === "jobs" ? "on" : ""}`} onClick={() => setTab("jobs")}>
           Job Levels
         </button>
+        <button type="button" className={`cm-tab ${tab === "profs" ? "on" : ""}`} onClick={() => setTab("profs")}>
+          Proficiencies
+        </button>
       </div>
 
       {tab === "overview" && (
@@ -329,7 +410,10 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
           <div className="cm-char-jobs">
             <div className="cm-char-job">
               <span className="field-label">Main</span>
-              <span className="cm-job-readout">{jobLabel(profile.main_job)} Lv{profile.level}</span>
+              <span className="cm-job-readout">
+                {jobLabel(profile.main_job)} Lv{profile.level}
+                <JobIdentityBadges jobId={profile.main_job} />
+              </span>
             </div>
             <div className="cm-char-job">
               <span className="field-label">Sub</span>
@@ -337,6 +421,7 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
                 {profile.sub_job
                   ? `${jobLabel(profile.sub_job)} Lv${subJobProgress?.level ?? 1}`
                   : "None"}
+                {profile.sub_job && <JobIdentityBadges jobId={profile.sub_job} />}
               </span>
             </div>
           </div>
@@ -347,37 +432,82 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
             <Param label="HP" value={stats.hp} />
             <Param label="MP" value={stats.mp} />
             <Param label="STR" value={stats.str} />
-            <Param label="MAG" value={stats.mag} />
-            <Param label="AGI" value={stats.agi} />
+            <Param label="DEX" value={stats.dex} />
+            <Param label="VIT" value={stats.vit} />
+            <Param label="INT" value={stats.int} />
+            <Param label="MD" value={stats.md} />
           </div>
         </>
       )}
 
       {tab === "jobs" && (
-        <div className="job-grid job-grid-compact cm-char-job-grid">
-          {sortedJobs.map((j) => {
-            const isMain = j.id === profile.main_job;
-            const isSub = j.id === profile.sub_job;
-            const unlocked = (profile.unlocked_jobs ?? []).includes(j.id);
-            return (
-              <div
-                key={j.id}
-                className={`job-card job-card--inline job-card--readout ${isMain || isSub ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
-              >
-                <span className="job-swatch" style={{ background: jobColor(j.id) }} />
-                <div className="job-card-body">
-                  <span className="job-name" style={{ color: unlocked ? jobColor(j.id) : undefined }}>
-                    {j.name}
-                    {isMain ? " (Main)" : isSub ? " (Sub)" : ""}
-                  </span>
-                  <span className="job-level-meta dim">
-                    {unlocked ? `Lv ${j.level} · ${j.xp}/${j.max_xp} EXP` : "Not unlocked"}
-                  </span>
-                </div>
-                {!unlocked && <span className="job-lock dim">Locked</span>}
+        <div className="cm-char-job-groups">
+          {jobRoleGroups.map(([role, jobs]) => (
+            <div key={role} className="cm-armoury-group">
+              <div className="cm-armoury-group-head">
+                <span className="cm-job-role-dot" style={{ background: ROLE_COLORS[role] }} />
+                {roleLabel(role)}
               </div>
-            );
-          })}
+              <div className="job-grid job-grid-compact cm-char-job-grid">
+                {jobs.map((j) => {
+                  const isMain = j.id === profile.main_job;
+                  const isSub = j.id === profile.sub_job;
+                  const unlocked = (profile.unlocked_jobs ?? []).includes(j.id);
+                  return (
+                    <div
+                      key={j.id}
+                      className={`job-card job-card--inline job-card--readout ${isMain || isSub ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
+                    >
+                      <JobIdentityBadges jobId={j.id} iconOnly />
+                      <div className="job-card-body">
+                        <span className="job-name">
+                          {j.name}
+                          {isMain ? " (Main)" : isSub ? " (Sub)" : ""}
+                        </span>
+                      </div>
+                      {unlocked ? (
+                        <span className="job-card-level">Lv {j.level}</span>
+                      ) : (
+                        <span className="job-lock dim">Locked</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab === "profs" && (
+        <div className="cm-char-prof-groups">
+          {PROFICIENCY_GROUPS.map((g) => (
+            <div key={g.label} className="cm-armoury-group">
+              <div className="cm-armoury-group-head">{g.label}</div>
+              <div className="cm-prof-list">
+                {g.profs.map((pid) => {
+                  const lvl = profile.prof_levels?.[pid] ?? 0;
+                  const maxed = lvl >= PROF_MAX_LEVEL;
+                  const pct = maxed
+                    ? 100
+                    : Math.min(100, ((profile.prof_exp?.[pid] ?? 0) / ((lvl + 1) * 100)) * 100);
+                  return (
+                    <div
+                      key={pid}
+                      className={`cm-prof-row${lvl === 0 ? " untrained" : ""}`}
+                      title={maxed ? `${proficiencyLabel(pid)} — max level` : `${proficiencyLabel(pid)} ${(profile.prof_exp?.[pid] ?? 0) / 100} / ${lvl + 1} growth`}
+                    >
+                      <span className="cm-prof-name">{proficiencyLabel(pid)}</span>
+                      <span className="cm-prof-bar">
+                        <span className="cm-prof-fill" style={{ width: `${pct}%` }} />
+                      </span>
+                      <span className="cm-prof-level">{maxed ? "MAX" : `Lv${lvl}`}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -406,6 +536,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   const byId = new Map(profile.inventory.map((i) => [i.id, i]));
   const [focus, setFocus] = useState<Item | null>(null);
   const [armouryTab, setArmouryTab] = useState<ArmouryTabId>("weapon");
+  const [activeSlot, setActiveSlot] = useState<string | null>(null);
 
   const slots = equipSlotsForProfile(profile.sub_job);
   const previewWeapon = previewWeaponForEquipment(profile, focus);
@@ -427,11 +558,50 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   );
   const armouryTabLabel = ARMOURY_TABS.find((t) => t.id === armouryTab)?.label ?? armouryTab;
 
+  // Every tab splits into type groups: weapons by weapon type, armor by
+  // weight class. Items keep inventory order within a group and groups
+  // follow the canonical WEAPONS / ARMOR_CLASSES ordering (unknowns last).
+  const armouryGroups = (() => {
+    const order: string[] = armouryTab === "weapon" ? WEAPONS.map((w) => w.id) : ARMOR_CLASSES.map((c) => c.id);
+    const byType = new Map<string, Item[]>();
+    for (const i of armouryItems) {
+      const t = i.type ?? "";
+      const list = byType.get(t);
+      if (list) list.push(i);
+      else byType.set(t, [i]);
+    }
+    const rank = (t: string) => {
+      const idx = order.indexOf(t);
+      return idx === -1 ? order.length : idx;
+    };
+    return [...byType.entries()]
+      .sort((a, b) => rank(a[0]) - rank(b[0]))
+      .map(([type, items]) => ({ type, items }));
+  })();
+
+  const renderArmouryRow = (item: Item) => (
+    <ItemListRow
+      key={item.id}
+      item={item}
+      profile={profile}
+      equipped={!!equippedSlotForItem(profile.equipped, item.id)}
+      equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
+      selected={focus?.id === item.id}
+      actionCtx={{ activeSlot: activeSlot ?? undefined }}
+      onClick={() => setFocus(item)}
+    />
+  );
+
   const dollSlot = (slotId: string, label: string) => {
     const enabled = slots.some((s) => s.id === slotId);
     const item = profile.equipped[slotId] ? byId.get(profile.equipped[slotId]) : undefined;
+    // The armoury chest has no sub_weapon tab — sub weapons live under Weapon.
+    const tabId = (slotId === "sub_weapon" ? "weapon" : slotId) as ArmouryTabId;
     return (
-      <div key={slotId} className={`cm-doll-cell doll-${slotId}`}>
+      <div
+        key={slotId}
+        className={`cm-doll-cell doll-${slotId} ${activeSlot === slotId ? "active" : ""}`}
+      >
         <span className="cm-doll-label">{label}</span>
         <ItemSlot
           item={item}
@@ -439,7 +609,16 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
           emptyLabel={label}
           equipped={!!item}
           selected={focus?.id === item?.id}
-          onClick={enabled && item ? () => setFocus(item) : undefined}
+          onClick={
+            enabled
+              ? () => {
+                  setArmouryTab(tabId);
+                  setActiveSlot((cur) => (cur === slotId ? null : slotId));
+                  if (item) setFocus(item);
+                  else if (focus && focus.slot !== tabId) setFocus(null);
+                }
+              : undefined
+          }
         />
       </div>
     );
@@ -479,16 +658,20 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
           ))}
         </div>
         <div className="cm-item-list">
-          {armouryItems.map((item) => (
-            <ItemListRow
-              key={item.id}
-              item={item}
-              profile={profile}
-              equipped={!!equippedSlotForItem(profile.equipped, item.id)}
-              equippedSlot={equippedSlotForItem(profile.equipped, item.id)}
-              selected={focus?.id === item.id}
-              onClick={() => setFocus(item)}
-            />
+          {armouryGroups.map((g) => (
+            <div key={g.type} className="cm-armoury-group">
+              <div className="cm-armoury-group-head">
+                {armouryTab === "weapon" ? (
+                  <>
+                    <WeaponTypeIcon type={g.type} size={13} />
+                    {weaponLabel(g.type)}
+                  </>
+                ) : (
+                  armorClassLabel(g.type)
+                )}
+              </div>
+              {g.items.map(renderArmouryRow)}
+            </div>
           ))}
           {armouryItems.length === 0 && (
             <p className="hint cm-item-list-empty">No {armouryTabLabel.toLowerCase()} gear in the armoury chest.</p>
@@ -602,27 +785,10 @@ function SkillRow({
         }}
       >
         <span className="cm-item-row-icon">
-          <GameIcon
-            src={
-              sk.id === "attack"
-                ? ICONS.attack
-                : sk.id === "return" || sk.id === "port" || sk.id === "camp"
-                  ? ICONS.skillUnlocked
-                  : sk.unlocked
-                    ? ICONS.skillUnlocked
-                    : ICONS.skillLockedNode
-            }
-            alt=""
-            size={20}
-          />
+          <GameIcon src={skillIconSrc(sk.id, sk.unlocked)} alt="" size={24} />
         </span>
-        <span className="cm-item-row-name">
-          {sk.name}
-          {sk.unlocked && sk.level > 0 ? ` Lv${sk.level}` : ""}
-        </span>
-        <span className={`cm-tree-tag ${sk.passive ? "passive" : sk.world_only ? "field" : "battle"}`}>
-          {sk.passive ? "Passive" : sk.world_only ? "Field" : "Battle"}
-        </span>
+        <span className="cm-item-row-name">{sk.name}</span>
+        {!sk.unlocked && <span className="cm-skill-level locked">Lv{sk.unlock_level}</span>}
       </button>
     </div>
   );
@@ -650,11 +816,7 @@ export function WindowBar() {
   const open = useGame((s) => s.openWindow);
   const keys: { id: WindowId; label: string; key: string; icon: string }[] = [
     { id: "character", label: "Character", key: "C", icon: ICONS.menuCharacter },
-    { id: "equipment", label: "Equipment", key: "E", icon: ICONS.menuEquipment },
-    { id: "inventory", label: "Inventory", key: "I", icon: ICONS.menuInventory },
-    { id: "skills", label: "Actions", key: "K", icon: ICONS.menuSkills },
     { id: "social", label: "Social", key: "O", icon: ICONS.menuSocial },
-    { id: "pets", label: "Pets", key: "P", icon: ICONS.menuInventory },
     { id: "map", label: "Map", key: "M", icon: "" },
   ];
   return (
@@ -663,7 +825,9 @@ export function WindowBar() {
         <HoverTooltip key={b.id} content={`${b.label} [${b.key}]`}>
           <button
             type="button"
-            className={`cm-menu-btn ${open === b.id || (open === "house_storage" && b.id === "inventory") ? "on" : ""}`}
+            className={`cm-menu-btn ${
+              (b.id === "character" && (isCharWindowTab(open) || open === "house_storage")) || open === b.id ? "on" : ""
+            }`}
             tabIndex={-1}
             onClick={() => toggle(b.id)}
             aria-label={b.label}

@@ -28,6 +28,7 @@ type CatalogItemDef struct {
 	Description string         `json:"description,omitempty"`
 	Slot        string         `json:"slot,omitempty"`
 	WeaponType  string         `json:"weapon_type,omitempty"`
+	ArmorClass  string         `json:"armor_class,omitempty"`
 	Rarity      string         `json:"rarity,omitempty"`
 	Level       int            `json:"level,omitempty"`
 	Stats       map[string]int `json:"stats,omitempty"`
@@ -93,6 +94,42 @@ func EnsureLootCatalogs() {
 	}
 }
 
+// equipmentDefToItem converts a catalog equipment definition into an item
+// template (catalog id as Item.ID; mint a fresh instance id when dropping).
+// Armor resolves its weight class, defaulting to medium for legacy defs.
+func equipmentDefToItem(def CatalogItemDef) (Item, bool) {
+	kind := def.Kind
+	if kind == "" {
+		kind = KindEquipment
+	}
+	if kind != KindEquipment {
+		return Item{}, false
+	}
+	rarity := Rarity(def.Rarity)
+	if rarity == "" {
+		rarity = RarityCommon
+	}
+	itemType := def.WeaponType
+	if def.Slot != SlotWeapon && def.Slot != SlotSubWeapon {
+		itemType = def.ArmorClass
+		if !ValidArmorClass(itemType) {
+			itemType = ArmorMedium
+		}
+	}
+	stats := map[string]int{}
+	for k, v := range def.Stats {
+		stats[k] = v
+	}
+	level := def.Level
+	if level < 1 {
+		level = 1
+	}
+	return Item{
+		ID: def.ID, Name: def.Name, Kind: KindEquipment, Slot: def.Slot,
+		Type: itemType, Rarity: rarity, Level: level, Stats: stats,
+	}, true
+}
+
 // ItemFromCatalog mints an inventory Item from a catalog definition.
 func ItemFromCatalog(rng *rand.Rand, defID string, level int) (Item, bool) {
 	EnsureLootCatalogs()
@@ -137,10 +174,14 @@ func ItemFromCatalog(rng *rand.Rand, defID string, level int) (Item, bool) {
 			Rarity: rarity, Level: level, Qty: 1, Stats: stats,
 		}, true
 	default:
-		return Item{
-			ID: id, Name: def.Name, Kind: KindEquipment, Slot: def.Slot,
-			Type: def.WeaponType, Rarity: rarity, Level: level, Qty: 1, Stats: stats,
-		}, true
+		item, ok := equipmentDefToItem(def)
+		if !ok {
+			return Item{}, false
+		}
+		item.ID = id
+		item.Level = level
+		item.Qty = 1
+		return item, true
 	}
 }
 
@@ -175,7 +216,7 @@ func RollDropPool(rng *rand.Rand, poolID string, level, lootBonus int) []Item {
 	return out
 }
 
-// GenerateVictoryLoot rolls assigned drop pools; falls back to procedural loot when none assigned.
+// GenerateVictoryLoot rolls assigned drop pools; falls back to catalog loot when none assigned.
 func GenerateVictoryLoot(rng *rand.Rand, level, lootBonus int, dropPoolIDs []string) []Item {
 	assigned := false
 	var loot []Item

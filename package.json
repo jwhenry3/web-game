@@ -22,6 +22,8 @@
     "world:gen": "go run ./cmd/genworld",
     "wire:gen": "go run ./cmd/genwire",
     "sprites:enemies": "node scripts/gen-enemy-sprites.mjs",
+    "icons:skills": "node scripts/gen-skill-icons.mjs",
+    "icons:items": "node scripts/gen-item-icons.mjs",
     "test": "npm run server:test"
   }
 }

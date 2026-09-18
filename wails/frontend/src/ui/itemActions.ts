@@ -25,6 +25,8 @@ export type ItemActionContext = {
   /** True while the house storage dual-window UI is open. */
   houseStorageOpen?: boolean;
   onPlaceFurniture?: (item: Item) => void;
+  /** Equipment window: doll slot currently marked active for equipping. */
+  activeSlot?: string;
 };
 
 function weaponSlotLabel(slot: "weapon" | "sub_weapon", profile: ProfileInfo): string {
@@ -152,9 +154,35 @@ export function itemActions(
   return actions;
 }
 
-function primaryWeaponEquipSlot(item: Item, profile: ProfileInfo): "weapon" | "sub_weapon" | null {
-  if (jobAllowsWeapon(profile.main_job, item.type)) return "weapon";
-  if (profile.sub_job && jobAllowsWeapon(profile.sub_job, item.type)) return "sub_weapon";
+function weaponSlotAllowed(slot: "weapon" | "sub_weapon", item: Item, profile: ProfileInfo): boolean {
+  const jobId = slot === "weapon" ? profile.main_job : profile.sub_job;
+  return !!jobId && jobAllowsWeapon(jobId, item.type);
+}
+
+/**
+ * Double-click weapon equip: an active weapon doll slot wins when the job can
+ * use the weapon there; otherwise the first empty slot (main, then sub), and
+ * with both filled it falls back to main.
+ */
+function primaryWeaponEquipSlot(
+  item: Item,
+  profile: ProfileInfo,
+  activeSlot?: string,
+): "weapon" | "sub_weapon" | null {
+  if (
+    (activeSlot === "weapon" || activeSlot === "sub_weapon") &&
+    weaponSlotAllowed(activeSlot, item, profile)
+  ) {
+    return activeSlot;
+  }
+  const mainFilled = !!profile.equipped?.weapon;
+  const subFilled = !!profile.equipped?.sub_weapon;
+  if (!mainFilled && weaponSlotAllowed("weapon", item, profile)) return "weapon";
+  if (mainFilled && !subFilled && weaponSlotAllowed("sub_weapon", item, profile)) {
+    return "sub_weapon";
+  }
+  if (weaponSlotAllowed("weapon", item, profile)) return "weapon";
+  if (weaponSlotAllowed("sub_weapon", item, profile)) return "sub_weapon";
   return null;
 }
 
@@ -198,7 +226,7 @@ export function runPrimaryItemAction(
   }
 
   if (item.slot === "weapon") {
-    const slot = primaryWeaponEquipSlot(item, profile);
+    const slot = primaryWeaponEquipSlot(item, profile, ctx.activeSlot);
     if (!slot) return false;
     net.equip(item.id, slot);
     return true;

@@ -6,7 +6,7 @@ import (
 	"clara-mundi/internal/game"
 )
 
-func TestPetCollectionFollowBattleRelease(t *testing.T) {
+func TestPetCollectionActiveMountRelease(t *testing.T) {
 	s := Load("")
 	p := s.GetOrCreate("PetOwner", game.StartingJobs[0])
 	p2, pet, errMsg := s.AddPet(p.Name, "goblin", "Goblin", 3)
@@ -16,9 +16,9 @@ func TestPetCollectionFollowBattleRelease(t *testing.T) {
 	if len(p2.Pets) != 1 || pet.Level != 3 {
 		t.Fatalf("pet not stored: %+v", p2.Pets)
 	}
-	p3, errMsg := s.SetFollowPet(p.Name, pet.ID)
-	if errMsg != "" || p3.FollowPetID != pet.ID {
-		t.Fatalf("follow: %s %+v", errMsg, p3)
+	p3, errMsg := s.SetMountPet(p.Name, pet.ID)
+	if errMsg != "" || p3.MountPetID != pet.ID {
+		t.Fatalf("mount: %s %+v", errMsg, p3)
 	}
 	p4, errMsg := s.SetBattlePet(p.Name, pet.ID)
 	if errMsg != "" || p4.BattlePetID != pet.ID {
@@ -28,7 +28,7 @@ func TestPetCollectionFollowBattleRelease(t *testing.T) {
 	if errMsg != "" {
 		t.Fatalf("release: %s", errMsg)
 	}
-	if len(p5.Pets) != 0 || p5.FollowPetID != "" || p5.BattlePetID != "" {
+	if len(p5.Pets) != 0 || p5.BattlePetID != "" || p5.MountPetID != "" {
 		t.Fatalf("release should clear slots: %+v", p5)
 	}
 }

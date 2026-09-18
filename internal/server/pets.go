@@ -2,8 +2,10 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
@@ -28,17 +30,28 @@ const (
 // petStandoff is how close to the target a pet stands to attack (px).
 const petStandoff = 30.0
 
-func (h *Hub) handlePetSetFollow(c *Client, raw json.RawMessage) {
-	var p protocol.PetIDPayload
-	_ = json.Unmarshal(raw, &p)
-	profile, errMsg := h.store.SetFollowPet(c.Name, p.PetID)
-	if errMsg != "" {
-		h.sendError(c, errMsg)
-		return
+// petTeleportTicks is how long a pet may go without closing distance on its
+// owner before snapping to them (~3s at the 50ms entity tick). Only applies
+// while following — a pet never teleports toward a combat target.
+const petTeleportTicks = 60
+
+// petSyncInterval throttles the tick-driven reconcile in syncPetEntities:
+// the entity set is rebuilt at most this often, while pet mutations set
+// petSyncDirty so the next 50ms tick resyncs immediately.
+const petSyncInterval = 250 * time.Millisecond
+
+// petSyncDue reports whether this entity tick should reconcile pet entities:
+// right away after a mutation (petSyncDirty), otherwise once per
+// petSyncInterval. lastPetSync is stamped here, on the tick path only —
+// direct syncPetEntities calls (join, disconnect, pet handlers, house exit)
+// run immediately and do not reset the cadence.
+func (h *Hub) petSyncDue(now time.Time) bool {
+	if !h.petSyncDirty && now.Sub(h.lastPetSync) < petSyncInterval {
+		return false
 	}
-	h.sendWelcome(c, profile)
-	h.syncPetEntities()
-	h.broadcastWorldState()
+	h.petSyncDirty = false
+	h.lastPetSync = now
+	return true
 }
 
 func (h *Hub) handlePetSetBattle(c *Client, raw json.RawMessage) {
@@ -50,8 +63,53 @@ func (h *Hub) handlePetSetBattle(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendWelcome(c, profile)
+	h.petSyncDirty = true
 	h.syncPetEntities()
 	h.broadcastWorldState()
+}
+
+func (h *Hub) handlePetSetMount(c *Client, raw json.RawMessage) {
+	var p protocol.PetIDPayload
+	_ = json.Unmarshal(raw, &p)
+	profile, errMsg := h.store.SetMountPet(c.Name, p.PetID)
+	if errMsg != "" {
+		h.sendError(c, errMsg)
+		return
+	}
+	h.sendWelcome(c, profile)
+	h.broadcastWorldState()
+}
+
+// handleMountToggle stubs the mount keybind: it toggles a mounted flag so the
+// feature can read state later, and reports the outcome via reward_notice.
+// Mounting movement/visuals are not implemented yet.
+func (h *Hub) handleMountToggle(c *Client, _ json.RawMessage) {
+	prof, ok := h.store.Get(c.Name)
+	if !ok {
+		h.sendError(c, "Character not found.")
+		return
+	}
+	pet, hasMount := prof.FindPet(prof.MountPetID)
+	if !hasMount {
+		h.sendError(c, "No mount selected — set one in the Pets window.")
+		return
+	}
+	e := h.playerEnt(c.ID)
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || e.hidden || cc.inHouse {
+		h.sendError(c, "You can't mount right now.")
+		return
+	}
+	cc.mounted = !cc.mounted
+	if cc.mounted {
+		h.send(c, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
+			Message: fmt.Sprintf("You call %s to ride. (Riding isn't implemented yet.)", pet.Name),
+		})
+	} else {
+		h.send(c, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
+			Message: "You dismiss your mount.",
+		})
+	}
 }
 
 func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
@@ -63,6 +121,7 @@ func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendWelcome(c, profile)
+	h.petSyncDirty = true
 	h.syncPetEntities()
 	h.broadcastWorldState()
 }
@@ -100,6 +159,7 @@ func (h *Hub) handlePetCommand(c *Client, raw json.RawMessage) {
 			return
 		}
 		e.engageID = t.ID // siccing the pet declares the owner's fight
+		h.petSyncDirty = true
 		countPets(func(pet *entity) {
 			pet.petHold = false
 			if h.canAttack(pet, t) {
@@ -111,6 +171,7 @@ func (h *Hub) handlePetCommand(c *Client, raw json.RawMessage) {
 			h.sendError(c, "You have no pet out.")
 		}
 	case "heel":
+		h.petSyncDirty = true
 		countPets(func(pet *entity) {
 			pet.petHold = true
 			pet.targetID = ""
@@ -124,20 +185,15 @@ func (h *Hub) handlePetCommand(c *Client, raw json.RawMessage) {
 	}
 }
 
-// activePetIDs returns all pet record IDs that should be on the world for
-// the given profile (follow pet and/or battle pet, deduplicated). Every
-// active pet gets the full pet behaviour set (follow, chase, attack).
+// activePetIDs returns the pet record IDs that should exist in the world for
+// the given profile. One active pet slot (BattlePetID) spawns a companion
+// with the full pet behaviour set (follow, chase, attack); the mount pet is
+// not a spawned companion — it's ridden, once mounting is implemented.
 func activePetIDs(prof store.Profile) []string {
-	var ids []string
-	seen := ""
-	if prof.FollowPetID != "" {
-		ids = append(ids, prof.FollowPetID)
-		seen = prof.FollowPetID
+	if prof.BattlePetID == "" {
+		return nil
 	}
-	if prof.BattlePetID != "" && prof.BattlePetID != seen {
-		ids = append(ids, prof.BattlePetID)
-	}
-	return ids
+	return []string{prof.BattlePetID}
 }
 
 // syncPetEntities creates entities for newly active pets and removes those
@@ -218,6 +274,31 @@ func followOffset(x, y float64, facing float64) (float64, float64) {
 	const dist = 32.0
 	fx, fy := game.FacingDir(facing)
 	return x - fx*dist, y - fy*dist + 4
+}
+
+// petTeleportTo snaps an unreachable pet to a walkable spot at its owner —
+// the last resort when even pathfinding can't reach them (sealed pocket,
+// across a one-way ledge). Prefers the usual trailing spot behind the owner,
+// then the owner's own tile, then a small ring around them.
+func (h *Hub) petTeleportTo(e, owner *entity) {
+	fx, fy := followOffset(owner.X, owner.Y, owner.Facing)
+	if h.walkableAt(fx, fy) {
+		e.X, e.Y = fx, fy
+		return
+	}
+	if h.walkableAt(owner.X, owner.Y) {
+		e.X, e.Y = owner.X, owner.Y
+		return
+	}
+	for r := 4.0; r <= 24.0; r += 4 {
+		for a := 0.0; a < 2*math.Pi; a += math.Pi / 6 {
+			nx, ny := owner.X+math.Cos(a)*r, owner.Y+math.Sin(a)*r
+			if h.walkableAt(nx, ny) {
+				e.X, e.Y = nx, ny
+				return
+			}
+		}
+	}
 }
 
 // petAttackPos returns a position near the target, offset toward the owner

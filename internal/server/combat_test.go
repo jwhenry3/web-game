@@ -14,6 +14,22 @@ import (
 
 // ---- test helpers ----
 
+type alwaysHitSource struct{}
+
+func (alwaysHitSource) Int63() int64 { return 0 }
+func (alwaysHitSource) Seed(int64)   {}
+
+func alwaysHitRNG() *rand.Rand { return rand.New(alwaysHitSource{}) }
+
+// alwaysMissSource rolls ≈0.999 — accuracy checks always miss. (MaxInt64
+// would round Float64 to exactly 1.0, which math/rand re-rolls forever.)
+type alwaysMissSource struct{}
+
+func (alwaysMissSource) Int63() int64 { return math.MaxInt64 - (1 << 53) }
+func (alwaysMissSource) Seed(int64)   {}
+
+func alwaysMissRNG() *rand.Rand { return rand.New(alwaysMissSource{}) }
+
 // addWorldClient attaches a second joined client + player entity to a test hub.
 func addWorldClient(h *Hub, id, name string, x, y float64) (*Client, *entity) {
 	c := &Client{
@@ -241,8 +257,8 @@ func TestCombatStaminaRegen(t *testing.T) {
 	// staminaNow applies regen on read.
 	cc.stamina = 50
 	cc.staminaAt = time.Now().Add(-time.Second)
-	if got := cc.staminaNow(time.Now()); got < 50+staminaRegenRate-0.5 {
-		t.Fatalf("stamina should regen ~%v/s, got %v after 1s", staminaRegenRate, got)
+	if got := cc.staminaNow(time.Now()); got < 50+regenPerSec-0.5 {
+		t.Fatalf("stamina should regen ~%v/s, got %v after 1s", regenPerSec, got)
 	}
 
 	// The out-of-combat regen tick pushes stamina onto the wire and restores
@@ -254,11 +270,60 @@ func TestCombatStaminaRegen(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		h.outOfCombatRegen()
 	}
-	if got := h.entitySync(pe).Stamina; got < 40+staminaRegenRate-1 {
+	if got := h.entitySync(pe).Stamina; got < 40+regenPerSec-1 {
 		t.Fatalf("outOfCombatRegen should sync regenerated stamina, got %v", got)
 	}
 	if pe.hp <= hpBefore {
 		t.Fatal("out-of-combat regen should restore hp after ~1s of ticks")
+	}
+}
+
+// Sanctuary tiles quintuple recovery (50 per 5s) and override a stale
+// inCombat flag — retreating to a crystal is supposed to be worth it.
+func TestSanctuaryRegenIsFaster(t *testing.T) {
+	ow := game.Loaded()
+	ts := float64(ow.TileSizePx())
+	var sx, sy float64
+	found := false
+	for r := 0; r < ow.Rows && !found; r++ {
+		for c := 0; c < ow.Cols && !found; c++ {
+			x, y := (float64(c)+0.5)*ts, (float64(r)+0.5)*ts
+			if ow.SanctuaryAt(c, r) && ow.WalkableAt(x, y) {
+				sx, sy, found = x, y, true
+			}
+		}
+	}
+	if !found {
+		t.Skip("loaded map has no walkable sanctuary tile")
+	}
+
+	h, _, pe := testHubWithPlayer(t, sx, sy)
+	h.SetMap("greenwood", "Greenwood", ow)
+	cc := clientControlOf(pe)
+	pe.hp, pe.mp = pe.maxHP-30, pe.maxMP-30
+	cc.inCombat = true // a stale combat flag must not block sanctuary regen
+
+	// ~1s of regen ticks at the sanctuary rate.
+	hpBefore, mpBefore := pe.hp, pe.mp
+	for i := 0; i < 4; i++ {
+		h.outOfCombatRegen()
+	}
+	if got := pe.hp - hpBefore; got < 9 {
+		t.Fatalf("sanctuary regen should restore ~%v hp/s, got %d", regenPerSecSanctuary, got)
+	}
+	if got := pe.mp - mpBefore; got < 9 {
+		t.Fatalf("sanctuary regen should restore ~%v mp/s, got %d", regenPerSecSanctuary, got)
+	}
+
+	// Stamina picks up the sanctuary rate on the entity tick.
+	cc.Tick(h, pe, time.Now(), combatTickInterval.Seconds())
+	if cc.staminaRate != regenPerSecSanctuary {
+		t.Fatalf("sanctuary stamina rate = %v, want %v", cc.staminaRate, regenPerSecSanctuary)
+	}
+	cc.stamina = 50
+	cc.staminaAt = time.Now().Add(-time.Second)
+	if got := cc.staminaNow(time.Now()); got < 50+regenPerSecSanctuary-0.5 {
+		t.Fatalf("sanctuary stamina should regen ~%v/s, got %v after 1s", regenPerSecSanctuary, got)
 	}
 }
 
@@ -463,6 +528,30 @@ func TestCombatEventAoIScope(t *testing.T) {
 	}
 	if hasFrameType(drainClient(cB), protocol.TypeCombatEvent) {
 		t.Fatal("distant client must not receive combat_event")
+	}
+}
+
+func TestCombatEventRecipientReceivesAoIClear(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	npcEngageOf(n).engaged = true
+	n.targetID = pe.ID
+	drainClient(c)
+
+	h.sendCombatEvent(protocol.CombatEventPayload{
+		AttackerID: n.ID, TargetID: c.ID, ActionID: game.BasicAttack.ID, Message: "test hit",
+	}, n.X, n.Y)
+	if !h.aoi[c.ID] {
+		t.Fatal("combat event recipient should be tracked for AoI cleanup")
+	}
+
+	h.disengage(n, false)
+	h.clearAoI()
+	ticks := combatTicks(drainClient(c))
+	if len(ticks) != 1 || len(ticks[0].Entities) != 0 {
+		t.Fatalf("event-only recipient should receive one empty combat_tick, got %+v", ticks)
 	}
 }
 
@@ -707,6 +796,54 @@ func TestSetTargetStoresTargetID(t *testing.T) {
 	}
 }
 
+func TestFriendlyFocusSurvivesEnemyAction(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	_, ally := addWorldClient(h, "client-2", "Lenna", px+30, py)
+	pe.targetID = ally.ID // ally focused via set_target
+
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID})
+	h.handleAction(c, raw)
+
+	if pe.targetID != ally.ID {
+		t.Fatalf("an enemy action with a friendly focus cleared the target, got %q", pe.targetID)
+	}
+	if pe.engageID != "" {
+		t.Fatalf("a friendly focus must not commit an attack, got %q", pe.engageID)
+	}
+	evs := combatEvents(drainClient(c))
+	if len(evs) == 0 || evs[len(evs)-1].Message != "No valid target." {
+		t.Fatalf("expected no-valid-target combat event, got %+v", evs)
+	}
+}
+
+func TestOutOfRangeAttackDoesNotCommitTarget(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-far", px+attackRangeW+enemyRadiusW+50, py)
+	npcSetHome(h, n, px, py)
+
+	raw, _ := json.Marshal(protocol.ActionPayload{
+		ActionID: game.BasicAttack.ID,
+		TargetID: n.ID,
+	})
+	h.handleAction(c, raw)
+
+	if pe.targetID != "" || pe.engageID != "" {
+		t.Fatalf("out-of-range attack committed target/engage %q/%q", pe.targetID, pe.engageID)
+	}
+	if n.hp != n.maxHP || npcEngaged(n) || n.targetID != "" {
+		t.Fatal("out-of-range attack changed NPC combat state")
+	}
+	if !pe.gcdReady(time.Now()) {
+		t.Fatal("out-of-range attack should not consume the GCD")
+	}
+	evs := combatEvents(drainClient(c))
+	if len(evs) == 0 || evs[len(evs)-1].Message != "Target out of range." {
+		t.Fatalf("expected out-of-range combat event, got %+v", evs)
+	}
+}
+
 func TestGCDSwallowsSecondAction(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
@@ -741,7 +878,7 @@ func TestGCDSwallowsSecondAction(t *testing.T) {
 	}
 }
 
-func TestGCDIsOneSecond(t *testing.T) {
+func TestGCDScalesWithDex(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, pe := testHubWithPlayer(t, px, py)
 	n := hostileNPC(h, "npc-1", px+40, py)
@@ -752,8 +889,9 @@ func TestGCDIsOneSecond(t *testing.T) {
 	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID, TargetID: n.ID})
 	h.handleAction(c, raw)
 	got := pe.gcdReadyAt.Sub(started)
-	if got < 950*time.Millisecond || got > 1050*time.Millisecond {
-		t.Fatalf("GCD = %v, want about 1s", got)
+	want := time.Duration(float64(gcdDuration) * game.AttackSpeedScale(pe.dex))
+	if got < want-50*time.Millisecond || got > want+50*time.Millisecond {
+		t.Fatalf("GCD = %v, want %v", got, want)
 	}
 }
 
@@ -781,7 +919,7 @@ func TestSkillCooldownAddsAfterGCD(t *testing.T) {
 		t.Fatal("skill should land")
 	}
 	skillReady := cc.skillReadyAt[skill.ID].Sub(started)
-	want := gcdDuration + time.Duration(skill.CooldownMs)*time.Millisecond
+	want := pe.gcdLen() + time.Duration(skill.CooldownMs)*time.Millisecond
 	if skillReady < want-50*time.Millisecond || skillReady > want+50*time.Millisecond {
 		t.Fatalf("skill ready delay = %v, want %v", skillReady, want)
 	}
@@ -808,25 +946,22 @@ func TestPassiveReflectsDamage(t *testing.T) {
 		t.Fatal(msg)
 	}
 	h.refreshCombatStats(c, pe)
-	for seed := int64(0); ; seed++ {
-		r := rand.New(rand.NewSource(seed))
-		if r.Float64() < 0.15 {
-			h.rng = r
-			break
-		}
-	}
+	h.rng = alwaysHitRNG()
+	cc := clientControlOf(pe)
 
 	before := n.hp
-	h.applyDamage(n, pe, 20, protocol.CombatEventPayload{ActionID: "test_hit"})
-	if pe.hp != pe.maxHP-20 {
-		t.Fatalf("incoming hp = %d, want %d", pe.hp, pe.maxHP-20)
+	dealt := h.applyDamage(n, pe, 20, protocol.CombatEventPayload{ActionID: "test_hit"})
+	if pe.hp != pe.maxHP-dealt {
+		t.Fatalf("incoming hp = %d, want %d", pe.hp, pe.maxHP-dealt)
 	}
-	if n.hp != before-5 {
-		t.Fatalf("reflected damage should cost attacker 5 hp, got %d", before-n.hp)
+	_, ratio := game.PassiveReflect(cc.skillLevels)
+	reflected := max(1, int(float64(dealt)*ratio))
+	if n.hp != before-reflected {
+		t.Fatalf("reflected damage should cost attacker %d hp, got %d", reflected, before-n.hp)
 	}
 	found := false
 	for _, ev := range combatEvents(drainClient(c)) {
-		if ev.ActionID == "reflect" && ev.Damage == 5 {
+		if ev.ActionID == "reflect" && ev.Damage == reflected {
 			found = true
 		}
 	}
@@ -884,53 +1019,64 @@ func TestCaptureIneligibleKeepsGCD(t *testing.T) {
 	}
 }
 
-func TestSkillWithoutTargetPicksNearestEnemy(t *testing.T) {
+func TestSkillWithoutTargetDoesNotAutoAcquire(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, pe := testHubWithPlayer(t, px, py)
 	near := hostileNPC(h, "npc-near", px+30, py)
 	npcSetHome(h, near, px, py)
-	far := hostileNPC(h, "npc-far", px+60, py) // in range, but not the closest
-	npcSetHome(h, far, px, py)
 
 	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID})
 	h.handleAction(c, raw)
-	if near.hp >= near.maxHP {
-		t.Fatal("a targetless attack should hit the nearest enemy")
+	if near.hp != near.maxHP {
+		t.Fatal("a targetless attack must not hit anything")
 	}
-	if far.hp != far.maxHP {
-		t.Fatal("a targetless attack must not hit a farther enemy")
+	if pe.targetID != "" || pe.engageID != "" {
+		t.Fatalf("a targetless attack must not commit target/engage, got %q/%q", pe.targetID, pe.engageID)
 	}
-	if pe.targetID != near.ID {
-		t.Fatalf("a targetless attack should focus the nearest enemy, got %q", pe.targetID)
-	}
-	if pe.engageID != near.ID {
-		t.Fatalf("a targetless attack should record the engage target, got %q", pe.engageID)
+	evs := combatEvents(drainClient(c))
+	if len(evs) == 0 || evs[len(evs)-1].Message != "No valid target." {
+		t.Fatalf("expected a no-valid-target event, got %+v", evs)
 	}
 }
 
-func TestCaptureWithoutTargetPicksNearestEnemy(t *testing.T) {
+// A stored explicit selection still counts: an action without a payload
+// target falls back to the player's current target.
+func TestSkillWithoutPayloadTargetUsesSelectedTarget(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, pe := testHubWithPlayer(t, px, py)
-	near := hostileNPC(h, "npc-near", px+30, py) // healthy — ineligible
-	npcSetHome(h, near, px, py)
-	far := hostileNPC(h, "npc-far", px+60, py) // weakened, capturable
-	npcSetHome(h, far, px, py)
-	respawnOf(near).capturable = true
-	respawnOf(far).capturable = true
-	far.hp = int(float64(far.maxHP)*game.CaptureHPThreshold) - 1
+	n := hostileNPC(h, "npc-1", px+40, py)
+	npcSetHome(h, n, px, py)
+	pe.targetID = n.ID
+
+	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.BasicAttack.ID})
+	h.handleAction(c, raw)
+	if n.hp >= n.maxHP {
+		t.Fatal("attack with a selected target should land")
+	}
+	if pe.engageID != n.ID {
+		t.Fatalf("attack should record the engage target, got %q", pe.engageID)
+	}
+}
+
+func TestCaptureWithoutTargetDoesNotAutoAcquire(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	n := hostileNPC(h, "npc-near", px+30, py)
+	npcSetHome(h, n, px, py)
+	respawnOf(n).capturable = true
+	n.hp = int(float64(n.maxHP)*game.CaptureHPThreshold) - 1
 
 	raw, _ := json.Marshal(protocol.ActionPayload{ActionID: game.ActionIDCapture})
 	h.handleAction(c, raw)
-	// Capture must pick the NEAR enemy — ineligible there, so no GCD.
 	if !pe.gcdReady(time.Now()) {
-		t.Fatal("capture on the nearest (ineligible) enemy must not trigger the GCD")
+		t.Fatal("a targetless capture attempt must not trigger the GCD")
+	}
+	if pe.targetID != "" {
+		t.Fatalf("a targetless capture must not commit a target, got %q", pe.targetID)
 	}
 	evs := combatEvents(drainClient(c))
 	if len(evs) == 0 {
 		t.Fatal("expected a combat event for the capture attempt")
-	}
-	if got := evs[len(evs)-1].TargetID; got != near.ID {
-		t.Fatalf("capture should target the nearest enemy %q, got %q", near.ID, got)
 	}
 }
 

@@ -7,7 +7,15 @@ import {
   updateSkillTreeNode,
 } from "../editor/jobCatalogHelpers";
 import { InspectorStackProvider } from "../editor/inspectorStack";
-import { JOB_CATEGORIES, WEAPON_TYPES, type JobDef, type JobSkillNode, type SkillDef } from "../editor/gameContentTypes";
+import {
+  COMBAT_STYLES,
+  JOB_CATEGORIES,
+  JOB_ROLES,
+  WEAPON_TYPES,
+  type JobDef,
+  type JobSkillNode,
+  type SkillDef,
+} from "../editor/gameContentTypes";
 import { ContentIdSelect } from "./ContentIdSelect";
 import { CheckboxField, FieldLabel, NumberField, SelectField, TextField } from "./CatalogEditorShell";
 import { InspectorStackHost } from "./InspectorStackView";
@@ -31,6 +39,18 @@ export function JobCoreForm({ draft, onChange }: { draft: JobDef; onChange: (dra
         options={JOB_CATEGORIES}
       />
       <SelectField
+        label="Role"
+        value={draft.role ?? "dps"}
+        onChange={(role) => onChange({ ...draft, role })}
+        options={JOB_ROLES}
+      />
+      <SelectField
+        label="Combat style"
+        value={draft.style ?? "melee"}
+        onChange={(style) => onChange({ ...draft, style })}
+        options={COMBAT_STYLES}
+      />
+      <SelectField
         label="Default weapon"
         value={draft.weapon}
         onChange={(weapon) => onChange({ ...draft, weapon })}
@@ -45,8 +65,10 @@ export function JobCoreForm({ draft, onChange }: { draft: JobDef; onChange: (dra
       <NumberField label="HP mult" value={draft.stat_mults.hp ?? 1} step={0.01} onChange={(v) => patchMult("hp", v)} />
       <NumberField label="MP mult" value={draft.stat_mults.mp ?? 1} step={0.01} onChange={(v) => patchMult("mp", v)} />
       <NumberField label="STR mult" value={draft.stat_mults.str ?? 1} step={0.01} onChange={(v) => patchMult("str", v)} />
-      <NumberField label="MAG mult" value={draft.stat_mults.mag ?? 1} step={0.01} onChange={(v) => patchMult("mag", v)} />
-      <NumberField label="AGI mult" value={draft.stat_mults.agi ?? 1} step={0.01} onChange={(v) => patchMult("agi", v)} />
+      <NumberField label="DEX mult" value={draft.stat_mults.dex ?? 1} step={0.01} onChange={(v) => patchMult("dex", v)} />
+      <NumberField label="VIT mult" value={draft.stat_mults.vit ?? 1} step={0.01} onChange={(v) => patchMult("vit", v)} />
+      <NumberField label="INT mult" value={draft.stat_mults.int ?? 1} step={0.01} onChange={(v) => patchMult("int", v)} />
+      <NumberField label="MD mult" value={draft.stat_mults.md ?? 1} step={0.01} onChange={(v) => patchMult("md", v)} />
     </>
   );
 }

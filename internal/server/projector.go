@@ -46,7 +46,7 @@ func (pr *projector) project(e *entity, now time.Time) protocol.WorldEntity {
 			we.CastingSkillID = e.casting.SkillID
 			we.CastTargetID = e.casting.TargetID
 			we.CastProgress = e.casting.Progress
-			we.CastEndsAt = 0
+			we.CastEndsAt = e.casting.EndsAt
 			if sk, ok := game.FindSkill(e.casting.SkillID); ok {
 				we.CastTimeMs = game.SkillCastTime(sk)
 			}

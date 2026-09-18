@@ -18,6 +18,21 @@ func skillAspects(skill Skill) map[SkillAspect]bool {
 	default:
 		out[AspectPhysical] = true
 	}
+	// Components can add aspects the flags don't express — e.g. a heal
+	// component on a flag-less skill, or a per-effect stat override making
+	// a nominally physical skill partially magic.
+	for _, e := range SkillEffects(skill) {
+		switch e.Kind {
+		case EffectHeal:
+			out[AspectHeal] = true
+		case EffectDamage:
+			if DamageClassForStat(e.Stat) == ClassElemental {
+				out[AspectMagic] = true
+			} else {
+				out[AspectPhysical] = true
+			}
+		}
+	}
 	if SkillIsRanged(skill) {
 		out[AspectRanged] = true
 	}
@@ -131,17 +146,26 @@ func ComboStack(list []ActiveStatus, def *ComboDef) int {
 	return 0
 }
 
-// AdvanceCombo selects the variant for the current stack and stores the next
-// stack in a short-lived status. Reaching the final variant clears the status
+// ComboSteps returns a combo's step count (0 = not a combo).
+func ComboSteps(def *ComboDef) int {
+	if def == nil {
+		return 0
+	}
+	return def.Steps
+}
+
+// AdvanceCombo selects the step for the current stack and stores the next
+// stack in a short-lived status. Reaching the final step clears the status
 // immediately so the next use starts the chain over.
 func AdvanceCombo(list *[]ActiveStatus, def *ComboDef, sourceID string) int {
-	if def == nil || len(def.Variants) == 0 {
+	steps := ComboSteps(def)
+	if steps <= 0 {
 		return 0
 	}
 	stack := ComboStack(*list, def)
-	step := stack % len(def.Variants)
+	step := stack % steps
 	next := stack + 1
-	if next >= len(def.Variants) {
+	if next >= steps {
 		out := (*list)[:0]
 		for _, s := range *list {
 			if s.Kind != def.Status {

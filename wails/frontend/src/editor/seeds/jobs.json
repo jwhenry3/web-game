@@ -9,7 +9,8 @@
     "weapon": "sword",
     "stat_mults": {
       "hp": 1.18,
-      "str": 1.08
+      "str": 1.08,
+      "vit": 1.12
     },
     "starting": true,
     "skill_tree": [
@@ -45,7 +46,8 @@
     "stat_mults": {
       "hp": 1.04,
       "mp": 1.16,
-      "mag": 1.12
+      "int": 1.04,
+      "md": 1.16
     },
     "starting": true,
     "skill_tree": [
@@ -80,7 +82,7 @@
     "weapon": "knuckles",
     "stat_mults": {
       "str": 1.16,
-      "agi": 1.1
+      "dex": 1.1
     },
     "starting": true,
     "skill_tree": [
@@ -115,7 +117,8 @@
     "weapon": "staff",
     "stat_mults": {
       "mp": 1.1,
-      "mag": 1.22
+      "int": 1.22,
+      "md": 1.06
     },
     "starting": true,
     "skill_tree": [
@@ -150,7 +153,7 @@
     "weapon": "dagger",
     "stat_mults": {
       "str": 1.04,
-      "agi": 1.2
+      "dex": 1.2
     },
     "starting": true,
     "skill_tree": [
@@ -189,8 +192,9 @@
     ],
     "stat_mults": {
       "mp": 1.1,
-      "mag": 1.08,
-      "agi": 1.08
+      "dex": 1.08,
+      "int": 1.06,
+      "md": 1.1
     },
     "starting": true,
     "skill_tree": [
@@ -225,7 +229,8 @@
     "weapon": "hammer",
     "stat_mults": {
       "hp": 1.2,
-      "str": 1.06
+      "str": 1.06,
+      "vit": 1.16
     },
     "starting": false,
     "skill_tree": [
@@ -260,7 +265,8 @@
     "weapon": "axe",
     "stat_mults": {
       "hp": 1.06,
-      "str": 1.18
+      "str": 1.18,
+      "vit": 1.06
     },
     "starting": false,
     "skill_tree": [
@@ -295,7 +301,7 @@
     "weapon": "spear",
     "stat_mults": {
       "str": 1.14,
-      "agi": 1.08
+      "dex": 1.1
     },
     "starting": false,
     "skill_tree": [
@@ -330,7 +336,7 @@
     "weapon": "katana",
     "stat_mults": {
       "str": 1.16,
-      "agi": 1.08
+      "dex": 1.08
     },
     "starting": false,
     "skill_tree": [

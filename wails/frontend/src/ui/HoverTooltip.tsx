@@ -26,16 +26,19 @@ function mergeRefs<T>(...refs: Array<Ref<T> | undefined>) {
   };
 }
 
-type Placement = "top" | "bottom";
+type Placement = "top" | "bottom" | "left" | "right";
 
 export function HoverTooltip({
   content,
   children,
   disabled,
+  side,
 }: {
   content: ReactNode;
   children: ReactElement;
   disabled?: boolean;
+  /** Prefer a horizontal placement ("left" | "right"); flips if it won't fit. */
+  side?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const [placement, setPlacement] = useState<Placement>("top");
@@ -53,6 +56,24 @@ export function HoverTooltip({
     const gap = 8;
     const margin = 8;
 
+    if (side) {
+      let place: Placement = side;
+      let left = side === "right" ? rect.right + gap : rect.left - tipRect.width - gap;
+      if (left + tipRect.width > window.innerWidth - margin) {
+        place = "left";
+        left = rect.left - tipRect.width - gap;
+      }
+      if (left < margin) {
+        place = "right";
+        left = rect.right + gap;
+      }
+      let top = rect.top + rect.height / 2 - tipRect.height / 2;
+      top = Math.max(margin, Math.min(top, window.innerHeight - tipRect.height - margin));
+      setPlacement(place);
+      setStyle({ top, left, visibility: "visible" });
+      return;
+    }
+
     let top = rect.top - tipRect.height - gap;
     let place: Placement = "top";
     if (top < margin) {
@@ -65,7 +86,7 @@ export function HoverTooltip({
 
     setPlacement(place);
     setStyle({ top, left, visibility: "visible" });
-  }, []);
+  }, [side]);
 
   useLayoutEffect(() => {
     if (!open) return;

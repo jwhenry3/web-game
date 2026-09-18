@@ -39,6 +39,11 @@ type JobLoadout struct {
 	SkillLevels map[string]int           `json:"skill_levels"`
 	SkillUsage  map[string]int           `json:"skill_usage"`
 	Proficiency map[string]int           `json:"proficiency"`
+	// ProfLevels holds discipline levels (elemental, swords, …) trained by
+	// using skills in that discipline. ProfExp is progress toward the next
+	// level in hundredths of a growth point.
+	ProfLevels map[string]int `json:"prof_levels"`
+	ProfExp    map[string]int `json:"prof_exp"`
 }
 
 func (l *JobLoadout) normalize() {
@@ -56,6 +61,12 @@ func (l *JobLoadout) normalize() {
 	}
 	if l.Proficiency == nil {
 		l.Proficiency = map[string]int{}
+	}
+	if l.ProfLevels == nil {
+		l.ProfLevels = map[string]int{}
+	}
+	if l.ProfExp == nil {
+		l.ProfExp = map[string]int{}
 	}
 	l.mergeWorldHotbar()
 	// Dodge moved to the Shift keybind — strip any stale hotbar binding.
@@ -230,6 +241,8 @@ func (p *Profile) newLoadout() JobLoadout {
 		SkillLevels: map[string]int{},
 		SkillUsage:  map[string]int{},
 		Proficiency: map[string]int{},
+		ProfLevels:  map[string]int{},
+		ProfExp:     map[string]int{},
 	}
 	if id := findWeaponForJob(p.Inventory, game.JobID(p.MainJob)); id != "" {
 		l.Equipped[game.SlotWeapon] = id
@@ -332,6 +345,8 @@ func (p *Profile) migrateJobs() {
 			SkillLevels: skillLevels,
 			SkillUsage:  map[string]int{},
 			Proficiency: cloneIntMap(p.Proficiency),
+			ProfLevels:  map[string]int{},
+			ProfExp:     map[string]int{},
 		},
 	}
 	p.ensureLoadout()
@@ -500,23 +515,23 @@ func awardXP(prog *game.JobProgress, xp int) int {
 	return levels
 }
 
-func applySkillUsage(l *JobLoadout, skillID string, uses int) {
-	if uses < 1 {
+// applyProficiencyGrowth adds rolled growth (hundredths of a point) to a
+// discipline and levels it while the accumulated exp crosses each threshold.
+func applyProficiencyGrowth(l *JobLoadout, prof string, growth int) {
+	if growth < 1 || prof == "" {
 		return
 	}
-	l.SkillUsage[skillID] += uses
-	lvl := l.SkillLevels[skillID]
-	if lvl < 1 {
+	lvl := l.ProfLevels[prof]
+	if lvl >= game.ProfMaxLevel {
 		return
 	}
-	for lvl < game.SkillMaxLevel {
-		needed := game.SkillUsagePerLevel * lvl
-		if l.SkillUsage[skillID] < needed {
-			break
-		}
+	exp := l.ProfExp[prof] + growth
+	for lvl < game.ProfMaxLevel && exp >= game.ProfExpToNext(lvl) {
+		exp -= game.ProfExpToNext(lvl)
 		lvl++
-		l.SkillLevels[skillID] = lvl
 	}
+	l.ProfLevels[prof] = lvl
+	l.ProfExp[prof] = exp
 }
 
 func normalizeJobID(id string) string {

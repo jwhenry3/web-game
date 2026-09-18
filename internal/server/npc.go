@@ -187,6 +187,9 @@ func restoreNPCCombat(n, old *entity) {
 // have any server entity within nearSyncDist; everyone else is folded into
 // the once-a-second far-sync digest instead.
 func (h *Hub) broadcastEntityState() {
+	// Post-tick batch pass: entities moved during the entity tick, so re-index
+	// before classifying each client by proximity to server entities.
+	h.spatialInvalidate()
 	msg := protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
 		Entities: h.serverEntitySnapshots(),
 	})

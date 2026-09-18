@@ -32,10 +32,11 @@ export type MessageType =
   "house_place_furniture" |
   "house_pick_furniture" |
   "set_camp_skin" |
-  "pet_set_follow" |
   "pet_set_battle" |
+  "pet_set_mount" |
   "pet_release" |
   "pet_command" |
+  "mount_toggle" |
   "welcome" |
   "world_state" |
   "player_joined" |
@@ -169,18 +170,36 @@ export interface SkillInfo {
   job?: string;
   category?: string;
   prereq?: string;
-  weapon_req?: string;
+  weapon_reqs?: string[];
   unlocked: boolean;
+  proficiency?: string;
   level: number;
   max_level: number;
   unlock_level: number;
-  usage?: number;
-  usage_to_next?: number;
+  prof_exp?: number;
+  prof_exp_next?: number;
   cast_time_ms?: number;
   cooldown_ms?: number;
   world_only?: boolean;
   passive?: boolean;
   combo_length?: number;
+  target?: string;
+  effects?: SkillEffect[];
+}
+
+export interface SkillEffect {
+  kind: string;
+  power?: number;
+  stat?: string;
+  status?: StatusEffectDef;
+  world?: string;
+}
+
+export interface StatusEffectDef {
+  kind: string;
+  duration: number;
+  potency: number;
+  on_caster?: boolean;
 }
 
 export interface JobProgressInfo {
@@ -197,8 +216,12 @@ export interface StatBlock {
   hp: number;
   mp: number;
   str: number;
-  mag: number;
-  agi: number;
+  dex: number;
+  vit: number;
+  int: number;
+  md: number;
+  mag?: number;
+  agi?: number;
 }
 
 export interface HotbarBinding {
@@ -226,14 +249,16 @@ export interface ProfileInfo {
   equipped: Record<string, string>;
   hotbar: Record<string, HotbarBinding>;
   skills: SkillInfo[];
+  prof_levels?: Record<string, number>;
+  prof_exp?: Record<string, number>;
   friends: string[];
   save_point_id?: string;
   save_point_name?: string;
   visited_save_points?: VisitedSavePoint[];
   keybinds?: Record<string, string>;
   pets?: PetRecord[];
-  follow_pet_id?: string;
   battle_pet_id?: string;
+  mount_pet_id?: string;
 }
 
 export interface Item {

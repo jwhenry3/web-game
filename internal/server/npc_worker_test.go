@@ -97,9 +97,9 @@ func TestWorldNPCStatusCommandMutatesWorkerState(t *testing.T) {
 	t.Cleanup(h.stopNPCWorkers)
 
 	n := hostileNPC(h, "worker-status", player.X+10, player.Y)
-	h.applyStatuses(player, n, game.Skill{}, game.StatusEffectDef{
+	h.applyStatusDefs(player, n, game.Skill{}, []game.StatusEffectDef{{
 		Kind: game.StatusPoison, Duration: 10, Potency: 0.5,
-	})
+	}})
 	projection := h.entities[n.ID]
 	if len(n.statuses) != 1 || len(projection.statuses) != 1 {
 		t.Fatalf("worker/projection statuses = %d/%d, want 1/1", len(n.statuses), len(projection.statuses))
@@ -142,6 +142,9 @@ func TestWorldNPCAttackIntentMutatesCanonicalPlayer(t *testing.T) {
 	h.engage(n, player)
 	if !engagedNPC(n) || !engagedNPC(h.entities[n.ID]) {
 		t.Fatal("engage command did not engage the worker-owned NPC")
+	}
+	for _, w := range h.npcWorkers {
+		w.sim.rng = alwaysHitRNG()
 	}
 	n.attackCD = time.Now().Add(-time.Second)
 	before := player.hp

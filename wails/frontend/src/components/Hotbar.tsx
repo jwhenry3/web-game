@@ -3,13 +3,15 @@ import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import {
   consumableCount,
+  isEnemyEntity,
   type HotbarBinding,
   type ProfileInfo,
 } from "../types";
 import { HOTBAR_ROWS, hotbarKeyLabel, mergeKeybinds } from "../input/keybinds";
 import { readHotbarDrag, writeHotbarDrag } from "../ui/hotbarDrag";
 import { GameIcon } from "../ui/GameIcon";
-import { hotbarIconSrc } from "../ui/itemDisplay";
+import { ICONS } from "../ui/icons";
+import { hotbarIconSrc, skillIconSrc } from "../ui/itemDisplay";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { hotbarTooltipContent } from "../ui/tooltipContent";
 
@@ -28,6 +30,8 @@ function labelFor(bind: HotbarBinding | undefined, profile: ProfileInfo): string
 export function Hotbar() {
   const profile = useGame((s) => s.profile);
   const selected = useGame((s) => s.selectedAction);
+  const entities = useGame((s) => s.entities);
+  const selfId = useGame((s) => s.selfId);
   const selfCombat = useGame((s) =>
     s.selfId && s.combatIds[s.selfId] ? s.entities[s.selfId] : undefined,
   );
@@ -39,6 +43,12 @@ export function Hotbar() {
   const inCombat = !!selfCombat?.alive;
   const gcd = selfCombat?.skill_atb ?? 0;
   const casting = !!selfCombat?.casting_skill_id;
+
+  // The active pet gets command slots parked beside the bar.
+  const actives = (profile.pets ?? []).filter((p) => p.id === profile.battle_pet_id);
+  const self = selfId ? entities[selfId] : undefined;
+  const focus = self?.target_id ? entities[self.target_id] : undefined;
+  const canPetAttack = !!focus && isEnemyEntity(focus) && focus.alive;
 
   const renderSlot = (slot: string) => {
     const bind = bindings[slot];
@@ -128,6 +138,39 @@ export function Hotbar() {
           {row.slots.map((slot) => renderSlot(slot))}
         </div>
       ))}
+      {actives.length > 0 && (
+        <div className="pet-cmds">
+          <button
+            type="button"
+            tabIndex={-1}
+            className="hotbar-slot pet-cmd"
+            disabled={!canPetAttack}
+            title={
+              canPetAttack
+                ? `Pet command: send pets at ${focus!.name}`
+                : "Pet command: target an enemy first"
+            }
+            onClick={() => net.petCommand("attack")}
+          >
+            <span className="hotbar-icon">
+              <GameIcon src={skillIconSrc("attack")} alt="" size={34} />
+            </span>
+            <span className="hotbar-label">Atk</span>
+          </button>
+          <button
+            type="button"
+            tabIndex={-1}
+            className="hotbar-slot pet-cmd"
+            title="Pet command: call pets back to follow"
+            onClick={() => net.petCommand("heel")}
+          >
+            <span className="hotbar-icon">
+              <GameIcon src={ICONS.feet} alt="" size={34} />
+            </span>
+            <span className="hotbar-label">Heel</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
