@@ -76,6 +76,7 @@ All combat is **realtime** and fought **directly in the overworld** — there ar
 - Pets engage only on real aggression: an explicit `attack` command, the owner committing an attack (`engageID` — selecting a target alone does nothing), or a foe striking the pet/owner. 
 - The **pet bar** (draggable HUD) sends `pet_command`: `attack` orders all active pets at the owner's focus target; `heel` makes them passive (no auto-engage) until the next `attack`.
 - Active pets follow their owner into **camps/houses** — they appear in `house_state` under each player's `pets` and trail the owner indoors.
+- One pet may be slotted as the **mount** (`pet_set_mount`). The mount keybind (default `R`, `mount_toggle`) seats the rider on it: `mounted`/`mount_sprite` ride on `player_sync`, movement gets a ×1.25 speed bonus, and the rider auto-dismounts on house entry, defeat, or releasing/swapping the slotted pet.
 - Ally heals/buffs/items may target pets.
 
 Crossing a map exit (e.g. Wolfrun road → Northern Wastes) keeps the same WebSocket; only the owning map node changes.

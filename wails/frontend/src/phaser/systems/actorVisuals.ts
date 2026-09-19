@@ -21,7 +21,7 @@ import {
   H99_WORLD_RING_Y,
   type CharacterAppearance,
 } from "../../characters/heroes99";
-import type { CharacterAppearanceWire } from "../../types";
+import type { CharacterAppearanceWire, WorldEntity } from "../../types";
 import { entityShadow } from "../entityShadow";
 import {
   applyIsoCounter,
@@ -43,6 +43,9 @@ export interface ActorVisual {
   sprite: IEntitySprite;
   /** EnemySprite is retained for NPC/pet kind changes without rebuilding. */
   enemy?: EnemySprite;
+  /** Mounted players carry the mount creature sprite under the rider. */
+  mount?: EnemySprite;
+  mountKind?: EnemyKind;
   /** CharacterSprite is retained for player appearance updates. */
   character?: CharacterSprite;
   /** Immunity/status ring for player avatars. */
@@ -90,6 +93,49 @@ function actorShadow(
 
 /** Follow pets use the battle foe sprite at a reduced size. */
 export const PET_FOLLOW_SCALE = 0.55;
+
+/** Mounts draw bigger than follow pets but still under NPC scale. */
+const MOUNT_SCALE = 0.85;
+/** Rider sits this far above the mount's ground point. */
+const RIDER_OFFSET_Y = -8;
+
+/** The creature under a mounted player, or undefined when on foot. */
+function mountKindOf(entity: WorldEntity): EnemyKind | undefined {
+  if (!entity.mounted || !entity.mount_sprite) return undefined;
+  return enemyKindFromName(entity.mount_sprite, entity.mount_sprite);
+}
+
+/**
+ * Reconcile a player visual's mount sprite with the replicated flag. The
+ * creature is inserted below the rider sprite (after the shadow) and the
+ * rider is lifted so they read as seated.
+ */
+function syncMountVisual(
+  scene: Phaser.Scene,
+  visual: ActorVisual,
+  entity: WorldEntity,
+  interactions: ActorVisualInteractions,
+): void {
+  const kind = mountKindOf(entity);
+  if (visual.mount && visual.mountKind === kind) return;
+  if (visual.mount) {
+    visual.mount.destroy();
+    visual.mount = undefined;
+    visual.mountKind = undefined;
+  }
+  if (!kind) {
+    visual.character?.container.setY(0);
+    return;
+  }
+  const mount = new EnemySprite(scene, 0, 0, kind);
+  mount.container.setScale(MOUNT_SCALE);
+  visual.wrapper.addAt(mount.container, 1); // above the shadow, under the rider
+  // Clicks on the creature still target the rider (self stays non-interactive).
+  if (!visual.isSelf) mount.setInteractive(() => interactions.clickEntity(entity.id));
+  visual.mount = mount;
+  visual.mountKind = kind;
+  visual.character?.container.setY(RIDER_OFFSET_Y);
+}
 
 export interface ActorVisualInteractions {
   clickEntity(id: string): void;
@@ -205,6 +251,7 @@ export function syncPlayerVisuals(
         visual.character?.setAppearance(appearance);
         visual.appearanceKey = key;
       }
+      syncMountVisual(scene, visual, snapshot, options);
       continue;
     }
 
@@ -238,6 +285,8 @@ export function syncPlayerVisuals(
       lastX: pose.x,
       lastY: pose.y,
     });
+    const stored = world.get(ActorVisual, entity);
+    if (stored) syncMountVisual(scene, stored, snapshot, options);
   }
 }
 

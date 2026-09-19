@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"math"
 	"strings"
 	"time"
 
@@ -27,6 +28,10 @@ type housePet struct {
 	Sprite string // pet kind / enemy sprite key
 	X, Y   float64
 	Facing float64
+
+	wanderAt time.Time
+	wx, wy   float64
+	hasSpot  bool
 }
 
 type houseGuest struct {
@@ -35,7 +40,6 @@ type houseGuest struct {
 	X, Y     float64
 	Facing   float64
 	Pets     []*housePet
-	petTick  time.Time // last time house pets were advanced
 }
 
 type houseRoom struct {
@@ -186,7 +190,7 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 		h.houses[owner] = room
 	}
 	sx, sy := game.HouseSpawnCenter()
-	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: e.Facing, petTick: time.Now()}
+	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: e.Facing}
 	// Active pets come inside: mirror each slotted pet record as a house pet
 	// at the spawn point, and drop any fight the entity was in at the door.
 	if prof, ok := h.store.Get(c.Name); ok {
@@ -212,6 +216,7 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 	room.Guests[c.ID] = guest
 	cc.inHouse = true
 	cc.houseOwner = owner
+	cc.mounted, cc.mountSprite = false, ""
 	e.hidden = true
 	c.HouseOwner = owner
 	// Broadcast (not owner-scoped sendPlayerSync): remote clients hide this
@@ -465,7 +470,6 @@ func (h *Hub) moveInHouse(c *Client, e *entity, x, y float64, facing *float64) {
 	guest.Facing = game.ResolveFacingYaw(nx-guest.X, ny-guest.Y, derefFacing(facing), facing != nil, guest.Facing)
 	guest.X, guest.Y = nx, ny
 	_ = e
-	h.stepHousePets(guest)
 	h.sendHouseState(room)
 }
 
@@ -478,35 +482,70 @@ func housePetSpot(x, y, facing float64, i int) (float64, float64) {
 	return gx - fy*side*20, gy + fx*side*20
 }
 
-// stepHousePets advances each guest pet toward its follow spot on the move
-// packet cadence, so they trail the owner around the room.
-func (h *Hub) stepHousePets(guest *houseGuest) {
-	if len(guest.Pets) == 0 {
-		return
-	}
-	now := time.Now()
-	dt := now.Sub(guest.petTick).Seconds()
-	guest.petTick = now
-	if dt > 0.25 {
-		dt = 0.25
-	}
-	step := petSpeed * dt
-	for i, p := range guest.Pets {
-		gx, gy := housePetSpot(guest.X, guest.Y, guest.Facing, i)
-		dx, dy := gx-p.X, gy-p.Y
-		d := dist(p.X, p.Y, gx, gy)
-		if d < 0.01 {
+// stepHousePets mirrors the overworld followOwner leash so pets behave the
+// same indoors: inside the wander radius they mill to a new spot every
+// petWanderInterval, and beyond it they close distance at catch-up-scaled
+// speed — stopping at the leash edge — rather than pinning to an exact
+// trailing spot. Runs on the entity tick; returns true when any pet moved.
+func (h *Hub) stepHousePets(guest *houseGuest, now time.Time, dt float64) bool {
+	moved := false
+	for _, p := range guest.Pets {
+		d := dist(p.X, p.Y, guest.X, guest.Y)
+		if d <= petWanderDist {
+			if h.stepHousePetWander(p, guest, now, dt) {
+				moved = true
+			}
 			continue
 		}
-		p.Facing = game.ResolveFacingYaw(dx, dy, 0, false, p.Facing)
-		if d <= step {
-			p.X, p.Y = gx, gy
-		} else {
-			p.X += dx / d * step
-			p.Y += dy / d * step
-		}
+		step := math.Min(petFollowSpeed(d)*dt, d-petFollowDist)
+		p.X += (guest.X - p.X) / d * step
+		p.Y += (guest.Y - p.Y) / d * step
 		p.X, p.Y = game.ClampHousePos(p.X, p.Y)
+		p.Facing = guest.Facing
+		moved = true
 	}
+	return moved
+}
+
+// stepHousePetWander mirrors followOwner.wander indoors: every
+// petWanderInterval the pet picks a walkable spot inside the wander radius
+// around its owner and ambles over. Returns true when the pet moved.
+func (h *Hub) stepHousePetWander(p *housePet, guest *houseGuest, now time.Time, dt float64) bool {
+	if !p.hasSpot || !now.Before(p.wanderAt) || dist(p.wx, p.wy, guest.X, guest.Y) > petWanderDist+8 {
+		p.wx, p.wy, p.hasSpot = h.housePetWanderSpot(guest)
+		p.wanderAt = now.Add(petWanderInterval)
+	}
+	if !p.hasSpot {
+		return false
+	}
+	d := dist(p.X, p.Y, p.wx, p.wy)
+	if d <= 4 {
+		return false
+	}
+	step := math.Min(petWanderSpeed*dt, d)
+	nx, ny := p.X+(p.wx-p.X)/d*step, p.Y+(p.wy-p.Y)/d*step
+	if !game.HouseCircleWalkableAt(nx, ny, game.PlayerCollisionRadius) {
+		p.hasSpot = false // blocked — repick next tick
+		return false
+	}
+	px, py := p.X, p.Y
+	p.X, p.Y = nx, ny
+	p.Facing = game.ResolveFacingYaw(p.X-px, p.Y-py, 0, false, p.Facing)
+	return true
+}
+
+// housePetWanderSpot is petWanderSpot for the house floor: a random point
+// in the ring around the guest that still fits the walkable island.
+func (h *Hub) housePetWanderSpot(guest *houseGuest) (x, y float64, ok bool) {
+	for i := 0; i < 6; i++ {
+		a := h.rng.Float64() * 2 * math.Pi
+		r := 16 + h.rng.Float64()*(petWanderDist-16)
+		nx, ny := guest.X+math.Cos(a)*r, guest.Y+math.Sin(a)*r
+		if game.HouseCircleWalkableAt(nx, ny, game.PlayerCollisionRadius) {
+			return nx, ny, true
+		}
+	}
+	return 0, 0, false
 }
 
 func (h *Hub) onHousingDisconnect(c *Client) {

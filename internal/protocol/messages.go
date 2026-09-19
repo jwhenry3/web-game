@@ -404,6 +404,10 @@ type WorldEntity struct {
 	ImmuneUntil int64               `json:"immune_until,omitempty"` // unix millis; collision/search blocked
 	InHouse     bool                `json:"in_house,omitempty"`
 	HouseOwner  string              `json:"house_owner,omitempty"` // owner character name
+	// Mounted players ride their profile mount pet; MountSprite is the pet
+	// kind so remote clients can draw the creature under the rider.
+	Mounted     bool   `json:"mounted,omitempty"`
+	MountSprite string `json:"mount_sprite,omitempty"`
 }
 
 type OverworldMap struct {

@@ -37,6 +37,7 @@ export {
   facingFromMotion,
   facingFromYaw,
   facingToFlipX,
+  moveFacingAxis,
   frameForAnim,
   layerOffsetX,
   layerOriginX,

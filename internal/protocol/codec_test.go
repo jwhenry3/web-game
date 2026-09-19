@@ -30,6 +30,30 @@ func TestProtobufRoundTripMove(t *testing.T) {
 	}
 }
 
+// A protobuf client that omits MovePayload.facing must not get a fabricated
+// facing=0 — presence (nil) is the "derive facing from motion" signal, and
+// EmitUnpopulated decode used to pin every protobuf mover's yaw to north.
+func TestProtobufDecodeMoveKeepsFacingAbsent(t *testing.T) {
+	frame, err := protocol.EncodeProtobuf(protocol.TypeMove, map[string]any{"x": 10, "y": 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := protocol.DecodeRequestFrame(protocol.CodecProtobuf, frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mv protocol.MovePayload
+	if err := json.Unmarshal(env.Payload, &mv); err != nil {
+		t.Fatal(err)
+	}
+	if mv.Facing != nil {
+		t.Fatalf("facing should be nil when unset on the wire, got %v", *mv.Facing)
+	}
+	if mv.X != 10 || mv.Y != 20 {
+		t.Fatalf("got %+v", mv)
+	}
+}
+
 func TestProtobufRoundTripEmpty(t *testing.T) {
 	frame := protocol.Encode(protocol.TypeDodge, struct{}{})
 	// Encode with empty object

@@ -1,53 +1,65 @@
+import { SpineGameObject, type SpinePlugin } from "@esotericsoftware/spine-phaser-v4";
 import Phaser from "phaser";
-import { ensureLayerTextures } from "../characters/assets";
 import {
-  H99_ANIMS,
+  SPINE_CHAR_ATLAS,
+  SPINE_CHAR_SKEL,
+  ensureSpineCharacterAssets,
+} from "../characters/assets";
+import {
   H99_DISPLAY_SCALE,
   H99_FACING_DEFAULT,
-  H99_LAYER_ORDER,
-  H99_ORIGIN,
   appearanceKey,
   facingFromDelta,
   facingToFlipX,
-  frameForAnim,
-  layerOffsetX,
-  layerOriginX,
-  layerTextureKey,
-  type CharacterAnim,
   type CharacterAppearance,
   type CharacterFacing,
 } from "../characters/heroes99";
 import { playHitFlash } from "./battleAnim";
 import type { IEntitySprite } from "./entitySprite";
 
-const LAYER_DEPTH: Record<string, number> = {
-  skin: 0,
-  cloth_bot: 1,
-  hair_bot: 2,
-  face: 3,
-  cloth_top: 4,
-  hair_top: 5,
-  weapon_bot: 6,
-  weapon_top: 7,
-};
+/** Track 0 loops idle/run; track 1 overlays one-shot attacks so legs keep moving. */
+const TRACK_LOCOMOTION = 0;
+const TRACK_ATTACK = 1;
+const ATTACK_FADE_OUT = 0.15;
+/** Retry window for failed spine loads — ~6s covers scene transitions. */
+const SPINE_RETRY_MS = 400;
+const SPINE_RETRY_MAX = 15;
+
+/** Slot name ("cloth_bot_torso", "hair_top_head", ...) -> attachment key. */
+function attachmentForSlot(slot: string, a: CharacterAppearance): string | null {
+  if (slot.startsWith("skin_")) return `skin_${a.skin}`;
+  if (slot.startsWith("face_")) return `face_${a.face}`;
+  if (slot.startsWith("hair_bot_") || slot.startsWith("hair_top_")) {
+    return `hair_${a.hair}_${a.hairColor}`;
+  }
+  if (slot.startsWith("cloth_bot_") || slot.startsWith("cloth_top_")) {
+    return `${a.cloth}_${a.clothColor}`;
+  }
+  if (slot.startsWith("weapon_")) {
+    return a.weapon === "weapon5" ? `weapon5_${a.weaponColor}` : a.weapon;
+  }
+  return null;
+}
 
 export class CharacterSprite implements IEntitySprite {
   readonly container: Phaser.GameObjects.Container;
-  private layers = new Map<string, Phaser.GameObjects.Sprite>();
+  private spine: SpineGameObject | null = null;
   private appearance: CharacterAppearance;
   private appearanceCacheKey = "";
-  private anim: CharacterAnim = "idle";
-  private frame = 0;
-  private frameTimer = 0;
+  private moving = false;
+  private mounted = false;
+  private anim: "idle" | "run" | "ride_idle" | "ride_run" = "idle";
   private facing: CharacterFacing = H99_FACING_DEFAULT;
   private loadToken = 0;
   private ready = false;
   private casting = false;
   private castPulse = 0;
-  private gcdReady = false;
   private hitCallback: (() => void) | null = null;
   private scene: Phaser.Scene;
   private hitFlash?: Phaser.Tweens.Tween;
+  private destroyed = false;
+  private retryIn = 0;
+  private retries = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -60,7 +72,7 @@ export class CharacterSprite implements IEntitySprite {
     this.appearanceCacheKey = appearanceKey(appearance);
     // Container is not auto-added to the scene — parent wrapper owns display list.
     this.container = new Phaser.GameObjects.Container(scene, x, y);
-    void this.syncLayers();
+    void this.syncSpine();
   }
 
   getFacing(): CharacterFacing {
@@ -70,7 +82,7 @@ export class CharacterSprite implements IEntitySprite {
   setFacing(facing: CharacterFacing): void {
     if (facing === this.facing) return;
     this.facing = facing;
-    if (this.ready) this.applyFrame();
+    this.applyFlip();
   }
 
   setAppearance(appearance: CharacterAppearance): void {
@@ -78,38 +90,28 @@ export class CharacterSprite implements IEntitySprite {
     if (key === this.appearanceCacheKey) return;
     this.appearance = { ...appearance };
     this.appearanceCacheKey = key;
-    void this.syncLayers();
+    this.applyAttachments();
   }
 
   setMoving(moving: boolean, dx = 0, _dy = 0): void {
-    const nextFacing = facingFromDelta(dx, this.facing);
-    const facingChanged = nextFacing !== this.facing;
-    this.facing = nextFacing;
+    this.facing = facingFromDelta(dx, this.facing);
+    this.moving = moving;
+    this.updateAnim();
+    this.applyFlip();
+  }
 
-    if (this.anim === "attack") {
-      if (this.ready && facingChanged) this.applyFrame();
-      return;
-    }
-
-    const nextAnim: CharacterAnim = moving ? "run" : "idle";
-    const animChanged = nextAnim !== this.anim;
-    if (animChanged) {
-      this.anim = nextAnim;
-      this.frame = 0;
-      this.frameTimer = 0;
-    }
-
-    if (this.ready && (facingChanged || animChanged)) {
-      this.applyFrame();
-    }
+  setMounted(mounted: boolean): void {
+    if (mounted === this.mounted) return;
+    this.mounted = mounted;
+    this.updateAnim();
   }
 
   playAttack(): void {
     this.casting = false;
-    this.anim = "attack";
-    this.frame = 0;
-    this.frameTimer = 0;
-    if (this.ready) this.applyFrame();
+    const st = this.spine?.animationState;
+    if (!st) return;
+    st.setAnimation(TRACK_ATTACK, "attack", false);
+    st.addEmptyAnimation(TRACK_ATTACK, ATTACK_FADE_OUT, 0);
   }
 
   playHit(battleSpeed?: number): void {
@@ -120,52 +122,23 @@ export class CharacterSprite implements IEntitySprite {
     if (this.casting === active) return;
     this.casting = active;
     this.castPulse = 0;
-    if (active) {
-      this.gcdReady = false;
-      this.anim = "idle";
-      this.frame = 0;
-      this.frameTimer = 0;
-    }
-    if (this.ready) this.applyFrame();
-  }
-
-  setGcdReady(ready: boolean): void {
-    if (this.gcdReady === ready) return;
-    this.gcdReady = ready;
   }
 
   update(delta: number): void {
-    if (!this.ready) return;
+    const skel = this.spine?.skeleton;
+    if (!skel) {
+      if (this.retryIn > 0) {
+        this.retryIn -= delta;
+        if (this.retryIn <= 0) void this.syncSpine();
+      }
+      return;
+    }
     if (this.casting) {
       this.castPulse += delta;
       const pulse = 0.85 + 0.15 * Math.sin(this.castPulse / 140);
-      const tint = Phaser.Display.Color.GetColor(
-        Math.floor(0xc4 * pulse),
-        Math.floor(0xb5 * pulse),
-        Math.floor(0xfd * pulse),
-      );
-      for (const sprite of this.layers.values()) sprite.setTint(tint);
-    } else if (this.gcdReady) {
-      this.castPulse += delta;
-      const pulse = 0.92 + 0.08 * Math.sin(this.castPulse / 160);
-      const tint = Phaser.Display.Color.GetColor(
-        Math.floor(0xff * pulse),
-        Math.floor(0xf0 * pulse),
-        Math.floor(0xc0 * pulse),
-      );
-      for (const sprite of this.layers.values()) sprite.setTint(tint);
+      skel.color.set((0xc4 / 255) * pulse, (0xb5 / 255) * pulse, (0xfd / 255) * pulse, 1);
     } else {
-      for (const sprite of this.layers.values()) sprite.clearTint();
-    }
-    const { frames, msPerFrame } = H99_ANIMS[this.anim];
-    this.frameTimer += delta;
-    if (this.frameTimer >= msPerFrame) {
-      this.frameTimer = 0;
-      this.frame = (this.frame + 1) % frames.length;
-      if (this.anim === "attack" && this.frame === 0) {
-        this.anim = "idle";
-      }
-      this.applyFrame();
+      skel.color.set(1, 1, 1, 1);
     }
   }
 
@@ -174,64 +147,141 @@ export class CharacterSprite implements IEntitySprite {
     this.applyInteractive();
   }
 
-  private applyInteractive(): void {
-    if (!this.hitCallback) return;
-    const body = this.layers.get("skin");
-    if (!body || body.input?.enabled) return;
-    body.setInteractive({ useHandCursor: true });
-    body.on("pointerdown", this.hitCallback);
-  }
-
   destroy(): void {
+    this.destroyed = true;
+    this.loadToken += 1;
     this.container.destroy();
   }
 
-  private async syncLayers(): Promise<void> {
-    const token = ++this.loadToken;
-    const appearance = { ...this.appearance };
-    try {
-      await ensureLayerTextures(this.scene, appearance);
-    } catch {
+  private scheduleRetry(why: string, err?: unknown): void {
+    if (this.destroyed) return;
+    if (this.retries >= SPINE_RETRY_MAX) {
+      if (this.retries === SPINE_RETRY_MAX) {
+        this.retries += 1;
+        console.error("[CharacterSprite] spine rig unavailable, giving up:", why, err);
+      }
       return;
     }
-    if (token !== this.loadToken) return;
+    this.retries += 1;
+    this.retryIn = SPINE_RETRY_MS;
+    console.warn("[CharacterSprite] spine rig failed, will retry:", why, err);
+  }
 
-    for (const layer of H99_LAYER_ORDER) {
-      const key = layerTextureKey(layer, appearance);
-      if (!this.scene.textures.exists(key)) continue;
+  private async syncSpine(): Promise<void> {
+    const token = ++this.loadToken;
+    try {
+      await ensureSpineCharacterAssets(this.scene);
+    } catch (err) {
+      this.scheduleRetry("asset load", err);
+      return;
+    }
+    if (token !== this.loadToken || this.destroyed) return;
 
-      let sprite = this.layers.get(layer);
-      if (sprite) {
-        if (sprite.texture.key !== key) {
-          sprite.setTexture(key, frameForAnim(this.anim, this.frame));
-        }
-        continue;
+    if (!this.spine) {
+      let obj: SpineGameObject;
+      try {
+        obj = this.createSpineObject();
+      } catch (err) {
+        this.scheduleRetry("spine object creation", err);
+        return;
       }
-
-      sprite = this.scene.add.sprite(0, 0, key, 0);
-      sprite.setOrigin(H99_ORIGIN.x, H99_ORIGIN.y);
-      sprite.setScale(H99_DISPLAY_SCALE);
-      sprite.setDepth(LAYER_DEPTH[layer] ?? 0);
-      this.layers.set(layer, sprite);
-      this.container.add(sprite);
+      obj.setScale(H99_DISPLAY_SCALE);
+      this.container.add(obj);
+      const mix = obj.animationStateData;
+      mix.setMix("idle", "run", 0.12);
+      mix.setMix("run", "idle", 0.12);
+      mix.setMix("ride_idle", "ride_run", 0.15);
+      mix.setMix("ride_run", "ride_idle", 0.15);
+      mix.setMix("idle", "ride_idle", 0.2);
+      mix.setMix("ride_idle", "idle", 0.2);
+      mix.setMix("run", "ride_run", 0.2);
+      mix.setMix("ride_run", "run", 0.2);
+      mix.setMix("idle", "attack", 0.05);
+      mix.setMix("run", "attack", 0.05);
+      this.spine = obj;
     }
 
+    this.retryIn = 0;
+    this.applyAttachments();
     this.ready = true;
-    this.applyFrame();
+    this.applyAnim();
+    this.applyFlip();
     this.applyInteractive();
   }
 
-  private applyFrame(): void {
-    if (!this.ready) return;
-    const idx = frameForAnim(this.anim, this.frame);
-    const flipX = facingToFlipX(this.facing);
-    const originX = layerOriginX(this.facing);
-    const offsetX = layerOffsetX(this.facing);
-    for (const sprite of this.layers.values()) {
-      sprite.setFrame(idx);
-      sprite.setOrigin(originX, H99_ORIGIN.y);
-      sprite.setFlipX(flipX);
-      sprite.x = offsetX;
+  /**
+   * Prefer the `add.spine` factory when the plugin registered it, else build
+   * the object directly via the scene's SpinePlugin instance (`sys.spine`).
+   * The factory registration patches GameObjectFactory's prototype — which can
+   * be absent if the plugin's Phaser module instance differs from the app's —
+   * while `sys.spine` is installed per-scene and always present once the
+   * loader-side file types worked.
+   */
+  private createSpineObject(): SpineGameObject {
+    const factory = this.scene.add as Phaser.GameObjects.GameObjectFactory & {
+      spine?: (x: number, y: number, dataKey: string, atlasKey: string) => SpineGameObject;
+    };
+    if (typeof factory.spine === "function") {
+      return factory.spine(0, 0, SPINE_CHAR_SKEL, SPINE_CHAR_ATLAS);
     }
+    const plugin = (this.scene.sys as unknown as { spine?: SpinePlugin }).spine;
+    if (!plugin) throw new Error("SpinePlugin not installed on scene");
+    const obj = new SpineGameObject(this.scene, plugin, {
+      x: 0,
+      y: 0,
+      dataKey: SPINE_CHAR_SKEL,
+      atlasKey: SPINE_CHAR_ATLAS,
+    });
+    this.scene.add.existing(obj);
+    return obj;
+  }
+
+  /** Swap every slot's attachment to match the current appearance (paper doll). */
+  private applyAttachments(): void {
+    const skel = this.spine?.skeleton;
+    const skin = skel?.data.defaultSkin;
+    if (!skel || !skin) return;
+    for (const slot of skel.slots) {
+      const name = attachmentForSlot(slot.data.name, this.appearance);
+      // Missing variant/part combos clear the slot instead of throwing.
+      slot.pose.setAttachment(name ? skin.getAttachment(slot.data.index, name) : null);
+    }
+  }
+
+  /** Recompute the locomotion animation from moving/mounted state. */
+  private updateAnim(): void {
+    const next = this.mounted
+      ? this.moving ? "ride_run" : "ride_idle"
+      : this.moving ? "run" : "idle";
+    if (next === this.anim) return;
+    this.anim = next;
+    this.applyAnim();
+  }
+
+  private applyAnim(): void {
+    const st = this.spine?.animationState;
+    if (!st || !this.ready) return;
+    const current = st.tracks[TRACK_LOCOMOTION];
+    if (!current || current.animation?.name !== this.anim) {
+      st.setAnimation(TRACK_LOCOMOTION, this.anim, true);
+    }
+  }
+
+  private applyFlip(): void {
+    if (!this.spine) return;
+    this.spine.flipX = facingToFlipX(this.facing);
+  }
+
+  private applyInteractive(): void {
+    if (!this.hitCallback || !this.spine || this.spine.input?.enabled) return;
+    const o = this.spine;
+    // Hit space adds displayOrigin to skeleton space; the body draws upward
+    // from the feet (skeleton y-up -> local y-down), so cover y in [-h, 0].
+    o.setInteractive({
+      hitArea: new Phaser.Geom.Rectangle(0, -o.height, o.width, o.height),
+      hitAreaCallback: Phaser.Geom.Rectangle.Contains,
+      useHandCursor: true,
+    });
+    o.on("pointerdown", this.hitCallback);
   }
 }

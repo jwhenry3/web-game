@@ -225,6 +225,10 @@ message WorldEntity {
   int64 immune_until = 32; // unix millis; collision/search blocked
   bool in_house = 33;
   string house_owner = 34;
+  // Mounted players ride their profile mount pet; mount_sprite is the pet
+  // kind so remote clients can draw the creature under the rider.
+  bool mounted = 35;
+  string mount_sprite = 36;
 }
 
 message WorldCamp {

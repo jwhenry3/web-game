@@ -22,7 +22,8 @@ type clientControl struct {
 	profLevels        map[string]int
 	pendingProfGrowth map[string]int // hundredths of growth per discipline
 	skillReadyAt      map[string]time.Time
-	mounted           bool // mount stub: toggled by mount_toggle, not yet rendered
+	mounted           bool   // riding the profile mount pet (mount_toggle)
+	mountSprite       string // mount pet's kind — remote clients render it under the rider
 
 	stamina          float64
 	staminaAt        time.Time
@@ -636,12 +637,17 @@ func (r *respawn) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 // ---------------------------------------------------------------- pet
 
 // followOwner derives the pet's target from its owner each tick and, when it
-// has none, keeps the pet within its leash radius. bestDist/unreachTicks
-// track progress toward the owner so a pet that stops closing in — pinned on
-// a wall, sliding along one, or cut off entirely — can teleport instead.
+// has none, keeps the pet within its leash radius — idling there by milling
+// to a new nearby spot every petWanderInterval. bestDist/unreachTicks track
+// progress toward the owner so a pet that spends a while out of view
+// without closing in — pinned on a wall, sliding along one, or cut off
+// entirely — can teleport instead.
 type followOwner struct {
 	unreachTicks int
 	bestDist     float64
+	wanderAt     time.Time
+	wx, wy       float64
+	hasSpot      bool
 }
 
 func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
@@ -684,8 +690,9 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 		return // chaseTarget/attackTarget take over
 	}
 	d := dist(e.X, e.Y, owner.X, owner.Y)
-	if d <= petFollowDist {
+	if d <= petWanderDist {
 		f.unreachTicks, f.bestDist = 0, 0
+		f.wander(h, e, owner, now, dt)
 		return
 	}
 	step := math.Min(petFollowSpeed(d)*dt, d-petFollowDist)
@@ -701,10 +708,12 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	if moved {
 		h.entityDirty = true
 	}
-	// Teleport when the pet stops closing in for a while — covers being
-	// pinned on a wall, sliding along one, or a sealed pocket alike. The
-	// combat chase branch never teleports: it drops the target instead.
-	if d2 := dist(e.X, e.Y, owner.X, owner.Y); f.bestDist == 0 || d2 < f.bestDist-0.5 {
+	// Teleport only after the pet spends a while out of view without closing
+	// in — covers being pinned on a wall, sliding along one, or a sealed
+	// pocket alike. An on-screen pet keeps walking so the player sees it
+	// catch up. The combat chase branch never teleports: it drops the
+	// target instead.
+	if d2 := dist(e.X, e.Y, owner.X, owner.Y); d2 <= petTeleportDist || f.bestDist == 0 || d2 < f.bestDist-0.5 {
 		f.bestDist, f.unreachTicks = d2, 0
 	} else {
 		f.unreachTicks++
@@ -718,6 +727,34 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 		}
 	}
 	e.Facing = owner.Facing
+}
+
+// wander mills about inside the leash: every petWanderInterval the pet
+// picks a nearby walkable spot around its owner and ambles over, so a
+// waiting pet looks alive instead of freezing at heel. A spot that the
+// owner's movement leaves outside the wander radius is dropped early.
+func (f *followOwner) wander(h *Hub, e, owner *entity, now time.Time, dt float64) {
+	if !f.hasSpot || !now.Before(f.wanderAt) || dist(f.wx, f.wy, owner.X, owner.Y) > petWanderDist+8 {
+		f.wx, f.wy, f.hasSpot = h.petWanderSpot(owner)
+		f.wanderAt = now.Add(petWanderInterval)
+	}
+	if !f.hasSpot {
+		return
+	}
+	d := dist(e.X, e.Y, f.wx, f.wy)
+	if d <= 4 {
+		return
+	}
+	step := math.Min(petWanderSpeed*dt, d)
+	nx, ny := e.X+(f.wx-e.X)/d*step, e.Y+(f.wy-e.Y)/d*step
+	if !h.walkableAt(nx, ny) {
+		f.hasSpot = false // blocked — repick next tick
+		return
+	}
+	px, py := e.X, e.Y
+	e.X, e.Y = nx, ny
+	e.Facing = game.ResolveFacingYaw(e.X-px, e.Y-py, 0, false, e.Facing)
+	h.entityDirty = true
 }
 
 // petLevelSync caps the pet's effective level at the owner's level, keeps

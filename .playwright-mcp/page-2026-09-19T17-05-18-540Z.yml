@@ -1,0 +1,11 @@
+- generic [ref=e4]:
+  - generic [ref=e5]: Character Creation
+  - generic [ref=e7]:
+    - generic [ref=e8]: Step 3 of 3 — Name Your Hero
+    - generic [ref=e94]: Vanguard
+    - generic [ref=e98]: Hero Name
+    - textbox "1–24 characters" [ref=e99]: Devtester
+    - generic [ref=e38]:
+      - button "Back" [disabled] [ref=e39]
+      - button "Entering…" [disabled] [ref=e101]
+    - button "Log Out" [disabled] [ref=e41]

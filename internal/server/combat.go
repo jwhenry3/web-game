@@ -242,10 +242,10 @@ func (h *Hub) resolveDodge(c *Client, e *entity) {
 	h.persistWorldLocation(c, e, false)
 	h.refreshRegionOwnership(c, e)
 	h.checkAggroAt(c.ID, e.X, e.Y)
+	// No Message: dodges drive the dash VFX but don't belong in the combat log.
 	h.sendCombatEvent(protocol.CombatEventPayload{
 		AttackerID: c.ID, ActionID: game.ActionIDDodge,
 		ActionName: game.SkillDodge.Name, Success: true, Hit: true,
-		Message: fmt.Sprintf("%s dodges", e.Name),
 	}, e.X, e.Y)
 }
 

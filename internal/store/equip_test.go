@@ -75,6 +75,33 @@ func TestEquipSubWeaponRequiresSubJob(t *testing.T) {
 	}
 }
 
+func TestUnequipWeaponStaysUnequipped(t *testing.T) {
+	s := testStore(t)
+	s.profiles["Hero"] = testProfile("Hero", game.JobVAN, "", []game.Item{
+		{ID: "sword1", Name: "Sword", Kind: game.KindEquipment, Slot: game.SlotWeapon, Type: "sword", Rarity: game.RarityCommon, Level: 1},
+	})
+
+	if _, ok := s.Unequip("Hero", game.SlotWeapon); !ok {
+		t.Fatal("unequip failed")
+	}
+	// Any ActiveLoadout read (stats refresh, weapon-type lookup, profile
+	// projection) used to re-equip a job weapon into the empty slot — the
+	// unequip must stick.
+	_ = s.profiles["Hero"].WeaponType()
+	l := s.profiles["Hero"].ActiveLoadout()
+	if got := l.Equipped[game.SlotWeapon]; got != "" {
+		t.Fatalf("weapon slot re-equipped itself: %q", got)
+	}
+	// Display reads the real item ("" = bare hands); combat keeps the job's
+	// innate weapon via the fallback.
+	if got := s.profiles["Hero"].EquippedWeaponType(); got != "" {
+		t.Fatalf("EquippedWeaponType = %q, want unarmed", got)
+	}
+	if got := s.profiles["Hero"].WeaponType(); got == "" {
+		t.Fatal("WeaponType should fall back to the job's innate weapon")
+	}
+}
+
 func TestEquipArmorIgnoresSlotParam(t *testing.T) {
 	s := testStore(t)
 	s.profiles["Hero"] = testProfile("Hero", game.JobVAN, "", []game.Item{

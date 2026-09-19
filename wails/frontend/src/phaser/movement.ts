@@ -22,6 +22,7 @@ import { battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
 import {
   isoDepth,
   isoLayer,
+  isoMoveSpeedScale,
   isoParent,
   isoProject,
   screenDirToWorldGrid,
@@ -33,6 +34,8 @@ import type { OverworldMap, WorldEntity } from "../types";
 import type { CharacterSprite } from "./CharacterSprite";
 
 const SPEED = 180; // matches house movement
+/** Riding speed bonus — mirrors the server's mountMoveMult clamp. */
+const MOUNT_SPEED_MULT = 1.25;
 const SEND_INTERVAL = 100;
 
 /** Dodge dash distance — two 32px squares (matches the old realtime battle dash). */
@@ -555,14 +558,16 @@ export class WorldMovement {
     lastWorldFacing = facingFromDelta(faceAxis, lastWorldFacing);
 
     const len = Math.hypot(dx, dy);
+    const speed =
+      SPEED * (wp.mounted ? MOUNT_SPEED_MULT : 1) * (iso ? isoMoveSpeedScale(dx / len, dy / len) : 1);
     const { w: worldW, h: worldH } = this.host.worldBounds();
     const nx = Phaser.Math.Clamp(
-      av.wrapper.x + (dx / len) * SPEED * dt,
+      av.wrapper.x + (dx / len) * speed * dt,
       H99_COLLISION_RADIUS,
       worldW - H99_COLLISION_RADIUS,
     );
     const ny = Phaser.Math.Clamp(
-      av.wrapper.y + (dy / len) * SPEED * dt,
+      av.wrapper.y + (dy / len) * speed * dt,
       H99_COLLISION_RADIUS,
       worldH - H99_COLLISION_RADIUS,
     );

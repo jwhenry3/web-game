@@ -379,6 +379,8 @@ export interface WorldEntity {
   immune_until?: number;
   in_house?: boolean;
   house_owner?: string;
+  mounted?: boolean;
+  mount_sprite?: string;
 }
 
 export interface StatusSnapshot {

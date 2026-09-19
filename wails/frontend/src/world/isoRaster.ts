@@ -152,7 +152,11 @@ export function rasterizeIsoChunk(
       wy,
       faceE: Math.max(0, level - blockLevelAt(c + 1, r)),
       faceS: Math.max(0, level - blockLevelAt(c, r + 1)),
-      depth: isoDepth(wx + t, wy + t),
+      // Sort key is the footprint's south-edge midpoint — same convention as
+      // the prop billboards. The front corner keys half a tile too deep: a
+      // feet-anchored actor walking out from behind the face stays occluded
+      // until they clear the corner, so tall faces cover them to the waist.
+      depth: isoDepth(wx + t / 2, wy + t),
     });
   };
 

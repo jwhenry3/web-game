@@ -187,16 +187,10 @@ func (p *Profile) syncWeaponSlots(l *JobLoadout) {
 	if p.SubJob == "" {
 		delete(l.Equipped, game.SlotSubWeapon)
 	}
-	if l.Equipped[game.SlotWeapon] == "" {
-		if id := findWeaponForJob(p.Inventory, game.JobID(p.MainJob)); id != "" {
-			l.Equipped[game.SlotWeapon] = id
-		}
-	}
-	if p.SubJob != "" && l.Equipped[game.SlotSubWeapon] == "" {
-		if id := findWeaponForJob(p.Inventory, game.JobID(p.SubJob)); id != "" {
-			l.Equipped[game.SlotSubWeapon] = id
-		}
-	}
+	// Empty weapon slots are left alone: a loadout starts equipped via
+	// newLoadout, and a cleared slot is an explicit unequip — refilling it
+	// here would undo the user's action (WeaponType falls back to the job's
+	// innate weapon, so unarmed remains valid).
 }
 
 func migrateProficiencyToJobs(l *JobLoadout, mainJob, subJob game.JobID) {
@@ -482,17 +476,33 @@ func (p Profile) SubWeaponType() game.WeaponType {
 }
 
 func (p Profile) equippedWeaponType(slot string, job game.JobID) game.WeaponType {
+	if w := p.equippedItemWeaponType(slot); w != "" {
+		return w
+	}
+	return game.JobWeapon(job)
+}
+
+// equippedItemWeaponType reports the item type actually in a slot, or "" when
+// the slot is empty or the item is gone. Callers that need a valid weapon for
+// combat use equippedWeaponType, which substitutes the job's innate weapon.
+func (p Profile) equippedItemWeaponType(slot string) game.WeaponType {
 	l := p.ActiveLoadout()
 	id, ok := l.Equipped[slot]
 	if !ok {
-		return game.JobWeapon(job)
+		return ""
 	}
 	for _, item := range p.Inventory {
 		if item.ID == id {
 			return game.WeaponType(item.Type)
 		}
 	}
-	return game.JobWeapon(job)
+	return ""
+}
+
+// EquippedWeaponType is the main-hand weapon type for display: "" when
+// unarmed, so clients render bare hands instead of the job's default weapon.
+func (p Profile) EquippedWeaponType() game.WeaponType {
+	return p.equippedItemWeaponType(game.SlotWeapon)
 }
 
 func awardXP(prog *game.JobProgress, xp int) int {

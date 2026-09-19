@@ -532,7 +532,7 @@ func (h *Hub) applyProfilePresence(e *entity, profile store.Profile) {
 	if cc == nil {
 		return
 	}
-	cc.weaponName = string(profile.WeaponType())
+	cc.weaponName = string(profile.EquippedWeaponType())
 	cc.race = profile.Race
 	cc.mainJobName = profile.MainJob
 	cc.subJobName = profile.SubJob
@@ -561,6 +561,9 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	}
 	prevX, prevY := e.X, e.Y
 	maxStep := maxMoveStep
+	if cc.mounted {
+		maxStep *= mountMoveMult
+	}
 	if time.Since(cc.dodgedAt) < dodgeLandingWindow {
 		maxStep += dodgeDashDist
 	}
@@ -629,7 +632,7 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	}
 	h.refreshCombatStats(c, e)
 	if cc := clientControlOf(e); cc != nil {
-		cc.weaponName = string(profile.WeaponType())
+		cc.weaponName = string(profile.EquippedWeaponType())
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
@@ -650,7 +653,7 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	}
 	h.refreshCombatStats(c, e)
 	if cc := clientControlOf(e); cc != nil {
-		cc.weaponName = string(profile.WeaponType())
+		cc.weaponName = string(profile.EquippedWeaponType())
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)

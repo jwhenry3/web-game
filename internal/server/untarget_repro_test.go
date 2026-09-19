@@ -103,7 +103,7 @@ func TestUntargetThroughProtobufFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env, err := protocol.DecodeFrame(protocol.CodecProtobuf, frame)
+	env, err := protocol.DecodeRequestFrame(protocol.CodecProtobuf, frame)
 	if err != nil {
 		t.Fatal(err)
 	}

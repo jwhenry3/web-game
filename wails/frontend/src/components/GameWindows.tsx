@@ -523,8 +523,10 @@ function Param({ label, value }: { label: string; value: number }) {
   );
 }
 
-function previewWeaponForEquipment(profile: ProfileInfo, focus: Item | null): string | undefined {
-  const equipped = mainWeaponTypeFromProfile(profile);
+function previewWeaponForEquipment(profile: ProfileInfo, focus: Item | null): string {
+  // "" = unarmed (bare hands); undefined would fall back to the base
+  // appearance's weapon in resolveCharacterAppearance.
+  const equipped = mainWeaponTypeFromProfile(profile) ?? "";
   if (!focus || focus.kind !== "equipment") return equipped;
   const slot = equippedSlotForItem(profile.equipped, focus.id) ?? focus.slot;
   if (slot === "weapon" && focus.type) return focus.type;
@@ -552,7 +554,8 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
       }),
     [selfId, profile, previewWeapon],
   );
-  const previewingWeapon = !!focus && previewWeapon !== mainWeaponTypeFromProfile(profile);
+  const previewingWeapon =
+    !!focus && previewWeapon !== (mainWeaponTypeFromProfile(profile) ?? "");
   const armouryItems = profile.inventory.filter(
     (i) => i.kind !== "consumable" && i.slot === armouryTab,
   );

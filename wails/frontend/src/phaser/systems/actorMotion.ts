@@ -14,6 +14,7 @@ import {
 } from "../../ecs/components";
 import type { EntityWorld } from "../../ecs/world";
 import type { WorldEntity } from "../../types";
+import { moveFacingAxis } from "../../characters/heroes99";
 import { facingOf, getLastWorldFacing, setLastWorldFacing } from "../movement";
 import { isoDepth } from "../../world/iso";
 import { ActorVisual, ISO_ACTOR_DEPTH_EPS, type ActorVisualRole } from "./actorVisuals";
@@ -75,7 +76,7 @@ function isMoving(dx: number, dy: number): boolean {
 
 /** Rendered-horizontal facing axis — under iso, screen x = dx − dy. */
 function faceAxis(visual: ActorVisual, dx: number, dy: number): number {
-  return visual.iso ? dx - dy : dx;
+  return moveFacingAxis(dx, dy, !!visual.iso);
 }
 
 function isCasting(entity: WorldEntity, combat: CombatState, role: ActorVisualRole): boolean {
@@ -249,11 +250,25 @@ export function syncActorMotion(
     switch (visual.role) {
       case "player": {
         updatePlayerState(visual, entity, combat, opts);
-        if (world.get(Self, e) != null) {
+        visual.sprite.setMounted?.(!!entity.mounted);
+        const isSelf = world.get(Self, e) != null;
+        if (isSelf) {
           updateSelf(visual, entity, delta, opts);
         } else {
           updateRemotePlayer(visual, entity, inView, delta, opts);
         }
+        // The mount sprite rides inside the player's wrapper — drive its
+        // gait from the wrapper's real motion (prediction for self,
+        // interpolation for remotes) and mirror the rider's facing.
+        if (visual.mount) {
+          const mdx = visual.wrapper.x - visual.lastX;
+          const mdy = visual.wrapper.y - visual.lastY;
+          visual.mount.setMoving(isMoving(mdx, mdy), faceAxis(visual, mdx, mdy), mdy);
+          visual.mount.setFacing(visual.sprite.getFacing());
+          if (isSelf || inView) visual.mount.update(delta);
+        }
+        visual.lastX = visual.wrapper.x;
+        visual.lastY = visual.wrapper.y;
         break;
       }
       case "npc": {

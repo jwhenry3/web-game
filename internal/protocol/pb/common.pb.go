@@ -901,12 +901,16 @@ type ProfileInfo struct {
 	HouseStorage         []*Item                   `protobuf:"bytes,23,rep,name=house_storage,json=houseStorage,proto3" json:"house_storage,omitempty"`
 	HouseStorageCapacity int32                     `protobuf:"varint,24,opt,name=house_storage_capacity,json=houseStorageCapacity,proto3" json:"house_storage_capacity,omitempty"`
 	Pets                 []*PetRecord              `protobuf:"bytes,25,rep,name=pets,proto3" json:"pets,omitempty"`
-	FollowPetId          string                    `protobuf:"bytes,26,opt,name=follow_pet_id,json=followPetId,proto3" json:"follow_pet_id,omitempty"`
-	BattlePetId          string                    `protobuf:"bytes,27,opt,name=battle_pet_id,json=battlePetId,proto3" json:"battle_pet_id,omitempty"`
-	ProfLevels           map[string]int32          `protobuf:"bytes,29,rep,name=prof_levels,json=profLevels,proto3" json:"prof_levels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	ProfExp              map[string]int32          `protobuf:"bytes,30,rep,name=prof_exp,json=profExp,proto3" json:"prof_exp,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// follow_pet_id is retired: the single active pet (battle_pet_id) both
+	// follows and fights. Field 26 stays reserved for old saves/clients.
+	FollowPetId string           `protobuf:"bytes,26,opt,name=follow_pet_id,json=followPetId,proto3" json:"follow_pet_id,omitempty"`
+	BattlePetId string           `protobuf:"bytes,27,opt,name=battle_pet_id,json=battlePetId,proto3" json:"battle_pet_id,omitempty"`
+	ProfLevels  map[string]int32 `protobuf:"bytes,29,rep,name=prof_levels,json=profLevels,proto3" json:"prof_levels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ProfExp     map[string]int32 `protobuf:"bytes,30,rep,name=prof_exp,json=profExp,proto3" json:"prof_exp,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	// Pet the mount keybind will ride once mounting is implemented.
+	MountPetId    string `protobuf:"bytes,31,opt,name=mount_pet_id,json=mountPetId,proto3" json:"mount_pet_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProfileInfo) Reset() {
@@ -1140,6 +1144,13 @@ func (x *ProfileInfo) GetProfExp() map[string]int32 {
 		return x.ProfExp
 	}
 	return nil
+}
+
+func (x *ProfileInfo) GetMountPetId() string {
+	if x != nil {
+		return x.MountPetId
+	}
+	return ""
 }
 
 type OverworldMap struct {
@@ -1602,13 +1613,17 @@ type WorldEntity struct {
 	CastTimeMs      int32                  `protobuf:"varint,26,opt,name=cast_time_ms,json=castTimeMs,proto3" json:"cast_time_ms,omitempty"`
 	CastEndsAt      int64                  `protobuf:"varint,27,opt,name=cast_ends_at,json=castEndsAt,proto3" json:"cast_ends_at,omitempty"` // unix millis
 	// Player presence extras.
-	Weapon        string               `protobuf:"bytes,28,opt,name=weapon,proto3" json:"weapon,omitempty"`
-	MainJob       string               `protobuf:"bytes,29,opt,name=main_job,json=mainJob,proto3" json:"main_job,omitempty"`
-	SubJob        string               `protobuf:"bytes,30,opt,name=sub_job,json=subJob,proto3" json:"sub_job,omitempty"`
-	Appearance    *CharacterAppearance `protobuf:"bytes,31,opt,name=appearance,proto3" json:"appearance,omitempty"`
-	ImmuneUntil   int64                `protobuf:"varint,32,opt,name=immune_until,json=immuneUntil,proto3" json:"immune_until,omitempty"` // unix millis; collision/search blocked
-	InHouse       bool                 `protobuf:"varint,33,opt,name=in_house,json=inHouse,proto3" json:"in_house,omitempty"`
-	HouseOwner    string               `protobuf:"bytes,34,opt,name=house_owner,json=houseOwner,proto3" json:"house_owner,omitempty"`
+	Weapon      string               `protobuf:"bytes,28,opt,name=weapon,proto3" json:"weapon,omitempty"`
+	MainJob     string               `protobuf:"bytes,29,opt,name=main_job,json=mainJob,proto3" json:"main_job,omitempty"`
+	SubJob      string               `protobuf:"bytes,30,opt,name=sub_job,json=subJob,proto3" json:"sub_job,omitempty"`
+	Appearance  *CharacterAppearance `protobuf:"bytes,31,opt,name=appearance,proto3" json:"appearance,omitempty"`
+	ImmuneUntil int64                `protobuf:"varint,32,opt,name=immune_until,json=immuneUntil,proto3" json:"immune_until,omitempty"` // unix millis; collision/search blocked
+	InHouse     bool                 `protobuf:"varint,33,opt,name=in_house,json=inHouse,proto3" json:"in_house,omitempty"`
+	HouseOwner  string               `protobuf:"bytes,34,opt,name=house_owner,json=houseOwner,proto3" json:"house_owner,omitempty"`
+	// Mounted players ride their profile mount pet; mount_sprite is the pet
+	// kind so remote clients can draw the creature under the rider.
+	Mounted       bool   `protobuf:"varint,35,opt,name=mounted,proto3" json:"mounted,omitempty"`
+	MountSprite   string `protobuf:"bytes,36,opt,name=mount_sprite,json=mountSprite,proto3" json:"mount_sprite,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1877,6 +1892,20 @@ func (x *WorldEntity) GetInHouse() bool {
 func (x *WorldEntity) GetHouseOwner() string {
 	if x != nil {
 		return x.HouseOwner
+	}
+	return ""
+}
+
+func (x *WorldEntity) GetMounted() bool {
+	if x != nil {
+		return x.Mounted
+	}
+	return false
+}
+
+func (x *WorldEntity) GetMountSprite() string {
+	if x != nil {
+		return x.MountSprite
 	}
 	return ""
 }
@@ -2883,7 +2912,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x14\n" +
-	"\x05level\x18\x04 \x01(\x05R\x05level\"\xc9\f\n" +
+	"\x05level\x18\x04 \x01(\x05R\x05level\"\xeb\f\n" +
 	"\vProfileInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05level\x18\x02 \x01(\x05R\x05level\x12\x0e\n" +
@@ -2917,7 +2946,9 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\rbattle_pet_id\x18\x1b \x01(\tR\vbattlePetId\x12H\n" +
 	"\vprof_levels\x18\x1d \x03(\v2'.fantasy.v1.ProfileInfo.ProfLevelsEntryR\n" +
 	"profLevels\x12?\n" +
-	"\bprof_exp\x18\x1e \x03(\v2$.fantasy.v1.ProfileInfo.ProfExpEntryR\aprofExp\x1a;\n" +
+	"\bprof_exp\x18\x1e \x03(\v2$.fantasy.v1.ProfileInfo.ProfExpEntryR\aprofExp\x12 \n" +
+	"\fmount_pet_id\x18\x1f \x01(\tR\n" +
+	"mountPetId\x1a;\n" +
 	"\rEquippedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aT\n" +
@@ -2966,7 +2997,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	" \x01(\v2\x1c.fantasy.v1.MapTerrainLayersR\rterrainLayers\x12\x19\n" +
 	"\borigin_x\x18\v \x01(\x01R\aoriginX\x12\x19\n" +
 	"\borigin_y\x18\f \x01(\x01R\aoriginY\x125\n" +
-	"\tneighbors\x18\r \x03(\v2\x17.fantasy.v1.MapNeighborR\tneighbors\"\xd6\a\n" +
+	"\tneighbors\x18\r \x03(\v2\x17.fantasy.v1.MapNeighborR\tneighbors\"\x93\b\n" +
 	"\vWorldEntity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -3009,7 +3040,9 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\fimmune_until\x18  \x01(\x03R\vimmuneUntil\x12\x19\n" +
 	"\bin_house\x18! \x01(\bR\ainHouse\x12\x1f\n" +
 	"\vhouse_owner\x18\" \x01(\tR\n" +
-	"houseOwner\"u\n" +
+	"houseOwner\x12\x18\n" +
+	"\amounted\x18# \x01(\bR\amounted\x12!\n" +
+	"\fmount_sprite\x18$ \x01(\tR\vmountSprite\"u\n" +
 	"\tWorldCamp\x12\x1d\n" +
 	"\n" +
 	"owner_name\x18\x01 \x01(\tR\townerName\x12\x19\n" +

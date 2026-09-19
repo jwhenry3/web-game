@@ -1,0 +1,6 @@
+- generic [ref=e4]:
+  - generic [ref=e5]: Clara Mundi
+  - generic [ref=e7]:
+    - paragraph [ref=e8]: Choose how to continue
+    - button "Play Game" [ref=e9] [cursor=pointer]
+    - paragraph [ref=e10]: 3D renderer preview — map designer coming later

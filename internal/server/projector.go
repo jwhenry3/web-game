@@ -36,6 +36,10 @@ func (pr *projector) project(e *entity, now time.Time) protocol.WorldEntity {
 			we.Engaged = cc.inCombat
 			we.Stamina = cc.staminaNow(now)
 			we.InHouse, we.HouseOwner = cc.inHouse, cc.houseOwner
+			we.Mounted = cc.mounted
+			if cc.mounted {
+				we.MountSprite = cc.mountSprite
+			}
 			we.ImmuneUntil = cc.immuneUntil
 			we.CastingSkillID = cc.fieldCastSkillID
 			we.CastTimeMs = cc.fieldCastTimeMs

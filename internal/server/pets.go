@@ -30,10 +30,33 @@ const (
 // petStandoff is how close to the target a pet stands to attack (px).
 const petStandoff = 30.0
 
-// petTeleportTicks is how long a pet may go without closing distance on its
-// owner before snapping to them (~3s at the 50ms entity tick). Only applies
-// while following — a pet never teleports toward a combat target.
-const petTeleportTicks = 60
+// mountMoveMult is the riding speed bonus applied to a mounted player's move
+// clamp — a modest bump over on-foot speed (client mirrors it for prediction).
+const mountMoveMult = 1.25
+
+// petTeleportDist is roughly the edge of the owner's viewport — the same
+// viewer radius as nearSyncDist/combatAoIDist. Beyond it the pet is off
+// screen, so teleporting can't produce a visible pop.
+const petTeleportDist = 900.0
+
+// petWanderInterval is how often an idle pet picks a new spot inside the
+// leash and ambles to it; petWanderSpeed is that amble pace — slower than
+// petSpeed so it reads as milling about, not catching up.
+const (
+	petWanderInterval = 5 * time.Second
+	petWanderSpeed    = 60.0
+)
+
+// petWanderDist is the radius the wander rule uses — slightly larger than
+// petFollowDist so a pet ambling to a spot just past the leash edge isn't
+// pulled back into follow mode mid-step.
+const petWanderDist = petFollowDist + 16
+
+// petTeleportTicks is how long a pet may sit out of view without closing
+// distance on its owner before snapping to them (~5s at the 50ms entity
+// tick). Only applies while following — a pet never teleports toward a
+// combat target.
+const petTeleportTicks = 100
 
 // petSyncInterval throttles the tick-driven reconcile in syncPetEntities:
 // the entity set is rebuilt at most this often, while pet mutations set
@@ -77,12 +100,14 @@ func (h *Hub) handlePetSetMount(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendProfileRefresh(c, profile)
+	h.syncMountState(c, profile)
 	h.broadcastWorldState()
 }
 
-// handleMountToggle stubs the mount keybind: it toggles a mounted flag so the
-// feature can read state later, and reports the outcome via reward_notice.
-// Mounting movement/visuals are not implemented yet.
+// handleMountToggle is the mount keybind: it seats the player on their slotted
+// mount pet or dismounts them. The mount pet never spawns as an entity — the
+// flag plus the pet kind ride along on player_sync so every client can draw
+// the creature under the rider and widen their move clamp.
 func (h *Hub) handleMountToggle(c *Client, _ json.RawMessage) {
 	prof, ok := h.store.Get(c.Name)
 	if !ok {
@@ -96,20 +121,40 @@ func (h *Hub) handleMountToggle(c *Client, _ json.RawMessage) {
 	}
 	e := h.playerEnt(c.ID)
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || e.hidden || cc.inHouse {
+	if e == nil || cc == nil || !e.alive || e.hidden || cc.inHouse {
 		h.sendError(c, "You can't mount right now.")
 		return
 	}
 	cc.mounted = !cc.mounted
 	if cc.mounted {
+		cc.mountSprite = pet.Kind
 		h.send(c, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
-			Message: fmt.Sprintf("You call %s to ride. (Riding isn't implemented yet.)", pet.Name),
+			Message: fmt.Sprintf("You climb onto %s.", pet.Name),
 		})
 	} else {
+		cc.mountSprite = ""
 		h.send(c, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
-			Message: "You dismiss your mount.",
+			Message: "You dismount.",
 		})
 	}
+	// Broadcast (not sendPlayerSync): mounted state must reach every observer,
+	// not just owner+party — remote clients render the mount sprite.
+	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+}
+
+// syncMountState keeps a mounted player's flags in step with the mount slot:
+// releasing or swapping the slotted pet dismounts/restyles the rider now,
+// instead of on the next toggle.
+func (h *Hub) syncMountState(c *Client, prof store.Profile) {
+	e := h.playerEnt(c.ID)
+	cc := clientControlOf(e)
+	if e == nil || cc == nil || !cc.mounted {
+		return
+	}
+	rec, ok := prof.FindPet(prof.MountPetID)
+	cc.mounted = ok
+	cc.mountSprite = rec.Kind
+	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 }
 
 func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
@@ -121,6 +166,7 @@ func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendProfileRefresh(c, profile)
+	h.syncMountState(c, profile)
 	h.petSyncDirty = true
 	h.syncPetEntities()
 	h.broadcastWorldState()
@@ -274,6 +320,22 @@ func followOffset(x, y float64, facing float64) (float64, float64) {
 	const dist = 32.0
 	fx, fy := game.FacingDir(facing)
 	return x - fx*dist, y - fy*dist + 4
+}
+
+// petWanderSpot picks a walkable point inside the leash around the owner
+// for idle milling — a ring far enough out that the pet doesn't stand on
+// its owner. Returns ok=false after a few tries (e.g. the owner is boxed
+// in); the caller just holds position until the next interval.
+func (h *Hub) petWanderSpot(owner *entity) (x, y float64, ok bool) {
+	for i := 0; i < 6; i++ {
+		a := h.rng.Float64() * 2 * math.Pi
+		r := 16 + h.rng.Float64()*(petWanderDist-16)
+		nx, ny := owner.X+math.Cos(a)*r, owner.Y+math.Sin(a)*r
+		if h.walkableAt(nx, ny) {
+			return nx, ny, true
+		}
+	}
+	return 0, 0, false
 }
 
 // petTeleportTo snaps an unreachable pet to a walkable spot at its owner —

@@ -256,20 +256,24 @@ func TestPetFollowLeashRadius(t *testing.T) {
 	}
 	dt := combatTickInterval.Seconds()
 
-	// Inside the leash radius, the pet keeps its current position.
+	// Inside the leash radius, the pet only ambles toward a wander spot —
+	// at most one wander step, never straying beyond the leash.
 	pet.X, pet.Y = pe.X-petFollowDist/2, pe.Y
 	bx, by := pet.X, pet.Y
 	fo.Tick(h, pet, time.Now(), dt)
-	if moved := dist(bx, by, pet.X, pet.Y); moved != 0 {
-		t.Fatalf("near pet should stay put, moved %v", moved)
+	if moved := dist(bx, by, pet.X, pet.Y); moved > petWanderSpeed*dt+1e-9 {
+		t.Fatalf("near pet should only amble, moved %v", moved)
+	}
+	if got := dist(pet.X, pet.Y, pe.X, pe.Y); got > petWanderDist+0.5 {
+		t.Fatalf("wandering pet left the wander radius, dist %v", got)
 	}
 
-	// Just outside the radius, the pet stops at the threshold instead of
-	// converging on a fixed owner-relative destination.
-	pet.X, pet.Y = pe.X-petFollowDist-2, pe.Y
+	// Just outside the wander overlap, the pet closes one follow step
+	// toward the owner instead of converging on a fixed destination.
+	pet.X, pet.Y = pe.X-petWanderDist-2, pe.Y
 	fo.Tick(h, pet, time.Now(), dt)
-	if got := dist(pet.X, pet.Y, pe.X, pe.Y); math.Abs(got-petFollowDist) > 1e-6 {
-		t.Fatalf("pet should stop at leash radius %v, got %v", petFollowDist, got)
+	if got := dist(pet.X, pet.Y, pe.X, pe.Y); math.Abs(got-(petWanderDist+2-petSpeed*dt)) > 1e-6 {
+		t.Fatalf("pet should close one follow step, got %v", got)
 	}
 
 	// Far away, the pet smoothly accelerates above its normal speed.
@@ -516,26 +520,146 @@ func sealedPocketMap() *game.Overworld {
 	return &game.Overworld{Cols: 24, Rows: 24, TileSize: 32, Cells: cells}
 }
 
+// petIslandMap builds a 48x48 map of open grass with the pet tile at (4,4)
+// walled off on all eight sides — a sealed pocket over petTeleportDist from
+// the open ground the owner stands on.
+func petIslandMap() *game.Overworld {
+	cells := make([]string, 48)
+	for r := 0; r < 48; r++ {
+		row := make([]byte, 48)
+		for c := 0; c < 48; c++ {
+			row[c] = game.TileGrass
+		}
+		cells[r] = string(row)
+	}
+	for r := 3; r <= 5; r++ {
+		row := []byte(cells[r])
+		for c := 3; c <= 5; c++ {
+			row[c] = game.TileRock
+		}
+		cells[r] = string(row)
+	}
+	center := []byte(cells[4])
+	center[4] = game.TileGrass
+	cells[4] = string(center)
+	return &game.Overworld{Cols: 48, Rows: 48, TileSize: 32, Cells: cells}
+}
+
 func TestPetTeleportsToUnreachableOwner(t *testing.T) {
+	h, _, owner := testHubWithPlayer(t, 1400, 1400)
+	h.SetMap("islands", "Islands", petIslandMap())
+	owner.X, owner.Y = 1400, 1400 // open ground, ~1775px from the pet pocket
+
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
+	pet.X, pet.Y = (4.5)*32, (4.5)*32 // sealed pocket at tile (4,4)
+	h.entities[pet.ID] = pet
+
+	fo := pet.components.followOwner
+	now := time.Now()
+	for i := 0; i < petTeleportTicks+60; i++ {
+		fo.Tick(h, pet, now, combatTickInterval.Seconds())
+		if !h.walkableAt(pet.X, pet.Y) {
+			t.Fatalf("pet occupied an unwalkable tile on tick %d at (%.1f,%.1f)", i, pet.X, pet.Y)
+		}
+	}
+	if got := dist(pet.X, pet.Y, owner.X, owner.Y); got > petWanderDist+0.5 {
+		t.Fatalf("pet should teleport within wander range of a sealed owner, dist %v", got)
+	}
+}
+
+func TestPetDoesNotTeleportInView(t *testing.T) {
 	ow := sealedPocketMap()
 	h, _, owner := testHubWithPlayer(t, 400, 400)
 	h.SetMap("sealed", "Sealed", ow)
 	owner.X, owner.Y = 400, 400 // tile (12,12) center, inside the pocket
 
 	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
-	pet.X, pet.Y = (4.5)*32, 400 // open ground, ~8 tiles west
+	pet.X, pet.Y = (4.5)*32, 400 // open ground, ~8 tiles west — unreachable but in view
 	h.entities[pet.ID] = pet
 
 	fo := pet.components.followOwner
 	now := time.Now()
-	for i := 0; i < 160; i++ {
+	for i := 0; i < petTeleportTicks+60; i++ {
 		fo.Tick(h, pet, now, combatTickInterval.Seconds())
-		if !h.walkableAt(pet.X, pet.Y) {
-			t.Fatalf("pet occupied an unwalkable tile on tick %d at (%.1f,%.1f)", i, pet.X, pet.Y)
+	}
+	if fo.unreachTicks != 0 {
+		t.Fatalf("in-view pet should not accrue teleport ticks, got %d", fo.unreachTicks)
+	}
+	if got := dist(pet.X, pet.Y, owner.X, owner.Y); got <= petFollowDist {
+		t.Fatalf("in-view pet should keep walking, not teleport (dist %v)", got)
+	}
+}
+
+func TestPetWandersInsideLeash(t *testing.T) {
+	h, _, owner := testHubWithPlayer(t, 400, 400)
+
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
+	pet.X, pet.Y = owner.X+petFollowDist-4, owner.Y // inside the leash
+	h.entities[pet.ID] = pet
+
+	fo := pet.components.followOwner
+	now := time.Now()
+	fo.Tick(h, pet, now, 0.05)
+	if !fo.hasSpot {
+		t.Fatal("in-leash pet should pick a wander spot")
+	}
+	if d := dist(fo.wx, fo.wy, owner.X, owner.Y); d > petWanderDist {
+		t.Fatalf("wander spot outside wander radius: %.1f", d)
+	}
+	// The pet ambles to the spot and never strays beyond the wander radius.
+	arrived := false
+	for i := 0; i < 40; i++ {
+		fo.Tick(h, pet, now, 0.05)
+		if d := dist(pet.X, pet.Y, owner.X, owner.Y); d > petWanderDist+0.5 {
+			t.Fatalf("pet left the wander radius while wandering: %.1f", d)
+		}
+		if dist(pet.X, pet.Y, fo.wx, fo.wy) <= 4 {
+			arrived = true
+			break
 		}
 	}
-	if got := dist(pet.X, pet.Y, owner.X, owner.Y); got > petFollowDist {
-		t.Fatalf("pet should teleport within follow range of a sealed owner, dist %v", got)
+	if !arrived {
+		t.Fatalf("pet never reached its wander spot, still %.1f out", dist(pet.X, pet.Y, fo.wx, fo.wy))
+	}
+	// Once the interval elapses the next tick picks a fresh spot.
+	first := fo.wanderAt
+	fo.Tick(h, pet, now.Add(petWanderInterval+time.Second), 0.05)
+	if !fo.wanderAt.After(first) {
+		t.Fatal("expected a new wander spot after the interval")
+	}
+}
+
+func TestHousePetWandersInsideLeash(t *testing.T) {
+	h, _, _ := testHubWithPlayer(t, 400, 400)
+	sx, sy := game.HouseSpawnCenter()
+	guest := &houseGuest{ClientID: "c1", Name: "Host", X: sx, Y: sy}
+	pet := &housePet{ID: "pet-1", Name: "P", Sprite: "goblin", X: sx + petFollowDist - 4, Y: sy}
+	guest.Pets = []*housePet{pet}
+
+	now := time.Now()
+	moved := false
+	for i := 0; i < 40; i++ {
+		if h.stepHousePets(guest, now, 0.05) {
+			moved = true
+		}
+		if d := dist(pet.X, pet.Y, guest.X, guest.Y); d > petWanderDist+0.5 {
+			t.Fatalf("house pet left the wander radius: %.1f", d)
+		}
+		if !game.HouseCircleWalkableAt(pet.X, pet.Y, game.PlayerCollisionRadius) {
+			t.Fatalf("house pet stepped off the walkable island at (%.1f,%.1f)", pet.X, pet.Y)
+		}
+	}
+	if !pet.hasSpot {
+		t.Fatal("in-leash house pet should pick a wander spot")
+	}
+	if !moved {
+		t.Fatal("in-leash house pet should amble to its wander spot")
+	}
+	// Once the interval elapses the next tick picks a fresh spot.
+	first := pet.wanderAt
+	h.stepHousePets(guest, now.Add(petWanderInterval+time.Second), 0.05)
+	if !pet.wanderAt.After(first) {
+		t.Fatal("expected a new house wander spot after the interval")
 	}
 }
 
@@ -564,5 +688,61 @@ func TestPetDoesNotTeleportTowardCombatTarget(t *testing.T) {
 	}
 	if fo.unreachTicks != 0 {
 		t.Fatalf("combat target should not accrue follow unreachability, got %d", fo.unreachTicks)
+	}
+}
+
+func TestMountToggleAndDismountRules(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
+
+	// No mount slotted: the keybind refuses.
+	h.handleMountToggle(c, nil)
+	if cc.mounted {
+		t.Fatal("mount should refuse with no mount pet slotted")
+	}
+
+	_, rec, errMsg := h.store.AddPet("Bartz", "dire_wolf", "Wolf", 1)
+	if errMsg != "" {
+		t.Fatalf("AddPet: %s", errMsg)
+	}
+	if _, errMsg := h.store.SetMountPet("Bartz", rec.ID); errMsg != "" {
+		t.Fatalf("SetMountPet: %s", errMsg)
+	}
+
+	h.handleMountToggle(c, nil)
+	if !cc.mounted || cc.mountSprite != "dire_wolf" {
+		t.Fatalf("expected mounted on dire_wolf, got mounted=%v sprite=%q", cc.mounted, cc.mountSprite)
+	}
+	if we := h.entitySync(pe); !we.Mounted || we.MountSprite != "dire_wolf" {
+		t.Fatalf("wire snapshot should carry mount state, got %+v", we)
+	}
+
+	// Mounted riders get the widened move clamp: a report past maxMoveStep
+	// clamps on foot but lands whole in the saddle.
+	move, _ := json.Marshal(protocol.MovePayload{X: px + maxMoveStep + 15, Y: py})
+	h.handleMove(c, move)
+	if got := dist(px, py, pe.X, pe.Y); math.Abs(got-(maxMoveStep+15)) > 1e-6 {
+		t.Fatalf("mounted move should clear the on-foot clamp, moved %v", got)
+	}
+
+	// Stepping into a house dismounts the rider.
+	h.camps["Bartz"] = &worldCamp{OwnerName: "Bartz", OwnerClientID: c.ID, X: pe.X, Y: pe.Y}
+	enter, _ := json.Marshal(protocol.EnterHousePayload{OwnerName: "Bartz"})
+	h.handleEnterHouse(c, enter)
+	if cc.mounted || cc.mountSprite != "" {
+		t.Fatal("entering a house should dismount the rider")
+	}
+	h.handleLeaveHouse(c)
+
+	// Releasing the slotted mount pet also dismounts.
+	h.handleMountToggle(c, nil)
+	if !cc.mounted {
+		t.Fatal("expected to re-mount after leaving the house")
+	}
+	release, _ := json.Marshal(protocol.PetIDPayload{PetID: rec.ID})
+	h.handlePetRelease(c, release)
+	if cc.mounted || cc.mountSprite != "" {
+		t.Fatal("releasing the mount pet should dismount the rider")
 	}
 }

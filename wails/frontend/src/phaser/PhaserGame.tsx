@@ -1,3 +1,4 @@
+import { SpinePlugin } from "@esotericsoftware/spine-phaser-v4";
 import Phaser from "phaser";
 import { useEffect, useRef } from "react";
 import { useGame } from "../state/store";
@@ -15,6 +16,11 @@ export function PhaserGame() {
       height: 600,
       backgroundColor: "#0a0f1e",
       scene: buildGameScenes(),
+      plugins: {
+        // Scene-level Spine runtime — gives every scene `load.spineSkeleton`,
+        // `load.spineAtlas`, `add.spine`, and `scene.spine`.
+        scene: [{ key: "spine", plugin: SpinePlugin, mapping: "spine" }],
+      },
       scale: {
         // Canvas always fills the stage at native resolution; each scene
         // zooms its camera via trackContentZoom so the rendered content
@@ -23,6 +29,7 @@ export function PhaserGame() {
       },
     });
     gameRef.current = game;
+    (window as unknown as { __game?: Phaser.Game }).__game = game;
 
     const unsub = useGame.subscribe((s, prev) => {
       if (s.screen === prev.screen) return;

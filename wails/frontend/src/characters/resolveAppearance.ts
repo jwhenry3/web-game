@@ -25,5 +25,7 @@ export function resolveCharacterAppearance(opts: {
       : appearanceFromRace(opts.race ?? "humanus"));
   const equipped =
     opts.playerId === opts.selfId ? mainWeaponTypeFromProfile(opts.profile) : undefined;
-  return applyGameWeapon(base, equipped ?? opts.weapon);
+  // The entity/preview weapon is authoritative ("" = unarmed → bare hands);
+  // the profile lookup only fills in when no weapon info was supplied.
+  return applyGameWeapon(base, opts.weapon ?? equipped);
 }

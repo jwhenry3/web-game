@@ -75,6 +75,18 @@ export function facingFromDelta(dx: number, current: CharacterFacing): Character
 }
 
 /**
+ * Deadbanded facing axis for replicated motion deltas. On a screen-vertical
+ * (iso-diagonal) step dx−dy is pure float noise, which would flip the facing
+ * every frame — return 0 (hold current facing) unless the horizontal share
+ * is a real fraction of the step. ~0.35 ≈ 20° off screen-vertical.
+ */
+export function moveFacingAxis(dx: number, dy: number, iso = false): number {
+  const axis = iso ? dx - dy : dx;
+  const len = Math.hypot(dx, dy);
+  return len > 0 && Math.abs(axis) > len * 0.35 ? axis : 0;
+}
+
+/**
  * World-space motion delta → facing along the rendered horizontal axis.
  * Under the isometric projection screen x = dx − dy, so world ±y motion
  * (up-right / down-left on screen) still picks a side.
@@ -85,7 +97,7 @@ export function facingFromMotion(
   current: CharacterFacing,
   iso = false,
 ): CharacterFacing {
-  return facingFromDelta(iso ? dx - dy : dx, current);
+  return facingFromDelta(moveFacingAxis(dx, dy, iso), current);
 }
 
 /**
@@ -266,8 +278,10 @@ export function applyGameWeapon(
   appearance: CharacterAppearance,
   gameWeapon?: string,
 ): CharacterAppearance {
-  if (!gameWeapon) return appearance;
-  const weapon = GAME_WEAPON_TO_H99[gameWeapon] ?? appearance.weapon;
+  // undefined = no weapon info (keep the base choice); "" = explicitly
+  // unarmed (bare hands); a known type maps to its Heroes 99 folder.
+  if (gameWeapon === undefined) return appearance;
+  const weapon = gameWeapon === "" ? "" : (GAME_WEAPON_TO_H99[gameWeapon] ?? appearance.weapon);
   return { ...appearance, weapon };
 }
 
@@ -305,6 +319,8 @@ export function layerAssetPath(layer: H99LayerId, appearance: CharacterAppearanc
 
 function weaponPath(appearance: CharacterAppearance, part: "top" | "bot"): string {
   const w = appearance.weapon;
+  // Unarmed: no weapon layer — callers must skip empty paths.
+  if (!w) return "";
   if (w === "weapon5") {
     return `${H99_BASE}/weapon/weapon5/weapon5_${part}/weapon5_${appearance.weaponColor}_${part}.png`;
   }

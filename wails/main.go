@@ -30,6 +30,7 @@ func main() {
 		BackgroundColour: &options.RGBA{R: 10, G: 15, B: 30, A: 255},
 		OnStartup:        gameApp.Startup,
 		OnShutdown:       gameApp.Shutdown,
+		Debug:            options.Debug{OpenInspectorOnStartup: true},
 		Bind: []any{
 			gameApp,
 		},

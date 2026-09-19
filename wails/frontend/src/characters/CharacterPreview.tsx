@@ -94,7 +94,8 @@ export function CharacterPreviewAnimated({
     let last = 0;
     const { frames, msPerFrame } = H99_ANIMS.idle;
     const layers = H99_LAYER_ORDER.filter((layer) => {
-      if (hideWeapon && (layer === "weapon_bot" || layer === "weapon_top")) return false;
+      if ((hideWeapon || !appearance.weapon) && (layer === "weapon_bot" || layer === "weapon_top"))
+        return false;
       if (hideCloth && (layer === "cloth_bot" || layer === "cloth_top")) return false;
       return true;
     });

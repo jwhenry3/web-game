@@ -95,6 +95,18 @@ export function screenDirToWorldGrid(dx: number, dy: number): { x: number; y: nu
   return { x: best.x, y: best.y };
 }
 
+/**
+ * Speed scale for a world-space unit direction so rendered movement doesn't
+ * outpace itself: the projection amplifies screen-horizontal motion (screen
+ * x = dx−dy) up to √2× while leaving vertical at √2/2×. Returns 1/projected
+ * length capped at 1 — the full slowdown lands on pure left/right and tapers
+ * to nothing as the direction turns screen-vertical.
+ */
+export function isoMoveSpeedScale(dx: number, dy: number): number {
+  const plen = Math.hypot(dx - dy, (dx + dy) / 2);
+  return plen > 1 ? 1 / plen : 1;
+}
+
 /** Screen-space (iso) bounding box of a tile map. */
 export function isoBounds(
   cols: number,

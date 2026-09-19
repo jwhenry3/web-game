@@ -1531,6 +1531,8 @@ h3 {
   z-index: 6;
   pointer-events: auto;
   cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
 .ff-party-frame {

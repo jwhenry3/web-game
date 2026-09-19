@@ -38,6 +38,12 @@ var (
 		UseProtoNames:   true,
 		EmitUnpopulated: true,
 	}
+	// protoDecodeMarshal is for client→server payloads: EmitUnpopulated would
+	// fabricate zeros for fields the client never sent, defeating presence
+	// checks like MovePayload.Facing (*float64 nil = "derive from motion").
+	protoDecodeMarshal = protojson.MarshalOptions{
+		UseProtoNames: true,
+	}
 	protoUnmarshal = protojson.UnmarshalOptions{
 		DiscardUnknown: true,
 	}
@@ -166,10 +172,12 @@ func jsonDirectOK(md protoreflect.MessageDescriptor, seen map[protoreflect.FullN
 	return true
 }
 
-// DecodeFrame parses a WebSocket frame into an Envelope for the hub.
+// DecodeFrame parses a server→client WebSocket frame into a JSON Envelope.
+// Client-side decoders need EmitUnpopulated so zero values (hp: 0) reach the
+// React layer — see protoMarshal.
 func DecodeFrame(codec Codec, data []byte) (Envelope, error) {
 	if codec == CodecProtobuf {
-		return decodeProtobuf(data)
+		return decodeProtobuf(data, protoMarshal)
 	}
 	var env Envelope
 	if err := json.Unmarshal(data, &env); err != nil {
@@ -178,7 +186,23 @@ func DecodeFrame(codec Codec, data []byte) (Envelope, error) {
 	return env, nil
 }
 
-func decodeProtobuf(data []byte) (Envelope, error) {
+// DecodeRequestFrame parses a client→server WebSocket frame into an Envelope
+// for hub handlers. It must NOT emit unpopulated fields: proto3 wire format
+// already drops zero values, and re-fabricating them as JSON (e.g. facing: 0)
+// would defeat presence checks like MovePayload.Facing (*float64 nil means
+// "derive facing from motion").
+func DecodeRequestFrame(codec Codec, data []byte) (Envelope, error) {
+	if codec == CodecProtobuf {
+		return decodeProtobuf(data, protoDecodeMarshal)
+	}
+	var env Envelope
+	if err := json.Unmarshal(data, &env); err != nil {
+		return Envelope{}, err
+	}
+	return env, nil
+}
+
+func decodeProtobuf(data []byte, marshal protojson.MarshalOptions) (Envelope, error) {
 	t, payload, err := unmarshalWireEnvelope(data)
 	if err != nil {
 		return Envelope{}, fmt.Errorf("wire envelope: %w", err)
@@ -191,7 +215,7 @@ func decodeProtobuf(data []byte) (Envelope, error) {
 	if err := proto.Unmarshal(payload, msg); err != nil {
 		return Envelope{}, fmt.Errorf("payload %s: %w", t, err)
 	}
-	raw, err := protoMarshal.Marshal(msg)
+	raw, err := marshal.Marshal(msg)
 	if err != nil {
 		return Envelope{}, err
 	}

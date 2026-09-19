@@ -14,6 +14,9 @@ export interface IEntitySprite {
 
   setMoving(moving: boolean, dx?: number, dy?: number): void;
 
+  /** Rider posture while mounted — only implemented by sprites with a ride pose. */
+  setMounted?(mounted: boolean): void;
+
   playAttack(): void;
   playHit(battleSpeed?: number): void;
 

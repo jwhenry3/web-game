@@ -6,6 +6,7 @@ import {
   appearanceKey,
   facingFromYaw,
   H99_NAME_LABEL_Y,
+  moveFacingAxis,
   type CharacterFacing,
 } from "../characters/types";
 import { bindingToPhaserKeyCode, mergeKeybinds } from "../input/keybinds";
@@ -31,6 +32,7 @@ import {
   applyIsoCounter,
   isoDepth,
   isoLayer,
+  isoMoveSpeedScale,
   isoParent,
   isoProject,
   screenDirToWorldGrid,
@@ -467,8 +469,7 @@ export class HouseScene extends Phaser.Scene {
       marker.wrapper.y = Phaser.Math.Linear(prevY, pet.y, PET_LERP);
       const mdx = marker.wrapper.x - prevX;
       const mdy = marker.wrapper.y - prevY;
-      // Iso facing axis: screen x = mdx − mdy.
-      marker.enemy.setMoving(Math.hypot(mdx, mdy) > 0.25, mdx - mdy, mdy);
+      marker.enemy.setMoving(Math.hypot(mdx, mdy) > 0.25, moveFacingAxis(mdx, mdy, true), mdy);
     }
     marker.wrapper.setDepth(isoDepth(marker.wrapper.x, marker.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
     marker.enemy.update(delta);
@@ -542,8 +543,7 @@ export class HouseScene extends Phaser.Scene {
         av.wrapper.y = Phaser.Math.Linear(av.wrapper.y, p.y, 0.3);
         const dx = av.wrapper.x - prevX;
         const dy = av.wrapper.y - prevY;
-        // Iso facing axis: screen x = dx − dy.
-        av.sprite.setMoving(Math.hypot(dx, dy) > 0.25, dx - dy, dy);
+        av.sprite.setMoving(Math.hypot(dx, dy) > 0.25, moveFacingAxis(dx, dy, true), dy);
         av.sprite.setFacing(this.facingOf(p, av.sprite.getFacing()));
       }
       av.wrapper.setDepth(isoDepth(av.wrapper.x, av.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
@@ -599,7 +599,7 @@ export class HouseScene extends Phaser.Scene {
       // grid-aligned world direction so combos follow tile edges.
       const w = screenDirToWorldGrid(mx, my);
       const len = Math.hypot(w.x, w.y) || 1;
-      const step = (SPEED * delta) / 1000;
+      const step = (SPEED * isoMoveSpeedScale(w.x / len, w.y / len) * delta) / 1000;
       const nx = selfAv.wrapper.x + (w.x / len) * step;
       const ny = selfAv.wrapper.y + (w.y / len) * step;
       const slid = slideMoveHousePlayer(house, selfAv.wrapper.x, selfAv.wrapper.y, nx, ny);

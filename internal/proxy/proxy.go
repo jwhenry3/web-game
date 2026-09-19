@@ -275,7 +275,7 @@ func (p *Proxy) readPump(s *session) {
 			}
 			break
 		}
-		env, err := protocol.DecodeFrame(s.codec, message)
+		env, err := protocol.DecodeRequestFrame(s.codec, message)
 		if err != nil {
 			log.Printf("session %s bad frame: %v", s.id, err)
 			continue

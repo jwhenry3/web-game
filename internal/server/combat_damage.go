@@ -62,6 +62,8 @@ func (h *Hub) defeatPlayer(clientID string) {
 	e.targetID = ""
 	e.engageID = ""
 	cc.inCombat = false
+	wasMounted := cc.mounted
+	cc.mounted, cc.mountSprite = false, ""
 	h.flushSkillUsage(e)
 	for _, n := range h.entities {
 		if n.Kind == kindNPC {
@@ -77,7 +79,12 @@ func (h *Hub) defeatPlayer(clientID string) {
 	cc.staminaAt = time.Now()
 	h.respawnAtSavePoint(clientID)
 	h.grantBattleImmunity(e)
-	h.sendPlayerSync(e)
+	if wasMounted {
+		// Every observer must drop the mount visual, not just owner+party.
+		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
+	} else {
+		h.sendPlayerSync(e)
+	}
 	h.mu.RLock()
 	c := h.clients[clientID]
 	h.mu.RUnlock()

@@ -8,7 +8,14 @@ type Offset = { x: number; y: number };
  */
 export function useWindowDrag(resetKey?: string | number | null, scale = 1) {
   const [offset, setOffset] = useState<Offset>({ x: 0, y: 0 });
-  const drag = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
+  const drag = useRef<{
+    startX: number;
+    startY: number;
+    origX: number;
+    origY: number;
+    /** Press landed on an interactive child — capture only once it moves. */
+    pending: boolean;
+  } | null>(null);
 
   useEffect(() => {
     setOffset({ x: 0, y: 0 });
@@ -19,16 +26,20 @@ export function useWindowDrag(resetKey?: string | number | null, scale = 1) {
     (e: ReactPointerEvent<HTMLElement>) => {
       if (e.button !== 0) return;
       const t = e.target as HTMLElement;
-      if (t.closest("button, a, input, select, textarea, .cm-close")) return;
-      e.preventDefault();
-      e.stopPropagation();
-      e.currentTarget.setPointerCapture(e.pointerId);
+      if (t.closest(".cm-close")) return;
+      const pending = !!t.closest("button, a, input, select, textarea");
       drag.current = {
         startX: e.clientX,
         startY: e.clientY,
         origX: offset.x,
         origY: offset.y,
+        pending,
       };
+      if (!pending) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+      }
     },
     [offset.x, offset.y],
   );
@@ -36,6 +47,14 @@ export function useWindowDrag(resetKey?: string | number | null, scale = 1) {
   const onPointerMove = useCallback((e: ReactPointerEvent<HTMLElement>) => {
     const d = drag.current;
     if (!d) return;
+    if (d.pending) {
+      // A press on a button becomes a drag only past a small threshold — a
+      // plain click still fires; crossing it captures the pointer here so
+      // the released click retargets to this element, not the button.
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < 4) return;
+      d.pending = false;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
     setOffset({
       x: d.origX + (e.clientX - d.startX),
       y: d.origY + (e.clientY - d.startY),
