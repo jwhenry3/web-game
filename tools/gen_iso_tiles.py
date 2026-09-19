@@ -34,19 +34,10 @@ def speckle(im, color, density, lo=1, hi=2):
             for dx in range(rng.randint(lo, hi)):
                 px[(x + dx) % T, (y + dy) % T] = color + (255,)
 
-def fill_tile(base, dark, light, d_dark=0.08, d_light=0.07, vignette=True):
+def fill_tile(base, dark, light, d_dark=0.08, d_light=0.07):
     im = Image.new("RGBA", (T, T), base + (255,))
     speckle(im, dark, d_dark)
     speckle(im, light, d_light)
-    if vignette:
-        # Soft top-left light — rotates into a consistent lit edge in iso.
-        d = ImageDraw.Draw(im)
-        for i in range(2):
-            d.line([(0, i), (T - 1, i)], fill=light + (140,), width=1)
-            d.line([(i, 0), (i, T - 1)], fill=light + (140,), width=1)
-        for i in range(2):
-            d.line([(0, T - 1 - i), (T - 1, T - 1 - i)], fill=dark + (140,), width=1)
-            d.line([(T - 1 - i, 0), (T - 1 - i, T - 1)], fill=dark + (140,), width=1)
     return im
 
 def ice_fill():

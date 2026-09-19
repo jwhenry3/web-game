@@ -5,7 +5,6 @@ import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 
 import { WorldMovement } from "./movement";
 import { FILL, tileAt, WALKABLE } from "../world/overworld";
-import { VisibilityFX } from "./visibility";
 import {
   terrainLayerKey,
   terrainLayersFromSnapshot,
@@ -146,7 +145,6 @@ export class WorldScene extends Phaser.Scene {
   private terrainPortalKey = "";
   private terrainTextureKey = "";
   private terrainUnsub?: () => void;
-  private visibility?: VisibilityFX;
   private worldW = 5120;
   private worldH = 3840;
   private lastMapId = "";
@@ -189,8 +187,6 @@ export class WorldScene extends Phaser.Scene {
     this.camProxy = this.add.zone(0, 0, 4, 4);
 
     this.resetEcs();
-    this.visibility?.destroy();
-    this.visibility = new VisibilityFX(this, { iso: true });
     const map = useGame.getState().overworld;
     this.applyWorldBounds(map);
     this.bindTerrainSync();
@@ -253,8 +249,6 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.terrainUnsub?.();
       this.terrainUnsub = undefined;
-      this.visibility?.destroy();
-      this.visibility = undefined;
       this.jumping.clear();
       this.targetRing.destroy();
       this.collisionGizmo.destroy();
@@ -273,10 +267,9 @@ export class WorldScene extends Phaser.Scene {
       // Returning from the house scene: force the self avatar to re-snap so
       // the camera follows the updated world position instead of the stale
       // pre-sleep location.  Also clear overlays so no house-scene labels
-      // linger and invalidate the visibility mask so it recomputes.
+      // linger.
       this.resetEcs();
       clearEntityOverlays();
-      this.visibility?.invalidate();
       // Don't replay combat events that fired while the scene was asleep.
       this.combatSeenSeq = latestCombatEventSeq(useGame.getState().combatEvents);
     });
@@ -482,14 +475,6 @@ export class WorldScene extends Phaser.Scene {
         originY: 0,
       };
       this.collisionGizmo.setGrid(this.collisionGrid);
-      this.visibility?.setGrid({
-        blocked: layerData.collision,
-        cols: layerData.cols,
-        rows: layerData.rows,
-        tileSize: layerData.tileSize,
-        originX: 0,
-        originY: 0,
-      });
       this.renderConfigTerrain(layerData, portals);
       return;
     }
@@ -509,14 +494,6 @@ export class WorldScene extends Phaser.Scene {
       originY: 0,
     };
     this.collisionGizmo.setGrid(this.collisionGrid);
-    this.visibility?.setGrid({
-      blocked,
-      cols: map.cols,
-      rows: map.rows,
-      tileSize: map.tile || 32,
-      originX: 0,
-      originY: 0,
-    });
   }
 
   private clearTerrain() {
@@ -1017,7 +994,6 @@ export class WorldScene extends Phaser.Scene {
     // POIs are world-fixed; project with the camera scroll Phaser will use this frame
     // (follow lerp runs in Camera.preRender after Scene.update).
     const selfAv = this.playerVisualFor(selfId);
-    if (selfAv) this.visibility?.update(selfAv.wrapper.x, selfAv.wrapper.y);
     // Follow prediction needs the camera's screen-space target — the proxy.
     const poiXf = getStageTransform(
       this,

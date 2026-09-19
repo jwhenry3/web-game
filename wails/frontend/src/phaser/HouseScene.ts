@@ -15,7 +15,6 @@ import { CharacterSprite } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
 import { entityShadow } from "./entityShadow";
 import { trackContentZoom } from "./contentZoom";
-import { VisibilityFX } from "./visibility";
 import { INTERACT_RANGE, interactKeyLabel } from "../world/interact";
 import {
   clearHousePlace,
@@ -110,7 +109,6 @@ export class HouseScene extends Phaser.Scene {
   private lastSentX = 0;
   private lastSentY = 0;
   private layoutKey = "";
-  private visibility?: VisibilityFX;
   /** Debug gizmo: entity collision bounds (options.showCollisionBounds / F3). */
   private collisionGizmo = new CollisionGizmo(this);
 
@@ -128,9 +126,6 @@ export class HouseScene extends Phaser.Scene {
     squash.add(rotate);
     this.worldLayer = rotate;
     setIsoLayer(this, rotate);
-    // No interior walls — sight covers the room; outside the walls dims.
-    this.visibility?.destroy();
-    this.visibility = new VisibilityFX(this, { radiusTiles: 0, iso: true });
     // Scene instances are reused across stop/start; stale Key refs won't receive input.
     this.moveKeys = {};
     this.moveKeysSig = "";
@@ -153,8 +148,6 @@ export class HouseScene extends Phaser.Scene {
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       setHouseClientToWorld(null);
-      this.visibility?.destroy();
-      this.visibility = undefined;
       this.clearAll();
     });
     this.events.off(Phaser.Scenes.Events.SLEEP, this.clearAll, this);
@@ -275,14 +268,6 @@ export class HouseScene extends Phaser.Scene {
     // No camera bounds — the camp is small, so let the camera freely center
     // on the player even when they're near the room edges.
     this.cameras.main.removeBounds();
-    this.visibility?.setGrid({
-      blocked: new Uint8Array(house.walk_cols * house.walk_rows),
-      cols: house.walk_cols,
-      rows: house.walk_rows,
-      tileSize: t,
-      originX: ox,
-      originY: oy,
-    });
   }
 
   private ensureAvatar(p: HousePlayer): HouseAvatar {
