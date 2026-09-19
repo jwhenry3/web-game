@@ -354,7 +354,7 @@ func (h *Hub) handleSetSavePoint(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Could not update save point.")
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 }
 
 func (h *Hub) respawnAtSavePoint(clientID string) {

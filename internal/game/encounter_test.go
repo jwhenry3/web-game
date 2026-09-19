@@ -26,11 +26,10 @@ func TestParseEncounterJSONValid(t *testing.T) {
 	}
 }
 
-func TestGenerateVictoryLootFallback(t *testing.T) {
+func TestGenerateVictoryLootNoPoolNoDrop(t *testing.T) {
 	rng := rand.New(rand.NewSource(42))
-	loot := GenerateVictoryLoot(rng, 3, 0, nil)
-	if len(loot) == 0 {
-		t.Fatal("expected procedural loot when no pools assigned")
+	if loot := GenerateVictoryLoot(rng, 3, 0, nil); len(loot) != 0 {
+		t.Fatalf("normal enemies without a drop pool should drop nothing, got %+v", loot)
 	}
 }
 

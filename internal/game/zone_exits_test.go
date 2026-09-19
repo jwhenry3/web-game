@@ -232,7 +232,7 @@ func assertBorderEntry(t *testing.T, name string, dest *Overworld, entryEdge Bor
 	t.Helper()
 	for _, frac := range []float64{0.25, 0.5, 0.75} {
 		x, y := dest.EntryPoint(entryEdge, frac)
-		if !dest.BoundsWalkableAt(x, y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+		if !dest.CircleWalkableAt(x, y, PlayerCollisionRadius) {
 			t.Fatalf("%s entry (%0.f,%0.f) is not walkable on dest map", name, x, y)
 		}
 		if _, _, _, crossing := dest.BorderCrossingAt(x, y); crossing {
@@ -243,7 +243,7 @@ func assertBorderEntry(t *testing.T, name string, dest *Overworld, entryEdge Bor
 
 func assertInlandSpawn(t *testing.T, name string, dest *Overworld, from MapExit) {
 	t.Helper()
-	if !dest.BoundsWalkableAt(from.DestX, from.DestY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if !dest.CircleWalkableAt(from.DestX, from.DestY, PlayerCollisionRadius) {
 		tile := dest.WorldToTile(from.DestX, from.DestY)
 		t.Fatalf("%s (%0.f,%0.f) tile (%d,%d) is not walkable on dest map", name, from.DestX, from.DestY, tile.C, tile.R)
 	}

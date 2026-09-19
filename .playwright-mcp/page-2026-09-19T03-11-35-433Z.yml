@@ -1,0 +1,17 @@
+- generic [ref=e12]:
+  - generic [ref=e13]: Clara Mundi
+  - generic [ref=e15]:
+    - paragraph [ref=e16]: Sign in to enter the world
+    - generic [ref=e17]:
+      - button "Log In" [ref=e18] [cursor=pointer]
+      - button "Register" [ref=e19] [cursor=pointer]
+    - generic [ref=e20]: Username
+    - textbox "Username" [ref=e21]:
+      - /placeholder: 3–20 characters
+    - generic [ref=e22]: Password
+    - textbox "Password" [ref=e23]:
+      - /placeholder: At least 6 characters
+    - generic [ref=e24] [cursor=pointer]:
+      - checkbox "Remember me" [ref=e25]
+      - generic [ref=e26]: Remember me
+    - button "Log In" [disabled] [ref=e27]

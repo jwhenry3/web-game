@@ -13,6 +13,7 @@ import type { MapPrefab } from "../editor/prefabs";
 import { createEmptyPrefab } from "../editor/prefabs";
 import { persistPrefabs } from "../editor/contentStore";
 import { TERRAIN_COLORS } from "../editor/tilePalette";
+import { ISO_BLOCKS, ISO_BLOCK_LEVELS } from "../world/isoTiles";
 import type { EditorInteractMode, ToolboxTab } from "../editor/sceneCatalog";
 import type { ImportedTileset } from "../editor/tilesetConfig";
 import { MapEditorTilesetPanel, MapEditorTilesetToolbar } from "./MapEditorTilesetPanel";
@@ -44,6 +45,9 @@ interface Props {
   onActiveEntity: (id: string | null) => void;
   entityStampMode: boolean;
   onRequestNewEntity?: () => void;
+  blockType: number;
+  blockLevel: number;
+  onBlockChange: (type: number, level: number) => void;
 }
 
 export function MapEditorToolbox({
@@ -71,6 +75,9 @@ export function MapEditorToolbox({
   onActiveEntity,
   entityStampMode,
   onRequestNewEntity,
+  blockType,
+  blockLevel,
+  onBlockChange,
 }: Props) {
   const mapMode = scope === "map" ? interactMode ?? "entity" : null;
   const prefabTab: ToolboxTab = tab === "prefabs" ? "terrain" : tab === "region" ? "entities" : tab;
@@ -129,6 +136,9 @@ export function MapEditorToolbox({
             selectedTileIndex={selectedTileIndex}
             onSelectTileIndex={onSelectTileIndex}
             showTileset={scope === "map"}
+            blockType={blockType}
+            blockLevel={blockLevel}
+            onBlockChange={onBlockChange}
           />
         )}
 
@@ -175,6 +185,9 @@ function TerrainTools({
   selectedTileIndex,
   onSelectTileIndex,
   showTileset,
+  blockType,
+  blockLevel,
+  onBlockChange,
 }: {
   tool: EditorTool;
   onTool: (t: EditorTool) => void;
@@ -183,6 +196,9 @@ function TerrainTools({
   selectedTileIndex: number | null;
   onSelectTileIndex: (i: number | null) => void;
   showTileset: boolean;
+  blockType: number;
+  blockLevel: number;
+  onBlockChange: (type: number, level: number) => void;
 }) {
   return (
     <div className="map-editor-panel-stack">
@@ -204,6 +220,41 @@ function TerrainTools({
           <TerrainBtn tool={tool} id="terrain_water" label="Water" color={TERRAIN_COLORS.water} onTool={onTool} />
           <TerrainBtn tool={tool} id="terrain_erase" label="Erase" color={TERRAIN_COLORS.empty} onTool={onTool} />
         </div>
+        <div className="map-editor-group-label">Blocks</div>
+        <div className="map-editor-tool-list">
+          <TerrainBtn tool={tool} id="terrain_block" label="Block column" color={ISO_BLOCKS[blockType]?.editorColor ?? "#6e6e78"} onTool={onTool} />
+        </div>
+        {tool === "terrain_block" && (
+          <>
+            <div className="map-editor-tool-list">
+              {ISO_BLOCKS.map((b, i) => (
+                <button
+                  key={b.name}
+                  type="button"
+                  className={`cm-btn map-editor-tool-btn ${blockType === i ? "on" : ""}`}
+                  onClick={() => onBlockChange(i, blockLevel)}
+                >
+                  <span className="map-editor-swatch" style={{ background: b.editorColor }} />
+                  {b.name}
+                </button>
+              ))}
+            </div>
+            <div className="map-editor-tool-list">
+              {!ISO_BLOCKS[blockType]?.flat &&
+                Array.from({ length: ISO_BLOCK_LEVELS }, (_, i) => i + 1).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  className={`cm-btn ${blockLevel === l ? "on" : ""}`}
+                  title={`Level ${l} (${l * 16}px)`}
+                  onClick={() => onBlockChange(blockType, l)}
+                >
+                  {l}
+                </button>
+                ))}
+            </div>
+          </>
+        )}
         <div className="map-editor-group-label">Collision</div>
         <div className="map-editor-tool-list">
           <button

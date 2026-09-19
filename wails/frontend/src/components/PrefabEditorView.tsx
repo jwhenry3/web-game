@@ -49,6 +49,8 @@ interface Props {
   focusSeq?: number;
   regionId?: string;
   interactableRoles?: NpcRole[];
+  /** Encoded GID for the terrain_block brush (type + elevation level). */
+  blockGid?: number;
   onChange: (prefab: MapPrefab) => void;
 }
 
@@ -62,6 +64,7 @@ export function PrefabEditorView({
   focusSeq = 0,
   regionId = "prefab",
   interactableRoles = ["job_master"],
+  blockGid,
   onChange,
 }: Props) {
   const [zoom, setZoom] = useState(1);
@@ -82,11 +85,13 @@ export function PrefabEditorView({
   const tilesetRef = useRef(tileset);
   const toolRef = useRef(tool);
   const selectedTileIndexRef = useRef(selectedTileIndex);
+  const blockGidRef = useRef(blockGid);
   panRef.current = pan;
   zoomRef.current = zoom;
   tilesetRef.current = tileset;
   toolRef.current = tool;
   selectedTileIndexRef.current = selectedTileIndex;
+  blockGidRef.current = blockGid;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const groundRef = useRef<number[]>([...prefab.ground]);
@@ -205,7 +210,7 @@ export function PrefabEditorView({
 
     const hover = placementHoverRef.current;
     if (hover && (isTerrainTool(toolRef.current) || isCollisionTool(toolRef.current))) {
-      drawTerrainPaintGhost(ctx, hover, toolRef.current, z, tileSize, ts, selectedTileIndexRef.current);
+      drawTerrainPaintGhost(ctx, hover, toolRef.current, z, tileSize, ts, selectedTileIndexRef.current, blockGidRef.current);
     }
 
     ctx.strokeStyle = "#c9a227";
@@ -339,12 +344,16 @@ export function PrefabEditorView({
     const i = t.r * t.cols + t.c;
     const ts = tilesetRef.current;
     if (isTerrainTool(tool)) {
-      const role = toolToRole(tool);
-      if (role === "unset") groundRef.current[i] = 0;
-      else if (selectedTileIndex != null && ts) {
-        groundRef.current[i] = ts.firstGid + selectedTileIndex;
-      } else if (role) {
-        groundRef.current[i] = gidForRole(role, ts);
+      if (tool === "terrain_block" && blockGid != null) {
+        groundRef.current[i] = blockGid;
+      } else {
+        const role = toolToRole(tool);
+        if (role === "unset") groundRef.current[i] = 0;
+        else if (selectedTileIndex != null && ts) {
+          groundRef.current[i] = ts.firstGid + selectedTileIndex;
+        } else if (role) {
+          groundRef.current[i] = gidForRole(role, ts);
+        }
       }
     } else if (isCollisionTool(tool)) {
       collisionRef.current[i] = tool === "collision_block" ? 1 : 0;

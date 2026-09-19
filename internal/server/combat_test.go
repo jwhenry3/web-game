@@ -783,6 +783,8 @@ func TestPlayerDefeatRespawnsAtSavePoint(t *testing.T) {
 func TestSetTargetStoresTargetID(t *testing.T) {
 	px, py := wildernessXY()
 	h, c, _ := testHubWithPlayer(t, px, py)
+	npc := &entity{ID: "npc-9", Kind: kindNPC, X: px + 40, Y: py, alive: true}
+	h.entities[npc.ID] = npc
 	delete(h.entities, c.ID) // prove set_target creates the player entity
 
 	raw, _ := json.Marshal(protocol.SetTargetPayload{TargetID: "npc-9"})
@@ -793,6 +795,32 @@ func TestSetTargetStoresTargetID(t *testing.T) {
 	}
 	if e.targetID != "npc-9" {
 		t.Fatalf("set_target should store the target, got %q", e.targetID)
+	}
+}
+
+func TestSetTargetRejectsHiddenAndMissingIDs(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	dead := &entity{ID: "npc-dead", Kind: kindNPC, X: px + 40, Y: py, alive: false, hidden: true}
+	h.entities[dead.ID] = dead
+
+	for _, id := range []string{"npc-dead", "npc-missing"} {
+		raw, _ := json.Marshal(protocol.SetTargetPayload{TargetID: id})
+		h.handleSetTarget(c, raw)
+		if pe.targetID != "" {
+			t.Fatalf("set_target %q should be rejected, got %q", id, pe.targetID)
+		}
+		frame, ok := lastFrame(drainClient(c), protocol.TypeSetTarget)
+		if !ok {
+			t.Fatalf("set_target %q should echo the cleared target", id)
+		}
+		var p protocol.SetTargetPayload
+		if err := json.Unmarshal(frame.Payload, &p); err != nil {
+			t.Fatalf("set_target payload: %v", err)
+		}
+		if p.TargetID != "" {
+			t.Fatalf("rejected set_target %q should echo \"\", got %q", id, p.TargetID)
+		}
 	}
 }
 

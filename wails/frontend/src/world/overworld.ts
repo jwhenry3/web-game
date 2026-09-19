@@ -1,7 +1,7 @@
 import type { OverworldMap } from "../types";
-import { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../characters/heroes99";
+import { H99_COLLISION_RADIUS } from "../characters/heroes99";
 
-const WALKABLE = new Set(["H", ".", ",", "R", "T"]);
+const WALKABLE = new Set(["H", ".", ",", "R", "T", "S", "D", "I"]);
 
 export function walkableAt(map: OverworldMap | null, x: number, y: number): boolean {
   if (!map) return true;
@@ -11,27 +11,39 @@ export function walkableAt(map: OverworldMap | null, x: number, y: number): bool
   return WALKABLE.has(map.cells[r * map.cols + c] ?? "");
 }
 
-/** Foot-anchored box (cx, cy) with halfW × halfH extending upward from the feet. */
-export function boundsWalkableAt(
+/**
+ * Feet-centered collision circle — true when the circle fits on walkable
+ * tiles: fully inside the map and no blocked cell's rect overlaps it.
+ */
+export function circleWalkableAt(
   map: OverworldMap | null,
   cx: number,
   cy: number,
-  halfW = H99_COLLISION_HALF_W,
-  halfH = H99_COLLISION_HALF_H,
+  radius = H99_COLLISION_RADIUS,
 ): boolean {
   if (!map) return true;
-  const left = cx - halfW;
-  const right = cx + halfW;
-  const top = cy - halfH;
-  const bottom = cy;
-  const c0 = Math.floor(left / map.tile);
-  const c1 = Math.floor(right / map.tile);
-  const r0 = Math.floor(top / map.tile);
-  const r1 = Math.floor(bottom / map.tile);
+  const t = map.tile;
+  if (
+    cx - radius < 0 ||
+    cy - radius < 0 ||
+    cx + radius > map.cols * t ||
+    cy + radius > map.rows * t
+  ) {
+    return false;
+  }
+  const c0 = Math.floor((cx - radius) / t);
+  const c1 = Math.floor((cx + radius) / t);
+  const r0 = Math.floor((cy - radius) / t);
+  const r1 = Math.floor((cy + radius) / t);
   for (let r = r0; r <= r1; r++) {
     for (let c = c0; c <= c1; c++) {
-      if (c < 0 || r < 0 || c >= map.cols || r >= map.rows) return false;
-      if (!WALKABLE.has(map.cells[r * map.cols + c] ?? "")) return false;
+      if (WALKABLE.has(map.cells[r * map.cols + c] ?? "")) continue;
+      // Closest point on the blocked cell's rect to the circle center.
+      const px = Math.min(Math.max(cx, c * t), (c + 1) * t);
+      const py = Math.min(Math.max(cy, r * t), (r + 1) * t);
+      const dx = cx - px;
+      const dy = cy - py;
+      if (dx * dx + dy * dy < radius * radius) return false;
     }
   }
   return true;
@@ -50,7 +62,7 @@ export function slideMove(
   return { x: fromX, y: fromY };
 }
 
-/** Player movement with a foot-anchored collision box. */
+/** Player movement with a feet-centered collision circle. */
 export function slideMovePlayer(
   map: OverworldMap | null,
   fromX: number,
@@ -58,13 +70,13 @@ export function slideMovePlayer(
   toX: number,
   toY: number,
 ): { x: number; y: number } {
-  if (boundsWalkableAt(map, toX, toY)) return { x: toX, y: toY };
-  if (boundsWalkableAt(map, toX, fromY)) return { x: toX, y: fromY };
-  if (boundsWalkableAt(map, fromX, toY)) return { x: fromX, y: toY };
+  if (circleWalkableAt(map, toX, toY)) return { x: toX, y: toY };
+  if (circleWalkableAt(map, toX, fromY)) return { x: toX, y: fromY };
+  if (circleWalkableAt(map, fromX, toY)) return { x: fromX, y: toY };
   return { x: fromX, y: fromY };
 }
 
-export { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W };
+export { H99_COLLISION_RADIUS };
 
 const FILL: Record<string, number> = {
   H: 0x2a4a28,
@@ -74,6 +86,9 @@ const FILL: Record<string, number> = {
   T: 0x16301c,
   "#": 0x3a3a40,
   "~": 0x1a3a5a,
+  S: 0xdfe8ee, // snow
+  D: 0xd0b47a, // sand / dunes
+  I: 0x8fbdd4, // ice
 };
 
 export function tileAt(map: OverworldMap, c: number, r: number): string {

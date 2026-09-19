@@ -3,6 +3,7 @@ package game
 import (
 	"math"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -77,6 +78,9 @@ type Overworld struct {
 	Collision         []int             // composed collision layer after overrides
 	TileOverrides     *MapTileOverrides // sparse tile patches applied on top of the base config
 	Objects           []OverrideObject  // composed object layer (base config + override)
+
+	sanctuaryOnce sync.Once
+	sanctuaryMask []bool // cols*rows; built lazily — SanctuaryAt runs in NPC workers
 }
 
 var loadedOverworld *Overworld
@@ -149,16 +153,34 @@ func (o *Overworld) tileSz() int {
 
 func (o *Overworld) TileSizePx() int { return o.tileSz() }
 
+// SanctuaryAt reports whether tile (c,r) is inside any sanctuary region. The
+// per-tile mask is built once — NPC walkability checks call this from worker
+// goroutines, and a linear region scan per tile does not scale to large maps.
 func (o *Overworld) SanctuaryAt(c, r int) bool {
 	if o == nil {
 		return false
 	}
-	for _, reg := range o.Regions {
-		if reg.Sanctuary && reg.Contains(c, r) {
-			return true
-		}
+	cols, rows := o.dims()
+	if c < 0 || r < 0 || c >= cols || r >= rows {
+		return false
 	}
-	return false
+	o.sanctuaryOnce.Do(func() {
+		mask := make([]bool, cols*rows)
+		for _, reg := range o.Regions {
+			if !reg.Sanctuary {
+				continue
+			}
+			for rr := maxInt(reg.MinR, 0); rr <= minInt(reg.MaxR, rows-1); rr++ {
+				for cc := maxInt(reg.MinC, 0); cc <= minInt(reg.MaxC, cols-1); cc++ {
+					if reg.Contains(cc, rr) {
+						mask[rr*cols+cc] = true
+					}
+				}
+			}
+		}
+		o.sanctuaryMask = mask
+	})
+	return o.sanctuaryMask[r*cols+c]
 }
 
 func (o *Overworld) SanctuaryAtWorld(x, y float64) bool {
@@ -189,7 +211,7 @@ func (o *Overworld) Cell(c, r int) byte {
 
 func (o *Overworld) WalkableTile(c, r int) bool {
 	switch o.Cell(c, r) {
-	case TileHaven, TileGrass, TilePath, TileRuins, TileTree:
+	case TileHaven, TileGrass, TilePath, TileRuins, TileTree, TileSnow, TileSand, TileIce:
 		return true
 	default:
 		return false
@@ -211,19 +233,24 @@ func (o *Overworld) TileCenter(t Tile) Vec2 {
 	return Vec2{X: (float64(t.C) + 0.5) * ts, Y: (float64(t.R) + 0.5) * ts}
 }
 
-func (o *Overworld) BoundsWalkableAt(cx, cy, halfW, halfH float64) bool {
+// CircleWalkableAt reports whether a feet-centered circle of radius r sits
+// entirely on walkable tiles inside the map.
+func (o *Overworld) CircleWalkableAt(cx, cy, radius float64) bool {
 	ts := float64(o.tileSz())
-	left := cx - halfW
-	right := cx + halfW
-	top := cy - halfH
-	bottom := cy
-	c0 := int(math.Floor(left / ts))
-	c1 := int(math.Floor(right / ts))
-	r0 := int(math.Floor(top / ts))
-	r1 := int(math.Floor(bottom / ts))
+	if cx-radius < 0 || cy-radius < 0 ||
+		cx+radius > float64(o.WorldW) || cy+radius > float64(o.WorldH) {
+		return false
+	}
+	c0 := int(math.Floor((cx - radius) / ts))
+	c1 := int(math.Floor((cx + radius) / ts))
+	r0 := int(math.Floor((cy - radius) / ts))
+	r1 := int(math.Floor((cy + radius) / ts))
 	for r := r0; r <= r1; r++ {
 		for c := c0; c <= c1; c++ {
-			if !o.WalkableTile(c, r) {
+			if o.WalkableTile(c, r) {
+				continue
+			}
+			if circleOverlapsCell(cx, cy, radius, c, r, ts) {
 				return false
 			}
 		}
@@ -232,13 +259,13 @@ func (o *Overworld) BoundsWalkableAt(cx, cy, halfW, halfH float64) bool {
 }
 
 func (o *Overworld) SlideMovePlayer(fromX, fromY, toX, toY float64) (float64, float64) {
-	if o.BoundsWalkableAt(toX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if o.CircleWalkableAt(toX, toY, PlayerCollisionRadius) {
 		return toX, toY
 	}
-	if o.BoundsWalkableAt(toX, fromY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if o.CircleWalkableAt(toX, fromY, PlayerCollisionRadius) {
 		return toX, fromY
 	}
-	if o.BoundsWalkableAt(fromX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if o.CircleWalkableAt(fromX, toY, PlayerCollisionRadius) {
 		return fromX, toY
 	}
 	return fromX, fromY
@@ -388,11 +415,13 @@ func (o *Overworld) EntryPoint(edge BorderEdge, t float64) (x, y float64) {
 		return depth
 	}
 	// Walkable check: (c,r) for horizontal edges is (along-axis, edge-axis).
+	// The player collision circle must fit at the tile center, not just the
+	// point — otherwise a crossing could land inside blocked geometry.
 	walkableAt := func(a, depth int) bool {
 		if horizontal {
-			return o.WalkableTile(a, insetFor(depth))
+			return o.CircleWalkableAt((float64(a)+0.5)*ts, (float64(insetFor(depth))+0.5)*ts, PlayerCollisionRadius)
 		}
-		return o.WalkableTile(insetFor(depth), a)
+		return o.CircleWalkableAt((float64(insetFor(depth))+0.5)*ts, (float64(a)+0.5)*ts, PlayerCollisionRadius)
 	}
 	// Nearest walkable along the edge: expand outward from the mirrored index,
 	// landing just past the trigger band (depth BorderBandTiles..+2).

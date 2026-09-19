@@ -67,6 +67,11 @@ type Proxy struct {
 	convMu  sync.Mutex
 	convSrc []byte
 	convDst []byte
+
+	// mapimgCache holds rendered terrain PNGs for /api/mapimg, keyed by map
+	// id. Terrain is static at runtime so entries never expire.
+	mapimgMu    sync.Mutex
+	mapimgCache map[string][]byte
 }
 
 func New(cfg cluster.Config, cfgPath string, tokens *auth.TokenIssuer, accounts *store.AccountStore, profiles *store.Store, adminSecret string) *Proxy {
@@ -126,6 +131,7 @@ func (p *Proxy) Handler() http.Handler {
 	apiMux := http.NewServeMux()
 	server.RegisterAPIRoutes(apiMux, p.auth)
 	apiMux.HandleFunc("/atlas", p.handleAtlas)
+	apiMux.HandleFunc("/mapimg", p.handleMapImage)
 	apiMux.HandleFunc("/status", p.handleStatus)
 	admin := &AdminMapsHandler{
 		Secret:   p.adminSecret,
@@ -160,6 +166,13 @@ func (p *Proxy) handleAtlas(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(protocol.AtlasPayload{Maps: p.atlasMaps()})
+}
+
+// atlasMaps collects the live atlas entries — the world node's terrain in
+// singular-world mode, otherwise every enabled running map node.
+func (p *Proxy) atlasMaps() []protocol.AtlasMap {
 	p.mu.Lock()
 	world := p.world
 	worldMode := p.cfg.HasWorld() || world != nil
@@ -188,8 +201,7 @@ func (p *Proxy) handleAtlas(w http.ResponseWriter, r *http.Request) {
 			maps = append(maps, n.AtlasMap())
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(protocol.AtlasPayload{Maps: maps})
+	return maps
 }
 
 func (p *Proxy) handleWS(w http.ResponseWriter, r *http.Request) {

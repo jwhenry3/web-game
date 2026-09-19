@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import {
@@ -8,7 +8,7 @@ import {
   type ProfileInfo,
 } from "../types";
 import { HOTBAR_ROWS, hotbarKeyLabel, mergeKeybinds } from "../input/keybinds";
-import { readHotbarDrag, writeHotbarDrag } from "../ui/hotbarDrag";
+import { readHotbarDrag, setHotbarDragImage, writeHotbarDrag } from "../ui/hotbarDrag";
 import { GameIcon } from "../ui/GameIcon";
 import { ICONS } from "../ui/icons";
 import { hotbarIconSrc, skillIconSrc } from "../ui/itemDisplay";
@@ -36,6 +36,7 @@ export function Hotbar() {
     s.selfId && s.combatIds[s.selfId] ? s.entities[s.selfId] : undefined,
   );
   const drag = useGame((s) => s.hotbarDrag);
+  const barRef = useRef<HTMLDivElement>(null);
   const keybinds = useMemo(() => mergeKeybinds(profile?.keybinds), [profile?.keybinds]);
   if (!profile) return null;
 
@@ -70,15 +71,25 @@ export function Hotbar() {
           tabIndex={-1}
           className={`hotbar-slot ${active ? "selected" : ""} ${gcdLocked ? "gcd-locked" : ""}`}
           draggable={!!bind}
-          onMouseDown={(e) => e.preventDefault()}
           onDragStart={(e) => {
             if (!bind) return;
             writeHotbarDrag(e, { kind: bind.kind as "skill" | "item", id: bind.id, slot });
+            if (iconSrc) {
+              setHotbarDragImage(e, iconSrc, bind.kind === "item" && itemCount > 1 ? itemCount : undefined);
+            }
           }}
           onDragEnd={(e) => {
             useGame.setState({ hotbarDrag: null });
-            if (!bind) return;
-            if (e.dataTransfer.dropEffect === "none") net.clearHotbar(slot);
+            e.currentTarget.blur();
+            if (!bind || e.dataTransfer.dropEffect !== "none") return;
+            // dropEffect "none" means no drop target accepted — either released
+            // off the bar or the drag was cancelled. Unbind only when the
+            // pointer is verifiably outside the bar (coords are 0 in engines
+            // that don't report drop position — treat those as cancels).
+            const r = barRef.current?.getBoundingClientRect();
+            const inside =
+              !!r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+            if (!inside && (e.clientX !== 0 || e.clientY !== 0)) net.clearHotbar(slot);
           }}
           onDragOver={(e) => {
             e.preventDefault();
@@ -97,8 +108,9 @@ export function Hotbar() {
             }
             net.setHotbar(slot, payload.kind, payload.id);
           }}
-          onClick={() => {
+          onClick={(e) => {
             net.activateHotbar(slot);
+            e.currentTarget.blur();
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -128,7 +140,20 @@ export function Hotbar() {
 
   return (
     <div
+      ref={barRef}
       className={`hotbar ${drag ? "hotbar--drop-target" : ""}`}
+      onDragOver={(e) => {
+        // Absorb drops that land on the bar's gaps between slots: they cancel
+        // the drag rather than count as a drop-off, which would unbind the
+        // source slot via dragend's dropEffect check.
+        if (!drag) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = drag.slot ? "move" : "copy";
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        useGame.setState({ hotbarDrag: null });
+      }}
       onKeyDown={(e) => {
         if (e.key.startsWith("Arrow")) e.preventDefault();
       }}

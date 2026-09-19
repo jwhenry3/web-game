@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -24,6 +25,36 @@ const npcActorScopeMargin = dropRange
 // npcWorkerReplyTimeout caps how long the hub waits for a worker's tick reply
 // before skipping it for the round; the worker's next result resyncs fully.
 const npcWorkerReplyTimeout = combatTickInterval
+
+// ---- slow-path diagnostics ----
+//
+// logSlow warns when a hot-path step blows its latency budget, at most once
+// per slowLogEvery per label so a saturated path cannot flood the log itself.
+// These logs are how worker backpressure (slow ticks, full inboxes, blocked
+// synchronous calls) is diagnosed in production.
+const slowLogEvery = 5 * time.Second
+
+var slowLogLast sync.Map // label -> time.Time of last emit
+
+func logSlow(label string, d, budget time.Duration) {
+	if d < budget {
+		return
+	}
+	if prev, ok := slowLogLast.Load(label); ok && time.Since(prev.(time.Time)) < slowLogEvery {
+		return
+	}
+	slowLogLast.Store(label, time.Now())
+	log.Printf("[slow] %s took %v (budget %v)", label, d.Round(time.Millisecond), budget)
+}
+
+// logThrottled emits msg at most once per slowLogEvery per label.
+func logThrottled(label, msg string) {
+	if prev, ok := slowLogLast.Load(label); ok && time.Since(prev.(time.Time)) < slowLogEvery {
+		return
+	}
+	slowLogLast.Store(label, time.Now())
+	log.Print(msg)
+}
 
 // npcWorker owns the mutable NPC entities for one simulation region. The hub
 // keeps only projection copies for targeting, AOI, and wire snapshots; every
@@ -64,6 +95,10 @@ type npcWorker struct {
 	sentActors       map[string]bool     // actor ids sent with the in-flight tick
 	lastActors       map[string]bool     // actor ids in the last acked snapshot
 	needFullSnapshot bool                // a skipped/dropped result must resync
+	// boundActors tracks actor ids a command clone installed into w.actors
+	// (see bindCommandSource): actors that never rode a tick snapshot still
+	// leave target/enmity references the removal fan-out must reach.
+	boundActors map[string]bool
 }
 
 type npcWorkerCall struct {
@@ -121,6 +156,31 @@ type npcCommand struct {
 	Shield   int
 	Enmity   int
 	Captured bool
+}
+
+func npcCmdName(kind npcCommandKind) string {
+	switch kind {
+	case npcCmdAdopt:
+		return "adopt"
+	case npcCmdRemove:
+		return "remove"
+	case npcCmdRemoveActor:
+		return "removeActor"
+	case npcCmdDamage:
+		return "damage"
+	case npcCmdStatuses:
+		return "statuses"
+	case npcCmdEnmity:
+		return "enmity"
+	case npcCmdEngage:
+		return "engage"
+	case npcCmdDisengage:
+		return "disengage"
+	case npcCmdKill:
+		return "kill"
+	default:
+		return "unknown"
+	}
 }
 
 type npcWorkerReply struct {
@@ -182,13 +242,14 @@ type npcTickResult struct {
 
 func newNPCWorker(id string, world *game.WorldDefinition, ow *game.Overworld) *npcWorker {
 	w := &npcWorker{
-		id:     id,
-		world:  world,
-		ow:     ow,
-		inbox:  make(chan npcWorkerCall, 64),
-		done:   make(chan struct{}),
-		npcs:   map[string]*entity{},
-		actors: map[string]*entity{},
+		id:          id,
+		world:       world,
+		ow:          ow,
+		inbox:       make(chan npcWorkerCall, 64),
+		done:        make(chan struct{}),
+		npcs:        map[string]*entity{},
+		actors:      map[string]*entity{},
+		boundActors: map[string]bool{},
 	}
 	if region, ok := world.SimulationRegionByID(id); ok {
 		ts := float64(world.TileSizePx())
@@ -222,11 +283,16 @@ func (w *npcWorker) run() {
 	for call := range w.inbox {
 		switch {
 		case call.tick != nil:
+			t0 := time.Now()
+			result := w.tick(*call.tick)
+			logSlow("npc-tick "+w.id, time.Since(t0), 40*time.Millisecond)
 			if call.reply != nil {
-				call.reply <- npcWorkerReply{Result: w.tick(*call.tick)}
+				call.reply <- npcWorkerReply{Result: result}
 			}
 		case call.command != nil:
+			t0 := time.Now()
 			reply := w.command(*call.command)
+			logSlow("npc-cmd "+w.id+" "+npcCmdName(call.command.Kind), time.Since(t0), 40*time.Millisecond)
 			if call.reply != nil {
 				call.reply <- reply
 			}
@@ -248,21 +314,27 @@ func (w *npcWorker) stop() {
 }
 
 // send posts a command and returns its reply channel without waiting, so a
-// caller can fan out to several workers before collecting any replies.
+// caller can fan out to several workers before collecting any replies. The
+// channel write itself blocks once the inbox is full — measured, since that
+// is how a backed-up worker stalls the hub loop.
 func (w *npcWorker) send(cmd npcCommand) chan npcWorkerReply {
 	reply := make(chan npcWorkerReply, 1)
+	t0 := time.Now()
 	select {
 	case w.inbox <- npcWorkerCall{command: &cmd, reply: reply}:
 	case <-w.done:
 		close(reply)
 	}
+	logSlow("npc-inbox "+w.id, time.Since(t0), 10*time.Millisecond)
 	return reply
 }
 
 func (w *npcWorker) call(cmd npcCommand) (npcWorkerReply, bool) {
 	reply := w.send(cmd)
+	t0 := time.Now()
 	select {
 	case res := <-reply:
+		logSlow("npc-call "+w.id+" "+npcCmdName(cmd.Kind), time.Since(t0), 50*time.Millisecond)
 		return res, true
 	case <-w.done:
 		return npcWorkerReply{}, false
@@ -276,13 +348,17 @@ func (w *npcWorker) callAll(cmds []npcCommand) ([]npcWorkerReply, bool) {
 		return nil, true
 	}
 	replies := make(chan []npcWorkerReply, 1)
+	t0 := time.Now()
 	select {
 	case w.inbox <- npcWorkerCall{commands: cmds, replies: replies}:
 	case <-w.done:
 		return nil, false
 	}
+	logSlow("npc-inbox "+w.id, time.Since(t0), 10*time.Millisecond)
+	t0 = time.Now()
 	select {
 	case res := <-replies:
+		logSlow("npc-callall "+w.id, time.Since(t0), 50*time.Millisecond)
 		return res, true
 	case <-w.done:
 		return nil, false
@@ -335,11 +411,13 @@ func (w *npcWorker) ackActors() {
 
 func (w *npcWorker) tickAsync(req npcTickRequest) chan npcWorkerReply {
 	reply := make(chan npcWorkerReply, 1)
+	t0 := time.Now()
 	select {
 	case w.inbox <- npcWorkerCall{tick: &req, reply: reply}:
 	case <-w.done:
 		close(reply)
 	}
+	logSlow("npc-inbox "+w.id, time.Since(t0), 10*time.Millisecond)
 	return reply
 }
 

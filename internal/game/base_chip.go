@@ -61,7 +61,7 @@ func LoadBaseChipConfig(path string) (*BaseChipConfig, error) {
 		ImageHeight:   raw.Image.Height,
 		WaterTiles:    map[int]bool{},
 		CollidesTiles: map[int]bool{},
-		TreeTiles:     []int{8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 32, 33, 34, 35},
+		TreeTiles:     []int{8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43},
 	}
 	for _, t := range raw.TerrainTypes.Terrains {
 		cfg.TerrainCenters = append(cfg.TerrainCenters, t.Tile)
@@ -86,12 +86,12 @@ func LoadBaseChipConfig(path string) (*BaseChipConfig, error) {
 	}
 	if len(cfg.CollidesTiles) == 0 {
 		cfg.CollidesTiles[BaseChipLocalStoneFill] = true
-		// Trunks + bushes block; canopy tops are walk-under.
+		// Trunks block (small + big trees); canopy tops are walk-under.
 		for local := 16; local <= 23; local++ {
 			cfg.CollidesTiles[local] = true
 		}
-		for _, b := range PipoyaBushLocals {
-			cfg.CollidesTiles[b] = true
+		for local := 32; local <= 39; local++ {
+			cfg.CollidesTiles[local] = true
 		}
 	}
 	if len(cfg.TerrainCenters) == 0 {
@@ -237,6 +237,12 @@ func containsInt(list []int, v int) bool {
 
 // CharFromGroundGID resolves a ground-layer GID using BaseChip firstgid.
 func (c *BaseChipConfig) CharFromGroundGID(firstGID, gid int) (byte, bool) {
+	if IsIsoBlockGID(gid) {
+		return TileRock, true
+	}
+	if gid >= MundiFirstTerrain && gid < MundiFirstTerrain+MundiTerrainTiles {
+		return mundiLocalChar(gid - MundiFirstTerrain)
+	}
 	if gid >= PipoyaFirstWaterAnim && gid < PipoyaFirstWaterAnim+3072 {
 		return TileWater, true
 	}

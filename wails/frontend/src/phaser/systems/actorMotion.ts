@@ -15,7 +15,8 @@ import {
 import type { EntityWorld } from "../../ecs/world";
 import type { WorldEntity } from "../../types";
 import { facingOf, getLastWorldFacing, setLastWorldFacing } from "../movement";
-import { ActorVisual, type ActorVisualRole } from "./actorVisuals";
+import { isoDepth } from "../../world/iso";
+import { ActorVisual, ISO_ACTOR_DEPTH_EPS, type ActorVisualRole } from "./actorVisuals";
 
 const PLAYER_SNAP_DIST = 80;
 const PLAYER_LERP = 0.25;
@@ -72,6 +73,11 @@ function isMoving(dx: number, dy: number): boolean {
   return Math.hypot(dx, dy) > 0.3;
 }
 
+/** Rendered-horizontal facing axis — under iso, screen x = dx − dy. */
+function faceAxis(visual: ActorVisual, dx: number, dy: number): number {
+  return visual.iso ? dx - dy : dx;
+}
+
 function isCasting(entity: WorldEntity, combat: CombatState, role: ActorVisualRole): boolean {
   if (role === "combat-extra") return !!entity.casting_skill_id;
   if (combat.inCombat) return !!entity.casting_skill_id;
@@ -105,7 +111,7 @@ function updateSelf(
 ): void {
   if (!opts.self.spawned()) {
     setPosition(visual, entity.x, entity.y);
-    setLastWorldFacing(facingOf(entity, getLastWorldFacing()));
+    setLastWorldFacing(facingOf(entity, getLastWorldFacing(), !!visual.iso));
     visual.sprite.setFacing(getLastWorldFacing());
     opts.self.onSpawn(visual);
   } else if (
@@ -114,7 +120,7 @@ function updateSelf(
     Math.hypot(visual.wrapper.x - entity.x, visual.wrapper.y - entity.y) > PLAYER_SNAP_DIST
   ) {
     setPosition(visual, entity.x, entity.y);
-    setLastWorldFacing(facingOf(entity, getLastWorldFacing()));
+    setLastWorldFacing(facingOf(entity, getLastWorldFacing(), !!visual.iso));
     visual.sprite.setFacing(getLastWorldFacing());
   }
   opts.self.onPosition(visual.wrapper.x, visual.wrapper.y);
@@ -131,11 +137,11 @@ function updateRemotePlayer(
   if (!opts.jumping.has(entity.id)) {
     if (inView && Math.hypot(visual.wrapper.x - entity.x, visual.wrapper.y - entity.y) <= PLAYER_SNAP_DIST) {
       const { dx, dy } = lerpPosition(visual, entity.x, entity.y, PLAYER_LERP);
-      visual.sprite.setMoving(isMoving(dx, dy), dx, dy);
+      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
     } else {
       setPosition(visual, entity.x, entity.y);
       visual.sprite.setMoving(false);
-      visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing()));
+      visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
     }
   }
   if (inView) visual.sprite.update(delta);
@@ -156,10 +162,11 @@ function updateNpc(
       visual.wrapper.y = Phaser.Math.Linear(visual.wrapper.y, entity.y, NPC_LERP);
       const dx = visual.wrapper.x - prevX;
       const dy = visual.wrapper.y - prevY;
-      visual.sprite.setMoving(isMoving(dx, dy), dx, dy);
+      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
     } else {
       setPosition(visual, entity.x, entity.y);
       visual.sprite.setMoving(false);
+      visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
     }
     visual.lastX = visual.wrapper.x;
     visual.lastY = visual.wrapper.y;
@@ -182,10 +189,11 @@ function updateCombatExtra(
       visual.wrapper.y = Phaser.Math.Linear(prevY, entity.y, COMBAT_EXTRA_LERP);
       const dx = visual.wrapper.x - prevX;
       const dy = visual.wrapper.y - prevY;
-      visual.sprite.setMoving(isMoving(dx, dy), dx, dy);
+      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
     } else {
       setPosition(visual, entity.x, entity.y);
       visual.sprite.setMoving(false);
+      visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
     }
   }
   if (inView) visual.sprite.update(delta);
@@ -206,12 +214,13 @@ function updatePet(
     if (Math.hypot(prevX - entity.x, prevY - entity.y) > PET_SNAP_DIST) {
       setPosition(visual, entity.x, entity.y);
       visual.sprite.setMoving(false);
+      visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
     } else {
       visual.wrapper.x = Phaser.Math.Linear(prevX, entity.x, PET_LERP);
       visual.wrapper.y = Phaser.Math.Linear(prevY, entity.y, PET_LERP);
       const dx = visual.wrapper.x - prevX;
       const dy = visual.wrapper.y - prevY;
-      visual.sprite.setMoving(isMoving(dx, dy), dx, dy);
+      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
     }
     visual.lastX = visual.wrapper.x;
     visual.lastY = visual.wrapper.y;
@@ -263,6 +272,14 @@ export function syncActorMotion(
         updateCombatExtra(visual, entity, inView, delta, opts);
         break;
       }
+    }
+
+    // Iso scenes depth-sort the world layer by projected screen Y — higher
+    // on screen draws behind lower. Orthogonal scenes keep role depths.
+    if (visual.iso) {
+      visual.wrapper.setDepth(
+        isoDepth(visual.wrapper.x, visual.wrapper.y) + ISO_ACTOR_DEPTH_EPS,
+      );
     }
   }
 }

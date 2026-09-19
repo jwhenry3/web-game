@@ -258,7 +258,7 @@ func (h *Hub) reloadOverworld(id, name string, ow *game.Overworld) {
 	} else {
 		h.SetMap(id, name, ow)
 	}
-	h.reseedNPCsPreservingCombat(npcCount)
+	h.reseedNPCsPreservingCombat(h.npcPatrolCount())
 	h.BroadcastMapConfig()
 	h.broadcastWorldState()
 	nClients := 0
@@ -307,7 +307,7 @@ func (h *Hub) Run() {
 	defer h.stopNPCWorkers()
 	h.initSocial()
 	h.ensureNPCWorkers()
-	h.seedNPCs(npcCount)
+	h.seedNPCs(h.npcPatrolCount())
 	ticker := time.NewTicker(time.Duration(npcTickSec * float64(time.Second)))
 	defer ticker.Stop()
 	castTicker := time.NewTicker(50 * time.Millisecond)
@@ -631,7 +631,7 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	if cc := clientControlOf(e); cc != nil {
 		cc.weaponName = string(profile.WeaponType())
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
 }
 
@@ -652,7 +652,7 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	if cc := clientControlOf(e); cc != nil {
 		cc.weaponName = string(profile.WeaponType())
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
 }
 
@@ -684,7 +684,7 @@ func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.applyProfilePresence(e, profile)
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
 }
 
@@ -698,7 +698,7 @@ func (h *Hub) handleSetHotbar(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Invalid hotbar slot.")
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 }
 
 func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
@@ -711,7 +711,7 @@ func (h *Hub) handleSetKeybinds(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Invalid keybinds.")
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 }
 
 func (h *Hub) grantBattleImmunity(e *entity) {

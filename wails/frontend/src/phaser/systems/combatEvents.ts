@@ -15,6 +15,34 @@ import {
   vfxCategoryForAction,
 } from "../battleVfx";
 import type { IEntitySprite } from "../entitySprite";
+import { isoLayer, isoProject, isoUp } from "../../world/iso";
+
+/** Screen-space position of a world-space wrapper (identity off-iso). */
+function screenPos(
+  scene: Phaser.Scene,
+  w: { x: number; y: number },
+): { x: number; y: number } {
+  return isoProject(scene, w.x, w.y);
+}
+
+/**
+ * Live-projected position — arc beziers re-read endpoints every frame while
+ * they draw, so hand them getters that follow the wrapper's world position.
+ */
+function livePos(
+  scene: Phaser.Scene,
+  w: { x: number; y: number },
+): { x: number; y: number } {
+  if (!isoLayer(scene)) return w;
+  return {
+    get x() {
+      return isoProject(scene, w.x, w.y).x;
+    },
+    get y() {
+      return isoProject(scene, w.x, w.y).y;
+    },
+  };
+}
 
 export interface CombatVisualRef {
   wrapper: Phaser.GameObjects.Container;
@@ -55,7 +83,8 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
   const actor = host.visualFor(ev.attacker_id);
   const target = ev.target_id ? host.visualFor(ev.target_id) : undefined;
   if (actor && target && actor !== target) {
-    const fdx = target.wrapper.x - actor.wrapper.x;
+    // Face screen-left/right — the projected horizontal delta under iso.
+    const fdx = screenPos(scene, target.wrapper).x - screenPos(scene, actor.wrapper).x;
     if (Math.abs(fdx) > 0.5) actor.sprite.setFacing(fdx < 0 ? "left" : "right");
   }
   const result: ActionResult = {
@@ -74,28 +103,36 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
   if (ev.cast_cancelled) {
     if (actor) {
       actor.sprite.setCasting(false);
-      playFizzleVfx(scene, actor.wrapper.x, actor.wrapper.y - 36, speed);
+      const p = screenPos(scene, actor.wrapper);
+      playFizzleVfx(scene, p.x, p.y - 36, speed);
     }
     return;
   }
 
   if (!result.success) {
-    if (actor) playFizzleVfx(scene, actor.wrapper.x, actor.wrapper.y - 36, speed);
+    if (actor) {
+      const p = screenPos(scene, actor.wrapper);
+      playFizzleVfx(scene, p.x, p.y - 36, speed);
+    }
     if (result.action_id === "attack") actor?.sprite.playAttack();
     return;
   }
 
   if (result.action_id === "dodge") {
-    if (actor) playDodgeVfx(scene, actor.wrapper.x, actor.wrapper.y - 8, speed);
+    if (actor) {
+      const p = screenPos(scene, actor.wrapper);
+      playDodgeVfx(scene, p.x, p.y - 8, speed);
+    }
     return;
   }
 
   if (result.cast_started) {
     if (actor) {
       actor.sprite.setCasting(true);
-      playCastStartVfx(scene, actor.wrapper.x, actor.wrapper.y - 20, result.action_id, speed);
+      const p = screenPos(scene, actor.wrapper);
+      playCastStartVfx(scene, p.x, p.y - 20, result.action_id, speed);
       if (target && target !== actor) {
-        playActionArc(scene, actor.wrapper, target.wrapper, result.action_id, speed);
+        playActionArc(scene, livePos(scene, actor.wrapper), livePos(scene, target.wrapper), result.action_id, speed);
       }
     }
     return;
@@ -107,14 +144,15 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
   const involves = ev.attacker_id === host.selfId || ev.target_id === host.selfId;
   const showHit = () => {
     if (!target) return;
+    const p = screenPos(scene, target.wrapper);
     if (result.damage) {
-      floatText(scene, target.wrapper.x, target.wrapper.y - 42, `${result.damage}`, "#ffffff", speed);
+      floatText(scene, p.x, p.y - 42, `${result.damage}`, "#ffffff", speed);
       target.sprite.playHit(speed);
       if (involves) scene.cameras.main.shake(battleDuration(70, speed), 0.003);
     } else if (result.heal) {
-      floatText(scene, target.wrapper.x, target.wrapper.y - 42, `+${result.heal}`, "#4ade80", speed);
+      floatText(scene, p.x, p.y - 42, `+${result.heal}`, "#4ade80", speed);
     } else if (result.mp_restored) {
-      floatText(scene, target.wrapper.x, target.wrapper.y - 42, `+${result.mp_restored} MP`, "#4aa3e8", speed);
+      floatText(scene, p.x, p.y - 42, `+${result.mp_restored} MP`, "#4aa3e8", speed);
     }
   };
 
@@ -131,18 +169,14 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
       target.wrapper,
       speed,
       () => {
-        playBattleVfx(
-          scene,
-          result,
-          { x: target.wrapper.x, y: target.wrapper.y },
-          { x: target.wrapper.x, y: target.wrapper.y },
-          speed,
-        );
+        const tp = screenPos(scene, target.wrapper);
+        playBattleVfx(scene, result, tp, tp, speed);
         showHit();
       },
       () => {
         host.jumping.delete(ev.attacker_id);
       },
+      isoUp(scene),
     );
     return;
   }
@@ -153,21 +187,24 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
     actor !== target &&
     vfxCategoryForAction(result.action_id, result.heal) !== "physical"
   ) {
-    playActionArc(scene, actor.wrapper, target.wrapper, result.action_id, speed, result.heal);
+    playActionArc(scene, livePos(scene, actor.wrapper), livePos(scene, target.wrapper), result.action_id, speed, result.heal);
   }
   if (target) {
     playBattleVfx(
       scene,
       result,
-      actor ? { x: actor.wrapper.x, y: actor.wrapper.y } : undefined,
-      { x: target.wrapper.x, y: target.wrapper.y },
+      actor ? screenPos(scene, actor.wrapper) : undefined,
+      screenPos(scene, target.wrapper),
       speed,
     );
   }
 
   if (actor && target && actor !== target) {
-    const dx = target.wrapper.x - actor.wrapper.x;
-    const dy = target.wrapper.y - actor.wrapper.y;
+    // Lunge in screen space — the sprite's inner container renders upright.
+    const ap = screenPos(scene, actor.wrapper);
+    const tp = screenPos(scene, target.wrapper);
+    const dx = tp.x - ap.x;
+    const dy = tp.y - ap.y;
     const mag = Math.hypot(dx, dy) || 1;
     const inner = actor.sprite.container;
     scene.tweens.killTweensOf(inner);

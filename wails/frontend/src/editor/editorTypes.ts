@@ -5,6 +5,7 @@ export type EditorTool =
   | "terrain_cliff"
   | "terrain_cobble"
   | "terrain_water"
+  | "terrain_block"
   | "terrain_erase"
   | "collision_block"
   | "collision_walk"

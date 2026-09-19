@@ -59,6 +59,7 @@ func LoadOverworldFromTiled(path string) (*Overworld, error) {
 	ApplyMapOverride(layerMap, override)
 	collision = layerMap["collision"]
 	ground = layerMap["ground"]
+	normalizeTreeCollision(collision, ground, ow.Cols, ow.Rows)
 	ow.Ground = append([]int(nil), ground...)
 	ow.Collision = append([]int(nil), collision...)
 	ow.TileOverrides = override
@@ -150,6 +151,56 @@ func buildCellsFromLayers(collision, ground []int, cols, rows int) []string {
 		out[r] = string(row)
 	}
 	return out
+}
+
+// treeStamp pairs a 2×2 stamp layout ({TL, TR, BL, BR} locals) with the
+// firstgid its tileset occupies in map ground layers.
+type treeStamp struct {
+	firstGID int
+	stamp    PipoyaTreeStamp
+}
+
+// treeStampByTLGID indexes every known 2×2 tree stamp by its top-left GID —
+// Pipoya small + big trees on BaseChip and the MundiTerrain set.
+var treeStampByTLGID = func() map[int]treeStamp {
+	m := map[int]treeStamp{}
+	add := func(stamps []PipoyaTreeStamp, firstGID int) {
+		for _, s := range stamps {
+			m[firstGID+s[0]] = treeStamp{firstGID: firstGID, stamp: s}
+		}
+	}
+	add(PipoyaTreeStamps, PipoyaFirstBaseChip)
+	add(PipoyaBigTreeStamps, PipoyaFirstBaseChip)
+	add(MundiTreeStamps, MundiFirstTerrain)
+	return m
+}()
+
+// normalizeTreeCollision enforces the one-tile tree footprint. A complete
+// 2×2 stamp renders as a single billboard under the isometric projection,
+// anchored at the bottom vertex of the bottom-left (BL) cell — so BL is the
+// tree's only blocked tile and collision on the bottom-right mate is
+// cleared, however it was set (generator, editor brush, or override).
+// Tops stay walk-under canopy; partial stamps are left untouched.
+func normalizeTreeCollision(collision, ground []int, cols, rows int) {
+	if len(collision) != cols*rows || len(ground) != cols*rows {
+		return
+	}
+	for r := 0; r+1 < rows; r++ {
+		for c := 0; c+1 < cols; c++ {
+			i := r*cols + c
+			ts, ok := treeStampByTLGID[tiledGID(ground[i])]
+			if !ok {
+				continue
+			}
+			fg := ts.firstGID
+			if tiledGID(ground[i+1]) != fg+ts.stamp[1] ||
+				tiledGID(ground[i+cols]) != fg+ts.stamp[2] ||
+				tiledGID(ground[i+cols+1]) != fg+ts.stamp[3] {
+				continue
+			}
+			collision[i+cols+1] = 0
+		}
+	}
 }
 
 func replaceObjectLayer(raw *tiledMapFile, objects []OverrideObject) {

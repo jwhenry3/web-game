@@ -120,21 +120,35 @@ func TestSpatialInvalidateRebuilds(t *testing.T) {
 	}
 }
 
-// Worker simulation façades (npcEffects != nil) have no Run loop to mark the
-// grid dirty, so every query rebuilds — even jumps beyond slack stay correct.
-func TestSpatialFacadeAlwaysRebuilds(t *testing.T) {
-	h := &Hub{entities: map[string]*entity{}, npcEffects: &npcSimEffects{}}
+// Worker sims share one grid rebuild per pass: rebuildEntities (run at the
+// top of every worker tick and command) invalidates the grid, so a jump
+// beyond slack is still picked up by the next query — without paying a
+// per-query rebuild on a 600-entity set.
+func TestSpatialFacadeRebuildsOnMembershipSwap(t *testing.T) {
+	w := &npcWorker{
+		npcs:   map[string]*entity{},
+		actors: map[string]*entity{},
+		sim:    &Hub{entities: map[string]*entity{}, npcEffects: &npcSimEffects{}},
+	}
 	e := &entity{ID: "n", Kind: kindNPC, X: 100, Y: 100, alive: true}
-	h.entities["n"] = e
-	if got := collectIDs(h, 100, 100, 50, nil); !got["n"] {
+	w.npcs["n"] = e
+	w.rebuildEntities()
+	if got := collectIDs(w.sim, 100, 100, 50, nil); !got["n"] {
 		t.Fatal("setup: entity should be found")
 	}
-	e.X = 9000 // jump far beyond slack, no invalidation on a façade
-	if got := collectIDs(h, 100, 100, 50, nil); got["n"] {
-		t.Fatal("façade query should rebuild and see the live position")
+	e.X = 9000 // jump far beyond slack
+	w.rebuildEntities()
+	if got := collectIDs(w.sim, 100, 100, 50, nil); got["n"] {
+		t.Fatal("post-swap query should rebuild and see the live position")
 	}
-	if got := collectIDs(h, 9000, 100, 50, nil); !got["n"] {
-		t.Fatal("façade query should rebuild and find the entity at its new cell")
+	if got := collectIDs(w.sim, 9000, 100, 50, nil); !got["n"] {
+		t.Fatal("post-swap query should rebuild and find the entity at its new cell")
+	}
+	// Queries inside the same pass share the rebuild: a mid-pass move within
+	// slack is still classified by live position.
+	e.X = 8950
+	if got := collectIDs(w.sim, 9000, 100, 50, nil); !got["n"] {
+		t.Fatal("same-pass query should reuse the grid and find the mover via live position")
 	}
 }
 

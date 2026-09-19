@@ -269,7 +269,7 @@ func boundsWalkableXY(t *testing.T, ow *game.Overworld) (float64, float64) {
 			if dist(x, y, sx, sy) < 4 {
 				continue
 			}
-			if ow.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) {
+			if ow.CircleWalkableAt(x, y, game.PlayerCollisionRadius) {
 				return x, y
 			}
 		}

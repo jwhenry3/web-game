@@ -17,8 +17,8 @@ func TestWorldMovementChangesRegionWithoutTransfer(t *testing.T) {
 	for r := 1; r < 100 && !found; r++ {
 		for c := 1; c < 100; c++ {
 			x1, x2, y := (float64(c)+0.5)*ts, (float64(c+1)+0.5)*ts, (float64(r)+0.5)*ts
-			if ow.BoundsWalkableAt(x1, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) &&
-				ow.BoundsWalkableAt(x2, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) {
+			if ow.CircleWalkableAt(x1, y, game.PlayerCollisionRadius) &&
+				ow.CircleWalkableAt(x2, y, game.PlayerCollisionRadius) {
 				col, row, found = c, r, true
 				break
 			}
@@ -192,8 +192,8 @@ func TestWorldNPCMovementUpdatesOwnership(t *testing.T) {
 	for r := 1; r < ow.Rows-1 && !found; r++ {
 		for c := 1; c < ow.Cols-2; c++ {
 			x1, x2, y := (float64(c)+0.5)*ts, (float64(c+1)+0.5)*ts, (float64(r)+0.5)*ts
-			if ow.BoundsWalkableAt(x1, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) &&
-				ow.BoundsWalkableAt(x2, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) {
+			if ow.CircleWalkableAt(x1, y, game.PlayerCollisionRadius) &&
+				ow.CircleWalkableAt(x2, y, game.PlayerCollisionRadius) {
 				col, row, found = c, r, true
 				break
 			}
@@ -246,7 +246,7 @@ func TestWorldEachEntityTicksOnce(t *testing.T) {
 	for r := 1; r < ow.Rows-1 && !found; r++ {
 		for c := 1; c < ow.Cols-1; c++ {
 			x, y := (float64(c)+0.5)*ts, (float64(r)+0.5)*ts
-			if ow.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) {
+			if ow.CircleWalkableAt(x, y, game.PlayerCollisionRadius) {
 				col, row, found = c, r, true
 				break
 			}

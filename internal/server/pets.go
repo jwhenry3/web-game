@@ -62,7 +62,7 @@ func (h *Hub) handlePetSetBattle(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.petSyncDirty = true
 	h.syncPetEntities()
 	h.broadcastWorldState()
@@ -76,7 +76,7 @@ func (h *Hub) handlePetSetMount(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.broadcastWorldState()
 }
 
@@ -120,7 +120,7 @@ func (h *Hub) handlePetRelease(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.petSyncDirty = true
 	h.syncPetEntities()
 	h.broadcastWorldState()
@@ -257,7 +257,7 @@ func (h *Hub) awardPetXP(c *Client, baseXP int) {
 	if leveled {
 		// petLevelSync picks up the new level next tick; refresh the client.
 		if updated, ok := h.store.Get(c.Name); ok {
-			h.sendWelcome(c, updated)
+			h.sendProfileRefresh(c, updated)
 		}
 	}
 }

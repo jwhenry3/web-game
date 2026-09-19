@@ -96,12 +96,9 @@ func NewPetRecord(id, kind, name string, level int) PetRecord {
 }
 
 // PetXPToNext returns the XP required to advance from the given level.
-// Uses the same curve as player XP.
+// Uses the same table as player XP.
 func PetXPToNext(level int) int {
-	if level < 1 {
-		level = 1
-	}
-	return level * 100
+	return XPToNext(level)
 }
 
 // PetAwardXP adds XP to a pet record, leveling it up as many times as the XP

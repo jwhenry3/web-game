@@ -306,7 +306,7 @@ func (h *Hub) handleHouseStorageDeposit(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendHouseState(room)
 }
 
@@ -325,7 +325,7 @@ func (h *Hub) handleHouseStorageWithdraw(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendHouseState(room)
 }
 
@@ -344,7 +344,7 @@ func (h *Hub) handleHousePlaceFurniture(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendHouseState(room)
 }
 
@@ -363,7 +363,7 @@ func (h *Hub) handleHousePickFurniture(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendHouseState(room)
 }
 
@@ -389,7 +389,7 @@ func (h *Hub) handleSetCampSkin(c *Client, raw json.RawMessage) {
 		camp.Skin = skin
 		h.broadcastCamps()
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendHouseState(room)
 }
 

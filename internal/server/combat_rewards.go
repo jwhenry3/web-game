@@ -71,7 +71,7 @@ func (h *Hub) awardKillInternal(n *entity, loot bool) {
 		mainXP, subXP := game.DistributeJobXP(xp, hasSub)
 		items := game.GenerateVictoryLoot(h.rng, n.Level, 0, pools)
 		updated, _, _ := h.store.AwardJobVictory(c.Name, mainXP, subXP, items)
-		h.sendWelcome(c, updated)
+		h.sendProfileRefresh(c, updated)
 		msg := fmt.Sprintf("Defeated %s — +%d EXP", n.Name, xp)
 		if len(items) > 0 {
 			msg += fmt.Sprintf(", found %s", items[0].Name)
@@ -127,7 +127,7 @@ func (h *Hub) awardKillInternal(n *entity, loot bool) {
 			}
 			pm, ps := game.DistributeJobXP(passiveXP, hasSub)
 			updated, _, _ := h.store.AwardJobVictory(mc.Name, pm, ps, nil)
-			h.sendWelcome(mc, updated)
+			h.sendProfileRefresh(mc, updated)
 			h.send(mc, protocol.TypeRewardNotice, protocol.RewardNoticePayload{
 				XP: pm, Passive: true, Victory: true,
 				Message: fmt.Sprintf("Party victory — +%d passive EXP (you stayed out of combat).", pm),

@@ -13,6 +13,7 @@ import {
 } from "../../ecs/components";
 import { component, type Entity, type EntityWorld } from "../../ecs/world";
 import { campSkinById, drawCampTent } from "../../housing/campSkins";
+import { applyIsoCounter, isoDepth, isoParent } from "../../world/iso";
 
 export type PoiVisualKind = "save_point" | "job_changer" | "camp";
 
@@ -33,6 +34,26 @@ export interface PoiVisualInteractions {
   setSavePoint(state: SavePointState): void;
   openJobChanger(state: JobChangerState): void;
   enterCamp(state: CampState): void;
+}
+
+/**
+ * Iso scenes: parent the marker into the world layer and counter-transform —
+ * the marker reads as an upright billboard anchored at its world point while
+ * the hit zone keeps a screen-aligned rect. Depth sorts by projected Y so
+ * actors pass in front of / behind markers naturally.
+ */
+function adoptIsoPoi(
+  scene: Phaser.Scene,
+  wrapper: Phaser.GameObjects.Container,
+  hit: Phaser.GameObjects.Zone,
+  x: number,
+  y: number,
+): void {
+  if (!isoParent(scene, wrapper)) return;
+  applyIsoCounter(wrapper);
+  wrapper.setDepth(isoDepth(x, y) + 0.05);
+  isoParent(scene, hit);
+  applyIsoCounter(hit);
 }
 
 function destroyPoiVisual(visual: PoiVisual): void {
@@ -114,6 +135,7 @@ function ensureSavePointVisual(
     const latest = world.get(SavePointState, entity);
     if (latest) interactions.setSavePoint(latest);
   });
+  adoptIsoPoi(scene, wrapper, hit, state.x, state.y);
 
   world.set(PoiVisual, entity, {
     kind: "save_point",
@@ -162,6 +184,7 @@ function ensureJobChangerVisual(
     const latest = world.get(JobChangerState, entity);
     if (latest) interactions.openJobChanger(latest);
   });
+  adoptIsoPoi(scene, wrapper, hit, state.x, state.y);
 
   world.set(PoiVisual, entity, {
     kind: "job_changer",
@@ -214,6 +237,7 @@ function ensureCampVisual(
     const latest = world.get(CampState, entity);
     if (latest) interactions.enterCamp(latest);
   });
+  adoptIsoPoi(scene, wrapper, hit, state.x, state.y);
 
   world.set(PoiVisual, entity, {
     kind: "camp",

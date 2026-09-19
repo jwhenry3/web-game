@@ -284,13 +284,14 @@ func (c *canvas) stampTree(col, row, variant int) bool {
 	for i, o := range offs {
 		gid := game.PipoyaFirstBaseChip + stamp[i]
 		cc, rr := col+o[0], row+o[1]
-		if i < 2 {
-			// Canopy tops: drawable + walk-under (no collision).
+		if i == 2 {
+			// Bottom-left trunk: the single blocked cell — the iso billboard
+			// anchors at this cell's bottom vertex.
+			c.setBlocked(cc, rr, gid)
+		} else {
+			// Canopy tops + bottom-right mate: walkable.
 			c.setGround(cc, rr, gid)
 			c.clearCollision(cc, rr)
-		} else {
-			// Trunk / lower canopy: blocked.
-			c.setBlocked(cc, rr, gid)
 		}
 	}
 	return true

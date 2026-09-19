@@ -105,6 +105,7 @@ func LoadOverworldFromMapConfig(path string) (*Overworld, error) {
 		return nil, err
 	}
 	ApplyMapOverride(layerMap, override)
+	normalizeTreeCollision(layerMap["collision"], layerMap["ground"], cfg.Cols, cfg.Rows)
 
 	ow := &Overworld{
 		Path:          path,
@@ -323,6 +324,7 @@ func loadOverworldFromTiledBase(path string) (*Overworld, []OverrideObject, wand
 	if err != nil {
 		return nil, nil, wanderSettings{}, err
 	}
+	normalizeTreeCollision(collision, ground, raw.Width, raw.Height)
 
 	ow := &Overworld{
 		Path:      path,
@@ -367,11 +369,14 @@ func objectsFromTiledRaw(raw tiledMapFile) []OverrideObject {
 	return nil
 }
 
-// MapConfigBase returns the base terrain/objects from a map config file (no overrides).
+// MapConfigBase returns the base terrain/objects from a map config file (no
+// overrides). Terrain is normalized like the runtime load path so the map
+// editor's view and save diffs match effective collision (one-tile trees).
 func MapConfigBase(path string) (MapConfigTerrain, []OverrideObject, error) {
 	cfg, err := LoadMapConfig(path)
 	if err != nil {
 		return MapConfigTerrain{}, nil, err
 	}
+	normalizeTreeCollision(cfg.Terrain.Collision, cfg.Terrain.Ground, cfg.Cols, cfg.Rows)
 	return cfg.Terrain, EditorObjectsFromConfig(cfg), nil
 }

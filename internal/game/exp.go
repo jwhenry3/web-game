@@ -16,10 +16,32 @@ type ExpRates struct {
 }
 
 const (
-	DefaultExpRate        = 1.0
+	DefaultExpRate        = 0.1
 	DefaultExpMainPercent = 75
 	DefaultExpSubPercent  = 25
 )
+
+// XPTable is the EXP required to advance from each level to the next:
+// index 0 is level 1→2, the last entry is level 19→20 (LevelCap). Values
+// are stated explicitly for easy tuning — roughly 75 × 1.4^(level-1), so
+// each level takes ~40% more EXP than the one before it.
+var XPTable = []int{
+	75, 105, 147, 206, 288, 403, 565, 791, 1107, 1550,
+	2169, 3037, 4252, 5953, 8334, 11668, 16335, 22869, 32016,
+}
+
+// XPToNext returns the EXP needed to advance from level to level+1.
+// Out-of-range levels clamp to the table ends so capped profiles still
+// have a sane stored-XP ceiling.
+func XPToNext(level int) int {
+	if level < 1 {
+		return XPTable[0]
+	}
+	if level > len(XPTable) {
+		return XPTable[len(XPTable)-1]
+	}
+	return XPTable[level-1]
+}
 
 var (
 	expMu    sync.RWMutex

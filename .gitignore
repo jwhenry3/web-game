@@ -20,6 +20,11 @@ wails/frontend/*.tsbuildinfo
 wails/build/
 wails/*.exe
 
+.tmp/
+
+# ---- Baked terrain chunks (tools/bake_terrain.py — regenerable) ----
+wails/frontend/public/assets/baked/
+
 # ---- Public content site ----
 site/node_modules/
 site/dist/
@@ -107,3 +112,4 @@ unity/Fantasy/InitTestScene*.unity*
 .cache/
 tmp/
 temp/
+nul

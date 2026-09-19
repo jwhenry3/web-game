@@ -1,25 +1,35 @@
 // A* over an OverworldMap {tile, cols, rows, cells} for smoke/debug scripts.
 // Mirrors wails/frontend/src/world/pathfind.ts and the server's
 // game.pathfindWith: 8-directional, no corner cutting, and the same
-// foot-anchored player collision box the server validates moves with.
+// feet-centered player collision circle the server validates moves with.
 
 const WALKABLE = new Set(["H", ".", ",", "R", "T"]);
-// internal/game/overworld.go: PlayerCollisionHalfW/H (125/8, 50/4).
-const HALF_W = 15.625;
-const HALF_H = 12.5;
+// internal/game/overworld.go: PlayerCollisionRadius (125/8 = 15.625).
+const RADIUS = 15.625;
 
 function tileWalkable(map, c, r) {
   if (c < 0 || r < 0 || c >= map.cols || r >= map.rows) return false;
   return WALKABLE.has(map.cells[r * map.cols + c] ?? "");
 }
 
-function boundsWalkableAt(map, cx, cy) {
-  const c0 = Math.floor((cx - HALF_W) / map.tile);
-  const c1 = Math.floor((cx + HALF_W) / map.tile);
-  const r0 = Math.floor((cy - HALF_H) / map.tile);
-  const r1 = Math.floor(cy / map.tile);
-  for (let r = r0; r <= r1; r++)
-    for (let c = c0; c <= c1; c++) if (!tileWalkable(map, c, r)) return false;
+function circleWalkableAt(map, cx, cy) {
+  if (
+    cx - RADIUS < 0 || cy - RADIUS < 0 ||
+    cx + RADIUS > map.cols * map.tile || cy + RADIUS > map.rows * map.tile
+  ) return false;
+  const c0 = Math.floor((cx - RADIUS) / map.tile);
+  const c1 = Math.floor((cx + RADIUS) / map.tile);
+  const r0 = Math.floor((cy - RADIUS) / map.tile);
+  const r1 = Math.floor((cy + RADIUS) / map.tile);
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      if (tileWalkable(map, c, r)) continue;
+      const px = Math.min(Math.max(cx, c * map.tile), (c + 1) * map.tile);
+      const py = Math.min(Math.max(cy, r * map.tile), (r + 1) * map.tile);
+      const dx = cx - px, dy = cy - py;
+      if (dx * dx + dy * dy < RADIUS * RADIUS) return false;
+    }
+  }
   return true;
 }
 
@@ -31,7 +41,7 @@ export function findPath(map, fromX, fromY, toX, toY) {
   const to = tileOf(toX, toY);
   const walkable = (c, r) =>
     c >= 0 && r >= 0 && c < map.cols && r < map.rows &&
-    boundsWalkableAt(map, (c + 0.5) * map.tile, (r + 0.5) * map.tile);
+    circleWalkableAt(map, (c + 0.5) * map.tile, (r + 0.5) * map.tile);
 
   const snap = (t) => {
     if (walkable(t.c, t.r)) return t;
@@ -54,7 +64,7 @@ export function findPath(map, fromX, fromY, toX, toY) {
   if (!start || !goal) return null;
   const center = (t) => ({ x: (t.c + 0.5) * map.tile, y: (t.r + 0.5) * map.tile });
   if (start.c === goal.c && start.r === goal.r) {
-    return [boundsWalkableAt(map, toX, toY) ? { x: toX, y: toY } : center(goal)];
+    return [circleWalkableAt(map, toX, toY) ? { x: toX, y: toY } : center(goal)];
   }
 
   const key = (c, r) => r * 1_000_000 + c;
@@ -127,7 +137,7 @@ export function findPath(map, fromX, fromY, toX, toY) {
   }
   const pts = tiles.map(center);
   const last = tiles[tiles.length - 1];
-  if (last && last.c === goal.c && last.r === goal.r && boundsWalkableAt(map, toX, toY)) {
+  if (last && last.c === goal.c && last.r === goal.r && circleWalkableAt(map, toX, toY)) {
     pts[pts.length - 1] = { x: toX, y: toY };
   }
   return pts;

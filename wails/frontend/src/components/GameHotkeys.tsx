@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { net } from "../net/socket";
 import { gameDialogOpen, useGame } from "../state/store";
+import { saveOptions } from "../state/optionsStorage";
 import { getChatControl } from "../input/chatControl";
 import {
   bindingMatchesEvent,
@@ -190,6 +191,15 @@ export function GameHotkeys() {
       }
 
       if (!inGame) return;
+
+      // F3 toggles the collision-bounds debug gizmo (persisted in options).
+      if (e.key === "F3") {
+        e.preventDefault();
+        const next = { ...state.options, showCollisionBounds: !state.options.showCollisionBounds };
+        state.setOptions(next);
+        saveOptions(next);
+        return;
+      }
 
       if (e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") {
         e.preventDefault();

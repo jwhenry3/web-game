@@ -74,6 +74,33 @@ export function facingFromDelta(dx: number, current: CharacterFacing): Character
   return current;
 }
 
+/**
+ * World-space motion delta → facing along the rendered horizontal axis.
+ * Under the isometric projection screen x = dx − dy, so world ±y motion
+ * (up-right / down-left on screen) still picks a side.
+ */
+export function facingFromMotion(
+  dx: number,
+  dy: number,
+  current: CharacterFacing,
+  iso = false,
+): CharacterFacing {
+  return facingFromDelta(iso ? dx - dy : dx, current);
+}
+
+/**
+ * Map-space yaw (wire facing, radians; dir = (−sin yaw, −cos yaw)) → the
+ * 2-way sheet facing matching its rendered horizontal direction.
+ */
+export function facingFromYaw(
+  yaw: number,
+  current: CharacterFacing,
+  iso = false,
+): CharacterFacing {
+  if (!Number.isFinite(yaw)) return current;
+  return facingFromMotion(-Math.sin(yaw), -Math.cos(yaw), current, iso);
+}
+
 export function facingToFlipX(facing: CharacterFacing): boolean {
   return facing === "left";
 }
@@ -83,9 +110,13 @@ export const H99_DISPLAY_SCALE = 1.25;
 
 export const H99_DISPLAY_WIDTH = H99_SHEET.frameWidth * H99_DISPLAY_SCALE;
 export const H99_DISPLAY_HEIGHT = H99_SHEET.frameHeight * H99_DISPLAY_SCALE;
-/** Foot-anchored collision box: quarter sprite size (top ~3/4 may overlap scenery). */
-export const H99_COLLISION_HALF_W = H99_DISPLAY_WIDTH / 8;
-export const H99_COLLISION_HALF_H = H99_DISPLAY_HEIGHT / 4;
+/**
+ * Feet-centered collision circle. The iso projection renders a world circle
+ * of radius r as a ground-plane ellipse 2√2r wide (~44px here — about a
+ * third of the sprite's width). Kept under half a tile so 1-tile lanes
+ * between blocked cells stay passable.
+ */
+export const H99_COLLISION_RADIUS = H99_DISPLAY_WIDTH / 8;
 export const H99_NAME_LABEL_Y = -(H99_DISPLAY_HEIGHT + 10);
 /** Selection / status rings sized to the sprite footprint. */
 export const H99_WORLD_RING_RADIUS = H99_DISPLAY_HEIGHT * 0.64;

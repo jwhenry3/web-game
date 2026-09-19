@@ -16,7 +16,7 @@ func adjacentRegionWorld(t *testing.T) (world *game.WorldDefinition, x, y, tileS
 	for r := 1; r < ow.Rows-1 && !found; r++ {
 		for c := 1; c < ow.Cols-1; c++ {
 			x, y = (float64(c)+0.5)*tileSize, (float64(r)+0.5)*tileSize
-			if ow.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) {
+			if ow.CircleWalkableAt(x, y, game.PlayerCollisionRadius) {
 				col, row, found = c, r, true
 				break
 			}
@@ -162,7 +162,7 @@ func TestWorldNPCHandoffTransfersCanonicalState(t *testing.T) {
 	for r := 1; r < ow.Rows-1 && !found; r++ {
 		for c := 1; c < ow.Cols-1; c++ {
 			x, y := (float64(c)+0.5)*ts, (float64(r)+0.5)*ts
-			if ow.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH) {
+			if ow.CircleWalkableAt(x, y, game.PlayerCollisionRadius) {
 				col, row, found = c, r, true
 				break
 			}

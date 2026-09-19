@@ -24,6 +24,30 @@ function apiPathOnly(path: string): string {
   return path.startsWith("/") ? path : `/${path}`;
 }
 
+/**
+ * APIGet wraps binary payloads (e.g. /api/mapimg PNGs) in a data URI so they
+ * survive the string bridge — decode them back into a binary Response.
+ */
+function responseFromBridge(text: string): Response {
+  if (text.startsWith("data:")) {
+    const comma = text.indexOf(",");
+    const meta = text.slice(5, comma);
+    if (comma > 0 && meta.endsWith(";base64")) {
+      const bin = atob(text.slice(comma + 1));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return new Response(bytes, {
+        status: 200,
+        headers: { "Content-Type": meta.slice(0, -7) },
+      });
+    }
+  }
+  return new Response(text, {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export async function wailsPlatformFetch(path: string, init?: RequestInit): Promise<Response> {
   const method = (init?.method ?? "GET").toUpperCase();
   const token = bearerToken(init);
@@ -43,10 +67,7 @@ export async function wailsPlatformFetch(path: string, init?: RequestInit): Prom
     } else {
       throw new Error(`Unsupported method ${method}`);
     }
-    return new Response(text, {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return responseFromBridge(text);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return new Response(JSON.stringify({ error: message }), {

@@ -4,6 +4,7 @@ import { uiOwnsKeyboard, useGame } from "../state/store";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import {
   appearanceKey,
+  facingFromYaw,
   H99_NAME_LABEL_Y,
   type CharacterFacing,
 } from "../characters/types";
@@ -19,9 +20,27 @@ import { INTERACT_RANGE, interactKeyLabel } from "../world/interact";
 import {
   clearHousePlace,
   getHousePlaceState,
+  setHouseClientToWorld,
   setHousePlaceTransform,
+  stagePointToWorld,
 } from "../world/housePlaceBridge";
-import { slideMoveHousePlayer } from "../world/houseMovement";
+import { houseWalkable, slideMoveHousePlayer } from "../world/houseMovement";
+import {
+  ISO_LAYER_SCALE,
+  ISO_ROT,
+  ISO_SQUASH_Y,
+  applyIsoCounter,
+  isoDepth,
+  isoLayer,
+  isoParent,
+  isoProject,
+  screenDirToWorldGrid,
+  screenToWorldX,
+  screenToWorldY,
+  setIsoLayer,
+} from "../world/iso";
+import { ISO_ACTOR_DEPTH_EPS } from "./systems/actorVisuals";
+import { CollisionGizmo, type CollisionGizmoEntry } from "./systems/collisionGizmo";
 import { campSkinById } from "../housing/campSkins";
 import {
   clearEntityOverlays,
@@ -76,6 +95,8 @@ interface FurnitureMarker {
 }
 
 export class HouseScene extends Phaser.Scene {
+  /** Iso world layer — same squash→rotate chain as WorldScene. */
+  private worldLayer?: Phaser.GameObjects.Container;
   private floor?: Phaser.GameObjects.Graphics;
   private placeGhost?: Phaser.GameObjects.Graphics;
   private avatars = new Map<string, HouseAvatar>();
@@ -90,6 +111,8 @@ export class HouseScene extends Phaser.Scene {
   private lastSentY = 0;
   private layoutKey = "";
   private visibility?: VisibilityFX;
+  /** Debug gizmo: entity collision bounds (options.showCollisionBounds / F3). */
+  private collisionGizmo = new CollisionGizmo(this);
 
   constructor() {
     super("house");
@@ -98,9 +121,16 @@ export class HouseScene extends Phaser.Scene {
   create() {
     this.cameras.main.setBackgroundColor(0x1a1410);
     trackContentZoom(this);
+    // Iso world layer — children keep world coords; the chain projects
+    // screen = (x−y, (x+y)/2), matching WorldScene.
+    const squash = this.add.container(0, 0).setScale(1, ISO_SQUASH_Y).setDepth(0);
+    const rotate = this.add.container(0, 0).setRotation(ISO_ROT).setScale(ISO_LAYER_SCALE);
+    squash.add(rotate);
+    this.worldLayer = rotate;
+    setIsoLayer(this, rotate);
     // No interior walls — sight covers the room; outside the walls dims.
     this.visibility?.destroy();
-    this.visibility = new VisibilityFX(this, { radiusTiles: 0 });
+    this.visibility = new VisibilityFX(this, { radiusTiles: 0, iso: true });
     // Scene instances are reused across stop/start; stale Key refs won't receive input.
     this.moveKeys = {};
     this.moveKeysSig = "";
@@ -109,8 +139,20 @@ export class HouseScene extends Phaser.Scene {
     this.lastSentY = 0;
     this.syncMoveKeys();
     this.input.keyboard?.disableGlobalCapture();
-    this.placeGhost = this.add.graphics().setDepth(20);
+    this.placeGhost = this.add.graphics().setDepth(1e5);
+    isoParent(this, this.placeGhost); // tile decal — squash into the plane
+    // Pointer → world for furniture placement: browser client px → stage →
+    // camera space, then unproject the iso screen point into world coords.
+    setHouseClientToWorld((clientX, clientY) => {
+      const stage = this.game.canvas.parentElement?.parentElement;
+      const rect = stage?.getBoundingClientRect();
+      if (!rect) return null;
+      const w = stagePointToWorld(clientX - rect.left, clientY - rect.top);
+      if (!w) return null;
+      return { x: screenToWorldX(w.x, w.y), y: screenToWorldY(w.x, w.y) };
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      setHouseClientToWorld(null);
       this.visibility?.destroy();
       this.visibility = undefined;
       this.clearAll();
@@ -135,6 +177,7 @@ export class HouseScene extends Phaser.Scene {
     this.layoutKey = "";
     this.moveKeys = {};
     this.moveKeysSig = "";
+    this.collisionGizmo.destroy();
     clearHousePlace();
     clearEntityOverlays();
   }
@@ -185,7 +228,8 @@ export class HouseScene extends Phaser.Scene {
     const h = house.walk_rows * t;
 
     const pal = campSkinById(house.skin);
-    const g = this.add.graphics().setDepth(0);
+    const g = this.add.graphics().setDepth(-20);
+    isoParent(this, g); // ground decal — squash into the tile plane
     // Dark surround must be large enough to fill the viewport at any camera
     // position (no bounds). 2000px padding covers the 960×600 design viewport
     // at max zoom-out plus comfortable margin.
@@ -208,6 +252,26 @@ export class HouseScene extends Phaser.Scene {
     g.fillTriangle(ox, oy, ox + w, oy, ox + w / 2, oy - 48);
 
     this.floor = g;
+    // Gizmo grid: the walkable island plus a one-cell blocked ring — the
+    // house has no interior walls; everything off the island is unwalkable.
+    const gc0 = house.walk_origin_col - 1;
+    const gr0 = house.walk_origin_row - 1;
+    const gcols = house.walk_cols + 2;
+    const grows = house.walk_rows + 2;
+    const blocked = new Uint8Array(gcols * grows);
+    for (let r = 0; r < grows; r++) {
+      for (let c = 0; c < gcols; c++) {
+        blocked[r * gcols + c] = houseWalkable(house, gc0 + c, gr0 + r) ? 0 : 1;
+      }
+    }
+    this.collisionGizmo.setGrid({
+      blocked,
+      cols: gcols,
+      rows: grows,
+      tileSize: t,
+      originX: gc0 * t,
+      originY: gr0 * t,
+    });
     // No camera bounds — the camp is small, so let the camera freely center
     // on the player even when they're near the room edges.
     this.cameras.main.removeBounds();
@@ -242,8 +306,14 @@ export class HouseScene extends Phaser.Scene {
       return av;
     }
     const wrapper = this.add.container(p.x, p.y).setDepth(10);
+    if (isoParent(this, wrapper)) {
+      applyIsoCounter(wrapper);
+      wrapper.setDepth(isoDepth(p.x, p.y) + ISO_ACTOR_DEPTH_EPS);
+    }
+    const shadow = entityShadow(this);
+    if (isoLayer(this)) shadow.setScale(1, 0.45);
     const sprite = new CharacterSprite(this, 0, 0, appearance);
-    wrapper.add([entityShadow(this), sprite.container]);
+    wrapper.add([shadow, sprite.container]);
     av = { wrapper, sprite, appearanceKey: appKey };
     this.avatars.set(p.id, av);
     return av;
@@ -264,6 +334,10 @@ export class HouseScene extends Phaser.Scene {
       const y = (f.row + 0.5) * tileSize;
       if (!node) {
         const wrapper = this.add.container(x, y).setDepth(6);
+        if (isoParent(this, wrapper)) {
+          applyIsoCounter(wrapper);
+          wrapper.setDepth(isoDepth(x, y));
+        }
         const box = this.add
           .rectangle(0, 0, 22, 18, 0x7a5a3a)
           .setStrokeStyle(1, 0xd4b890)
@@ -281,6 +355,7 @@ export class HouseScene extends Phaser.Scene {
         node.x = x;
         node.y = y;
         node.name = f.item.name.slice(0, 10);
+        if (isoLayer(this)) node.wrapper.setDepth(isoDepth(x, y));
       }
       node.wrapper.setAlpha(pickMode ? 0.95 : 1);
       const box = node.wrapper.list[0] as Phaser.GameObjects.Rectangle | undefined;
@@ -332,6 +407,10 @@ export class HouseScene extends Phaser.Scene {
       let m = this.pois.get(poi.id);
       if (!m) {
         const wrapper = this.add.container(poi.x, poi.y).setDepth(5);
+        if (isoParent(this, wrapper)) {
+          applyIsoCounter(wrapper);
+          wrapper.setDepth(isoDepth(poi.x, poi.y));
+        }
         const isDoor = poi.kind === "door";
         const glow = this.add.circle(0, 0, 18, isDoor ? 0x6a9ad4 : 0xd4a05a, 0.35);
         const body = this.add.rectangle(0, 4, isDoor ? 20 : 22, isDoor ? 28 : 16, isDoor ? 0x4a6038 : 0x8a6030);
@@ -344,6 +423,7 @@ export class HouseScene extends Phaser.Scene {
         m.x = poi.x;
         m.y = poi.y;
         m.name = poi.name;
+        if (isoLayer(this)) m.wrapper.setDepth(isoDepth(poi.x, poi.y));
       }
     }
   }
@@ -372,9 +452,15 @@ export class HouseScene extends Phaser.Scene {
     let marker = this.pets.get(pet.id);
     if (!marker) {
       const wrapper = this.add.container(pet.x, pet.y).setDepth(9);
+      if (isoParent(this, wrapper)) {
+        applyIsoCounter(wrapper);
+        wrapper.setDepth(isoDepth(pet.x, pet.y) + ISO_ACTOR_DEPTH_EPS);
+      }
       const enemy = new EnemySprite(this, 0, 0, kind);
       enemy.container.setScale(PET_SCALE);
-      wrapper.add([entityShadow(this, PET_SCALE), enemy.container]);
+      const shadow = entityShadow(this, PET_SCALE);
+      if (isoLayer(this)) shadow.setScale(PET_SCALE, PET_SCALE * 0.45);
+      wrapper.add([shadow, enemy.container]);
       marker = { wrapper, enemy, kind };
       this.pets.set(pet.id, marker);
       return [{ id: pet.id, label: pet.name }];
@@ -388,19 +474,28 @@ export class HouseScene extends Phaser.Scene {
     if (Math.hypot(prevX - pet.x, prevY - pet.y) > PET_SNAP_DIST) {
       marker.wrapper.setPosition(pet.x, pet.y);
       marker.enemy.setMoving(false);
+      if (typeof pet.facing === "number") {
+        marker.enemy.setFacing(facingFromYaw(pet.facing, marker.enemy.getFacing(), true));
+      }
     } else {
       marker.wrapper.x = Phaser.Math.Linear(prevX, pet.x, PET_LERP);
       marker.wrapper.y = Phaser.Math.Linear(prevY, pet.y, PET_LERP);
       const mdx = marker.wrapper.x - prevX;
       const mdy = marker.wrapper.y - prevY;
-      marker.enemy.setMoving(Math.hypot(mdx, mdy) > 0.25, mdx, mdy);
+      // Iso facing axis: screen x = mdx − mdy.
+      marker.enemy.setMoving(Math.hypot(mdx, mdy) > 0.25, mdx - mdy, mdy);
     }
+    marker.wrapper.setDepth(isoDepth(marker.wrapper.x, marker.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
     marker.enemy.update(delta);
     return [{ id: pet.id, label: pet.name }];
   }
 
   private facingOf(p: HousePlayer, fallback: CharacterFacing): CharacterFacing {
-    return p.facing === "left" || p.facing === "right" ? p.facing : fallback;
+    const f = p.facing;
+    if (f === "left" || f === "right") return f;
+    // House renders isometrically — yaw converts on the screen-x axis.
+    if (typeof f === "number") return facingFromYaw(f, fallback, true);
+    return fallback;
   }
 
   private stageEntity(
@@ -412,9 +507,11 @@ export class HouseScene extends Phaser.Scene {
     transform: StageTransform,
     nameLocalY = H99_NAME_LABEL_Y,
   ): EntityOverlayMark {
-    const feet = worldToStagePoint(this, worldX, worldY, transform);
-    const name = worldLocalToStage(this, worldX, worldY, 0, nameLocalY, transform);
-    const cast = worldLocalToStage(this, worldX, worldY, 0, CAST_BAR_Y, transform);
+    // Overlays anchor at the projected (screen-space) position.
+    const p = isoProject(this, worldX, worldY);
+    const feet = worldToStagePoint(this, p.x, p.y, transform);
+    const name = worldLocalToStage(this, p.x, p.y, 0, nameLocalY, transform);
+    const cast = worldLocalToStage(this, p.x, p.y, 0, CAST_BAR_Y, transform);
     return {
       id,
       label,
@@ -460,9 +557,11 @@ export class HouseScene extends Phaser.Scene {
         av.wrapper.y = Phaser.Math.Linear(av.wrapper.y, p.y, 0.3);
         const dx = av.wrapper.x - prevX;
         const dy = av.wrapper.y - prevY;
-        av.sprite.setMoving(Math.hypot(dx, dy) > 0.25, dx, dy);
+        // Iso facing axis: screen x = dx − dy.
+        av.sprite.setMoving(Math.hypot(dx, dy) > 0.25, dx - dy, dy);
         av.sprite.setFacing(this.facingOf(p, av.sprite.getFacing()));
       }
+      av.wrapper.setDepth(isoDepth(av.wrapper.x, av.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
       av.sprite.update(delta);
       // Nameplates filled after camera settle so stage transform matches sprites.
       entities.push({
@@ -486,12 +585,14 @@ export class HouseScene extends Phaser.Scene {
     const petMarks = this.syncPets(house, delta);
 
     if (!selfId) {
+      this.collisionGizmo.clear();
       setWorldOverlays({ entities: [], pois: [], interacts: [] });
       return;
     }
     const selfGuest = house.players.find((p) => p.id === selfId);
     const selfAv = this.avatars.get(selfId);
     if (!selfGuest || !selfAv) {
+      this.collisionGizmo.clear();
       setWorldOverlays({ entities: [], pois: [], interacts: [] });
       return;
     }
@@ -509,20 +610,30 @@ export class HouseScene extends Phaser.Scene {
       if (this.isMoveDown("move_down")) my += 1;
     }
     if (mx || my) {
-      const len = Math.hypot(mx, my) || 1;
+      // Keys mean screen directions (W = up-screen); snap to the nearest
+      // grid-aligned world direction so combos follow tile edges.
+      const w = screenDirToWorldGrid(mx, my);
+      const len = Math.hypot(w.x, w.y) || 1;
       const step = (SPEED * delta) / 1000;
-      const nx = selfAv.wrapper.x + (mx / len) * step;
-      const ny = selfAv.wrapper.y + (my / len) * step;
+      const nx = selfAv.wrapper.x + (w.x / len) * step;
+      const ny = selfAv.wrapper.y + (w.y / len) * step;
       const slid = slideMoveHousePlayer(house, selfAv.wrapper.x, selfAv.wrapper.y, nx, ny);
       selfAv.wrapper.x = slid.x;
       selfAv.wrapper.y = slid.y;
-      selfAv.sprite.setMoving(true, mx, my);
+      selfAv.sprite.setMoving(true, w.x - w.y, w.y);
     } else {
       selfAv.sprite.setMoving(false);
       selfAv.sprite.setFacing(this.facingOf(selfGuest, selfAv.sprite.getFacing()));
     }
+    selfAv.wrapper.setDepth(
+      isoDepth(selfAv.wrapper.x, selfAv.wrapper.y) + ISO_ACTOR_DEPTH_EPS,
+    );
+    this.worldLayer?.sort("depth");
+    this.updateCollisionGizmo(state);
 
-    this.cameras.main.centerOn(selfAv.wrapper.x, selfAv.wrapper.y);
+    // The camera lives in projected screen space.
+    const camTarget = isoProject(this, selfAv.wrapper.x, selfAv.wrapper.y);
+    this.cameras.main.centerOn(camTarget.x, camTarget.y);
 
     this.sendAcc += delta;
     if (this.sendAcc >= SEND_INTERVAL) {
@@ -563,11 +674,13 @@ export class HouseScene extends Phaser.Scene {
     }
 
     for (const f of this.furniture.values()) {
-      const pt = worldLocalToStage(this, f.x, f.y, 0, FURNITURE_LABEL_Y, transform);
+      const fp = isoProject(this, f.x, f.y);
+      const pt = worldLocalToStage(this, fp.x, fp.y, 0, FURNITURE_LABEL_Y, transform);
       pois.push({ id: `furn:${f.id}`, label: f.name, variant: "furniture", x: pt.x, y: pt.y });
     }
     for (const m of this.pois.values()) {
-      const pt = worldLocalToStage(this, m.x, m.y, 0, POI_LABEL_Y, transform);
+      const mp = isoProject(this, m.x, m.y);
+      const pt = worldLocalToStage(this, mp.x, mp.y, 0, POI_LABEL_Y, transform);
       pois.push({ id: `hpoi:${m.id}`, label: m.name, variant: "house-poi", x: pt.x, y: pt.y });
     }
 
@@ -577,12 +690,35 @@ export class HouseScene extends Phaser.Scene {
     if (showPrompts) {
       for (const m of this.pois.values()) {
         if (Math.hypot(selfAv.wrapper.x - m.x, selfAv.wrapper.y - m.y) > INTERACT_RANGE) continue;
-        const pt = worldLocalToStage(this, m.x, m.y, 0, POI_PROMPT_Y, transform);
+        const mp = isoProject(this, m.x, m.y);
+        const pt = worldLocalToStage(this, mp.x, mp.y, 0, POI_PROMPT_Y, transform);
         interacts.push({ id: `ix-hpoi:${m.id}`, keyLabel, x: pt.x, y: pt.y });
       }
     }
 
     setWorldOverlays({ entities, pois, interacts });
+  }
+
+  /** Redraw the collision-bounds gizmo over the island edge + house actors. */
+  private updateCollisionGizmo(state: ReturnType<typeof useGame.getState>) {
+    if (!state.options.showCollisionBounds) {
+      this.collisionGizmo.clear();
+      return;
+    }
+    this.collisionGizmo.updateTiles();
+    const entries: CollisionGizmoEntry[] = [];
+    for (const [id, av] of this.avatars) {
+      entries.push({
+        x: av.wrapper.x,
+        y: av.wrapper.y,
+        role: "player",
+        isSelf: id === state.selfId,
+      });
+    }
+    for (const p of this.pets.values()) {
+      entries.push({ x: p.wrapper.x, y: p.wrapper.y, role: "pet" });
+    }
+    this.collisionGizmo.draw(entries);
   }
 }
 

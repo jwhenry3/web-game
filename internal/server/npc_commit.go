@@ -244,6 +244,8 @@ func (h *Hub) finishNPCWorkerTicks(pending []npcPendingTick) {
 			// Timed out or closed: leave w.inFlight on p.reply so the next
 			// round drains the late reply instead of queuing another tick.
 			p.worker.needFullSnapshot = true
+			logThrottled("npc-skip "+p.worker.id,
+				"[slow] npc worker "+p.worker.id+" tick reply missed the deadline (round skipped)")
 		}
 	}
 	for _, result := range results {
@@ -372,22 +374,18 @@ func (h *Hub) propagateNPCEngagement(npcID, targetID, sourceRegion string) {
 	if source == nil || target == nil {
 		return
 	}
-	for _, candidate := range h.entities {
+	h.spatialEach(source.X, source.Y, assistRadius, func(candidate *entity) bool {
 		if candidate.Kind != kindNPC || candidate.ID == npcID {
-			continue
+			return false
 		}
 		owner, owned := h.npcOwners[candidate.ID]
 		if !owned || owner == sourceRegion {
-			continue
+			return false
 		}
-		if engagedNPC(candidate) || !h.canAttack(candidate, target) {
-			continue
-		}
-		if dist(candidate.X, candidate.Y, source.X, source.Y) > assistRadius {
-			continue
-		}
+		return !engagedNPC(candidate) && h.canAttack(candidate, target)
+	}, func(candidate *entity) {
 		h.commandNPCEngage(candidate.ID, target.ID)
-	}
+	})
 }
 
 // queueNPCCommand enqueues a fire-and-forget command on the owning worker's
@@ -468,6 +466,12 @@ func (h *Hub) bindCommandSource(cmd *npcCommand, src *entity, targetID string) {
 		return // resolvable from the worker's actor snapshot — skip the clone
 	}
 	cmd.Source = cloneEntity(src, false)
+	if w != nil {
+		// The worker installs this clone into w.actors — record it so the
+		// removal fan-out reaches the worker even though the actor never
+		// rode a tick snapshot (and so isn't in lastActors/sentActors).
+		w.boundActors[src.ID] = true
+	}
 }
 
 // commandNPCDamage stays synchronous: callers use the returned damage
@@ -521,19 +525,31 @@ func (h *Hub) broadcastNPCActorRemoved(id string) {
 	if !h.npcWorkersActive() {
 		return
 	}
-	// Fan the removal out to every worker before collecting any reply: the
-	// round-trips overlap instead of serializing, but the call still returns
-	// only after every worker applied it — callers rely on the worker state
-	// being cleared synchronously (e.g. NPC targets cleared on disconnect).
+	// A worker's NPCs can only reference entities inside its own sim — its
+	// owned NPCs plus the actor snapshot. Workers that never had `id` in
+	// scope hold no target/enmity/contributor entries for it, so skip them;
+	// an actor that left scope a tick ago self-cleans through validTarget.
+	// Fan the removal out to the remaining workers before collecting any
+	// reply: the round-trips overlap instead of serializing, but the call
+	// still returns only after every relevant worker applied it — callers
+	// rely on the worker state being cleared synchronously (e.g. NPC targets
+	// cleared on disconnect).
 	pending := make([]chan npcWorkerReply, 0, len(h.npcWorkerOrder))
 	for _, workerID := range h.npcWorkerOrder {
-		if w := h.npcWorkers[workerID]; w != nil {
-			pending = append(pending, w.send(npcCommand{Kind: npcCmdRemoveActor, TargetID: id}))
+		w := h.npcWorkers[workerID]
+		if w == nil {
+			continue
 		}
+		if h.npcOwners[id] != workerID && !w.lastActors[id] && !w.sentActors[id] && !w.boundActors[id] {
+			continue
+		}
+		pending = append(pending, w.send(npcCommand{Kind: npcCmdRemoveActor, TargetID: id}))
 	}
+	t0 := time.Now()
 	for _, ch := range pending {
 		if reply, ok := <-ch; ok {
 			h.commitNPCCommand(reply)
 		}
 	}
+	logSlow("npc-removeActor", time.Since(t0), 50*time.Millisecond)
 }

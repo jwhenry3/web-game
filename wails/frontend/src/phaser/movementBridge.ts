@@ -1,5 +1,5 @@
 import type { OverworldMap } from "../types";
-import { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../characters/heroes99";
+import { H99_COLLISION_RADIUS } from "../characters/heroes99";
 import { slideMovePlayer } from "../world/overworld";
 
 export interface MovementResult {
@@ -37,4 +37,4 @@ export async function applyPlayerSlide(
   return slideMovePlayer(map, fromX, fromY, toX, toY);
 }
 
-export { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W };
+export { H99_COLLISION_RADIUS };

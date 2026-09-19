@@ -46,7 +46,7 @@
         {
           "name": "encounter",
           "type": "string",
-          "value": "{\"enemies\":[{\"kind\":\"goblin\",\"levelMin\":3,\"levelMax\":3,\"dropPoolId\":\"pool_goblin\"}]}"
+          "value": "{\"enemies\":[{\"kind\":\"goblin\",\"levelMin\":3,\"levelMax\":3}]}"
         }
       ]
     }
@@ -98,7 +98,7 @@
         {
           "name": "encounter",
           "type": "string",
-          "value": "{\"enemies\":[{\"kind\":\"dire_wolf\",\"levelMin\":5,\"levelMax\":5,\"dropPoolId\":\"pool_dire_wolf\"}]}"
+          "value": "{\"enemies\":[{\"kind\":\"dire_wolf\",\"levelMin\":5,\"levelMax\":5}]}"
         }
       ]
     }
@@ -150,7 +150,7 @@
         {
           "name": "encounter",
           "type": "string",
-          "value": "{\"enemies\":[{\"kind\":\"stone_imp\",\"levelMin\":4,\"levelMax\":4,\"dropPoolId\":\"pool_stone_imp\"}]}"
+          "value": "{\"enemies\":[{\"kind\":\"stone_imp\",\"levelMin\":4,\"levelMax\":4}]}"
         }
       ]
     }

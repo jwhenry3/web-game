@@ -48,7 +48,7 @@ func TestBuildStatusSnapshotNoMapsRunning(t *testing.T) {
 	if snap.Maps[1].Enabled {
 		t.Fatalf("frostkeep should be disabled: %+v", snap.Maps[1])
 	}
-	if snap.Exp.Rate != 1.0 {
+	if snap.Exp.Rate != 0.1 {
 		t.Fatalf("exp rate %v", snap.Exp.Rate)
 	}
 }

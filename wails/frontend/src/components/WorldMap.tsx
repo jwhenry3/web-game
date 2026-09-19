@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AtlasMap, VisitedSavePoint } from "../types";
-import { TILE_FILL_CSS } from "../world/overworld";
+import { FILL } from "../world/overworld";
+import { loadMapImage } from "../world/mapImage";
 import { markersForMap, type MapMarker } from "../world/mapMarkers";
 import { HoverTooltip } from "../ui/HoverTooltip";
 import { useGame } from "../state/store";
@@ -14,25 +15,81 @@ const MAX_ZOOM = 4;
 const DEFAULT_ZOOM = 2.2;
 const DRAG_THRESHOLD = 5;
 
+/**
+ * Cell-array fallback for when the baked map image fails to load — paints at
+ * 1px/tile via a single ImageData write (the plane CSS stretches + pixelates
+ * it), so even a 1280×960 map costs one buffer instead of millions of
+ * fillRect calls.
+ */
 function paintTerrain(canvas: HTMLCanvasElement, map: AtlasMap["overworld"]) {
   const ctx = canvas.getContext("2d");
   if (!ctx || map.cols <= 0 || map.rows <= 0) return;
-  const scale = 8;
-  canvas.width = map.cols * scale;
-  canvas.height = map.rows * scale;
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
-      const ch = map.cells[r * map.cols + c] ?? "#";
-      ctx.fillStyle = TILE_FILL_CSS[ch] ?? "#1a3a22";
-      ctx.fillRect(c * scale, r * scale, scale, scale);
-    }
+  canvas.width = map.cols;
+  canvas.height = map.rows;
+  const img = ctx.createImageData(map.cols, map.rows);
+  const px = img.data;
+  for (let i = 0; i < map.cols * map.rows; i++) {
+    const rgb = FILL[map.cells[i] ?? "#"] ?? 0x1a3a22;
+    const o = i * 4;
+    px[o] = (rgb >> 16) & 0xff;
+    px[o + 1] = (rgb >> 8) & 0xff;
+    px[o + 2] = rgb & 0xff;
+    px[o + 3] = 0xff;
   }
+  ctx.putImageData(img, 0, 0);
 }
 
-function worldPct(map: AtlasMap["overworld"], x: number, y: number) {
-  const w = Math.max(1, map.cols * map.tile);
-  const h = Math.max(1, map.rows * map.tile);
-  return { left: (x / w) * 100, top: (y / h) * 100 };
+type TerrainSource = (ImageBitmap | HTMLCanvasElement) & { width: number; height: number };
+
+/**
+ * Bake the square world-rect terrain into the isometric projection the world
+ * scene uses: world (x,y) → iso (x−y, (x+y)/2). Output is always 2:1 — the
+ * iso bounds of any tile map are (cols+rows)·t wide by half that tall.
+ */
+function drawIsoTerrain(
+  canvas: HTMLCanvasElement,
+  src: TerrainSource,
+  ow: AtlasMap["overworld"],
+) {
+  const t = Math.max(1, ow.tile);
+  const colsT = ow.cols * t;
+  const rowsT = ow.rows * t;
+  const isoW = colsT + rowsT;
+  if (isoW <= 0) return;
+  const outW = Math.min(4096, Math.max(2, (ow.cols + ow.rows) * 2));
+  const outH = Math.max(1, Math.round(outW / 2));
+  if (canvas.width !== outW || canvas.height !== outH) {
+    canvas.width = outW;
+    canvas.height = outH;
+  }
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const s = outW / isoW;
+  // canvas = s·iso + offset: a=s, b=s/2, c=−s, d=s/2, e=s·rowsT (iso x min).
+  ctx.imageSmoothingEnabled = true;
+  ctx.setTransform(s, s / 2, -s, s / 2, s * rowsT, 0);
+  ctx.drawImage(src, 0, 0, src.width, src.height, 0, 0, colsT, rowsT);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/** World point → position within the iso-projected plane, in percent. */
+function isoPct(map: AtlasMap["overworld"], x: number, y: number) {
+  const t = Math.max(1, map.tile);
+  const isoW = Math.max(1, (map.cols + map.rows) * t);
+  return {
+    left: ((x - y + map.rows * t) / isoW) * 100,
+    top: ((x + y) / isoW) * 100,
+  };
+}
+
+/** World point → fractional position inside the iso plane (0..1). */
+function isoFrac(map: AtlasMap["overworld"], x: number, y: number) {
+  const t = Math.max(1, map.tile);
+  const isoW = Math.max(1, (map.cols + map.rows) * t);
+  return {
+    fx: (x - y + map.rows * t) / isoW,
+    fy: (x + y) / isoW,
+  };
 }
 
 function clampPan(x: number, y: number, viewW: number, viewH: number, planeW: number, planeH: number) {
@@ -99,9 +156,26 @@ export function WorldMap({
   const zoomRef = useRef(zoom);
   zoomRef.current = zoom;
 
+  // Bake the iso terrain once per map — the server PNG when it decodes,
+  // otherwise the cell-array fallback.
   useEffect(() => {
-    if (!atlas || !canvasRef.current) return;
-    paintTerrain(canvasRef.current, atlas.overworld);
+    if (!atlas) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let live = true;
+    loadMapImage(atlas.id).then((img) => {
+      if (!live) return;
+      let src: TerrainSource | null = img;
+      if (!src) {
+        const cells = document.createElement("canvas");
+        paintTerrain(cells, atlas.overworld);
+        src = cells;
+      }
+      drawIsoTerrain(canvas, src, atlas.overworld);
+    });
+    return () => {
+      live = false;
+    };
   }, [atlas]);
 
   useEffect(() => {
@@ -118,8 +192,11 @@ export function WorldMap({
   }, [atlas?.id]);
 
   const ow = atlas?.overworld;
+  // The plane is the iso-projected map — always a 2:1 diamond bounding box.
   const fit =
-    ow && view.w > 0 ? fitSize(view.w, view.h, ow.cols, ow.rows) : { w: 0, h: 0 };
+    ow && view.w > 0
+      ? fitSize(view.w, view.h, ow.cols + ow.rows, (ow.cols + ow.rows) / 2)
+      : { w: 0, h: 0 };
   const planeW = fit.w * zoom;
   const planeH = fit.h * zoom;
 
@@ -136,7 +213,7 @@ export function WorldMap({
   useEffect(() => {
     if (!atlas || !ow || view.w <= 0) return;
     const z = needsCenter.current ? DEFAULT_ZOOM : zoom;
-    const f = fitSize(view.w, view.h, ow.cols, ow.rows);
+    const f = fitSize(view.w, view.h, ow.cols + ow.rows, (ow.cols + ow.rows) / 2);
     const pw = f.w * z;
     const ph = f.h * z;
     if (pw <= 0 || ph <= 0) return;
@@ -145,15 +222,14 @@ export function WorldMap({
       return;
     }
     needsCenter.current = false;
-    const worldW = ow.cols * ow.tile;
-    const worldH = ow.rows * ow.tile;
     const focus =
       markers.find((m) => m.id === selectedMarkerId) ??
       markers.find((m) => m.kind === "player") ??
       markers.find((m) => m.home);
-    const fx = focus ? focus.x : worldW / 2;
-    const fy = focus ? focus.y : worldH / 2;
-    setPan(clampPan(view.w / 2 - (fx / worldW) * pw, view.h / 2 - (fy / worldH) * ph, view.w, view.h, pw, ph));
+    const { fx, fy } = focus
+      ? isoFrac(ow, focus.x, focus.y)
+      : { fx: 0.5, fy: 0.5 };
+    setPan(clampPan(view.w / 2 - fx * pw, view.h / 2 - fy * ph, view.w, view.h, pw, ph));
     // Center once per map using default zoom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atlas?.id, view.w, view.h, zoom, planeW, planeH]);
@@ -163,12 +239,11 @@ export function WorldMap({
 
   useEffect(() => {
     if (!focusMarker || !ow || view.w <= 0 || planeW <= 0 || planeH <= 0) return;
-    const worldW = ow.cols * ow.tile;
-    const worldH = ow.rows * ow.tile;
+    const { fx, fy } = isoFrac(ow, focusMarker.x, focusMarker.y);
     setPan(
       clampPan(
-        view.w / 2 - (focusMarker.x / worldW) * planeW,
-        view.h / 2 - (focusMarker.y / worldH) * planeH,
+        view.w / 2 - fx * planeW,
+        view.h / 2 - fy * planeH,
         view.w,
         view.h,
         planeW,
@@ -296,7 +371,7 @@ export function WorldMap({
           >
             <canvas ref={canvasRef} className="world-map-canvas" />
             {markers.map((m) => {
-              const pct = worldPct(ow, m.x, m.y);
+              const pct = isoPct(ow, m.x, m.y);
               return (
                 <HoverTooltip key={m.id} content={m.name}>
                   <button

@@ -167,7 +167,15 @@ func (h *Hub) handleSetTarget(c *Client, raw json.RawMessage) {
 	}
 	if e := h.ensurePlayer(c); e != nil {
 		e.targetID = p.TargetID
-		if p.TargetID == "" {
+		if e.targetID != "" {
+			// Focus only resolves to entities on the world: dead/hidden NPCs
+			// and stale ids are rejected, so a lingering corpse cannot be
+			// re-locked during the window before its snapshot removal lands.
+			if t := h.ent(e.targetID); t == nil || t.hidden {
+				e.targetID = ""
+			}
+		}
+		if e.targetID == "" {
 			// Dropping focus also releases the committed attack so pets heel;
 			// a mob still attacking us is re-acquired by their defensive scan.
 			e.engageID = ""
@@ -217,8 +225,8 @@ func (h *Hub) resolveDodge(c *Client, e *entity) {
 	}
 	prevX, prevY := e.X, e.Y
 	worldW, worldH := h.worldSize()
-	tx := clamp(e.X+dx*dodgeDashDist, game.PlayerCollisionHalfW, worldW-game.PlayerCollisionHalfW)
-	ty := clamp(e.Y+dy*dodgeDashDist, game.PlayerCollisionHalfH, worldH)
+	tx := clamp(e.X+dx*dodgeDashDist, game.PlayerCollisionRadius, worldW-game.PlayerCollisionRadius)
+	ty := clamp(e.Y+dy*dodgeDashDist, game.PlayerCollisionRadius, worldH-game.PlayerCollisionRadius)
 	if h.overworld != nil {
 		e.X, e.Y = h.overworld.SlideMovePlayer(prevX, prevY, tx, ty)
 	} else {
@@ -467,7 +475,7 @@ func (h *Hub) resolveItemUse(c *Client, e *entity, action protocol.ActionPayload
 	}
 	h.splashEnmity(e, enmityAllyBase+hp/2)
 	if profile, ok := h.store.Get(c.Name); ok {
-		h.sendWelcome(c, profile)
+		h.sendProfileRefresh(c, profile)
 	}
 	res.Message = fmt.Sprintf("%s uses %s", e.Name, item.Name)
 	h.sendCombatEvent(res, e.X, e.Y)
@@ -534,7 +542,7 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 	res.Hit = true
 	res.Message = fmt.Sprintf("Captured %s!", n.Name)
 	h.sendCombatEvent(res, e.X, e.Y)
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.captureNPC(n, e)
 }
 

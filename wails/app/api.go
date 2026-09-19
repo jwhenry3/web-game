@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,7 +52,25 @@ func (a *App) apiRequest(method, path, body, token string) (string, int, error) 
 	if err != nil {
 		return "", res.StatusCode, err
 	}
+	// Binary payloads (e.g. /api/mapimg PNGs) can't cross the JS bridge as a
+	// raw string — UTF-8 coercion corrupts them. Wrap as a data URI;
+	// wailsPlatformFetch decodes it back into bytes.
+	if isBinaryContentType(res.Header.Get("Content-Type")) {
+		return "data:" + res.Header.Get("Content-Type") + ";base64," +
+			base64.StdEncoding.EncodeToString(data), res.StatusCode, nil
+	}
 	return string(data), res.StatusCode, nil
+}
+
+// isBinaryContentType reports whether a response Content-Type carries bytes
+// that would not survive a UTF-8 string round-trip through the Wails bridge.
+func isBinaryContentType(ct string) bool {
+	ct = strings.ToLower(strings.TrimSpace(strings.Split(ct, ";")[0]))
+	if ct == "" {
+		return false
+	}
+	return !(strings.HasPrefix(ct, "text/") ||
+		ct == "application/json" || strings.HasSuffix(ct, "+json"))
 }
 
 // APIGet proxies a GET request to the game server REST API.

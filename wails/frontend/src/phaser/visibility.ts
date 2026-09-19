@@ -56,23 +56,49 @@ export function computeVisibility(
   wy: number,
   radiusTiles: number,
 ): Float32Array {
+  return computeVisibilityWindow(grid, wx, wy, radiusTiles, 0, 0, grid.cols, grid.rows);
+}
+
+/**
+ * Windowed variant: returns a w×h mask covering tiles [c0,c0+w)×[r0,r0+h).
+ * Cells outside the grid stay 0 (occluded). World-scale maps rasterize the
+ * mask per window — a full-map mask would cost megabytes per tile step.
+ */
+function computeVisibilityWindow(
+  grid: VisibilityGrid,
+  wx: number,
+  wy: number,
+  radiusTiles: number,
+  c0: number,
+  r0: number,
+  w: number,
+  h: number,
+): Float32Array {
   const { cols, rows, tileSize, originX, originY } = grid;
-  const out = new Float32Array(cols * rows);
+  const out = new Float32Array(w * h);
   const pc = Math.floor((wx - originX) / tileSize);
   const pr = Math.floor((wy - originY) / tileSize);
   const unlimited = radiusTiles <= 0;
-  const r = unlimited ? Math.max(cols, rows) : Math.ceil(radiusTiles);
-  for (let tr = Math.max(0, pr - r); tr <= Math.min(rows - 1, pr + r); tr++) {
-    for (let tc = Math.max(0, pc - r); tc <= Math.min(cols - 1, pc + r); tc++) {
+  const r = unlimited ? Math.max(w, h) : Math.ceil(radiusTiles);
+  const tr0 = Math.max(0, pr - r, r0);
+  const tr1 = Math.min(rows - 1, pr + r, r0 + h - 1);
+  const tc0 = Math.max(0, pc - r, c0);
+  const tc1 = Math.min(cols - 1, pc + r, c0 + w - 1);
+  for (let tr = tr0; tr <= tr1; tr++) {
+    for (let tc = tc0; tc <= tc1; tc++) {
       const dx = tc - pc;
       const dy = tr - pr;
       const d = Math.hypot(dx, dy);
       if (!unlimited && d > radiusTiles) continue;
       if (!lineVisible(grid, pc, pr, tc, tr)) continue;
-      out[tr * cols + tc] = unlimited ? 1 : Math.min(1, Math.max(0, (radiusTiles - d) / 1.5));
+      out[(tr - r0) * w + (tc - c0)] = unlimited
+        ? 1
+        : Math.min(1, Math.max(0, (radiusTiles - d) / 1.5));
     }
   }
-  if (pc >= 0 && pr >= 0 && pc < cols && pr < rows) out[pr * cols + pc] = 1;
+  if (pc >= c0 && pr >= r0 && pc < c0 + w && pr < r0 + h && pc < cols && pr < rows) {
+    out[(pr - r0) * w + (pc - c0)] = 1;
+  }
   return out;
 }
 
@@ -88,6 +114,7 @@ const FRAG = [
   "uniform vec2 uMaskSize;",   // world px size covered by the mask
   "uniform float uDim;",       // darken strength 0..1
   "uniform float uEnabled;",
+  "uniform float uIso;",       // 1 = camera space is isometric projection
   "varying vec2 outTexCoord;",
   "void main ()",
   "{",
@@ -96,6 +123,12 @@ const FRAG = [
   "    if (uEnabled > 0.5)",
   "    {",
   "        vec2 worldPos = uWorldView.xy + vec2(outTexCoord.x, 1.0 - outTexCoord.y) * uWorldView.zw;",
+  // Iso scenes render the world through Iso = (x−y, (x+y)/2); unproject the
+  // screen position back to tile space before sampling the LOS mask.
+  "        if (uIso > 0.5)",
+  "        {",
+  "            worldPos = vec2(worldPos.x * 0.5 + worldPos.y, worldPos.y - worldPos.x * 0.5);",
+  "        }",
   // Mask canvas uploads with UNPACK_FLIP_Y (row 0 -> v=1), so flip Y here.
   "        vec2 muv = vec2((worldPos.x - uMaskOrigin.x) / uMaskSize.x, 1.0 - (worldPos.y - uMaskOrigin.y) / uMaskSize.y);",
   "        if (muv.x < 0.0 || muv.x > 1.0 || muv.y < 0.0 || muv.y > 1.0) vis = 0.0;",
@@ -133,6 +166,7 @@ function ensureVisibilityNode(renderer: any): boolean {
       pm.setUniform("uMaskSize", controller.losSize);
       pm.setUniform("uDim", controller.losDim);
       pm.setUniform("uEnabled", controller.losMask ? 1 : 0);
+      pm.setUniform("uIso", controller.losIso ?? 0);
     },
   });
   renderer.renderNodes.addNode(NODE_NAME, new node(renderer.renderNodes));
@@ -145,6 +179,8 @@ export interface VisibilityFXOptions {
   radiusTiles?: number;
   /** Darken strength 0..1 for fully occluded areas. */
   dim?: number;
+  /** True when the scene renders isometrically — the shader unprojects. */
+  iso?: boolean;
 }
 
 /**
@@ -152,6 +188,9 @@ export interface VisibilityFXOptions {
  * Call setGrid when the map layout is known and update(playerX, playerY)
  * each frame; the mask only re-renders when the player crosses a tile.
  */
+/** Extra tiles of mask margin beyond the sight radius on each side. */
+const MASK_PAD_TILES = 3;
+
 export class VisibilityFX {
   private scene: Phaser.Scene;
   private ctrl: any = null;
@@ -159,6 +198,8 @@ export class VisibilityFX {
   private radiusTiles: number;
   private texKey: string;
   private maskTex?: Phaser.Textures.CanvasTexture;
+  /** Side length of the mask texture in tiles — a window, not the whole map. */
+  private maskTiles = 0;
   private lastCX = Number.NaN;
   private lastCY = Number.NaN;
 
@@ -173,6 +214,7 @@ export class VisibilityFX {
     ctrl.losOrigin = [0, 0];
     ctrl.losSize = [1, 1];
     ctrl.losDim = opts.dim ?? 0.85;
+    ctrl.losIso = opts.iso ? 1 : 0;
     this.ctrl = ctrl;
     scene.cameras.main.filters.external.add(ctrl);
   }
@@ -189,12 +231,23 @@ export class VisibilityFX {
     }
     if (!grid) {
       this.ctrl.losMask = null;
+      this.maskTiles = 0;
       return;
     }
-    this.maskTex = this.scene.textures.createCanvas(this.texKey, grid.cols, grid.rows) ?? undefined;
+    // Ranged sight only needs a window around the viewer; unlimited sight
+    // (interiors) covers the whole map — those grids are small.
+    this.maskTiles =
+      this.radiusTiles > 0
+        ? Math.min(
+            Math.max(grid.cols, grid.rows),
+            (Math.ceil(this.radiusTiles) + MASK_PAD_TILES) * 2,
+          )
+        : Math.max(grid.cols, grid.rows);
+    this.maskTex =
+      this.scene.textures.createCanvas(this.texKey, this.maskTiles, this.maskTiles) ?? undefined;
     this.maskTex?.setFilter(Phaser.Textures.FilterMode.LINEAR);
     this.ctrl.losOrigin = [grid.originX, grid.originY];
-    this.ctrl.losSize = [grid.cols * grid.tileSize, grid.rows * grid.tileSize];
+    this.ctrl.losSize = [this.maskTiles * grid.tileSize, this.maskTiles * grid.tileSize];
     this.ctrl.losMask = this.maskTex
       ? this.scene.textures.getFrame(this.texKey).glTexture
       : null;
@@ -217,9 +270,13 @@ export class VisibilityFX {
     if (cx === this.lastCX && cy === this.lastCY) return;
     this.lastCX = cx;
     this.lastCY = cy;
-    const mask = computeVisibility(grid, wx, wy, this.radiusTiles);
+
+    const side = this.maskTiles;
+    const w0c = Math.min(Math.max(0, cx - (side >> 1)), Math.max(0, grid.cols - side));
+    const w0r = Math.min(Math.max(0, cy - (side >> 1)), Math.max(0, grid.rows - side));
+    const mask = computeVisibilityWindow(grid, wx, wy, this.radiusTiles, w0c, w0r, side, side);
     const ctx = tex.context;
-    const img = ctx.createImageData(grid.cols, grid.rows);
+    const img = ctx.createImageData(side, side);
     const px = img.data;
     for (let i = 0; i < mask.length; i++) {
       const v = Math.round(mask[i] * 255);
@@ -230,6 +287,8 @@ export class VisibilityFX {
     }
     ctx.putImageData(img, 0, 0);
     tex.refresh();
+    this.ctrl.losOrigin = [grid.originX + w0c * grid.tileSize, grid.originY + w0r * grid.tileSize];
+    this.ctrl.losSize = [side * grid.tileSize, side * grid.tileSize];
   }
 
   /** Force the mask to recompute on the next update() call. */

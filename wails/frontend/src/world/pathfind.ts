@@ -1,5 +1,5 @@
 import type { OverworldMap } from "../types";
-import { boundsWalkableAt } from "./overworld";
+import { circleWalkableAt } from "./overworld";
 
 export interface PathPoint {
   x: number;
@@ -16,8 +16,8 @@ const key = (c: number, r: number) => r * 1_000_000 + c;
 /**
  * A* over the overworld tile grid. 8-directional with no corner cutting
  * (matches the server's game.pathfindWith). Walkability uses the player's
- * foot-anchored collision box at each tile center so paths never hug a wall
- * the slide would reject.
+ * feet-centered collision circle at each tile center so paths never hug a
+ * wall the slide would reject.
  */
 export function findPath(
   map: OverworldMap | null,
@@ -30,11 +30,11 @@ export function findPath(
   const from = { c: Math.floor(fromX / map.tile), r: Math.floor(fromY / map.tile) };
   const to = { c: Math.floor(toX / map.tile), r: Math.floor(toY / map.tile) };
 
-  // A tile counts as standable when the foot-anchored collision box fits at
-  // the tile center — same anchor the emitted waypoints use.
+  // A tile counts as standable when the feet-centered collision circle fits
+  // at the tile center — same anchor the emitted waypoints use.
   const walkable = (c: number, r: number) => {
     if (c < 0 || r < 0 || c >= map.cols || r >= map.rows) return false;
-    return boundsWalkableAt(map, (c + 0.5) * map.tile, (r + 0.5) * map.tile);
+    return circleWalkableAt(map, (c + 0.5) * map.tile, (r + 0.5) * map.tile);
   };
 
   // Snap endpoints to the nearest walkable tile (small ring search) so
@@ -67,7 +67,7 @@ export function findPath(
   if (!start || !goal) return null;
   if (start.c === goal.c && start.r === goal.r) {
     return [
-      boundsWalkableAt(map, toX, toY)
+      circleWalkableAt(map, toX, toY)
         ? { x: toX, y: toY }
         : { x: (goal.c + 0.5) * map.tile, y: (goal.r + 0.5) * map.tile },
     ];
@@ -166,7 +166,7 @@ export function findPath(
     y: (t.r + 0.5) * map.tile,
   }));
   const last = tiles[tiles.length - 1];
-  if (last && last.c === goal.c && last.r === goal.r && boundsWalkableAt(map, toX, toY)) {
+  if (last && last.c === goal.c && last.r === goal.r && circleWalkableAt(map, toX, toY)) {
     pts[pts.length - 1] = { x: toX, y: toY };
   }
   return pts;

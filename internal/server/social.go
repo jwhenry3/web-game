@@ -200,7 +200,7 @@ func (h *Hub) handleAddFriend(c *Client, raw json.RawMessage) {
 		h.sendError(c, msg)
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 
 	otherProfile, hasOther := h.store.FindByName(p.PlayerName)
 	target := h.findClientByName(p.PlayerName)
@@ -208,7 +208,7 @@ func (h *Hub) handleAddFriend(c *Client, raw json.RawMessage) {
 
 	if target != nil {
 		if becameFriends {
-			h.sendWelcome(target, otherProfile)
+			h.sendProfileRefresh(target, otherProfile)
 		} else if friendRequestPending(otherProfile, c.Name) {
 			h.send(target, protocol.TypeFriendRequestMsg, protocol.FriendRequestPayload{
 				FromID: c.ID, FromName: c.Name,
@@ -251,14 +251,14 @@ func (h *Hub) handleAcceptFriend(c *Client, raw json.RawMessage) {
 		h.sendError(c, msg)
 		return
 	}
-	h.sendWelcome(c, accepter)
+	h.sendProfileRefresh(c, accepter)
 	h.sendSocialState(c)
 	h.refreshFriendsSocial(c.Name)
 	h.refreshFriendsSocial(other.Name)
 
 	target := h.findClientByName(other.Name)
 	if target != nil {
-		h.sendWelcome(target, other)
+		h.sendProfileRefresh(target, other)
 		h.sendSocialState(target)
 	}
 }
@@ -276,7 +276,7 @@ func (h *Hub) handleDeclineFriend(c *Client, raw json.RawMessage) {
 	h.sendSocialState(c)
 	target := h.findClientByName(p.PlayerName)
 	if target != nil {
-		h.sendWelcome(target, other)
+		h.sendProfileRefresh(target, other)
 		h.sendSocialState(target)
 	}
 }
@@ -291,7 +291,7 @@ func (h *Hub) handleRemoveFriend(c *Client, raw json.RawMessage) {
 		h.sendError(c, "That hero is not on your friend list.")
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 	h.sendSocialState(c)
 }
 

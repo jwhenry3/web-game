@@ -98,7 +98,7 @@ func TestSlideMoveStopsOnWater(t *testing.T) {
 
 func TestPlayerBoundsWalkableAtSpawn(t *testing.T) {
 	x, y := SpawnPosition("")
-	if !BoundsWalkableAt(x, y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if !CircleWalkableAt(x, y, PlayerCollisionRadius) {
 		t.Fatal("default spawn must fit the player collision box")
 	}
 }
@@ -107,10 +107,10 @@ func TestSlideMovePlayerStopsAtTrees(t *testing.T) {
 	from := TileCenter(scaleTile(13, 8))
 	to := TileCenter(scaleTile(15, 8))
 	x, y := SlideMovePlayer(from.X, from.Y, to.X, to.Y)
-	if BoundsWalkableAt(to.X, to.Y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if CircleWalkableAt(to.X, to.Y, PlayerCollisionRadius) {
 		t.Skip("destination is open; map changed")
 	}
-	if !BoundsWalkableAt(x, y, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if !CircleWalkableAt(x, y, PlayerCollisionRadius) {
 		t.Fatalf("player slide must stay walkable, landed at (%f,%f)", x, y)
 	}
 	if x == to.X && y == to.Y {

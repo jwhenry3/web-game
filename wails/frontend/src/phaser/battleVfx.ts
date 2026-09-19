@@ -410,7 +410,12 @@ export function isJumpAction(actionId: string): boolean {
   return /jump/i.test(actionId);
 }
 
-/** Leap off the top of the screen, crash onto the target, then bounce home. */
+/**
+ * Leap off the top of the screen, crash onto the target, then bounce home.
+ * `up` is the world-space direction that reads as screen-up — (0,−1)
+ * orthogonally, (−1,−1) under iso (isoUp). Offsets along it lift the actor
+ * vertically on screen regardless of projection.
+ */
 export function playJumpCrash(
   scene: Phaser.Scene,
   actor: Phaser.GameObjects.Container,
@@ -418,11 +423,20 @@ export function playJumpCrash(
   battleSpeed: number,
   onImpact?: () => void,
   onDone?: () => void,
+  up: { x: number; y: number } = { x: 0, y: -1 },
 ): void {
   const startX = actor.x;
   const startY = actor.y;
   const startDepth = actor.depth;
+  // How far along `up` the actor must travel to clear the top of the view.
+  // Screen Y is y orthogonally and (x+y)/2 under iso — either way it's
+  // up.y·(x+y)-ish, so project through the same screen-y function.
+  const screenY = (x: number, y: number) =>
+    up.x !== 0 ? (x + y) / 2 : y;
   const skyY = scene.cameras.main.worldView.top - 90;
+  const lift = Math.max(0, screenY(startX, startY) - skyY);
+  const skyX = startX + up.x * lift;
+  const skyYY = startY + up.y * lift;
   const finish = () => {
     actor.setPosition(startX, startY);
     actor.setDepth(startDepth);
@@ -437,7 +451,8 @@ export function playJumpCrash(
 
   scene.tweens.add({
     targets: actor,
-    y: skyY,
+    x: skyX,
+    y: skyYY,
     duration: battleDuration(260, battleSpeed),
     ease: "Cubic.easeIn",
     onComplete: () => {
@@ -448,11 +463,20 @@ export function playJumpCrash(
         duration: battleDuration(200, battleSpeed),
         ease: "Cubic.easeIn",
         onUpdate: () => {
-          actor.setPosition(target.x, skyY + (target.y - skyY) * followCrash.p);
+          // Fall from the sky point toward the target, biased by `up` so the
+          // descent reads vertical on screen rather than a world-space slide.
+          const p = followCrash.p;
+          actor.setPosition(
+            target.x + (skyX - target.x) * (1 - p),
+            target.y + (skyYY - target.y) * (1 - p),
+          );
         },
         onComplete: () => {
           actor.setPosition(target.x, target.y);
-          burst(scene, target.x, target.y + 10, 48, 0xccbb88, 55, battleSpeed, { size: 5, duration: 500 });
+          const bp = up.x !== 0
+            ? { x: target.x - target.y, y: (target.x + target.y) / 2 + 10 }
+            : { x: target.x, y: target.y + 10 };
+          burst(scene, bp.x, bp.y, 48, 0xccbb88, 55, battleSpeed, { size: 5, duration: 500 });
           onImpact?.();
           followHop.h = 0;
           scene.tweens.add({
@@ -462,15 +486,19 @@ export function playJumpCrash(
             yoyo: true,
             ease: "Quad.easeOut",
             onUpdate: () => {
-              actor.setPosition(target.x, target.y - followHop.h);
+              actor.setPosition(
+                target.x + up.x * followHop.h,
+                target.y + up.y * followHop.h,
+              );
             },
             onComplete: () => {
               const fromX = actor.x;
               const fromY = actor.y;
-              const apexY = Math.min(startY, fromY) - 140;
+              const apexX = (startX + fromX) / 2 + up.x * 140;
+              const apexY = (startY + fromY) / 2 + up.y * 140;
               scene.tweens.add({
                 targets: actor,
-                x: (startX + fromX) / 2,
+                x: apexX,
                 y: apexY,
                 duration: battleDuration(120, battleSpeed),
                 ease: "Quad.easeOut",

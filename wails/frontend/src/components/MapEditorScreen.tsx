@@ -25,6 +25,7 @@ import type { ImportedTileset } from "../editor/tilesetConfig";
 import { objectsMatch } from "../editor/objectProps";
 import { entityFromPlacementTool, instantiateEntity, type EntityDefinition } from "../editor/entities";
 import { drawEntityPlacementGhost, drawPrefabPlacementGhost, drawTerrainPaintGhost, type PlacementHover } from "../editor/placementGhost";
+import { isoBlockPaintGid } from "../world/isoTiles";
 import { drawEditorObject, ensureEditorSpritesLoaded, sortObjectsForDraw } from "../editor/editorEntitySprites";
 import {
   applyObjectDrag,
@@ -85,6 +86,8 @@ export function MapEditorScreen() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [tool, setTool] = useState<EditorTool>("select");
+  const [blockType, setBlockType] = useState(0);
+  const [blockLevel, setBlockLevel] = useState(1);
   const [zoom, setZoom] = useState(0.5);
   const [pan, setPan] = useState({ x: 20, y: 20 });
   const [panning, setPanning] = useState(false);
@@ -171,6 +174,9 @@ export function MapEditorScreen() {
   const activeEntityRef = useRef(activeEntity);
   const toolRef = useRef(tool);
   const selectedTileIndexRef = useRef(selectedTileIndex);
+  const blockGid = isoBlockPaintGid(blockType, blockLevel);
+  const blockGidRef = useRef(blockGid);
+  blockGidRef.current = blockGid;
   stampModeRef.current = stampMode;
   entityStampModeRef.current = entityStampMode;
   activePrefabRef.current = activePrefab;
@@ -357,7 +363,7 @@ export function MapEditorScreen() {
       } else if (entityStampModeRef.current && activeEntityRef.current) {
         drawEntityPlacementGhost(ctx, activeEntityRef.current, hover, z, tileSize);
       } else if (isTerrainTool(toolRef.current) || isCollisionTool(toolRef.current)) {
-        drawTerrainPaintGhost(ctx, hover, toolRef.current, z, tileSize, ts, selectedTileIndexRef.current);
+        drawTerrainPaintGhost(ctx, hover, toolRef.current, z, tileSize, ts, selectedTileIndexRef.current, blockGidRef.current);
       }
     }
 
@@ -527,12 +533,16 @@ export function MapEditorScreen() {
     const i = t.r * t.cols + t.c;
     const ts = tilesetRef.current;
     if (isTerrainTool(tool)) {
-      const role = toolToRole(tool);
-      if (role === "unset") currentLayersRef.current.ground[i] = 0;
-      else if (selectedTileIndex != null && ts) {
-        currentLayersRef.current.ground[i] = ts.firstGid + selectedTileIndex;
-      } else if (role) {
-        currentLayersRef.current.ground[i] = gidForRole(role, ts);
+      if (tool === "terrain_block") {
+        currentLayersRef.current.ground[i] = blockGid;
+      } else {
+        const role = toolToRole(tool);
+        if (role === "unset") currentLayersRef.current.ground[i] = 0;
+        else if (selectedTileIndex != null && ts) {
+          currentLayersRef.current.ground[i] = ts.firstGid + selectedTileIndex;
+        } else if (role) {
+          currentLayersRef.current.ground[i] = gidForRole(role, ts);
+        }
       }
     } else if (isCollisionTool(tool)) {
       currentLayersRef.current.collision[i] = tool === "collision_block" ? 1 : 0;
@@ -1304,6 +1314,12 @@ export function MapEditorScreen() {
           }}
           entityStampMode={entityStampMode}
           onRequestNewEntity={requestNewEntity}
+          blockType={blockType}
+          blockLevel={blockLevel}
+          onBlockChange={(t, l) => {
+            setBlockType(t);
+            setBlockLevel(l);
+          }}
         />
       </div>
       {inPrefabMode && editingPrefab ? (
@@ -1318,6 +1334,7 @@ export function MapEditorScreen() {
           focusSeq={focusSeq}
           regionId={selectedId || "prefab"}
           interactableRoles={interactableRoles}
+          blockGid={blockGid}
           onChange={handlePrefabChange}
         />
       ) : (

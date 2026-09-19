@@ -1,4 +1,5 @@
 import type { ImportedTileset, TileRole } from "./tilesetConfig";
+import { isoBlockForGid } from "../world/isoTiles";
 
 export const BASE_CHIP_FIRST_GID = 577;
 export const TILE_PX = 32;
@@ -30,6 +31,7 @@ export function defaultGidForRole(role: TileRole): number {
 export function roleForGid(gid: number, tileset: ImportedTileset | null): TileRole {
   const raw = gid & 0x1fffffff;
   if (raw === 0) return "unset";
+  if (isoBlockForGid(raw)) return "cliff";
   if (tileset) {
     const local = raw - tileset.firstGid;
     if (local >= 0) {
@@ -59,7 +61,36 @@ export function gidForRole(role: TileRole, tileset: ImportedTileset | null): num
   return defaultGidForRole(role);
 }
 
+const MUNDI_FIRST_GID = 6000;
+const WATER_ANIM_FIRST_GID = 2169;
+const WATER_ANIM_END_GID = WATER_ANIM_FIRST_GID + 3072;
+
+/** Fallback colors for MundiTerrain locals (used when sheet pixels aren't loaded). */
+const MUNDI_LOCAL_COLORS: Record<number, string> = {
+  0: "#dfe8ee", // snow
+  1: "#cdd8e2", // packed snow
+  2: "#9fc8dc", // ice
+  3: "#d8bc72", // dune sand
+  4: "#d0b47a", // beach sand
+  5: "#8c8478", // scree
+  6: "#686664", // ash
+  7: "#4c4834", // peat
+};
+
+function mundiLocalColor(gid: number): string | null {
+  const local = gid - MUNDI_FIRST_GID;
+  if (local < 0 || local >= 64) return null;
+  if (local <= 7) return MUNDI_LOCAL_COLORS[local];
+  return TERRAIN_COLORS.grass; // trees/props — ground shows through
+}
+
 export function colorForGid(gid: number, tileset: ImportedTileset | null): string {
+  const raw = gid & 0x1fffffff;
+  const block = isoBlockForGid(raw);
+  if (block) return block.def.editorColor;
+  const mundi = mundiLocalColor(raw);
+  if (mundi) return mundi;
+  if (raw >= WATER_ANIM_FIRST_GID && raw < WATER_ANIM_END_GID) return TERRAIN_COLORS.water;
   const role = roleForGid(gid, tileset);
   if (role === "unset") return TERRAIN_COLORS.empty;
   return TERRAIN_COLORS[role];

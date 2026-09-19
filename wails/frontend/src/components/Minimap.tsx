@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame } from "../state/store";
-import { TILE_FILL_CSS } from "../world/overworld";
+import { FILL } from "../world/overworld";
+import { loadMapImage } from "../world/mapImage";
 import { getWorldLocalPos } from "../world/worldLocalPos";
 import type { OverworldMap } from "../types";
 
@@ -46,13 +47,32 @@ function paintTerrain(cache: HTMLCanvasElement, map: OverworldMap) {
     cache.width = w;
     cache.height = h;
   }
+  // Bulk paint via ImageData — per-tile fillRect costs millions of canvas
+  // calls on world-scale maps.
+  const img = ctx.createImageData(w, h);
+  const px = img.data;
+  const S = TERRAIN_SCALE;
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
-      const ch = map.cells[r * map.cols + c] ?? "#";
-      ctx.fillStyle = TILE_FILL_CSS[ch] ?? "#1a3a22";
-      ctx.fillRect(c * TERRAIN_SCALE, r * TERRAIN_SCALE, TERRAIN_SCALE, TERRAIN_SCALE);
+      const rgb = FILL[map.cells[r * map.cols + c] ?? "#"] ?? 0x1a3a22;
+      const rr = (rgb >> 16) & 0xff;
+      const gg = (rgb >> 8) & 0xff;
+      const bb = rgb & 0xff;
+      const x0 = c * S;
+      const y0 = r * S;
+      for (let dy = 0; dy < S; dy++) {
+        let i = ((y0 + dy) * w + x0) * 4;
+        for (let dx = 0; dx < S; dx++) {
+          px[i] = rr;
+          px[i + 1] = gg;
+          px[i + 2] = bb;
+          px[i + 3] = 255;
+          i += 4;
+        }
+      }
     }
   }
+  ctx.putImageData(img, 0, 0);
 }
 
 function dot(
@@ -79,6 +99,9 @@ export function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const terrainRef = useRef<HTMLCanvasElement | null>(null);
   const terrainKeyRef = useRef("");
+  const terrainImgRef = useRef<ImageBitmap | null>(null);
+  const terrainImgIdRef = useRef("");
+  const terrainImgFailedRef = useRef(false);
   const sizeRef = useRef(DEFAULT_SIZE);
   const zoomRef = useRef(1);
   const chromeRef = useRef<HTMLDivElement>(null);
@@ -146,49 +169,79 @@ export function Minimap() {
       const selfX = local?.x ?? self.x;
       const selfY = local?.y ?? self.y;
 
-      if (!terrainRef.current) terrainRef.current = document.createElement("canvas");
-      const key = terrainFingerprint(map);
-      if (key !== terrainKeyRef.current) {
-        terrainKeyRef.current = key;
-        paintTerrain(terrainRef.current, map);
+      // Baked terrain image — the same /api/mapimg PNG the map window uses,
+      // loaded once per map. Falls back to painting the cell array into a
+      // cache canvas when the endpoint is unavailable.
+      const mapId = state.mapInfo?.id ?? "";
+      if (mapId && mapId !== terrainImgIdRef.current) {
+        terrainImgIdRef.current = mapId;
+        terrainImgRef.current = null;
+        terrainImgFailedRef.current = false;
+        loadMapImage(mapId).then((img) => {
+          if (terrainImgIdRef.current !== mapId) return;
+          if (img) terrainImgRef.current = img;
+          else terrainImgFailedRef.current = true;
+        });
+      }
+      let terrain: HTMLCanvasElement | ImageBitmap | null = terrainImgRef.current;
+      if (!terrain && (terrainImgFailedRef.current || !mapId)) {
+        if (!terrainRef.current) terrainRef.current = document.createElement("canvas");
+        const key = terrainFingerprint(map);
+        if (key !== terrainKeyRef.current) {
+          terrainKeyRef.current = key;
+          paintTerrain(terrainRef.current, map);
+        }
+        terrain = terrainRef.current;
       }
 
-      const worldW = map.cols * map.tile;
-      const worldH = map.rows * map.tile;
+      // Isometric radar — the same projection the world scene uses:
+      // world (x,y) → iso (x−y, (x+y)/2). The square canvas shows a square
+      // window of iso space centered on the player.
+      const t = Math.max(1, map.tile || 1);
+      const colsT = map.cols * t;
+      const rowsT = map.rows * t;
+      const isoW = colsT + rowsT; // iso x range: [-rowsT, colsT]
+      const isoH = isoW / 2; //      iso y range: [0, isoH]
       const baseView = BASE_VIEW_WORLD / zoomLv;
-      const viewWorld = Math.max(
-        320,
-        Math.max(baseView, Math.min(worldW, worldH) < baseView ? Math.max(worldW, worldH) : baseView),
-      );
-      const half = viewWorld / 2;
-      let viewX = selfX - half;
-      let viewY = selfY - half;
-      if (worldW <= viewWorld) viewX = (worldW - viewWorld) / 2;
-      else viewX = Math.max(0, Math.min(worldW - viewWorld, viewX));
-      if (worldH <= viewWorld) viewY = (worldH - viewWorld) / 2;
-      else viewY = Math.max(0, Math.min(worldH - viewWorld, viewY));
+      const side = Math.max(320, isoH < baseView ? isoW : baseView);
 
-      ctx.imageSmoothingEnabled = false;
+      const pix = selfX - selfY;
+      const piy = (selfX + selfY) / 2;
+      const viewX =
+        isoW <= side
+          ? -rowsT - (side - isoW) / 2
+          : Math.max(-rowsT, Math.min(colsT - side, pix - side / 2));
+      const viewY =
+        isoH <= side
+          ? -(side - isoH) / 2
+          : Math.max(0, Math.min(isoH - side, piy - side / 2));
+      const s = sizePx / side;
+
+      ctx.imageSmoothingEnabled = true;
       ctx.fillStyle = "#0a0c10";
       ctx.fillRect(0, 0, sizePx, sizePx);
-
-      const terrain = terrainRef.current;
-      const dstX = ((0 - viewX) / viewWorld) * sizePx;
-      const dstY = ((0 - viewY) / viewWorld) * sizePx;
-      const dstW = (worldW / viewWorld) * sizePx;
-      const dstH = (worldH / viewWorld) * sizePx;
-      ctx.drawImage(terrain, 0, 0, terrain.width, terrain.height, dstX, dstY, dstW, dstH);
+      if (terrain) {
+        // canvas = s·(iso − view): a=s, b=s/2, c=−s, d=s/2
+        ctx.setTransform(s, s / 2, -s, s / 2, -s * viewX, -s * viewY);
+        ctx.drawImage(terrain, 0, 0, terrain.width, terrain.height, 0, 0, colsT, rowsT);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      }
 
       const toMini = (wx: number, wy: number) => ({
-        x: ((wx - viewX) / viewWorld) * sizePx,
-        y: ((wy - viewY) / viewWorld) * sizePx,
+        x: (wx - wy - viewX) * s,
+        y: ((wx + wy) / 2 - viewY) * s,
       });
 
-      const inView = (wx: number, wy: number) =>
-        wx >= viewX - 32 &&
-        wx <= viewX + viewWorld + 32 &&
-        wy >= viewY - 32 &&
-        wy <= viewY + viewWorld + 32;
+      const inView = (wx: number, wy: number) => {
+        const ix = wx - wy;
+        const iy = (wx + wy) / 2;
+        return (
+          ix >= viewX - 64 &&
+          ix <= viewX + side + 64 &&
+          iy >= viewY - 64 &&
+          iy <= viewY + side + 64
+        );
+      };
 
       const scale = sizePx / DEFAULT_SIZE;
       for (const sp of Object.values(state.savePoints)) {

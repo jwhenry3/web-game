@@ -22,16 +22,23 @@ func dist(ax, ay, bx, by float64) float64 {
 	return math.Hypot(ax-bx, ay-by)
 }
 
-// serverEntitySnapshots lists entities the server drives (NPCs and pets) for
-// entity_state deltas.
-func (h *Hub) serverEntitySnapshots() []protocol.WorldEntity {
+// entitySyncRadius scopes each client's entity_state to server-driven entities
+// within this radius. The client's handler rebuilds its NPC/pet set from the
+// message, so out-of-range entities evict themselves — the only way a world
+// with hundreds of NPCs stays affordable per tick. Sized beyond the farthest
+// viewport/minimap view (~1700px at max zoom-out) plus margin.
+const entitySyncRadius = 2200.0
+
+// serverEntitySnapshotsNear lists server-driven entities (NPCs and pets)
+// within r of (x, y) for a per-client entity_state scope.
+func (h *Hub) serverEntitySnapshotsNear(x, y, r float64) []protocol.WorldEntity {
 	out := make([]protocol.WorldEntity, 0)
-	for _, e := range h.entities {
-		if e.Kind == kindPlayer || e.hidden {
-			continue
-		}
-		out = append(out, h.projector.project(e, time.Now()))
-	}
+	now := time.Now()
+	h.spatialEach(x, y, r, func(e *entity) bool {
+		return e.Kind != kindPlayer && !e.hidden
+	}, func(e *entity) {
+		out = append(out, h.projector.project(e, now))
+	})
 	return out
 }
 
@@ -66,6 +73,16 @@ func (h *Hub) removeNPCs() {
 		delete(h.entities, id)
 		delete(h.npcOwners, id)
 	}
+}
+
+// npcPatrolCount is the full spawn count for the loaded map: every patrol in
+// the config is seeded (large worlds define hundreds; the npcCount constant
+// remains only as a floor for legacy callers).
+func (h *Hub) npcPatrolCount() int {
+	if h.overworld != nil {
+		return len(h.overworld.NPCPatrols)
+	}
+	return len(game.NPCPatrols)
 }
 
 func (h *Hub) buildNPCs(count int) []*entity {
@@ -183,16 +200,15 @@ func restoreNPCCombat(n, old *entity) {
 	}
 }
 
-// broadcastEntityState streams NPC+pet snapshots in real time to clients that
-// have any server entity within nearSyncDist; everyone else is folded into
-// the once-a-second far-sync digest instead.
+// broadcastEntityState streams NPC+pet snapshots scoped to each client's
+// surroundings (entitySyncRadius). The client's handler rebuilds non-player
+// entities from the message, so entities leaving the radius evict themselves —
+// on large maps this keeps per-tick payload to a handful of entities instead
+// of the full world population.
 func (h *Hub) broadcastEntityState() {
 	// Post-tick batch pass: entities moved during the entity tick, so re-index
-	// before classifying each client by proximity to server entities.
+	// before scoping each client's snapshot.
 	h.spatialInvalidate()
-	msg := protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
-		Entities: h.serverEntitySnapshots(),
-	})
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, c := range h.clients {
@@ -200,11 +216,12 @@ func (h *Hub) broadcastEntityState() {
 			continue
 		}
 		p := h.entities[c.ID]
-		if p != nil && h.nearServerEntity(p) {
-			h.sendRawLocked(c, msg)
-		} else {
-			h.farEntityClients[c.ID] = true
+		if p == nil {
+			continue
 		}
+		h.sendRawLocked(c, protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
+			Entities: h.serverEntitySnapshotsNear(p.X, p.Y, entitySyncRadius),
+		}))
 	}
 }
 
@@ -223,8 +240,8 @@ func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
 // a larger step right after a dodge so the dash isn't read as a teleport.
 func (h *Hub) clampMoveStep(fromX, fromY, toX, toY, maxStep float64) (float64, float64) {
 	worldW, worldH := h.worldSize()
-	toX = clamp(toX, game.PlayerCollisionHalfW, worldW-game.PlayerCollisionHalfW)
-	toY = clamp(toY, game.PlayerCollisionHalfH, worldH)
+	toX = clamp(toX, game.PlayerCollisionRadius, worldW-game.PlayerCollisionRadius)
+	toY = clamp(toY, game.PlayerCollisionRadius, worldH-game.PlayerCollisionRadius)
 	dx, dy := toX-fromX, toY-fromY
 	d := math.Hypot(dx, dy)
 	if d > maxStep {

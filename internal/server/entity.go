@@ -246,20 +246,21 @@ func (h *Hub) focusTarget(e *entity) *entity {
 
 // nearestAttackable picks the closest entity `from` may attack within maxD.
 // Hostile attackers skip players standing in a sanctuary (unreachable).
+// Candidates come from the spatial grid — only cells overlapping maxD are
+// visited instead of a full entity-map scan.
 func (h *Hub) nearestAttackable(from *entity, maxD float64) *entity {
 	var best *entity
 	bestD := maxD
-	for _, t := range h.entities {
+	h.spatialEach(from.X, from.Y, maxD, func(t *entity) bool {
 		if !h.canAttack(from, t) {
-			continue
+			return false
 		}
-		if from.Faction == factionHostile && t.Kind == kindPlayer && h.inSanctuary(t) {
-			continue
-		}
+		return from.Faction != factionHostile || t.Kind != kindPlayer || !h.inSanctuary(t)
+	}, func(t *entity) {
 		if d := dist(from.X, from.Y, t.X, t.Y); d <= bestD && (best == nil || d < bestD) {
 			bestD, best = d, t
 		}
-	}
+	})
 	return best
 }
 
@@ -494,20 +495,26 @@ func (h *Hub) tickEntityStatuses(e *entity) {
 
 // tickEntities is the single hub simulation step, run every combatTickInterval.
 func (h *Hub) tickEntities(now time.Time) {
+	start := time.Now()
+	defer func() { logSlow("hub tickEntities", time.Since(start), 80*time.Millisecond) }()
 	dt := combatTickInterval.Seconds()
 	if h.petSyncDue(now) {
 		h.syncPetEntities()
 	}
 
+	simStart := time.Now()
 	if h.world != nil {
 		h.tickEntitiesWorld(now, dt)
 	} else {
 		h.tickEntitiesLegacy(now, dt)
 	}
+	logSlow("hub tickEntities.sim", time.Since(simStart), 50*time.Millisecond)
 
 	if h.entityDirty {
 		h.entityDirty = false
+		bStart := time.Now()
 		h.broadcastEntityState()
+		logSlow("hub tickEntities.entityState", time.Since(bStart), 30*time.Millisecond)
 	}
 	if !h.combatActive() {
 		if len(h.aoi) > 0 {
@@ -516,7 +523,9 @@ func (h *Hub) tickEntities(now time.Time) {
 		return
 	}
 	h.updateCombatFlags(now)
+	cStart := time.Now()
 	h.broadcastCombatTick()
+	logSlow("hub tickEntities.combatTick", time.Since(cStart), 30*time.Millisecond)
 }
 
 // tickEntitiesLegacy preserves the original map-iteration order for legacy maps.

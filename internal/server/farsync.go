@@ -8,11 +8,10 @@ import (
 
 // ---- far-sync digest ----
 //
-// Movement streams in real time to clients inside nearSyncDist; clients with
-// no nearby entity activity instead receive a batched entity_state digest on
-// farSyncInterval. farEntityClients / movedPlayers (Hub fields, hub.go) are
-// the bookkeeping: npc.go's tick marks farEntityClients, broadcastPlayerMoved
-// accumulates movedPlayers, and flushFarSync drains both.
+// Movement streams in real time to clients inside nearSyncDist; movers out of
+// a client's range are batched into an entity_state digest on farSyncInterval.
+// broadcastEntityState already streams per-client scoped NPC/pet snapshots
+// every tick, so flushFarSync only tracks movedPlayers now.
 
 // broadcastPlayerMoved streams a move update to the mover and clients within
 // nearSyncDist immediately; distant clients pick the position up on the
@@ -38,26 +37,17 @@ func (h *Hub) broadcastPlayerMoved(moverID string, e *entity) {
 	}
 }
 
-// nearServerEntity reports whether any server-driven entity (NPC/pet) is
-// within nearSyncDist of the player entity.
-func (h *Hub) nearServerEntity(p *entity) bool {
-	return h.spatialAny(p.X, p.Y, nearSyncDist, func(e *entity) bool {
-		return e.Kind != kindPlayer && !e.hidden
-	})
-}
-
-// flushFarSync runs on farSyncInterval: clients with no nearby server entity
-// get a full entity_state digest, and players that moved while out of a
-// client's near range ride along in that digest as full snapshots — one
-// batched message per client instead of one player_moved per mover.
+// flushFarSync runs on farSyncInterval: players that moved while out of a
+// client's near range ride along in a batched entity_state digest as full
+// snapshots — one message per client instead of one player_moved per mover.
 //
-// The payload always carries the complete server-entity set: the client's
-// entity_state handler rebuilds its non-player entities from the message, so
-// a movers-only digest would evict every NPC and pet. Far movers travel as
-// full player projections; the handler's by-id merge replaces the record
-// wholesale, exactly like a player_sync update.
+// The digest carries the client's scoped server-entity set as well: the
+// client's entity_state handler rebuilds its non-player entities from the
+// message, so a movers-only payload would evict every NPC and pet in view.
+// Far movers travel as full player projections; the handler's by-id merge
+// replaces the record wholesale, exactly like a player_sync update.
 func (h *Hub) flushFarSync() {
-	if len(h.farEntityClients) == 0 && len(h.movedPlayers) == 0 {
+	if len(h.movedPlayers) == 0 {
 		return
 	}
 	h.spatialInvalidate() // batch pass: re-index the settled positions once
@@ -71,8 +61,6 @@ func (h *Hub) flushFarSync() {
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	var snapshots []protocol.WorldEntity
-	var digestMsg []byte // shared encode for clients with no far movers
 	now := time.Now()
 	for _, c := range h.clients {
 		if !c.Joined {
@@ -92,21 +80,14 @@ func (h *Hub) flushFarSync() {
 			}
 			movers = append(movers, h.projector.project(e, now))
 		}
-		if len(movers) == 0 && !h.farEntityClients[c.ID] {
-			continue
-		}
-		if snapshots == nil {
-			snapshots = h.serverEntitySnapshots()
-		}
 		if len(movers) == 0 {
-			if digestMsg == nil {
-				digestMsg = protocol.Encode(protocol.TypeEntityState, protocol.EntityStatePayload{
-					Entities: snapshots,
-				})
-			}
-			h.sendRawLocked(c, digestMsg)
 			continue
 		}
+		p := h.entities[c.ID]
+		if p == nil {
+			continue
+		}
+		snapshots := h.serverEntitySnapshotsNear(p.X, p.Y, entitySyncRadius)
 		entities := make([]protocol.WorldEntity, 0, len(snapshots)+len(movers))
 		entities = append(entities, snapshots...)
 		entities = append(entities, movers...)

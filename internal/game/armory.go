@@ -316,10 +316,6 @@ func BaseStats(level int) Stats {
 	return s
 }
 
-func XPToNext(level int) int {
-	return level * 100
-}
-
 var starterNames = map[WeaponType]string{
 	WeaponSword:    "Rusty Sword",
 	WeaponHammer:   "Worn Hammer",

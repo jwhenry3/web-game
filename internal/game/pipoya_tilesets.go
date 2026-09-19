@@ -71,11 +71,12 @@ func fallbackBaseChipConfig() *BaseChipConfig {
 		CollidesTiles: map[int]bool{
 			BaseChipLocalStoneFill: true,
 			BaseChipLocalWaterChip: true,
-			// Trunks + bushes only — canopy tops (8–15) are walk-under.
+			// Trunks only (16-23 small, 32-39 big) — canopy tops are walk-under.
 			16: true, 17: true, 18: true, 19: true, 20: true, 21: true, 22: true, 23: true,
-			32: true, 33: true, 34: true, 35: true,
+			32: true, 33: true, 34: true, 35: true, 36: true, 37: true, 38: true, 39: true,
 		},
-		TreeTiles: []int{8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 32, 33, 34, 35},
+		TreeTiles: []int{8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+			24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43},
 	}
 }
 

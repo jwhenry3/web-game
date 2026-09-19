@@ -108,7 +108,9 @@ Configured once in `data/cluster.json` under `exp` and applied by every map serv
 1. Scale base award by `exp.rate`.
 2. If a subjob is set, split by `exp.main_percent` / `exp.sub_percent`; otherwise all EXP goes to main.
 
-Used for per-kill XP shares and party passive EXP. Defaults: rate `1.0`, main `75%`, sub `25%`.
+Used for per-kill XP shares and party passive EXP. Defaults: rate `0.1`, main `75%`, sub `25%`.
+
+Level-up requirements are an explicit per-level table (`game.XPTable` in `internal/game/exp.go`): index 0 is the EXP for level 1→2, the last entry is 19→20 (`LevelCap`). The curve climbs ~40% per level; edit the literal values to tune pacing. Pets share the same table via `PetXPToNext`.
 
 ## Housing / camps
 

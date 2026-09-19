@@ -1,7 +1,7 @@
 {
   "exp": {
     "main_percent": 75,
-    "rate": 1,
+    "rate": 0.1,
     "sub_percent": 25,
     "subjob_unlock_level": 5
   },

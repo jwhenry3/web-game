@@ -102,6 +102,20 @@ func (h *Hub) sendWelcome(c *Client, profile store.Profile) {
 	h.send(c, protocol.TypeWelcome, h.welcomePayload(c, profile))
 }
 
+// sendProfileRefresh pushes a profile-only welcome. The full welcome embeds
+// the map snapshot — on large maps that is a multi-MB cells string plus the
+// ground/collision int layers — and profile updates fire per kill, equip,
+// pet, and party event, so resending terrain each time floods both the hub
+// encode path and the client's send queue. A missing map means "keep
+// current" (the client's welcome handler applies the map only when present);
+// the join path still sends the full snapshot via sendWelcome.
+func (h *Hub) sendProfileRefresh(c *Client, profile store.Profile) {
+	h.send(c, protocol.TypeWelcome, protocol.WelcomePayload{
+		PlayerID: c.ID,
+		Profile:  profileInfo(profile),
+	})
+}
+
 func (h *Hub) mapCells() (tile, cols, rows int, cells string) {
 	if h.overworld != nil {
 		return h.overworld.MapPayload()
@@ -324,9 +338,9 @@ func (h *Hub) persistedPosInThisWorld(p store.Profile) bool {
 
 func (h *Hub) canResumeAt(x, y float64) bool {
 	if h.overworld != nil {
-		return h.overworld.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
+		return h.overworld.CircleWalkableAt(x, y, game.PlayerCollisionRadius)
 	}
-	return game.BoundsWalkableAt(x, y, game.PlayerCollisionHalfW, game.PlayerCollisionHalfH)
+	return game.CircleWalkableAt(x, y, game.PlayerCollisionRadius)
 }
 
 func (h *Hub) persistWorldLocation(c *Client, e *entity, flush bool) {

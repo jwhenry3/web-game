@@ -161,20 +161,37 @@ export function hotbarTooltipContent(bind: ProfileInfo["hotbar"][string] | undef
       </div>
     );
   }
+  const hint = <div className="cm-tooltip-hint dim">Drag to move · drop outside to unbind.</div>;
   if (bind.kind === "skill") {
     const sk = profile.skills.find((s) => s.id === bind.id);
-    if (sk) return <SkillTooltipContent sk={sk} byId={new Map(profile.skills.map((s) => [s.id, s]))} />;
+    if (sk) {
+      return (
+        <>
+          <SkillTooltipContent sk={sk} byId={new Map(profile.skills.map((s) => [s.id, s]))} />
+          {hint}
+        </>
+      );
+    }
     return (
       <div className="cm-tooltip-body">
         <div className="cm-tooltip-title">{bind.id}</div>
+        {hint}
       </div>
     );
   }
   const item = profile.inventory.find((i) => i.consumable === bind.id);
-  if (item) return <ItemTooltipContent item={item} />;
+  if (item) {
+    return (
+      <>
+        <ItemTooltipContent item={item} />
+        {hint}
+      </>
+    );
+  }
   return (
     <div className="cm-tooltip-body">
       <div className="cm-tooltip-title">{bind.id}</div>
+      {hint}
     </div>
   );
 }

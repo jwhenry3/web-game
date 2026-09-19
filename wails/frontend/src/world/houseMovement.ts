@@ -1,7 +1,7 @@
-import { H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "../characters/heroes99";
+import { H99_COLLISION_RADIUS } from "../characters/heroes99";
 import type { HouseStatePayload } from "../types";
 
-function houseWalkable(house: HouseStatePayload, col: number, row: number): boolean {
+export function houseWalkable(house: HouseStatePayload, col: number, row: number): boolean {
   return (
     col >= house.walk_origin_col &&
     col < house.walk_origin_col + house.walk_cols &&
@@ -10,29 +10,20 @@ function houseWalkable(house: HouseStatePayload, col: number, row: number): bool
   );
 }
 
-/** Foot-anchored box against the house walkable island (matches server HouseBoundsWalkableAt). */
-export function houseBoundsWalkableAt(
+/** Feet-centered circle against the house walkable island (matches server HouseCircleWalkableAt). */
+export function houseCircleWalkableAt(
   house: HouseStatePayload,
   cx: number,
   cy: number,
-  halfW = H99_COLLISION_HALF_W,
-  halfH = H99_COLLISION_HALF_H,
+  radius = H99_COLLISION_RADIUS,
 ): boolean {
   const ts = house.tile_size;
-  const left = cx - halfW;
-  const right = cx + halfW;
-  const top = cy - halfH;
-  const bottom = cy;
-  const c0 = Math.floor(left / ts);
-  const c1 = Math.floor(right / ts);
-  const r0 = Math.floor(top / ts);
-  const r1 = Math.floor(bottom / ts);
-  for (let r = r0; r <= r1; r++) {
-    for (let c = c0; c <= c1; c++) {
-      if (!houseWalkable(house, c, r)) return false;
-    }
-  }
-  return true;
+  return (
+    cx - radius >= house.walk_origin_col * ts &&
+    cx + radius <= (house.walk_origin_col + house.walk_cols) * ts &&
+    cy - radius >= house.walk_origin_row * ts &&
+    cy + radius <= (house.walk_origin_row + house.walk_rows) * ts
+  );
 }
 
 /** Axis-slide movement inside the house (matches server SlideMoveHousePlayer). */
@@ -43,8 +34,8 @@ export function slideMoveHousePlayer(
   toX: number,
   toY: number,
 ): { x: number; y: number } {
-  if (houseBoundsWalkableAt(house, toX, toY)) return { x: toX, y: toY };
-  if (houseBoundsWalkableAt(house, toX, fromY)) return { x: toX, y: fromY };
-  if (houseBoundsWalkableAt(house, fromX, toY)) return { x: fromX, y: toY };
+  if (houseCircleWalkableAt(house, toX, toY)) return { x: toX, y: toY };
+  if (houseCircleWalkableAt(house, toX, fromY)) return { x: toX, y: fromY };
+  if (houseCircleWalkableAt(house, fromX, toY)) return { x: fromX, y: toY };
   return { x: fromX, y: fromY };
 }

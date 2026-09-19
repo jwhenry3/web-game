@@ -20,6 +20,10 @@ func (w *npcWorker) rebuildEntities() {
 	for id, e := range w.npcs {
 		w.sim.entities[id] = e
 	}
+	// Membership was swapped wholesale: the next spatial query rebuilds once,
+	// and every query in this pass then shares the grid. Entities that move
+	// mid-tick stay correct via live re-resolution inside the slack window.
+	w.sim.spatialInvalidate()
 }
 
 func (w *npcWorker) tick(req npcTickRequest) npcTickResult {

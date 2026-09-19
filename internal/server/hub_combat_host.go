@@ -25,7 +25,7 @@ func (h *Hub) SendProfileUpdate(clientID string, profile store.Profile) {
 	if !ok {
 		return
 	}
-	h.sendWelcome(c, profile)
+	h.sendProfileRefresh(c, profile)
 }
 
 func (h *Hub) SendError(clientID, message string) {

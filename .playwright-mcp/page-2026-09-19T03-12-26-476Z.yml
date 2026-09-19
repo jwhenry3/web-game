@@ -1,0 +1,81 @@
+- generic [ref=e45]:
+  - generic:
+    - generic "Drag to move" [ref=e46]:
+      - button "devtest Lv1 HP 151 MP 45 ST 100" [ref=e48] [cursor=pointer]:
+        - generic [ref=e49]:
+          - generic "Sword weapon" [ref=e51]
+          - text: devtest
+          - generic [ref=e56]: Lv1
+        - generic "HP 151 / 151" [ref=e57]:
+          - generic [ref=e58]: HP
+          - generic [ref=e59]: "151"
+        - generic "MP 45 / 45" [ref=e62]:
+          - generic [ref=e63]: MP
+          - generic [ref=e64]: "45"
+        - generic "ST 100 / 100" [ref=e67]:
+          - generic [ref=e68]: ST
+          - generic [ref=e69]: "100"
+    - generic "Minimap":
+      - button "Minimap settings" [ref=e72] [cursor=pointer]
+      - generic [aria-hidden]: You Foe Camp
+  - generic [ref=e75]:
+    - generic [ref=e76]:
+      - button "General" [ref=e77] [cursor=pointer]
+      - button "Social" [ref=e78] [cursor=pointer]
+      - button "System" [ref=e79] [cursor=pointer]
+      - button "Battle" [ref=e80] [cursor=pointer]
+    - generic [ref=e158]:
+      - generic [ref=e159]: "[devtest]"
+      - text: hello from the bridge
+    - textbox "Say something… (Enter)" [active] [ref=e84]
+    - generic "Drag to resize" [ref=e85]
+  - generic [ref=e86]:
+    - generic [ref=e87]:
+      - button "Shift+1" [ref=e88] [cursor=pointer]
+      - button "Shift+2" [ref=e90] [cursor=pointer]
+      - button "Shift+3" [ref=e92] [cursor=pointer]
+      - button "Shift+4" [ref=e94] [cursor=pointer]
+      - button "Shift+5" [ref=e96] [cursor=pointer]
+      - button "Shift+6" [ref=e98] [cursor=pointer]
+      - button "Shift+7" [ref=e100] [cursor=pointer]
+      - button "Shift+8" [ref=e102] [cursor=pointer]
+    - generic [ref=e104]:
+      - button "Control+1 Return" [ref=e105]:
+        - generic [ref=e106]: Control+1
+        - generic [ref=e107]: Return
+      - button "Control+2 Port" [ref=e108]:
+        - generic [ref=e109]: Control+2
+        - generic [ref=e110]: Port
+      - button "Control+3 Camp" [ref=e111]:
+        - generic [ref=e112]: Control+3
+        - generic [ref=e113]: Camp
+      - button "Control+4" [ref=e114] [cursor=pointer]
+      - button "Control+5" [ref=e116] [cursor=pointer]
+      - button "Control+6" [ref=e118] [cursor=pointer]
+      - button "Control+7" [ref=e120] [cursor=pointer]
+      - button "Control+8" [ref=e122] [cursor=pointer]
+    - generic [ref=e124]:
+      - button "1 Attack" [ref=e125]:
+        - generic [ref=e126]: "1"
+        - generic [ref=e127]: Attack
+      - button "2 ×3 ×3" [ref=e128]:
+        - generic [ref=e129]: "2"
+        - generic [ref=e130]: ×3
+        - generic [ref=e131]: ×3
+      - button "3 Wedge Guard" [ref=e132]:
+        - generic [ref=e133]: "3"
+        - generic [ref=e134]: Wedge Guard
+      - button "4" [ref=e135] [cursor=pointer]
+      - button "5" [ref=e137] [cursor=pointer]
+      - button "6" [ref=e139] [cursor=pointer]
+      - button "7 Capture" [ref=e141]:
+        - generic [ref=e142]: "7"
+        - generic [ref=e143]: Capture
+      - button "8" [ref=e144] [cursor=pointer]
+  - generic "Experience 0 of 75": Vanguard Lv 1 · 0 / 75 EXP
+  - generic [ref=e146]:
+    - button "Character" [ref=e147] [cursor=pointer]
+    - button "Social" [ref=e149] [cursor=pointer]
+    - button "Map" [ref=e151] [cursor=pointer]
+    - button "Main Menu" [ref=e156] [cursor=pointer]:
+      - generic [ref=e157]: ☰

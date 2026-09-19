@@ -18,14 +18,18 @@ var (
 	OverworldRows = 30
 
 	// Heroes 99 at display scale 1.25 — keep in sync with wails/frontend/src/characters/heroes99.ts.
-	playerSpriteW        = 100.0 * 1.25
-	playerSpriteH        = 40.0 * 1.25
-	PlayerCollisionHalfW = playerSpriteW / 8
-	PlayerCollisionHalfH = playerSpriteH / 4
+	playerSpriteW = 100.0 * 1.25
+
+	// PlayerCollisionRadius is the feet-centered collision circle. On screen
+	// the iso projection renders a world circle of radius r as a ground-plane
+	// ellipse 2√2r wide (~44px here — about a third of the sprite's width).
+	// Kept under half a tile so 1-tile lanes between blocked cells stay
+	// passable.
+	PlayerCollisionRadius = playerSpriteW / 8
 )
 
-// Tile kinds for the shared overworld. Walkable: H . , R
-// Blocked: # ~ T
+// Tile kinds for the shared overworld. Walkable: H . , R T S D I
+// Blocked: # ~
 const (
 	TileHaven = 'H'
 	TileGrass = '.'
@@ -34,6 +38,9 @@ const (
 	TileTree  = 'T'
 	TileRock  = '#'
 	TileWater = '~'
+	TileSnow  = 'S' // snow-covered ground (MundiTerrain fills)
+	TileSand  = 'D' // sand / dunes (MundiTerrain fills)
+	TileIce   = 'I' // frozen water — walkable like snow
 )
 
 type Tile struct {
@@ -153,7 +160,7 @@ func OverworldCell(c, r int) byte {
 
 func WalkableTile(c, r int) bool {
 	switch OverworldCell(c, r) {
-	case TileHaven, TileGrass, TilePath, TileRuins, TileTree:
+	case TileHaven, TileGrass, TilePath, TileRuins, TileTree, TileSnow, TileSand, TileIce:
 		return true
 	default:
 		return false
@@ -177,25 +184,37 @@ func WalkableAt(x, y float64) bool {
 	return WalkableTile(t.C, t.R)
 }
 
-// BoundsWalkableAt checks a foot-anchored box (cx, cy) with halfW × halfH extending upward.
-func BoundsWalkableAt(cx, cy, halfW, halfH float64) bool {
+// CircleWalkableAt reports whether a feet-centered circle of radius r sits
+// entirely on walkable tiles inside the map.
+func CircleWalkableAt(cx, cy, radius float64) bool {
 	ts := float64(TileSize)
-	left := cx - halfW
-	right := cx + halfW
-	top := cy - halfH
-	bottom := cy
-	c0 := int(math.Floor(left / ts))
-	c1 := int(math.Floor(right / ts))
-	r0 := int(math.Floor(top / ts))
-	r1 := int(math.Floor(bottom / ts))
+	if cx-radius < 0 || cy-radius < 0 ||
+		cx+radius > float64(OverworldCols)*ts || cy+radius > float64(OverworldRows)*ts {
+		return false
+	}
+	c0 := int(math.Floor((cx - radius) / ts))
+	c1 := int(math.Floor((cx + radius) / ts))
+	r0 := int(math.Floor((cy - radius) / ts))
+	r1 := int(math.Floor((cy + radius) / ts))
 	for r := r0; r <= r1; r++ {
 		for c := c0; c <= c1; c++ {
-			if !WalkableTile(c, r) {
+			if WalkableTile(c, r) {
+				continue
+			}
+			if circleOverlapsCell(cx, cy, radius, c, r, ts) {
 				return false
 			}
 		}
 	}
 	return true
+}
+
+// circleOverlapsCell reports whether the circle intersects the cell's rect.
+func circleOverlapsCell(cx, cy, radius float64, col, row int, ts float64) bool {
+	px := math.Max(float64(col)*ts, math.Min(cx, float64(col+1)*ts))
+	py := math.Max(float64(row)*ts, math.Min(cy, float64(row+1)*ts))
+	dx, dy := cx-px, cy-py
+	return dx*dx+dy*dy < radius*radius
 }
 
 // SlideMove keeps motion on walkable tiles: try the full step, then axis slides.
@@ -212,15 +231,15 @@ func SlideMove(fromX, fromY, toX, toY float64) (float64, float64) {
 	return fromX, fromY
 }
 
-// SlideMovePlayer applies the player foot-anchored collision box.
+// SlideMovePlayer applies the player feet-centered collision circle.
 func SlideMovePlayer(fromX, fromY, toX, toY float64) (float64, float64) {
-	if BoundsWalkableAt(toX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if CircleWalkableAt(toX, toY, PlayerCollisionRadius) {
 		return toX, toY
 	}
-	if BoundsWalkableAt(toX, fromY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if CircleWalkableAt(toX, fromY, PlayerCollisionRadius) {
 		return toX, fromY
 	}
-	if BoundsWalkableAt(fromX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if CircleWalkableAt(fromX, toY, PlayerCollisionRadius) {
 		return fromX, toY
 	}
 	return fromX, fromY
@@ -237,6 +256,11 @@ func OverworldMapPayload() (tile, cols, rows int, cells string) {
 func Pathfind(from, to Tile, region Region) []Vec2 {
 	return pathfindWith(WalkableTile, from, to, region)
 }
+
+// pathfindMaxExpansions bounds A* search effort. Wander paths are
+// region-scoped (small); unbounded chase paths on very large maps must give up
+// rather than flood the whole grid when the target is unreachable.
+const pathfindMaxExpansions = 20000
 
 func pathfindWith(walkable func(c, r int) bool, from, to Tile, region Region) []Vec2 {
 	if from == to {
@@ -257,6 +281,7 @@ func pathfindWith(walkable func(c, r int) bool, from, to Tile, region Region) []
 	heap.Push(open, &pathNode{t: from, g: 0, f: heuristic(from, to)})
 	came := map[Tile]Tile{}
 	bestG := map[Tile]float64{from: 0}
+	expanded := 0
 
 	dirs := []struct {
 		dc, dr int
@@ -270,6 +295,10 @@ func pathfindWith(walkable func(c, r int) bool, from, to Tile, region Region) []
 		cur := heap.Pop(open).(*pathNode)
 		if cur.t == to {
 			return reconstruct(came, to)
+		}
+		expanded++
+		if expanded > pathfindMaxExpansions {
+			return nil
 		}
 		for _, d := range dirs {
 			nc, nr := cur.t.C+d.dc, cur.t.R+d.dr

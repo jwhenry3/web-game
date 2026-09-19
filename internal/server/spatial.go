@@ -38,9 +38,9 @@ import "math"
 // invalidated post-tick broadcast).
 //
 // Worker simulation façades (h.npcEffects != nil) have no Run loop to mark
-// the grid dirty, so they rebuild on every query. Their entity set is just one
-// region's NPCs plus actor projections — the same set the old linear scans
-// walked, so the path is never worse than before.
+// the grid dirty; npcWorker.rebuildEntities invalidates it instead, so a
+// worker tick or command rebuilds the grid at most once and every spatial
+// query in that pass shares it.
 const (
 	spatialCellSize = 128.0
 	spatialSlack    = 160.0
@@ -105,10 +105,7 @@ func (g *spatialGrid) eachInRadius(entities map[string]*entity, x, y, r float64,
 func (h *Hub) spatialInvalidate() { h.spatialDirty = true }
 
 func (h *Hub) spatialEnsure() {
-	// Façade hubs inside NPC workers have no Run loop to invalidate on; their
-	// entity set is one region's worth, so a per-query rebuild is parity with
-	// the scans this replaces.
-	if h.spatial.cells != nil && !h.spatialDirty && h.npcEffects == nil {
+	if h.spatial.cells != nil && !h.spatialDirty {
 		return
 	}
 	h.spatialDirty = false
@@ -124,11 +121,17 @@ func (h *Hub) spatialEach(x, y, r float64, filter func(*entity) bool, fn func(*e
 
 // spatialAny reports whether any entity within r of (x, y) passes filter.
 func (h *Hub) spatialAny(x, y, r float64, filter func(*entity) bool) bool {
-	found := false
+	return h.spatialFirst(x, y, r, filter) != nil
+}
+
+// spatialFirst returns the first entity within r of (x, y) passing filter.
+// Iteration follows cell order — "first" is arbitrary, not nearest.
+func (h *Hub) spatialFirst(x, y, r float64, filter func(*entity) bool) *entity {
+	var found *entity
 	h.spatialEach(x, y, r, func(e *entity) bool {
-		return !found && (filter == nil || filter(e))
-	}, func(*entity) {
-		found = true
+		return found == nil && (filter == nil || filter(e))
+	}, func(e *entity) {
+		found = e
 	})
 	return found
 }

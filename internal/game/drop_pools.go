@@ -216,19 +216,16 @@ func RollDropPool(rng *rand.Rand, poolID string, level, lootBonus int) []Item {
 	return out
 }
 
-// GenerateVictoryLoot rolls assigned drop pools; falls back to catalog loot when none assigned.
+// GenerateVictoryLoot rolls assigned drop pools. Enemies with no pool
+// assigned (normal overworld foes) drop nothing — loot is reserved for
+// encounters that name a table (bosses and other special enemies).
 func GenerateVictoryLoot(rng *rand.Rand, level, lootBonus int, dropPoolIDs []string) []Item {
-	assigned := false
 	var loot []Item
 	for _, id := range dropPoolIDs {
 		if id == "" {
 			continue
 		}
-		assigned = true
 		loot = append(loot, RollDropPool(rng, id, level, lootBonus)...)
-	}
-	if !assigned {
-		return GenerateLoot(rng, level, lootBonus)
 	}
 	return loot
 }

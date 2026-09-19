@@ -155,12 +155,13 @@ func TestFlushFarSyncBatchesMoversIntoEntityState(t *testing.T) {
 func TestFlushFarSyncDigestStillCarriesServerEntities(t *testing.T) {
 	px, py := wildernessXY()
 	h, cA, eA := testHubWithPlayer(t, px, py)
-	n := hostileNPC(h, "npc-1", px+40, py)
+	nearA := hostileNPC(h, "npc-1", px+40, py)
 	fx, fy := farCorner(h, px, py)
-	if dist(px, py, fx, fy) <= nearSyncDist {
+	if dist(px, py, fx, fy) <= entitySyncRadius {
 		t.Skip("map too small for far-sync test")
 	}
 	cB, _ := addWorldClient(h, "client-2", "Lenna", fx, fy)
+	nearB := hostileNPC(h, "npc-2", fx+40, fy)
 
 	h.farEntityClients[cB.ID] = true
 	h.movedPlayers[eA.ID] = true
@@ -187,8 +188,11 @@ func TestFlushFarSyncDigestStillCarriesServerEntities(t *testing.T) {
 	for _, e := range found.Entities {
 		ids[e.ID] = true
 	}
-	if !ids[n.ID] {
-		t.Fatal("digest must still carry server-driven entities (NPCs)")
+	if !ids[nearB.ID] {
+		t.Fatal("digest must carry server-driven entities inside the client's scope")
+	}
+	if ids[nearA.ID] {
+		t.Fatal("digest must not carry server entities outside the client's scope")
 	}
 	if !ids[eA.ID] {
 		t.Fatal("digest should carry the far mover's player snapshot")

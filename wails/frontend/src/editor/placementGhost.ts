@@ -1,4 +1,5 @@
 import { colorForGid, gidForRole, TERRAIN_COLORS, toolToRole } from "./tilePalette";
+import { isoBlockGid } from "../world/isoTiles";
 import { drawEditorObject } from "./editorEntitySprites";
 import { isPointLikeObject } from "./editorCanvasUtils";
 import type { EditorObject, EditorTool } from "./editorTypes";
@@ -22,6 +23,7 @@ export function drawTerrainPaintGhost(
   tileSize: number,
   tileset: ImportedTileset | null,
   selectedTileIndex: number | null,
+  blockGid?: number | null,
 ) {
   const x = hover.col * tileSize * zoom;
   const y = hover.row * tileSize * zoom;
@@ -30,7 +32,10 @@ export function drawTerrainPaintGhost(
   ctx.save();
   ctx.globalAlpha = 0.5;
 
-  if (tool === "collision_block") {
+  if (tool === "terrain_block") {
+    ctx.fillStyle = colorForGid(blockGid ?? isoBlockGid(0, 1), tileset);
+    ctx.fillRect(x, y, s, s);
+  } else if (tool === "collision_block") {
     ctx.fillStyle = TERRAIN_COLORS.collision;
     ctx.fillRect(x, y, s, s);
   } else if (tool === "collision_walk") {

@@ -1,7 +1,6 @@
 package game
 
 import (
-	"math"
 	"strings"
 )
 
@@ -108,14 +107,14 @@ func HouseSpawnCenter() (x, y float64) {
 	return (float64(col) + 0.5) * HouseTileSize, (float64(row) + 0.5) * HouseTileSize
 }
 
-// ClampHousePos keeps a foot-anchored player position inside the walkable island.
+// ClampHousePos keeps a foot-centered player circle inside the walkable island.
 func ClampHousePos(x, y float64) (float64, float64) {
 	col0, row0 := HouseWalkOrigin()
 	ts := float64(HouseTileSize)
-	minX := float64(col0)*ts + PlayerCollisionHalfW
-	maxX := float64(col0+HouseWalkCols)*ts - PlayerCollisionHalfW
-	minY := float64(row0)*ts + PlayerCollisionHalfH
-	maxY := float64(row0+HouseWalkRows) * ts
+	minX := float64(col0)*ts + PlayerCollisionRadius
+	maxX := float64(col0+HouseWalkCols)*ts - PlayerCollisionRadius
+	minY := float64(row0)*ts + PlayerCollisionRadius
+	maxY := float64(row0+HouseWalkRows)*ts - PlayerCollisionRadius
 	if x < minX {
 		x = minX
 	}
@@ -131,36 +130,26 @@ func ClampHousePos(x, y float64) (float64, float64) {
 	return x, y
 }
 
-// HouseBoundsWalkableAt checks a foot-anchored box against the walkable house footprint.
-func HouseBoundsWalkableAt(cx, cy, halfW, halfH float64) bool {
+// HouseCircleWalkableAt reports whether the feet-centered collision circle
+// fits inside the walkable house footprint.
+func HouseCircleWalkableAt(cx, cy, radius float64) bool {
+	col0, row0 := HouseWalkOrigin()
 	ts := float64(HouseTileSize)
-	left := cx - halfW
-	right := cx + halfW
-	top := cy - halfH
-	bottom := cy
-	c0 := int(math.Floor(left / ts))
-	c1 := int(math.Floor(right / ts))
-	r0 := int(math.Floor(top / ts))
-	r1 := int(math.Floor(bottom / ts))
-	for r := r0; r <= r1; r++ {
-		for c := c0; c <= c1; c++ {
-			if !HouseWalkable(c, r) {
-				return false
-			}
-		}
-	}
-	return true
+	return cx-radius >= float64(col0)*ts &&
+		cx+radius <= float64(col0+HouseWalkCols)*ts &&
+		cy-radius >= float64(row0)*ts &&
+		cy+radius <= float64(row0+HouseWalkRows)*ts
 }
 
-// SlideMoveHousePlayer applies the player collision box inside the house walkable area.
+// SlideMoveHousePlayer applies the player collision circle inside the house walkable area.
 func SlideMoveHousePlayer(fromX, fromY, toX, toY float64) (float64, float64) {
-	if HouseBoundsWalkableAt(toX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if HouseCircleWalkableAt(toX, toY, PlayerCollisionRadius) {
 		return toX, toY
 	}
-	if HouseBoundsWalkableAt(toX, fromY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if HouseCircleWalkableAt(toX, fromY, PlayerCollisionRadius) {
 		return toX, fromY
 	}
-	if HouseBoundsWalkableAt(fromX, toY, PlayerCollisionHalfW, PlayerCollisionHalfH) {
+	if HouseCircleWalkableAt(fromX, toY, PlayerCollisionRadius) {
 		return fromX, toY
 	}
 	return fromX, fromY

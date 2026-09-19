@@ -83,7 +83,7 @@ func (h *Hub) defeatPlayer(clientID string) {
 	h.mu.RUnlock()
 	if c != nil {
 		if profile, ok := h.store.Get(c.Name); ok {
-			h.sendWelcome(c, profile)
+			h.sendProfileRefresh(c, profile)
 		}
 	}
 }

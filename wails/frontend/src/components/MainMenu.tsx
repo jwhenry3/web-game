@@ -293,7 +293,14 @@ function OptionsPanel() {
         <div className="main-menu-options-content">
           {tab === "video" && (
             <div className="main-menu-options">
-              <p className="hint">Display settings will appear here.</p>
+              <label className="main-menu-option main-menu-option--check">
+                <input
+                  type="checkbox"
+                  checked={options.showCollisionBounds}
+                  onChange={(e) => patch({ showCollisionBounds: e.target.checked })}
+                />
+                <span>Show collision bounds [F3]</span>
+              </label>
             </div>
           )}
           {tab === "interface" && <InterfaceContent />}

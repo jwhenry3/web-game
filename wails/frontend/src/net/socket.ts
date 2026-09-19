@@ -200,7 +200,10 @@ export const net = {
       return;
     }
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`);
+    const wsBase =
+      (window as unknown as { CM_WS_URL?: string }).CM_WS_URL ??
+      `${proto}://${location.host}/ws`;
+    ws = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
 
     ws.onopen = () => {
       useGame.setState({ connected: true, loginError: null });

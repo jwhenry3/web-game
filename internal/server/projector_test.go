@@ -189,22 +189,22 @@ func TestProjectorServerEntitySnapshotsFiltering(t *testing.T) {
 	h.entities[pet.ID] = pet
 	n := hostileNPC(h, "npc-1", 300, 300)
 
-	entities := h.serverEntitySnapshots()
+	entities := h.serverEntitySnapshotsNear(x, y, 100000)
 	ids := entityIDs(entities)
 	if contains(ids, pe.ID) {
-		t.Error("serverEntitySnapshots should exclude players")
+		t.Error("serverEntitySnapshotsNear should exclude players")
 	}
 	if !contains(ids, n.ID) || !contains(ids, pet.ID) {
-		t.Error("serverEntitySnapshots should include on-world NPC and pet")
+		t.Error("serverEntitySnapshotsNear should include on-world NPC and pet")
 	}
 
 	// Hidden server entities are excluded.
 	n.hidden = true
 	pet.hidden = true
-	entities = h.serverEntitySnapshots()
+	entities = h.serverEntitySnapshotsNear(x, y, 100000)
 	ids = entityIDs(entities)
 	if contains(ids, n.ID) || contains(ids, pet.ID) {
-		t.Error("serverEntitySnapshots should exclude hidden server entities")
+		t.Error("serverEntitySnapshotsNear should exclude hidden server entities")
 	}
 }
 

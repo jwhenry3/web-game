@@ -23,6 +23,12 @@ import {
 } from "../../characters/heroes99";
 import type { CharacterAppearanceWire } from "../../types";
 import { entityShadow } from "../entityShadow";
+import {
+  applyIsoCounter,
+  isoDepth,
+  isoLayer,
+  isoParent,
+} from "../../world/iso";
 import { CharacterSprite } from "../CharacterSprite";
 import { EnemySprite } from "../EnemySprite";
 import type { IEntitySprite } from "../entitySprite";
@@ -45,10 +51,42 @@ export interface ActorVisual {
   isSelf?: boolean;
   appearanceKey?: string;
   kind?: EnemyKind;
+  /** True when the wrapper lives in the scene's iso layer (depth = isoY). */
+  iso?: boolean;
   lastX: number;
   lastY: number;
 }
 export const ActorVisual = component<ActorVisual>();
+
+/** Small depth bias so actors beat prop billboards on exact isoY ties. */
+export const ISO_ACTOR_DEPTH_EPS = 0.1;
+
+/**
+ * If the scene renders isometrically, move the wrapper into the iso layer and
+ * counter-transform it — the wrapper keeps world coordinates while its
+ * children (sprites, rings, shadows) render upright in screen space.
+ */
+function adoptIso(
+  scene: Phaser.Scene,
+  wrapper: Phaser.GameObjects.Container,
+  x: number,
+  y: number,
+): boolean {
+  if (!isoParent(scene, wrapper)) return false;
+  applyIsoCounter(wrapper);
+  wrapper.setDepth(isoDepth(x, y) + ISO_ACTOR_DEPTH_EPS);
+  return true;
+}
+
+/** Ground shadow — squashed to an ellipse when the scene is isometric. */
+function actorShadow(
+  scene: Phaser.Scene,
+  scale = 1,
+): Phaser.GameObjects.Image {
+  const shadow = entityShadow(scene, scale);
+  if (isoLayer(scene)) shadow.setScale(scale, scale * 0.45);
+  return shadow;
+}
 
 /** Follow pets use the battle foe sprite at a reduced size. */
 export const PET_FOLLOW_SCALE = 0.55;
@@ -173,12 +211,13 @@ export function syncPlayerVisuals(
     const wrapper = scene.add
       .container(pose.x, pose.y)
       .setDepth(ENTITY_PRESENTATION.playerDepth);
+    const iso = adoptIso(scene, wrapper, pose.x, pose.y);
     const ring = scene.add
       .circle(0, H99_WORLD_RING_Y, H99_WORLD_RING_RADIUS, 0xffe9a8, 0)
       .setVisible(false);
     const sprite = new CharacterSprite(scene, 0, 0, appearance);
     wrapper.add([
-      entityShadow(scene, ENTITY_PRESENTATION.defaultShadowScale),
+      actorShadow(scene, ENTITY_PRESENTATION.defaultShadowScale),
       ring,
       sprite.container,
     ]);
@@ -195,6 +234,7 @@ export function syncPlayerVisuals(
       ring,
       isSelf,
       appearanceKey: key,
+      iso,
       lastX: pose.x,
       lastY: pose.y,
     });
@@ -235,8 +275,9 @@ export function syncNpcVisuals(
     const wrapper = scene.add
       .container(pose.x, pose.y)
       .setDepth(ENTITY_PRESENTATION.foeDepth);
+    const iso = adoptIso(scene, wrapper, pose.x, pose.y);
     const enemy = new EnemySprite(scene, 0, 0, kind);
-    wrapper.add([entityShadow(scene), enemy.container]);
+    wrapper.add([actorShadow(scene), enemy.container]);
     enemy.setInteractive(() => interactions.clickEntity(snapshot.id));
 
     world.set(ActorVisual, entity, {
@@ -245,6 +286,7 @@ export function syncNpcVisuals(
       sprite: enemy,
       enemy,
       kind,
+      iso,
       lastX: pose.x,
       lastY: pose.y,
     });
@@ -285,9 +327,10 @@ export function syncPetVisuals(
     const wrapper = scene.add
       .container(pose.x, pose.y)
       .setDepth(ENTITY_PRESENTATION.petDepth);
+    const iso = adoptIso(scene, wrapper, pose.x, pose.y);
     const enemy = new EnemySprite(scene, 0, 0, kind);
     enemy.container.setScale(PET_FOLLOW_SCALE);
-    wrapper.add([entityShadow(scene, PET_FOLLOW_SCALE), enemy.container]);
+    wrapper.add([actorShadow(scene, PET_FOLLOW_SCALE), enemy.container]);
     enemy.setInteractive(() => interactions.clickEntity(snapshot.id));
 
     world.set(ActorVisual, entity, {
@@ -296,6 +339,7 @@ export function syncPetVisuals(
       sprite: enemy,
       enemy,
       kind,
+      iso,
       lastX: pose.x,
       lastY: pose.y,
     });
@@ -347,8 +391,9 @@ export function syncCombatExtraVisuals(
     const wrapper = scene.add
       .container(pose.x, pose.y)
       .setDepth(ENTITY_PRESENTATION.combatExtraDepth);
+    const iso = adoptIso(scene, wrapper, pose.x, pose.y);
     const sprite = createSpriteForEntity(scene, snapshot);
-    wrapper.add([entityShadow(scene, ENTITY_PRESENTATION.defaultShadowScale), sprite.container]);
+    wrapper.add([actorShadow(scene, ENTITY_PRESENTATION.defaultShadowScale), sprite.container]);
     wrapper.setSize(44, 60);
     wrapper.setInteractive({ useHandCursor: true, cursor: "pointer" });
     wrapper.on("pointerdown", () => options.clickEntity(snapshot.id));
@@ -357,6 +402,7 @@ export function syncCombatExtraVisuals(
       role: "combat-extra",
       wrapper,
       sprite,
+      iso,
       lastX: pose.x,
       lastY: pose.y,
     });

@@ -672,12 +672,10 @@ func (f *followOwner) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 		owner.engageID = "" // stale engage (target died, leashed, or left)
 		if h.validTarget(e) == nil {
 			e.targetID = ""
-			for _, o := range h.entities {
-				if (o.targetID == e.ID || o.targetID == owner.ID) && h.canAttack(e, o) &&
-					dist(e.X, e.Y, o.X, o.Y) <= dropRange {
-					e.targetID = o.ID
-					break
-				}
+			if o := h.spatialFirst(e.X, e.Y, dropRange, func(o *entity) bool {
+				return (o.targetID == e.ID || o.targetID == owner.ID) && h.canAttack(e, o)
+			}); o != nil {
+				e.targetID = o.ID
 			}
 		}
 	}

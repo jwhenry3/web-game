@@ -8,16 +8,26 @@ import { net } from "../net/socket";
 import { uiOwnsKeyboard, useGame } from "../state/store";
 import {
   facingFromDelta,
+  facingFromYaw,
   H99_FACING_DEFAULT,
   H99_WORLD_RING_RADIUS,
   H99_WORLD_RING_Y,
   type CharacterFacing,
 } from "../characters/types";
-import { applyPlayerSlide, H99_COLLISION_HALF_H, H99_COLLISION_HALF_W } from "./movementBridge";
+import { applyPlayerSlide, H99_COLLISION_RADIUS } from "./movementBridge";
 import { mergeKeybinds, resolveHotbarSlot, bindingToPhaserKeyCode } from "../input/keybinds";
 import { findPath, type PathPoint } from "../world/pathfind";
 import { playDodgeVfx } from "./battleVfx";
 import { battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
+import {
+  isoDepth,
+  isoLayer,
+  isoParent,
+  isoProject,
+  screenDirToWorldGrid,
+  screenToWorldX,
+  screenToWorldY,
+} from "../world/iso";
 import { setWorldLocalPos } from "../world/worldLocalPos";
 import type { OverworldMap, WorldEntity } from "../types";
 import type { CharacterSprite } from "./CharacterSprite";
@@ -46,8 +56,12 @@ export function setLastWorldFacing(f: CharacterFacing) {
 export function facingOf(
   wp: Pick<WorldEntity, "facing">,
   fallback: CharacterFacing,
+  iso = false,
 ): CharacterFacing {
-  return wp.facing === "left" || wp.facing === "right" ? wp.facing : fallback;
+  const f = wp.facing;
+  if (f === "left" || f === "right") return f;
+  if (typeof f === "number") return facingFromYaw(f, fallback, iso);
+  return fallback;
 }
 
 /** The ECS-owned local actor the controller is allowed to move. */
@@ -129,7 +143,15 @@ export class WorldMovement {
     if (pointer.button !== 0 || (over && over.length > 0)) return;
     const tag = document.activeElement?.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA") return;
-    this.startClickMove(pointer.worldX, pointer.worldY);
+    // Iso scenes: pointer.worldX/Y are projected screen coords — unproject
+    // back to the world tile plane before pathing.
+    const wx = isoLayer(this.scene)
+      ? screenToWorldX(pointer.worldX, pointer.worldY)
+      : pointer.worldX;
+    const wy = isoLayer(this.scene)
+      ? screenToWorldY(pointer.worldX, pointer.worldY)
+      : pointer.worldY;
+    this.startClickMove(wx, wy);
   };
 
   private clearTargetSelection() {
@@ -215,6 +237,9 @@ export class WorldMovement {
       .circle(last.x, last.y, 11)
       .setStrokeStyle(2, 0xe8c96a)
       .setDepth(6);
+    if (isoParent(this.scene, ring)) {
+      ring.setDepth(isoDepth(last.x, last.y) - 1);
+    }
     this.scene.tweens.add({
       targets: ring,
       scale: 0.4,
@@ -258,6 +283,9 @@ export class WorldMovement {
         .circle(x, y, 2.5, 0xe8c96a, 0)
         .setDepth(6)
         .setScale(0.4);
+      if (isoParent(this.scene, dot)) {
+        dot.setDepth(isoDepth(x, y) - 1);
+      }
       this.scene.tweens.add({
         targets: dot,
         alpha: 0.55,
@@ -311,11 +339,19 @@ export class WorldMovement {
       if (this.dodgeCdGfx) this.dodgeCdGfx.clear();
       return;
     }
-    if (!this.dodgeCdGfx) this.dodgeCdGfx = this.scene.add.graphics().setDepth(11);
+    if (!this.dodgeCdGfx) {
+      this.dodgeCdGfx = this.scene.add.graphics().setDepth(11);
+      isoParent(this.scene, this.dodgeCdGfx); // ground decal — squash is correct
+    }
     const pct = 1 - remaining / DODGE_COOLDOWN_MS;
     const g = this.dodgeCdGfx;
     g.clear();
-    g.setPosition(av.wrapper.x, av.wrapper.y + H99_WORLD_RING_Y);
+    // Screen-down offset under iso is (+d,+d) in world terms.
+    const iso = !!g.parentContainer;
+    const rx = av.wrapper.x + (iso ? H99_WORLD_RING_Y : 0);
+    const ry = av.wrapper.y + H99_WORLD_RING_Y;
+    g.setPosition(rx, ry);
+    if (iso) g.setDepth(isoDepth(rx, ry) + 0.05);
     g.lineStyle(3, 0x9fb6c9, 0.55);
     g.beginPath();
     g.arc(0, 0, H99_WORLD_RING_RADIUS * 0.8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
@@ -350,17 +386,18 @@ export class WorldMovement {
     const { w: worldW, h: worldH } = this.host.worldBounds();
     const rawX = Phaser.Math.Clamp(
       av.wrapper.x + dx * DODGE_DIST,
-      H99_COLLISION_HALF_W,
-      worldW - H99_COLLISION_HALF_W,
+      H99_COLLISION_RADIUS,
+      worldW - H99_COLLISION_RADIUS,
     );
     const rawY = Phaser.Math.Clamp(
       av.wrapper.y + dy * DODGE_DIST,
-      H99_COLLISION_HALF_H,
-      worldH,
+      H99_COLLISION_RADIUS,
+      worldH - H99_COLLISION_RADIUS,
     );
     const ox = av.wrapper.x;
     const oy = av.wrapper.y;
-    playDodgeVfx(this.scene, ox, oy - 8, DEFAULT_BATTLE_SPEED);
+    const vp = isoProject(this.scene, ox, oy);
+    playDodgeVfx(this.scene, vp.x, vp.y - 8, DEFAULT_BATTLE_SPEED);
     this.dodging = true;
     const epoch = this.moveEpoch;
     void applyPlayerSlide(state.overworld, ox, oy, rawX, rawY).then((slid) => {
@@ -383,7 +420,8 @@ export class WorldMovement {
         ease: "Power2",
         onComplete: () => {
           this.dodging = false;
-          playDodgeVfx(this.scene, cur.wrapper.x, cur.wrapper.y - 8, DEFAULT_BATTLE_SPEED);
+          const lp = isoProject(this.scene, cur.wrapper.x, cur.wrapper.y);
+          playDodgeVfx(this.scene, lp.x, lp.y - 8, DEFAULT_BATTLE_SPEED);
           setWorldLocalPos(cur.wrapper.x, cur.wrapper.y);
           // The server applies the authoritative dash on the 'dodge' message,
           // so the client does not need to send a follow-up move.
@@ -446,6 +484,16 @@ export class WorldMovement {
     if (this.isMoveDown("move_right")) dx += 1;
     if (this.isMoveDown("move_up")) dy -= 1;
     if (this.isMoveDown("move_down")) dy += 1;
+    // Iso scenes: keys mean *screen* directions (W = up-screen); snap the
+    // intent to the nearest grid-aligned world direction so combos walk
+    // along tile edges instead of at arbitrary angles. Click-path deltas
+    // below are already world-space.
+    const iso = !!isoLayer(this.scene);
+    if (iso && (dx !== 0 || dy !== 0)) {
+      const w = screenDirToWorldGrid(dx, dy);
+      dx = w.x;
+      dy = w.y;
+    }
 
     // Manual input cancels click-to-move; otherwise steer along the path.
     let faceDx: number | null = null;
@@ -462,9 +510,11 @@ export class WorldMovement {
         if (dd > 6) {
           dx = ddx / dd;
           dy = ddy / dd;
-          // Facing deadzone: while the waypoint sits nearly overhead, keep
-          // the current facing instead of flapping left/right each frame.
-          faceDx = Math.abs(ddx) > 10 ? dx : 0;
+          // Facing deadzone on the rendered horizontal (iso screen x is
+          // ddx−ddy): while the waypoint sits nearly overhead, keep the
+          // current facing instead of flapping left/right each frame.
+          const sddx = iso ? ddx - ddy : ddx;
+          faceDx = Math.abs(sddx) > 10 ? sddx : 0;
           break;
         }
         this.clickPath.shift();
@@ -498,20 +548,23 @@ export class WorldMovement {
 
     this.wasMoving = true;
 
-    av.sprite.setMoving(true, faceDx ?? dx, dy);
-    lastWorldFacing = facingFromDelta(faceDx ?? dx, lastWorldFacing);
+    // Facing follows the rendered horizontal — under iso, world deltas
+    // project to screen x = dx − dy.
+    const faceAxis = faceDx ?? (iso ? dx - dy : dx);
+    av.sprite.setMoving(true, faceAxis, dy);
+    lastWorldFacing = facingFromDelta(faceAxis, lastWorldFacing);
 
     const len = Math.hypot(dx, dy);
     const { w: worldW, h: worldH } = this.host.worldBounds();
     const nx = Phaser.Math.Clamp(
       av.wrapper.x + (dx / len) * SPEED * dt,
-      H99_COLLISION_HALF_W,
-      worldW - H99_COLLISION_HALF_W,
+      H99_COLLISION_RADIUS,
+      worldW - H99_COLLISION_RADIUS,
     );
     const ny = Phaser.Math.Clamp(
       av.wrapper.y + (dy / len) * SPEED * dt,
-      H99_COLLISION_HALF_H,
-      worldH,
+      H99_COLLISION_RADIUS,
+      worldH - H99_COLLISION_RADIUS,
     );
     const ox = av.wrapper.x;
     const oy = av.wrapper.y;

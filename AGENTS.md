@@ -21,3 +21,11 @@ Follow these steps for each interaction:
      a) Create entities for recurring organizations, people, and significant events
      b) Connect them to the current entities using relations
      c) Store facts about them as observations
+
+## Project Commands
+
+- Maps are authored in the in-app web editor (Wails client, world mode).
+  Base maps live at `data/maps/<id>.map.json` + `<id>.server.json`; saves
+  write sparse overrides to `data/maps/overrides/<id>.json`. See
+  `docs/GAME_DESIGNER.md` for editor controls, object types, and the
+  `/api/admin/maps` lifecycle.

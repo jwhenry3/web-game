@@ -11,6 +11,8 @@ export interface GameOptions {
    * "win:<windowId>" or "hud:<group>"; missing keys render at 100%.
    */
   uiScale: Record<string, number>;
+  /** Debug gizmo: draw entity collision bounds in world/house scenes. */
+  showCollisionBounds: boolean;
 }
 
 export const DEFAULT_OPTIONS: GameOptions = {
@@ -19,6 +21,7 @@ export const DEFAULT_OPTIONS: GameOptions = {
   confirmLogout: true,
   theme: DEFAULT_THEME,
   uiScale: {},
+  showCollisionBounds: false,
 };
 
 const KEY = "ffv-game-options";
