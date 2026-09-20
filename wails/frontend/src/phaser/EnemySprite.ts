@@ -49,6 +49,18 @@ export class EnemySprite implements IEntitySprite {
     this.syncKind();
   }
 
+  /** Rendered position of the rig's "seat" marker bone in this container's
+   * local space — where a rider childed to this container should sit.
+   * Tracks the bone's animated world transform (and flipX), so the rider
+   * follows the mount's sway. Null for rigs/kinds without the bone or
+   * before the mount is parented. */
+  seatOffset(): { x: number; y: number } | null {
+    const world = this.doll?.boneWorldPos("seat");
+    if (!world || !this.container.parentContainer) return null;
+    const local = this.container.getLocalPoint(world.x, world.y);
+    return { x: local.x, y: local.y };
+  }
+
   getFacing(): CharacterFacing {
     return this.doll ? this.doll.getFacing() : this.facing;
   }

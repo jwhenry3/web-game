@@ -41,6 +41,10 @@ function weaponVariantKey(w: string, color: string): string {
   return COLORED_WEAPONS.has(w) ? `${w}_${color}` : w;
 }
 
+// Far-side slots (background arm/leg and the far-hand weapon mounts) hide
+// while mounted — they would draw over the mount's body otherwise.
+const FAR_SIDE_SLOT = /(?:armB_[ul]|legB_[ul])$|^weapon_(?:bot|over)_/;
+
 /** Slot name ("cloth_bot_torso", "hair_top_head", ...) -> attachment key. */
 function attachmentForSlot(slot: string, a: CharacterAppearance): string | null {
   if (slot.startsWith("skin_")) return `skin_${a.skin}`;
@@ -230,6 +234,26 @@ export class CharacterSprite implements IEntitySprite {
     if (mounted === this.mounted) return;
     this.mounted = mounted;
     this.updateAnim();
+    // Mounting hides the far-side limb slots — re-resolve attachments.
+    this.applyAttachments();
+  }
+
+  /** Rendered world position of a marker bone, matching what the spine
+   * renderer draws (render offset and ancestor transforms included). flipX
+   * is render-only — it never reaches bone world transforms — so mirror x
+   * about the object's origin axis here. Null when the rig lacks the bone. */
+  boneWorldPos(name: string): { x: number; y: number } | null {
+    const obj = this.spine;
+    const bone = obj?.skeleton.findBone(name);
+    if (!obj || !bone) return null;
+    const p = bone.appliedPose;
+    const pt = { x: p.worldX, y: p.worldY };
+    obj.skeletonToGame(pt);
+    if (obj.flipX) {
+      const tx = obj.getWorldTransformMatrix().tx;
+      pt.x = 2 * tx - pt.x;
+    }
+    return pt;
   }
 
   playAttack(): void {
@@ -398,7 +422,12 @@ export class CharacterSprite implements IEntitySprite {
     this.mainWeaponMounted = false;
     this.subWeaponMounted = false;
     for (const slot of skel.slots) {
-      const name = attachmentForSlot(slot.data.name, this.appearance);
+      // While mounted the rider's far-side limbs (and whatever they carry)
+      // tuck behind the mount's body — clear those slots entirely.
+      const name =
+        this.mounted && FAR_SIDE_SLOT.test(slot.data.name)
+          ? null
+          : attachmentForSlot(slot.data.name, this.appearance);
       // Missing variant/part combos clear the slot instead of throwing.
       const att = name ? skin.getAttachment(slot.data.index, name) : null;
       slot.pose.setAttachment(att);

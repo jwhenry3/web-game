@@ -17,20 +17,122 @@ import type { WorldEntity } from "../../types";
 import { moveFacingAxis } from "../../characters/heroes99";
 import { facingOf, getLastWorldFacing, setLastWorldFacing } from "../movement";
 import { isoDepth } from "../../world/iso";
-import { ActorVisual, ISO_ACTOR_DEPTH_EPS, type ActorVisualRole } from "./actorVisuals";
+import {
+  ActorVisual,
+  ISO_ACTOR_DEPTH_EPS,
+  syncRiderSeat,
+  type ActorVisualRole,
+} from "./actorVisuals";
 
 const PLAYER_SNAP_DIST = 80;
 const PLAYER_LERP = 0.25;
 // Snap distances sit well above what normal interpolation lag produces —
 // crossing one teleports the actor and flags it stopped, which cuts a run
 // animation mid-stride. Remote actors get generous headroom so only real
-// teleports snap; everything else stays on the smooth lerp path.
+// teleports snap; everything else stays on the smooth chase path.
 const NPC_SNAP_DIST = 260;
-const NPC_LERP = 0.2;
 const COMBAT_EXTRA_SNAP_DIST = 260;
-const COMBAT_EXTRA_LERP = 0.25;
 const PET_SNAP_DIST = 260;
-const PET_LERP = 0.2;
+
+/**
+ * Server-simulated actors publish positions in discrete hops (~4Hz,
+ * npcTickSec). Fraction-lerping toward each hop decelerates into it and
+ * drops dx under the moving threshold, so the run anim stalled and
+ * restarted every stride. Instead chase at the measured authority speed:
+ * each hop's size over its interval gives the entity's speed (smoothed),
+ * and the wrapper advances at that rate toward the live target — constant
+ * velocity through the stride, and a glide to rest when updates stop.
+ */
+const CHASE_SPEED_SMOOTH = 0.35;
+/** Keep the cruise speed this long after the last hop — covers inter-hop
+ * gaps plus jitter so momentum (and the run anim) never stalls mid-path. */
+const CHASE_HOLD_MS = 500;
+/** After the hold, bleed the cruise speed off over this window. */
+const CHASE_DECAY_MS = 350;
+/** Catch-up floor — arrive within ~one hop even before a speed sample. */
+const CHASE_FLOOR_SEC = 0.28;
+
+function isMoving(dx: number, dy: number): boolean {
+  return Math.hypot(dx, dy) > 0.3;
+}
+
+/** Rendered-horizontal facing axis — under iso, screen x = dx − dy. */
+function faceAxis(visual: ActorVisual, dx: number, dy: number): number {
+  return moveFacingAxis(dx, dy, !!visual.iso);
+}
+
+/**
+ * Advance the wrapper toward the authority position at the measured entity
+ * speed. Returns the frame delta; `snapped` means the actor teleported.
+ */
+function chaseAuthority(
+  visual: ActorVisual,
+  entity: WorldEntity,
+  delta: number,
+  snapDist: number,
+): { dx: number; dy: number; snapped: boolean } {
+  if (visual.entX === undefined) {
+    visual.entX = entity.x;
+    visual.entY = entity.y;
+    visual.entAccMs = 0;
+    visual.stillMs = CHASE_HOLD_MS + 1; // idle until the first hop lands
+    visual.chaseSpeed = 0;
+    visual.moving = false;
+  }
+  // A new authority position = one hop; hop size over hop interval is the
+  // entity's speed. Blend samples so a single laggy tick can't spike it.
+  const hop = Math.hypot(entity.x - visual.entX, entity.y - visual.entY!);
+  if (hop > 0.4) {
+    const secs = Math.max(0.03, (visual.entAccMs ?? 0) / 1000);
+    const measured = hop / secs;
+    visual.chaseSpeed =
+      (visual.chaseSpeed ?? 0) * (1 - CHASE_SPEED_SMOOTH) + measured * CHASE_SPEED_SMOOTH;
+    visual.entAccMs = 0;
+    visual.stillMs = 0;
+  } else {
+    visual.entAccMs = (visual.entAccMs ?? 0) + delta;
+    visual.stillMs = (visual.stillMs ?? 0) + delta;
+  }
+  visual.entX = entity.x;
+  visual.entY = entity.y;
+
+  const dx = entity.x - visual.wrapper.x;
+  const dy = entity.y - visual.wrapper.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > snapDist) {
+    setPosition(visual, entity.x, entity.y);
+    visual.chaseSpeed = 0;
+    visual.moving = false;
+    return { dx: 0, dy: 0, snapped: true };
+  }
+  const still = visual.stillMs ?? 0;
+  const decay = still <= CHASE_HOLD_MS
+    ? 1
+    : Math.max(0, 1 - (still - CHASE_HOLD_MS) / CHASE_DECAY_MS);
+  const speed = Math.max((visual.chaseSpeed ?? 0) * decay, dist / CHASE_FLOOR_SEC);
+  const step = Math.min(dist, speed * (delta / 1000));
+  if (step <= 0.02) {
+    return { dx: 0, dy: 0, snapped: false };
+  }
+  const ux = dx / dist;
+  const uy = dy / dist;
+  visual.wrapper.x += ux * step;
+  visual.wrapper.y += uy * step;
+  return { dx: ux * step, dy: uy * step, snapped: false };
+}
+
+/**
+ * Moving flag with momentum: once an actor is striding it stays flagged
+ * through inter-hop gaps until the authority stream goes quiet past the
+ * hold window — the run anim keeps playing instead of flapping per hop.
+ */
+function chaseMoving(visual: ActorVisual, dx: number, dy: number): boolean {
+  const moving =
+    isMoving(dx, dy) ||
+    (!!visual.moving && (visual.stillMs ?? Infinity) <= CHASE_HOLD_MS);
+  visual.moving = moving;
+  return moving;
+}
 
 export interface SelfMotionHooks {
   /** Whether the local player has been placed and camera-followed this map. */
@@ -75,15 +177,6 @@ function lerpPosition(
   visual.wrapper.x = Phaser.Math.Linear(prevX, x, amount);
   visual.wrapper.y = Phaser.Math.Linear(prevY, y, amount);
   return { dx: visual.wrapper.x - prevX, dy: visual.wrapper.y - prevY };
-}
-
-function isMoving(dx: number, dy: number): boolean {
-  return Math.hypot(dx, dy) > 0.3;
-}
-
-/** Rendered-horizontal facing axis — under iso, screen x = dx − dy. */
-function faceAxis(visual: ActorVisual, dx: number, dy: number): number {
-  return moveFacingAxis(dx, dy, !!visual.iso);
 }
 
 function isCasting(entity: WorldEntity, combat: CombatState, role: ActorVisualRole): boolean {
@@ -164,18 +257,19 @@ function updateNpc(
   opts: ActorMotionOptions,
 ): void {
   if (!opts.jumping.has(entity.id)) {
-    const prevX = visual.lastX;
-    const prevY = visual.lastY;
-    if (inView && Math.hypot(visual.wrapper.x - entity.x, visual.wrapper.y - entity.y) <= NPC_SNAP_DIST) {
-      visual.wrapper.x = Phaser.Math.Linear(visual.wrapper.x, entity.x, NPC_LERP);
-      visual.wrapper.y = Phaser.Math.Linear(visual.wrapper.y, entity.y, NPC_LERP);
-      const dx = visual.wrapper.x - prevX;
-      const dy = visual.wrapper.y - prevY;
-      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
-    } else {
+    if (!inView) {
       setPosition(visual, entity.x, entity.y);
       visual.sprite.setMoving(false);
       visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
+      visual.moving = false;
+    } else {
+      const { dx, dy, snapped } = chaseAuthority(visual, entity, delta, NPC_SNAP_DIST);
+      if (snapped) {
+        visual.sprite.setMoving(false);
+        visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
+      } else {
+        visual.sprite.setMoving(chaseMoving(visual, dx, dy), faceAxis(visual, dx, dy), dy);
+      }
     }
     visual.lastX = visual.wrapper.x;
     visual.lastY = visual.wrapper.y;
@@ -190,19 +284,20 @@ function updateCombatExtra(
   delta: number,
   opts: ActorMotionOptions,
 ): void {
-  const prevX = visual.wrapper.x;
-  const prevY = visual.wrapper.y;
   if (!opts.jumping.has(entity.id)) {
-    if (inView && Math.hypot(prevX - entity.x, prevY - entity.y) <= COMBAT_EXTRA_SNAP_DIST) {
-      visual.wrapper.x = Phaser.Math.Linear(prevX, entity.x, COMBAT_EXTRA_LERP);
-      visual.wrapper.y = Phaser.Math.Linear(prevY, entity.y, COMBAT_EXTRA_LERP);
-      const dx = visual.wrapper.x - prevX;
-      const dy = visual.wrapper.y - prevY;
-      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
-    } else {
+    if (!inView) {
       setPosition(visual, entity.x, entity.y);
       visual.sprite.setMoving(false);
       visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
+      visual.moving = false;
+    } else {
+      const { dx, dy, snapped } = chaseAuthority(visual, entity, delta, COMBAT_EXTRA_SNAP_DIST);
+      if (snapped) {
+        visual.sprite.setMoving(false);
+        visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
+      } else {
+        visual.sprite.setMoving(chaseMoving(visual, dx, dy), faceAxis(visual, dx, dy), dy);
+      }
     }
   }
   if (inView) visual.sprite.update(delta);
@@ -218,18 +313,12 @@ function updatePet(
   opts: ActorMotionOptions,
 ): void {
   if (!opts.jumping.has(entity.id)) {
-    const prevX = visual.wrapper.x;
-    const prevY = visual.wrapper.y;
-    if (Math.hypot(prevX - entity.x, prevY - entity.y) > PET_SNAP_DIST) {
-      setPosition(visual, entity.x, entity.y);
+    const { dx, dy, snapped } = chaseAuthority(visual, entity, delta, PET_SNAP_DIST);
+    if (snapped) {
       visual.sprite.setMoving(false);
       visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
     } else {
-      visual.wrapper.x = Phaser.Math.Linear(prevX, entity.x, PET_LERP);
-      visual.wrapper.y = Phaser.Math.Linear(prevY, entity.y, PET_LERP);
-      const dx = visual.wrapper.x - prevX;
-      const dy = visual.wrapper.y - prevY;
-      visual.sprite.setMoving(isMoving(dx, dy), faceAxis(visual, dx, dy), dy);
+      visual.sprite.setMoving(chaseMoving(visual, dx, dy), faceAxis(visual, dx, dy), dy);
     }
     visual.lastX = visual.wrapper.x;
     visual.lastY = visual.wrapper.y;
@@ -274,6 +363,7 @@ export function syncActorMotion(
           visual.mount.setMoving(isMoving(mdx, mdy), faceAxis(visual, mdx, mdy), mdy);
           visual.mount.setFacing(visual.sprite.getFacing());
           if (isSelf || inView) visual.mount.update(delta);
+          syncRiderSeat(visual);
         }
         visual.lastX = visual.wrapper.x;
         visual.lastY = visual.wrapper.y;

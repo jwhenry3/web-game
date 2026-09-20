@@ -31,6 +31,8 @@ class QuadrupedRigTest(unittest.TestCase):
         self.assertEqual(bones["neck"], "body")
         self.assertEqual(bones["head"], "neck")
         self.assertEqual(bones["tail_l"], "tail_u")
+        # Rider anchor rides the body animation.
+        self.assertEqual(bones["seat"], "body")
 
     def test_slots_and_variants(self):
         slots = {s["name"]: s["bone"] for s in self.rig["slots"]}

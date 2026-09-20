@@ -15,6 +15,8 @@ import {
   vfxCategoryForAction,
 } from "../battleVfx";
 import type { IEntitySprite } from "../entitySprite";
+import type { EnemySprite } from "../EnemySprite";
+import { riderRestOffset } from "./actorVisuals";
 import { isoLayer, isoProject, isoUp } from "../../world/iso";
 
 /** Screen-space position of a world-space wrapper (identity off-iso). */
@@ -47,6 +49,9 @@ function livePos(
 export interface CombatVisualRef {
   wrapper: Phaser.GameObjects.Container;
   sprite: IEntitySprite;
+  /** The creature under a mounted player — its "seat" bone anchors the
+   * rider's rest position for lunges/jumps. */
+  mount?: EnemySprite;
 }
 
 export interface CombatEventHost {
@@ -159,10 +164,15 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
   if (actor && target && isJumpAction(result.action_id)) {
     if (ev.attacker_id === host.selfId) host.invalidateSelfSlides();
     host.jumping.add(ev.attacker_id);
+    if (actor.mount) {
+      scene.tweens.killTweensOf(actor.mount.container);
+      actor.mount.container.setPosition(0, 0);
+    }
     const inner = actor.sprite.container;
+    const rest = riderRestOffset(actor.mount);
     scene.tweens.killTweensOf(inner);
-    inner.x = 0;
-    inner.y = 0;
+    inner.x = rest.x;
+    inner.y = rest.y;
     playJumpCrash(
       scene,
       actor.wrapper,
@@ -206,7 +216,10 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
     const dx = tp.x - ap.x;
     const dy = tp.y - ap.y;
     const mag = Math.hypot(dx, dy) || 1;
-    const inner = actor.sprite.container;
+    // Mounted: lunge the mount container — it is the unit's location root,
+    // and syncRiderSeat keeps the rider on the seat while it moves. On foot:
+    // lunge the sprite container (wrapper positions are owned by the lerp).
+    const inner = actor.mount ? actor.mount.container : actor.sprite.container;
     scene.tweens.killTweensOf(inner);
     scene.tweens.add({
       targets: inner,

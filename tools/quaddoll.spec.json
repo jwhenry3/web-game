@@ -90,6 +90,12 @@
       "y": 12.5
     },
     {
+      "name": "seat",
+      "parent": "body",
+      "x": -5.0,
+      "y": 12.0
+    },
+    {
       "name": "legFF_u",
       "parent": "chest",
       "x": 7.0,

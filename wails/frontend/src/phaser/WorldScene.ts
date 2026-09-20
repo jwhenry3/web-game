@@ -49,7 +49,6 @@ import {
   type SavePointState,
 } from "../ecs";
 
-import type { IEntitySprite } from "./entitySprite";
 import { trackContentZoom } from "./contentZoom";
 import { pushChat } from "../state/store";
 import { openJobMasterDialog } from "../world/npcDialogue";
@@ -98,6 +97,7 @@ import {
 import {
   latestCombatEventSeq,
   processCombatEvents as processEcsCombatEvents,
+  type CombatVisualRef,
 } from "./systems/combatEvents";
 import { TargetRing } from "./systems/targetRing";
 import { syncVisualHandles as syncEcsVisualHandles, VisualHandle } from "./systems/visualHandles";
@@ -887,11 +887,13 @@ export class WorldScene extends Phaser.Scene {
   /** Scene position + sprite for any combat id: player, NPC, pet, or combat-only extra. */
   private combatAvatarFor(
     id: string,
-  ): { wrapper: Phaser.GameObjects.Container; sprite: IEntitySprite } | undefined {
+  ): CombatVisualRef | undefined {
     const entity = this.ecs.entityByExternalId(entityExternalId(id));
     if (entity === undefined || this.ecs.get(Removed, entity) != null) return undefined;
-    const visual = this.ecs.get(VisualHandle, entity);
-    return visual ? { wrapper: visual.wrapper, sprite: visual.sprite } : undefined;
+    const visual = this.ecs.get(ActorVisual, entity);
+    return visual
+      ? { wrapper: visual.wrapper, sprite: visual.sprite, mount: visual.mount }
+      : undefined;
   }
 
   private isNearCamera(x: number, y: number, pad = 256): boolean {

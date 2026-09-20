@@ -58,6 +58,15 @@ export interface ActorVisual {
   iso?: boolean;
   lastX: number;
   lastY: number;
+  /** Remote-chase state (npc/pet/combat-extra): last authority position,
+   * ms accumulated since it last changed, smoothed entity speed, and the
+   * held moving flag — see chaseAuthority in actorMotion. */
+  entX?: number;
+  entY?: number;
+  entAccMs?: number;
+  stillMs?: number;
+  chaseSpeed?: number;
+  moving?: boolean;
 }
 export const ActorVisual = component<ActorVisual>();
 
@@ -119,14 +128,18 @@ function syncMountVisual(
   const kind = mountKindOf(entity);
   if (visual.mount && visual.mountKind === kind) return;
   if (visual.mount) {
+    // Pull the rider back into the wrapper before the mount container is
+    // destroyed — container destruction can take the rider with it.
+    const rider = visual.character?.container;
+    if (rider) {
+      visual.wrapper.add(rider);
+      rider.setScale(1).setPosition(0, 0);
+    }
     visual.mount.destroy();
     visual.mount = undefined;
     visual.mountKind = undefined;
   }
-  if (!kind) {
-    visual.character?.container.setY(0);
-    return;
-  }
+  if (!kind) return;
   const mount = new EnemySprite(scene, 0, 0, kind);
   mount.container.setScale(MOUNT_SCALE);
   visual.wrapper.addAt(mount.container, 1); // above the shadow, under the rider
@@ -134,7 +147,40 @@ function syncMountVisual(
   if (!visual.isSelf) mount.setInteractive(() => interactions.clickEntity(entity.id));
   visual.mount = mount;
   visual.mountKind = kind;
-  visual.character?.container.setY(RIDER_OFFSET_Y);
+  const rider = visual.character?.container;
+  if (rider) {
+    // Parent the rider to the mount so all mount movement carries it;
+    // counter-scale so the rider keeps its own size inside the scaled
+    // mount container, then drop it on the fallback seat.
+    mount.container.add(rider);
+    rider.setScale(1 / MOUNT_SCALE);
+    rider.setPosition(0, RIDER_OFFSET_Y / MOUNT_SCALE);
+  }
+}
+
+/** The rider's resting position in mount-container space — the mount rig's
+ * "seat" bone when it has one, else a fixed lift above the mount's ground
+ * point. The rider is a child of the mount container, so mount motion
+ * (lunges, wrapper tweens) carries it with no per-frame catch-up. */
+export function riderRestOffset(mount?: EnemySprite): { x: number; y: number } {
+  if (!mount) return { x: 0, y: 0 };
+  const seat = mount.seatOffset();
+  if (seat) return seat;
+  // Container-local units — undo the mount scale so the lift lands at the
+  // same world height as an unscaled rider.
+  return { x: 0, y: RIDER_OFFSET_Y / mount.container.scaleY };
+}
+
+/** Seat the rider on the mount each frame — rigs with a "seat" marker bone
+ * (quaddoll) carry the rider on the body's animated position; anything else
+ * falls back to a fixed lift. The rider is a child of the mount container,
+ * so container motion is rigid — this only tracks the seat bone's sway. */
+export function syncRiderSeat(visual: ActorVisual): void {
+  const rider = visual.character?.container;
+  if (!rider || !visual.mount) return;
+  if (visual.wrapper.scene.tweens.isTweening(rider)) return;
+  const { x, y } = riderRestOffset(visual.mount);
+  rider.setPosition(x, y);
 }
 
 export interface ActorVisualInteractions {

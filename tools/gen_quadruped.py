@@ -86,6 +86,10 @@ FAR_DAMP = round(LEG_CHAIN_NEAR / LEG_CHAIN_FAR, 3)
 _BONES_WORLD = {
     "root": S(FOOT_X, FOOT_Y),
     "body": S(*BODY),
+    # Rider anchor: just under the back line, behind mid-body, so the
+    # rider's feet land mid-flank in a straddle rather than standing on top.
+    # Child of `body` so the rider follows the mount's pitch and sway.
+    "seat": S(40, 22),
     "neck": S(*NECK),
     "head": S(*HEAD),
     "tail_u": S(*TAIL_U), "tail_l": S(*TAIL_L),
@@ -98,7 +102,7 @@ _BONES_WORLD = {
 BONES = [
     ("root", None), ("body", "root"), ("neck", "body"), ("head", "neck"),
     ("tail_u", "body"), ("tail_l", "tail_u"),
-    ("chest", "body"), ("haunch", "body"),
+    ("chest", "body"), ("haunch", "body"), ("seat", "body"),
     ("legFF_u", "chest"), ("legFF_l", "legFF_u"),
     ("legFB_u", "chest"), ("legFB_l", "legFB_u"),
     ("legHF_u", "haunch"), ("legHF_l", "legHF_u"),
