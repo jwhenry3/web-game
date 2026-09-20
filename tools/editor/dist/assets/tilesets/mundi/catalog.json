@@ -1,0 +1,32 @@
+{
+  "id": "mundi",
+  "name": "Mundi Terrain 32x32",
+  "tile_size": 32,
+  "credit": "Generated in-house — tools/gen_mundi_terrain.py",
+  "license": "Project-internal asset; regenerate rather than redistribute.",
+  "public_base": "/assets/tilesets/mundi",
+  "tilesets": [
+    {
+      "id": "munditerrain",
+      "name": "MundiTerrain",
+      "firstgid": 6000,
+      "tilecount": 64,
+      "columns": 8,
+      "image": "MundiTerrain.png",
+      "tsx": "MundiTerrain.tsx"
+    }
+  ],
+  "locals": {
+    "fills": { "snow": 0, "packed_snow": 1, "ice": 2, "dune_sand": 3, "beach_sand": 4, "scree": 5, "ash": 6, "peat": 7 },
+    "trees_2x2": { "pine": 8, "pine_snow": 10, "palm": 12, "dead_grey": 14 },
+    "props": {
+      "cactus_tall": 24, "cactus_round": 25, "sage": 26, "snow_shrub": 27,
+      "reeds_tall": 28, "reeds_short": 29, "ice_crystal": 30, "boulder": 31,
+      "rock_spire": 32, "snow_drift": 33, "fern": 34, "vine_bush": 35,
+      "snowy_rock": 36, "charred_stump": 37, "mud_mound": 38, "driftwood": 39,
+      "wet_rock": 40, "shells": 41, "obsidian": 42, "lava_rock": 43,
+      "frost_fern": 44, "mossy_rock": 45, "skull": 46, "stone_marker": 47,
+      "giant_mushroom": 48
+    }
+  }
+}

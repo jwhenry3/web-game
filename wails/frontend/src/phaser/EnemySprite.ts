@@ -12,13 +12,23 @@ import {
   type CharacterFacing,
 } from "../characters/heroes99";
 import { ensureEnemyTextures } from "../characters/enemyAssets";
-import { enemyTextureKey, type EnemyKind } from "../characters/enemies";
+import {
+  ENEMY_DOLL_PRESETS,
+  enemyDollAppearance,
+  enemyTextureKey,
+  type EnemyKind,
+} from "../characters/enemies";
 import { playHitFlash } from "./battleAnim";
+import { CharacterSprite, type CharacterRig } from "./CharacterSprite";
 import type { IEntitySprite } from "./entitySprite";
 
 export class EnemySprite implements IEntitySprite {
   readonly container: Phaser.GameObjects.Container;
   private sprite: Phaser.GameObjects.Sprite | null = null;
+  /** Doll kinds delegate to a Spine rig — humanoids on paperdoll, beasts on
+   * quaddoll. */
+  private doll: CharacterSprite | null = null;
+  private dollRig: CharacterRig | null = null;
   private kind: EnemyKind;
   private anim: CharacterAnim = "idle";
   private frame = 0;
@@ -36,14 +46,18 @@ export class EnemySprite implements IEntitySprite {
     this.scene = scene;
     this.kind = kind;
     this.container = new Phaser.GameObjects.Container(scene, x, y);
-    void this.syncSprite();
+    this.syncKind();
   }
 
   getFacing(): CharacterFacing {
-    return this.facing;
+    return this.doll ? this.doll.getFacing() : this.facing;
   }
 
   setFacing(facing: CharacterFacing): void {
+    if (this.doll) {
+      this.doll.setFacing(facing);
+      return;
+    }
     if (facing === this.facing) return;
     this.facing = facing;
     if (this.ready) this.applyFrame();
@@ -52,6 +66,39 @@ export class EnemySprite implements IEntitySprite {
   setKind(kind: EnemyKind): void {
     if (kind === this.kind) return;
     this.kind = kind;
+    this.syncKind();
+  }
+
+  /**
+   * Rebuild the backing sprite for the current kind — humanoid kinds get a
+   * paper-doll CharacterSprite child, the rest a pixel-art sheet sprite.
+   */
+  private syncKind(): void {
+    const preset = ENEMY_DOLL_PRESETS[this.kind];
+    if (preset) {
+      const rig = preset.rig ?? "paperdoll";
+      const appearance = enemyDollAppearance(this.kind);
+      if (!this.doll || this.dollRig !== rig) {
+        this.loadToken += 1; // cancel any in-flight sheet load
+        this.sprite?.destroy();
+        this.sprite = null;
+        this.ready = false;
+        this.doll?.destroy();
+        this.doll = new CharacterSprite(this.scene, 0, 0, appearance, rig);
+        this.dollRig = rig;
+        this.container.add(this.doll.container);
+        if (this.hitCallback) this.doll.setInteractive(this.hitCallback);
+      } else {
+        this.doll.setAppearance(appearance);
+      }
+      this.doll.container.setScale(preset.scale);
+      return;
+    }
+    if (this.doll) {
+      this.doll.destroy();
+      this.doll = null;
+      this.dollRig = null;
+    }
     this.sprite?.destroy();
     this.sprite = null;
     this.ready = false;
@@ -59,6 +106,10 @@ export class EnemySprite implements IEntitySprite {
   }
 
   setMoving(moving: boolean, dx = 0, _dy = 0): void {
+    if (this.doll) {
+      this.doll.setMoving(moving, dx, _dy);
+      return;
+    }
     const nextFacing = facingFromDelta(dx, this.facing);
     const facingChanged = nextFacing !== this.facing;
     this.facing = nextFacing;
@@ -83,6 +134,10 @@ export class EnemySprite implements IEntitySprite {
 
   playAttack(): void {
     this.casting = false;
+    if (this.doll) {
+      this.doll.playAttack();
+      return;
+    }
     this.anim = "attack";
     this.frame = 0;
     this.frameTimer = 0;
@@ -90,6 +145,10 @@ export class EnemySprite implements IEntitySprite {
   }
 
   playHit(battleSpeed?: number): void {
+    if (this.doll) {
+      this.doll.playHit(battleSpeed);
+      return;
+    }
     if (!this.sprite) return;
     this.hitFlash = playHitFlash(this.scene, this.sprite, this.hitFlash, battleSpeed, 0.4);
   }
@@ -98,6 +157,10 @@ export class EnemySprite implements IEntitySprite {
     if (this.casting === active) return;
     this.casting = active;
     this.castPulse = 0;
+    if (this.doll) {
+      this.doll.setCasting(active);
+      return;
+    }
     if (active) {
       this.anim = "idle";
       this.frame = 0;
@@ -107,6 +170,10 @@ export class EnemySprite implements IEntitySprite {
   }
 
   update(delta: number): void {
+    if (this.doll) {
+      this.doll.update(delta);
+      return;
+    }
     if (!this.ready) return;
     if (this.casting && this.sprite) {
       this.castPulse += delta;
@@ -134,10 +201,16 @@ export class EnemySprite implements IEntitySprite {
 
   setInteractive(hitCallback: () => void): void {
     this.hitCallback = hitCallback;
+    if (this.doll) {
+      this.doll.setInteractive(hitCallback);
+      return;
+    }
     this.applyInteractive();
   }
 
   destroy(): void {
+    this.loadToken += 1;
+    this.doll?.destroy();
     this.container.destroy();
   }
 

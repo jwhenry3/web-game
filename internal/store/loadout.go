@@ -505,6 +505,15 @@ func (p Profile) EquippedWeaponType() game.WeaponType {
 	return p.equippedItemWeaponType(game.SlotWeapon)
 }
 
+// EquippedSubWeaponType is the sub-hand weapon type for display: "" when the
+// slot is empty or no sub job is set — clients render an empty off-hand.
+func (p Profile) EquippedSubWeaponType() game.WeaponType {
+	if p.SubJob == "" {
+		return ""
+	}
+	return p.equippedItemWeaponType(game.SlotSubWeapon)
+}
+
 func awardXP(prog *game.JobProgress, xp int) int {
 	if xp < 1 {
 		return 0

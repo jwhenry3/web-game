@@ -18,6 +18,7 @@ import { HouseToolbar } from "./components/HouseToolbar";
 import { HousePlaceLayer } from "./components/HousePlaceLayer";
 import { GameHotkeys } from "./components/GameHotkeys";
 import { MainMenu } from "./components/MainMenu";
+import { ZoneTransition } from "./components/ZoneTransition";
 import { ExpBar } from "./components/ExpBar";
 import { ItemMenuProvider } from "./components/ItemContextMenu";
 import { fetchMe, getStoredToken, setStoredToken } from "./net/auth";
@@ -120,6 +121,7 @@ function AppBody() {
           <JobChangeDialog />
           <InviteToasts />
           <MainMenu />
+          <ZoneTransition />
         </div>
       </div>
     </ItemMenuProvider>

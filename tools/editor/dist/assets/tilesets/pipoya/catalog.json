@@ -1,0 +1,87 @@
+{
+  "id": "pipoya",
+  "name": "Pipoya RPG Tileset 32x32",
+  "tile_size": 32,
+  "credit": "Pipoya — https://pipoya.itch.io/pipoya-rpg-tileset-32x32",
+  "license": "Free for commercial/personal use; do not redistribute the assets themselves.",
+  "public_base": "/assets/tilesets/pipoya",
+  "data_dir": "data/maps/tilesets/pipoya",
+  "tilesets": [
+    {
+      "id": "waterfall",
+      "name": "WaterFall_pipo",
+      "firstgid": 1,
+      "tilecount": 576,
+      "columns": 32,
+      "image": "WaterFall_pipo.png",
+      "tsx": "WaterFall_pipo.tsx"
+    },
+    {
+      "id": "basechip",
+      "name": "BaseChip_pipo",
+      "firstgid": 577,
+      "tilecount": 1064,
+      "columns": 8,
+      "image": "BaseChip_pipo.png",
+      "tsx": "BaseChip_pipo.tsx",
+      "primary": true
+    },
+    {
+      "id": "grass",
+      "name": "Grass_pipo",
+      "firstgid": 1641,
+      "tilecount": 528,
+      "columns": 8,
+      "image": "Grass_pipo.png",
+      "tsx": "Grass_pipo.tsx"
+    },
+    {
+      "id": "water",
+      "name": "Water_pipo",
+      "firstgid": 2169,
+      "tilecount": 3072,
+      "columns": 64,
+      "image": "Water_pipo.png",
+      "tsx": "Water_pipo.tsx"
+    },
+    {
+      "id": "flower",
+      "name": "Flower_pipo",
+      "firstgid": 5241,
+      "tilecount": 48,
+      "columns": 8,
+      "image": "Flower_pipo.png",
+      "tsx": "Flower_pipo.tsx"
+    },
+    {
+      "id": "dirt",
+      "name": "Dirt_pipo",
+      "firstgid": 5289,
+      "tilecount": 336,
+      "columns": 8,
+      "image": "Dirt_pipo.png",
+      "tsx": "Dirt_pipo.tsx",
+      "note": "Matches samplemap grass-layer GIDs past Flower; same slot as PipoyaFirstLongGrass in Go."
+    },
+    {
+      "id": "wallup",
+      "name": "WallUp_pipo",
+      "firstgid": 5625,
+      "tilecount": 0,
+      "columns": 8,
+      "image": "WallUp_pipo.png",
+      "tsx": "WallUp_pipo.tsx"
+    },
+    {
+      "id": "lightshadow",
+      "name": "LightShadow_pipo",
+      "firstgid": 5700,
+      "tilecount": 0,
+      "columns": 8,
+      "image": "LightShadow_pipo.png",
+      "tsx": "LightShadow_pipo.tsx"
+    }
+  ],
+  "sample_map": "samplemap.tmx",
+  "layers": ["ground", "grass", "farm", "farm_up", "water", "water_grass", "building", "building_up", "tree"]
+}

@@ -1,5 +1,10 @@
 import type { EditorObject } from "./editorTypes";
-import { enemyKindFromName, type EnemyKind } from "../characters/enemies";
+import {
+  ENEMY_DOLL_PRESETS,
+  ENEMY_KINDS,
+  enemyKindFromName,
+  type EnemyKind,
+} from "../characters/enemies";
 import { H99_DISPLAY_SCALE, H99_ORIGIN, H99_SHEET } from "../characters/heroes99";
 import { isSanctuaryRegion } from "./hierarchyTree";
 import { propString } from "./editorTypes";
@@ -7,10 +12,16 @@ import { parseNpcServiceRoles } from "./objectProps";
 import { hasCombatRole, isNpcEntity, normalizeNpcObject } from "./npcEntity";
 import { regionPolygon } from "./regionPolygon";
 
+/**
+ * Preview image per kind. Doll kinds use the baked 100x40 paper-doll cell
+ * from the generator; sheet kinds use cell 0 of the animated PNG sheet —
+ * the frame math below is identical either way.
+ */
 const ENEMY_SHEET: Record<EnemyKind, string> = {
-  goblin: "/assets/enemies/goblin.png",
-  dire_wolf: "/assets/enemies/dire_wolf.png",
-  stone_imp: "/assets/enemies/stone_imp.png",
+  goblin: "/assets/spine/doll_goblin.png",
+  dire_wolf: "/assets/spine/doll_dire_wolf.png",
+  stone_imp: "/assets/spine/doll_stone_imp.png",
+  imp: "/assets/spine/doll_imp.png",
 };
 
 const enemyImages = new Map<EnemyKind, HTMLImageElement>();
@@ -31,7 +42,7 @@ async function loadEnemyImage(kind: EnemyKind): Promise<HTMLImageElement> {
 
 /** Preload enemy sheets used by combat NPC previews in the map editor. */
 export function ensureEditorSpritesLoaded(): Promise<void> {
-  if (enemyImages.size >= 3) return Promise.resolve();
+  if (enemyImages.size >= ENEMY_KINDS.length) return Promise.resolve();
   if (!enemyLoadPromise) {
     enemyLoadPromise = Promise.all(
       (Object.keys(ENEMY_SHEET) as EnemyKind[]).map((kind) => loadEnemyImage(kind)),
@@ -188,9 +199,11 @@ function drawCombatNpc(ctx: CanvasRenderingContext2D, obj: EditorObject, x: numb
   const name = propString(obj.properties, "name") || kind;
 
   if (img) {
-    // Draw the sheet's idle frame (cell 0) at world scale, foot-anchored like the game.
+    // Draw the sheet's idle frame (cell 0) at world scale, foot-anchored like
+    // the game. Doll kinds bake at full rig size — apply the preset's
+    // creature scale so previews match in-game proportions.
     const { frameWidth, frameHeight } = H99_SHEET;
-    const scale = H99_DISPLAY_SCALE * z;
+    const scale = H99_DISPLAY_SCALE * z * (ENEMY_DOLL_PRESETS[kind]?.scale ?? 1);
     const drawW = frameWidth * scale;
     const drawH = frameHeight * scale;
     const ox = x - drawW * H99_ORIGIN.x;

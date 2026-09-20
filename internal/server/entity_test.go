@@ -10,6 +10,40 @@ import (
 	"clara-mundi/internal/protocol"
 )
 
+// houseHubForTest builds a hub running the generated house instance for a
+// transfer spec, sharing the world hub's profile store.
+func houseHubForTest(t *testing.T, src *Hub, spec *HouseSpec) *Hub {
+	t.Helper()
+	hh := mustTestHub()
+	hh.store = src.store
+	hh.SetMap(HouseMapID(spec.Owner), "House", game.NewHouseOverworld())
+	hh.SetHouseContext(&HouseContext{
+		Owner:     spec.Owner,
+		Skin:      spec.Skin,
+		ReturnMap: spec.ReturnMap,
+		ReturnX:   spec.ReturnX,
+		ReturnY:   spec.ReturnY,
+	})
+	return hh
+}
+
+// joinHouseClient simulates the proxy's attach + join_world replay onto a
+// house instance hub.
+func joinHouseClient(t *testing.T, hh *Hub, clientID, name string, dest TransferDest) *Client {
+	t.Helper()
+	hc := &Client{
+		ID: clientID, Send: make(chan []byte, 256), Hub: hh,
+		UseSpawn: true, SpawnX: dest.X, SpawnY: dest.Y, SpawnFacing: dest.Facing,
+	}
+	hh.clients[hc.ID] = hc
+	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: name})
+	hh.handleJoinWorld(hc, raw)
+	if !hc.Joined {
+		t.Fatalf("house join failed for %s", name)
+	}
+	return hc
+}
+
 // slotBattlePet adds a pet record to Bartz's profile and slots it as the
 // battle pet so syncPetEntities keeps its entity on the world.
 func slotBattlePet(t *testing.T, h *Hub, kind, name string, level int) game.PetRecord {
@@ -405,34 +439,58 @@ func TestPetFollowsOwnerIntoCamp(t *testing.T) {
 	h, c, pe := testHubWithPlayer(t, px, py)
 	rec := slotBattlePet(t, h, "goblin", "Gobby", 1)
 	h.tickEntities(time.Now())
-	pet := h.ent(rec.ID)
-	if pet == nil {
+	if h.ent(rec.ID) == nil {
 		t.Fatal("expected pet entity on the world")
 	}
 
 	h.placeCamp(c, pe)
+	var dest TransferDest
+	h.OnTransfer = func(_ string, d TransferDest) { dest = d }
 	raw, _ := json.Marshal(protocol.EnterHousePayload{OwnerName: "Bartz"})
 	h.handleEnterHouse(c, raw)
-	room := h.houses["Bartz"]
-	if room == nil {
-		t.Fatal("expected a house room")
+
+	// Entry is a transfer into a lazily created house instance.
+	if dest.House == nil || dest.Map != HouseMapID("Bartz") {
+		t.Fatalf("enter_house should transfer to the house instance, got %+v", dest)
 	}
-	guest := room.Guests[c.ID]
-	if guest == nil || len(guest.Pets) != 1 || guest.Pets[0].ID != rec.ID {
-		t.Fatalf("pet should follow the owner inside, got %+v", guest)
+	sx, sy := game.HouseSpawnCenter()
+	if dest.X != sx || dest.Y != sy {
+		t.Fatalf("house spawn mismatch: got (%.0f,%.0f)", dest.X, dest.Y)
 	}
-	h.tickEntities(time.Now())
-	if !pet.hidden {
-		t.Fatal("pet should be hidden on the overworld while the owner is inside")
+	if !c.Transferring {
+		t.Fatal("enter transfer should mark the client as transferring")
+	}
+	// The detach is a transfer, not a logout: the camp stays pitched and the
+	// owner's world entities despawn with them.
+	h.handleDisconnect(c)
+	if _, ok := h.camps["Bartz"]; !ok {
+		t.Fatal("camp must stay pitched while the owner is inside the instance")
+	}
+	if h.ent(rec.ID) != nil {
+		t.Fatal("world pet should despawn when the owner leaves the world hub")
 	}
 
-	h.handleLeaveHouse(c)
-	h.tickEntities(time.Now())
-	if pet.hidden {
-		t.Fatal("pet should be back on the overworld after leaving")
+	// On the instance side the join replays like any map transfer and the
+	// slotted pet respawns inside the walkable island.
+	hh := houseHubForTest(t, h, dest.House)
+	hc := joinHouseClient(t, hh, c.ID, "Bartz", dest)
+	if e := hh.playerEnt(hc.ID); e == nil || e.X != sx || e.Y != sy {
+		t.Fatalf("expected owner at the house spawn, got %+v", e)
 	}
-	if d := dist(pet.X, pet.Y, pe.X, pe.Y); d > 120 {
-		t.Fatalf("pet should reappear beside the owner (dist %.1f)", d)
+	housePet := hh.ent(rec.ID)
+	if housePet == nil {
+		t.Fatal("pet should spawn inside the house instance")
+	}
+	if !hh.overworld.CircleWalkableAt(housePet.X, housePet.Y, game.PlayerCollisionRadius) {
+		t.Fatalf("pet spawned off the walkable island at (%.1f,%.1f)", housePet.X, housePet.Y)
+	}
+
+	// Leaving transfers back to the camp position on the world map.
+	var back TransferDest
+	hh.OnTransfer = func(_ string, d TransferDest) { back = d }
+	hh.handleLeaveHouse(hc)
+	if back.Map != dest.House.ReturnMap || back.X != dest.House.ReturnX || back.Y != dest.House.ReturnY {
+		t.Fatalf("leave should return to the camp on %q, got %+v", dest.House.ReturnMap, back)
 	}
 }
 
@@ -630,35 +688,47 @@ func TestPetWandersInsideLeash(t *testing.T) {
 }
 
 func TestHousePetWandersInsideLeash(t *testing.T) {
-	h, _, _ := testHubWithPlayer(t, 400, 400)
+	hh := mustTestHub()
+	hh.SetMap(HouseMapID("Bartz"), "House", game.NewHouseOverworld())
+	hh.SetHouseContext(&HouseContext{Owner: "Bartz"})
 	sx, sy := game.HouseSpawnCenter()
-	guest := &houseGuest{ClientID: "c1", Name: "Host", X: sx, Y: sy}
-	pet := &housePet{ID: "pet-1", Name: "P", Sprite: "goblin", X: sx + petFollowDist - 4, Y: sy}
-	guest.Pets = []*housePet{pet}
+	c := &Client{ID: "c1", Name: "Bartz", Joined: true, Send: make(chan []byte, 256), Hub: hh}
+	hh.clients[c.ID] = c
+	hh.store.GetOrCreate("Bartz", game.JobVAN)
+	owner := hh.ensurePlayer(c)
+	owner.X, owner.Y = sx, sy
+	pet := newPetEntity(game.PetRecord{ID: "pet-1", Kind: "goblin", Name: "P", Level: 1}, owner)
+	pet.X, pet.Y = sx+petFollowDist-4, sy
+	hh.entities[pet.ID] = pet
 
+	// Inside an instance pets are ordinary followOwner entities on the
+	// generated island overworld — wander reuses the world behavior.
+	fo := pet.components.followOwner
 	now := time.Now()
 	moved := false
+	bx, by := pet.X, pet.Y
 	for i := 0; i < 40; i++ {
-		if h.stepHousePets(guest, now, 0.05) {
+		fo.Tick(hh, pet, now, 0.05)
+		if pet.X != bx || pet.Y != by {
 			moved = true
 		}
-		if d := dist(pet.X, pet.Y, guest.X, guest.Y); d > petWanderDist+0.5 {
+		if d := dist(pet.X, pet.Y, owner.X, owner.Y); d > petWanderDist+0.5 {
 			t.Fatalf("house pet left the wander radius: %.1f", d)
 		}
-		if !game.HouseCircleWalkableAt(pet.X, pet.Y, game.PlayerCollisionRadius) {
+		if !hh.overworld.CircleWalkableAt(pet.X, pet.Y, game.PlayerCollisionRadius) {
 			t.Fatalf("house pet stepped off the walkable island at (%.1f,%.1f)", pet.X, pet.Y)
 		}
 	}
-	if !pet.hasSpot {
+	if !fo.hasSpot {
 		t.Fatal("in-leash house pet should pick a wander spot")
 	}
 	if !moved {
 		t.Fatal("in-leash house pet should amble to its wander spot")
 	}
 	// Once the interval elapses the next tick picks a fresh spot.
-	first := pet.wanderAt
-	h.stepHousePets(guest, now.Add(petWanderInterval+time.Second), 0.05)
-	if !pet.wanderAt.After(first) {
+	first := fo.wanderAt
+	fo.Tick(hh, pet, now.Add(petWanderInterval+time.Second), 0.05)
+	if !fo.wanderAt.After(first) {
 		t.Fatal("expected a new house wander spot after the interval")
 	}
 }
@@ -726,20 +796,30 @@ func TestMountToggleAndDismountRules(t *testing.T) {
 		t.Fatalf("mounted move should clear the on-foot clamp, moved %v", got)
 	}
 
-	// Stepping into a house dismounts the rider.
+	// Stepping into a house dismounts the rider: entering transfers to the
+	// instance, where the respawned entity is never mounted and toggles are
+	// refused.
 	h.camps["Bartz"] = &worldCamp{OwnerName: "Bartz", OwnerClientID: c.ID, X: pe.X, Y: pe.Y}
+	var dest TransferDest
+	h.OnTransfer = func(_ string, d TransferDest) { dest = d }
 	enter, _ := json.Marshal(protocol.EnterHousePayload{OwnerName: "Bartz"})
 	h.handleEnterHouse(c, enter)
-	if cc.mounted || cc.mountSprite != "" {
-		t.Fatal("entering a house should dismount the rider")
+	if dest.House == nil {
+		t.Fatal("entering a house should transfer to its instance")
 	}
-	h.handleLeaveHouse(c)
+	hh := houseHubForTest(t, h, dest.House)
+	hc := joinHouseClient(t, hh, c.ID, "Bartz", dest)
+	hpe := hh.playerEnt(hc.ID)
+	hcc := clientControlOf(hpe)
+	if hcc == nil || hcc.mounted {
+		t.Fatal("the instance entity should not be mounted")
+	}
+	hh.handleMountToggle(hc, nil)
+	if hcc.mounted {
+		t.Fatal("mount should be refused inside a house")
+	}
 
 	// Releasing the slotted mount pet also dismounts.
-	h.handleMountToggle(c, nil)
-	if !cc.mounted {
-		t.Fatal("expected to re-mount after leaving the house")
-	}
 	release, _ := json.Marshal(protocol.PetIDPayload{PetID: rec.ID})
 	h.handlePetRelease(c, release)
 	if cc.mounted || cc.mountSprite != "" {

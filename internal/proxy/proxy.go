@@ -97,6 +97,9 @@ func (p *Proxy) RegisterMap(n *mapnode.Node) {
 	n.Transfer = func(req cluster.TransferRequest) {
 		p.handleTransfer(req)
 	}
+	n.Hub.OnCloseHouse = func(owner, reason string) {
+		p.closeHouseInstance(owner, reason)
+	}
 	p.mu.Lock()
 	p.maps[n.Spec.ID] = n
 	p.mu.Unlock()
@@ -106,7 +109,13 @@ func (p *Proxy) RegisterWorld(n *mapnode.Node) {
 	n.Forward = func(clientID string, msg []byte) {
 		p.sendToClient(clientID, msg)
 	}
-	// World mode uses a single node; map-to-map transfers are not applicable.
+	// The world node transfers sessions into dynamic house instances.
+	n.Transfer = func(req cluster.TransferRequest) {
+		p.handleTransfer(req)
+	}
+	n.Hub.OnCloseHouse = func(owner, reason string) {
+		p.closeHouseInstance(owner, reason)
+	}
 	p.mu.Lock()
 	p.world = n
 	p.mu.Unlock()
@@ -326,7 +335,11 @@ func (p *Proxy) route(s *session, env protocol.Envelope) {
 			p.sendToClient(s.id, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Join the world first."}))
 			return
 		}
-		p.world.Handle(s.id, env)
+		// Sessions bound to a dynamic instance (house:<owner>) route to that
+		// node; everything else lands on the world node.
+		if n := p.nodeFor(s.mapID); n != nil {
+			n.Handle(s.id, env)
+		}
 		return
 	}
 	if env.Type == protocol.TypeJoinWorld && s.mapID == "" {
@@ -346,6 +359,21 @@ func (p *Proxy) route(s *session, env protocol.Envelope) {
 		return
 	}
 	n.Handle(s.id, env)
+}
+
+// nodeFor resolves the node bound to a session's map id. Configured maps and
+// dynamic house instances live in p.maps; the singular world node is
+// registered separately.
+func (p *Proxy) nodeFor(mapID string) *mapnode.Node {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if n := p.maps[mapID]; n != nil {
+		return n
+	}
+	if p.world != nil && p.world.Spec.ID == mapID {
+		return p.world
+	}
+	return nil
 }
 
 func (p *Proxy) pickMap(s *session, env protocol.Envelope) string {
@@ -368,16 +396,14 @@ func (p *Proxy) pickMap(s *session, env protocol.Envelope) string {
 }
 
 func (p *Proxy) attach(s *session, mapID string, req cluster.AttachRequest) bool {
-	p.mu.Lock()
-	n := p.maps[mapID]
-	if n == nil && p.world != nil && p.world.Spec.ID == mapID {
-		n = p.world
-	}
-	p.mu.Unlock()
+	n := p.nodeFor(mapID)
 	if n == nil {
 		return false
 	}
 	c := n.Attach(req)
+	if c == nil {
+		return false
+	}
 	c.CloseFn = func() {
 		s.conn.Close()
 	}
@@ -386,32 +412,38 @@ func (p *Proxy) attach(s *session, mapID string, req cluster.AttachRequest) bool
 }
 
 func (p *Proxy) handleTransfer(req cluster.TransferRequest) {
-	if !p.cfg.CanTravelTo(req.DestMap) {
+	_, isHouse := server.ParseHouseMapID(req.DestMap)
+	if !isHouse && req.DestMap != p.worldID() && !p.cfg.CanTravelTo(req.DestMap) {
 		log.Printf("proxy: rejected transfer to unavailable map %q", req.DestMap)
 		p.sendToClient(req.ClientID, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Cannot travel there."}))
 		return
 	}
 	p.mu.Lock()
 	s := p.sess[req.ClientID]
-	var src *mapnode.Node
-	srcMapID := ""
-	if s != nil {
-		srcMapID = s.mapID
-		src = p.maps[s.mapID]
-	}
-	dst := p.maps[req.DestMap]
 	p.mu.Unlock()
-	if s == nil || dst == nil {
+	if s == nil {
 		p.sendToClient(req.ClientID, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Destination unavailable."}))
 		return
 	}
-	if src != nil && src.Spec.ID == req.DestMap {
+	srcMapID := s.mapID
+	src := p.nodeFor(srcMapID)
+	dst := p.nodeFor(req.DestMap)
+	if dst == nil && isHouse {
+		dst = p.ensureHouseNode(req)
+	}
+	if dst == nil {
+		p.sendToClient(req.ClientID, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{Message: "Destination unavailable."}))
+		return
+	}
+	if src != nil && src == dst {
 		return
 	}
 	name := ""
 	if src != nil {
 		name = src.CharacterName(s.id)
-		src.Detach(s.id)
+		src.Detach(s.id, true)
+		// An emptied instance tears itself down once its last occupant leaves.
+		p.teardownIfEmpty(src)
 	}
 	if !p.attach(s, req.DestMap, cluster.AttachRequest{
 		ClientID: s.id, AccountID: s.acctID, Username: s.user,
@@ -433,6 +465,109 @@ func (p *Proxy) handleTransfer(req cluster.TransferRequest) {
 	raw, _ := json.Marshal(protocol.JoinWorldPayload{PlayerName: name})
 	dst.Handle(s.id, protocol.Envelope{Type: protocol.TypeJoinWorld, Payload: raw})
 	log.Printf("proxy: %s transferred to %s", s.id, req.DestMap)
+}
+
+func (p *Proxy) worldID() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.world != nil {
+		return p.world.Spec.ID
+	}
+	return ""
+}
+
+func (p *Proxy) worldNode() *mapnode.Node {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.world
+}
+
+// ensureHouseNode lazily creates a dynamic house instance node the first
+// time someone transfers into it. The HouseSpec on the request carries the
+// owner/skin/return position captured by the source hub.
+func (p *Proxy) ensureHouseNode(req cluster.TransferRequest) *mapnode.Node {
+	spec := req.House
+	if spec == nil {
+		owner, _ := server.ParseHouseMapID(req.DestMap)
+		spec = &cluster.HouseSpec{
+			Owner:     owner,
+			ReturnMap: p.worldID(),
+			ReturnX:   req.DestX,
+			ReturnY:   req.DestY,
+		}
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if n := p.maps[req.DestMap]; n != nil {
+		return n
+	}
+	n, err := mapnode.StartHouse(spec, p.profiles, p.accounts)
+	if err != nil {
+		log.Printf("proxy: cannot start house instance %s: %v", req.DestMap, err)
+		return nil
+	}
+	n.Forward = func(clientID string, msg []byte) {
+		p.sendToClient(clientID, msg)
+	}
+	n.Transfer = func(r cluster.TransferRequest) {
+		p.handleTransfer(r)
+	}
+	returnMap := spec.ReturnMap
+	n.Hub.OnCampSkinChanged = func(owner, skin string) {
+		if src := p.nodeFor(returnMap); src != nil {
+			src.Hub.PostTask(func() { src.Hub.UpdateCampSkin(owner, skin) })
+		}
+	}
+	p.maps[req.DestMap] = n
+	return n
+}
+
+// teardownIfEmpty stops a dynamic instance once its last session detaches.
+// Static configured maps are never torn down.
+func (p *Proxy) teardownIfEmpty(n *mapnode.Node) {
+	if n == nil || n.Instance == nil {
+		return
+	}
+	p.mu.Lock()
+	if p.maps[n.Spec.ID] != n || len(n.SessionIDs()) != 0 {
+		p.mu.Unlock()
+		return
+	}
+	n.MarkClosed()
+	delete(p.maps, n.Spec.ID)
+	p.mu.Unlock()
+	go n.Stop()
+	log.Printf("instance %s torn down (empty)", n.Spec.ID)
+}
+
+// closeHouseInstance evicts every occupant of a house instance; the
+// per-detach teardown path then removes the empty node. Called from the
+// world hub when the owning camp despawns — it must not block that hub.
+func (p *Proxy) closeHouseInstance(owner, reason string) {
+	n := p.nodeFor(server.HouseMapID(owner))
+	if n == nil || n.Instance == nil {
+		return
+	}
+	n.Hub.PostTask(func() { n.Hub.EvictHouse(reason) })
+}
+
+// StopInstances shuts down every dynamic instance node (house interiors).
+// Called on process shutdown alongside the configured nodes.
+func (p *Proxy) StopInstances() {
+	p.mu.Lock()
+	nodes := make([]*mapnode.Node, 0)
+	for id, n := range p.maps {
+		if n.Instance == nil {
+			continue
+		}
+		n.MarkClosed()
+		delete(p.maps, id)
+		nodes = append(nodes, n)
+	}
+	p.mu.Unlock()
+	for _, n := range nodes {
+		n.Stop()
+	}
 }
 
 func (p *Proxy) sendToClient(clientID string, msg []byte) {
@@ -484,13 +619,23 @@ func (p *Proxy) convertFrame(msg []byte) ([]byte, error) {
 func (p *Proxy) drop(s *session) {
 	p.mu.Lock()
 	delete(p.sess, s.id)
-	n := p.maps[s.mapID]
-	if n == nil && p.world != nil && p.world.Spec.ID == s.mapID {
-		n = p.world
-	}
 	p.mu.Unlock()
+	n := p.nodeFor(s.mapID)
 	if n != nil {
-		n.Detach(s.id)
+		// A real disconnect inside an instance mirrors the old in-house
+		// logout rules: the character's own camp unpitches, which also
+		// evicts remaining guests when the house owner logs out.
+		if n.Instance != nil {
+			if world := p.worldNode(); world != nil {
+				if name := n.CharacterName(s.id); name != "" {
+					world.Hub.PostTask(func() {
+						world.Hub.DespawnCamp(name, "The camp was packed up.")
+					})
+				}
+			}
+		}
+		n.Detach(s.id, false)
+		p.teardownIfEmpty(n)
 	}
 	close(s.send)
 	log.Printf("proxy session %s disconnected", s.id)

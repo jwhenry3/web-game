@@ -27,7 +27,7 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 const APPEARANCE_ROWS: {
-  key: keyof CharacterAppearance;
+  key: "skin" | "face" | "hair" | "hairColor";
   label: string;
   options: readonly string[];
 }[] = [

@@ -121,7 +121,7 @@ func (h *Hub) handleMountToggle(c *Client, _ json.RawMessage) {
 	}
 	e := h.playerEnt(c.ID)
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || !e.alive || e.hidden || cc.inHouse {
+	if e == nil || cc == nil || !e.alive || e.hidden || h.houseCtx != nil {
 		h.sendError(c, "You can't mount right now.")
 		return
 	}
@@ -183,7 +183,7 @@ func (h *Hub) handlePetCommand(c *Client, raw json.RawMessage) {
 	}
 	e := h.playerEnt(c.ID)
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || e.hidden || cc.inHouse {
+	if e == nil || cc == nil || e.hidden || h.houseCtx != nil {
 		h.sendError(c, "Your pet can't do that right now.")
 		return
 	}

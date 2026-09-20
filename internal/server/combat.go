@@ -65,10 +65,12 @@ var enemyTemplates = map[string]int{ // kind -> base hp
 	"goblin":    70,
 	"dire_wolf": 55,
 	"stone_imp": 95,
+	"imp":       60,
 }
 
 var petTemplates = map[string]struct{ hp, str, dex int }{
 	"goblin": {70, 9, 11}, "dire_wolf": {55, 8, 17}, "stone_imp": {95, 11, 8},
+	"imp": {60, 10, 14},
 }
 
 // ---- player entity lifecycle ----

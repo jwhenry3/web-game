@@ -107,57 +107,30 @@ func HouseSpawnCenter() (x, y float64) {
 	return (float64(col) + 0.5) * HouseTileSize, (float64(row) + 0.5) * HouseTileSize
 }
 
-// ClampHousePos keeps a foot-centered player circle inside the walkable island.
-func ClampHousePos(x, y float64) (float64, float64) {
-	col0, row0 := HouseWalkOrigin()
-	ts := float64(HouseTileSize)
-	minX := float64(col0)*ts + PlayerCollisionRadius
-	maxX := float64(col0+HouseWalkCols)*ts - PlayerCollisionRadius
-	minY := float64(row0)*ts + PlayerCollisionRadius
-	maxY := float64(row0+HouseWalkRows)*ts - PlayerCollisionRadius
-	if x < minX {
-		x = minX
+// NewHouseOverworld builds the instance overworld for a house interior: a
+// HouseMapCols×HouseMapRows rock map with the walkable island at
+// HouseWalkOrigin. House hubs run it through SetMap, so movement, collision,
+// pathfinding, and pet wander all use the standard Overworld machinery.
+func NewHouseOverworld() *Overworld {
+	cells := make([]string, HouseMapRows)
+	for r := 0; r < HouseMapRows; r++ {
+		row := make([]byte, HouseMapCols)
+		for c := 0; c < HouseMapCols; c++ {
+			if HouseWalkable(c, r) {
+				row[c] = TileGrass
+			} else {
+				row[c] = TileRock
+			}
+		}
+		cells[r] = string(row)
 	}
-	if x > maxX {
-		x = maxX
+	return &Overworld{
+		Path:     "house",
+		Cols:     HouseMapCols,
+		Rows:     HouseMapRows,
+		TileSize: HouseTileSize,
+		WorldW:   HouseMapCols * HouseTileSize,
+		WorldH:   HouseMapRows * HouseTileSize,
+		Cells:    cells,
 	}
-	if y < minY {
-		y = minY
-	}
-	if y > maxY {
-		y = maxY
-	}
-	return x, y
-}
-
-// HouseCircleWalkableAt reports whether the feet-centered collision circle
-// fits inside the walkable house footprint.
-func HouseCircleWalkableAt(cx, cy, radius float64) bool {
-	col0, row0 := HouseWalkOrigin()
-	ts := float64(HouseTileSize)
-	return cx-radius >= float64(col0)*ts &&
-		cx+radius <= float64(col0+HouseWalkCols)*ts &&
-		cy-radius >= float64(row0)*ts &&
-		cy+radius <= float64(row0+HouseWalkRows)*ts
-}
-
-// SlideMoveHousePlayer applies the player collision circle inside the house walkable area.
-func SlideMoveHousePlayer(fromX, fromY, toX, toY float64) (float64, float64) {
-	if HouseCircleWalkableAt(toX, toY, PlayerCollisionRadius) {
-		return toX, toY
-	}
-	if HouseCircleWalkableAt(toX, fromY, PlayerCollisionRadius) {
-		return toX, fromY
-	}
-	if HouseCircleWalkableAt(fromX, toY, PlayerCollisionRadius) {
-		return fromX, toY
-	}
-	return fromX, fromY
-}
-
-// HousePixelToTile converts house-world pixels to tile indices.
-func HousePixelToTile(x, y float64) (col, row int) {
-	col = int(x) / HouseTileSize
-	row = int(y) / HouseTileSize
-	return
 }

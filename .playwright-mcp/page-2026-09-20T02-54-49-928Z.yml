@@ -1,0 +1,97 @@
+- generic [ref=f20e3]:
+  - generic [ref=f20e4]:
+    - strong [ref=f20e5]: Spine Character Editor
+    - combobox [ref=f20e6]:
+      - option "paperdoll (no spec)" [selected]
+      - option "h99doll"
+      - option "testblank"
+    - button "New" [ref=f20e7] [cursor=pointer]
+    - button "Duplicate" [ref=f20e8] [cursor=pointer]
+    - button "Delete" [ref=f20e9] [cursor=pointer]
+    - button "Bones" [disabled] [ref=f20e10]
+    - button "Animations" [ref=f20e11] [cursor=pointer]
+    - button "Pixels" [ref=f20e12] [cursor=pointer]
+    - button "Template" [ref=f20e13] [cursor=pointer]
+    - button "Reload" [ref=f20e14] [cursor=pointer]
+    - button "Regenerate" [disabled] [ref=f20e15]
+    - button "Save" [disabled] [ref=f20e16]
+  - generic [ref=f20e20]:
+    - generic [ref=f20e21]:
+      - button "Bones" [ref=f20e22] [cursor=pointer]
+      - button "Animations" [ref=f20e23] [cursor=pointer]
+      - button "Pixels" [ref=f20e24] [cursor=pointer]
+      - button "Template" [ref=f20e25] [cursor=pointer]
+    - generic [ref=f20e26]:
+      - heading "Appearance variant" [level=3] [ref=f20e27]
+      - generic [ref=f20e28]:
+        - generic [ref=f20e29]: Skin
+        - combobox [ref=f20e30]:
+          - option "— none —" [selected]
+      - generic [ref=f20e31]:
+        - generic [ref=f20e32]: Face
+        - combobox [ref=f20e33]:
+          - option "— none —" [selected]
+      - generic [ref=f20e34]:
+        - generic [ref=f20e35]: Hair
+        - combobox [ref=f20e36]:
+          - option "— none —" [selected]
+      - generic [ref=f20e37]:
+        - generic [ref=f20e38]: Hair color
+        - combobox [ref=f20e39]:
+          - option "— none —" [selected]
+      - generic [ref=f20e40]:
+        - generic [ref=f20e41]: Cloth
+        - combobox [ref=f20e42]:
+          - option "— none —" [selected]
+      - generic [ref=f20e43]:
+        - generic [ref=f20e44]: Cloth color
+        - combobox [ref=f20e45]:
+          - option "— none —" [selected]
+      - generic [ref=f20e46]:
+        - generic [ref=f20e47]: Weapon
+        - combobox [ref=f20e48]:
+          - option "— none —" [selected]
+      - generic [ref=f20e49]:
+        - generic [ref=f20e50]: Weapon color
+        - combobox [ref=f20e51]:
+          - option "— none —" [selected]
+      - heading "Bones" [level=3] [ref=f20e52]
+      - generic [ref=f20e53]:
+        - generic [ref=f20e54] [cursor=pointer]:
+          - text: root
+          - generic [ref=f20e55]: —
+        - generic [ref=f20e56] [cursor=pointer]:
+          - text: torso
+          - generic [ref=f20e57]: root
+        - generic [ref=f20e58] [cursor=pointer]:
+          - text: head
+          - generic [ref=f20e59]: torso
+        - generic [ref=f20e60] [cursor=pointer]:
+          - text: armF_u
+          - generic [ref=f20e61]: torso
+        - generic [ref=f20e62] [cursor=pointer]:
+          - text: armF_l
+          - generic [ref=f20e63]: armF_u
+        - generic [ref=f20e64] [cursor=pointer]:
+          - text: armB_u
+          - generic [ref=f20e65]: torso
+        - generic [ref=f20e66] [cursor=pointer]:
+          - text: armB_l
+          - generic [ref=f20e67]: armB_u
+        - generic [ref=f20e68] [cursor=pointer]:
+          - text: legF_u
+          - generic [ref=f20e69]: root
+        - generic [ref=f20e70] [cursor=pointer]:
+          - text: legF_l
+          - generic [ref=f20e71]: legF_u
+        - generic [ref=f20e72] [cursor=pointer]:
+          - text: legB_u
+          - generic [ref=f20e73]: root
+        - generic [ref=f20e74] [cursor=pointer]:
+          - text: legB_l
+          - generic [ref=f20e75]: legB_u
+      - heading "Add bone" [level=3] [ref=f20e76]
+      - generic [ref=f20e77]:
+        - textbox "bone name" [ref=f20e78]
+        - button "Add" [disabled] [ref=f20e79]
+      - generic [ref=f20e80]: New bones parent under the selected bone (or root). Slots bind to bones in the Template tab via part rules.

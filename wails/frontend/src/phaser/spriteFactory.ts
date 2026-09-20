@@ -3,7 +3,7 @@ import { enemyKindFromName } from "../characters/enemies";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { useGame } from "../state/store";
 import type { WorldEntity } from "../types";
-import { CharacterSprite } from "./CharacterSprite";
+import { CharacterSprite, PLAYER_RIG } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
 import type { IEntitySprite } from "./entitySprite";
 
@@ -16,7 +16,7 @@ export const ENTITY_PRESENTATION = {
   /** Scene display depth for combat-only extras (summons, battle-only actors). */
   combatExtraDepth: 10,
   /** Default world shadow scale for a standard humanoid-sized entity. */
-  defaultShadowScale: 1,
+  defaultShadowScale: 1.5,
   /** Depth for player avatars. */
   playerDepth: 10,
   /** Depth for NPC / enemy avatars. */
@@ -50,9 +50,10 @@ export function createSpriteForEntity(
       profile: state.profile,
       race: entity.sprite,
       weapon: entity.weapon,
+      subWeapon: entity.sub_weapon,
       wire: entity.appearance,
     });
-    return new CharacterSprite(scene, 0, 0, appearance);
+    return new CharacterSprite(scene, 0, 0, appearance, PLAYER_RIG);
   }
 
   const kind = enemyKindFromName(entity.name, entity.sprite);

@@ -12,6 +12,31 @@ type TransferRequest struct {
 	Facing   float64
 	Edge     string
 	EdgeT    float64
+	// House carries instance context when DestMap is a dynamic house id
+	// (house:<owner>). The proxy lazily creates the instance node from it.
+	House *HouseSpec
+}
+
+// HouseSpec describes a dynamic house instance: which camp owns it and where
+// occupants return when they leave or are evicted.
+type HouseSpec struct {
+	Owner     string
+	Skin      string
+	ReturnMap string
+	ReturnX   float64
+	ReturnY   float64
+}
+
+// HouseMapID returns the dynamic map id for a player's house instance.
+func HouseMapID(owner string) string { return "house:" + owner }
+
+// ParseHouseMapID extracts the owner name from a dynamic house map id.
+func ParseHouseMapID(id string) (owner string, ok bool) {
+	const prefix = "house:"
+	if len(id) > len(prefix) && id[:len(prefix)] == prefix {
+		return id[len(prefix):], true
+	}
+	return "", false
 }
 
 // AttachRequest binds a proxy WebSocket session to a map hub.

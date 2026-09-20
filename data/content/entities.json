@@ -159,6 +159,58 @@
       }
     },
     {
+      "id": "ent-imp",
+      "name": "Imp",
+      "kind": "npc_combat",
+      "template": {
+        "id": 1008,
+        "name": "imp",
+        "type": "npc",
+        "x": 48,
+        "y": 48,
+        "width": 0,
+        "height": 0,
+        "point": true,
+        "properties": [
+          {
+            "name": "id",
+            "type": "string",
+            "value": "imp"
+          },
+          {
+            "name": "roles",
+            "type": "string",
+            "value": "combat"
+          },
+          {
+            "name": "kind",
+            "type": "string",
+            "value": "imp"
+          },
+          {
+            "name": "name",
+            "type": "string",
+            "value": "Imp"
+          },
+          {
+            "name": "level",
+            "type": "int",
+            "value": 2
+          },
+          {
+            "name": "region",
+            "type": "string",
+            "value": ""
+          },
+          {
+            "name": "encounter",
+            "type": "string",
+            "value": "{\"enemies\":[{\"kind\":\"imp\",\"levelMin\":2,\"levelMax\":3}]}"
+          }
+        ]
+      }
+    },
+    {
       "id": "ent-job-master",
       "name": "Job Master",
       "kind": "npc_service",

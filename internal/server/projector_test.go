@@ -42,8 +42,6 @@ func TestProjectorPlayerFields(t *testing.T) {
 	cc.appearance = protocol.CharacterAppearance{Skin: "a", Face: "b", Hair: "c", HairColor: "d"}
 	cc.inCombat = true
 	cc.immuneUntil = time.Now().Add(5 * time.Second).UnixMilli()
-	cc.inHouse = true
-	cc.houseOwner = "Bartz"
 
 	pe.hp, pe.maxHP, pe.mp, pe.maxMP = 80, 100, 30, 50
 	pe.targetID = "npc-1"
@@ -72,9 +70,6 @@ func TestProjectorPlayerFields(t *testing.T) {
 	}
 	if we.Stamina != cc.staminaNow(now) {
 		t.Errorf("stamina mismatch: got %v want %v", we.Stamina, cc.staminaNow(now))
-	}
-	if !we.InHouse || we.HouseOwner != "Bartz" {
-		t.Errorf("house mismatch: got inHouse=%v owner=%q", we.InHouse, we.HouseOwner)
 	}
 	if we.ImmuneUntil != cc.immuneUntil {
 		t.Errorf("immuneUntil mismatch: got %d want %d", we.ImmuneUntil, cc.immuneUntil)

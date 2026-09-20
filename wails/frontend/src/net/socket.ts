@@ -41,6 +41,7 @@ import {
   actionFromSkill,
   firstConsumable,
   mainWeaponTypeFromProfile,
+  subWeaponTypeFromProfile,
   skillTargetsAlly,
   skillWeaponMatches,
 } from "../types";
@@ -89,60 +90,47 @@ const isEnemy = (e: WorldEntity) => e.kind === "npc" && !e.is_ally;
  *  max_hp 0 and are never attackable). */
 const isTargetableEnemy = (e: WorldEntity) => isEnemy(e) && e.alive && e.max_hp > 0;
 
-/** Closest targetable enemy to `self` in `pool`. */
-function nearestEnemy(self: WorldEntity, pool: Iterable<WorldEntity>): WorldEntity | undefined {
-  let best: WorldEntity | undefined;
-  let bestD = Infinity;
-  for (const e of pool) {
-    if (!isTargetableEnemy(e)) continue;
-    const d = Math.hypot(e.x - self.x, e.y - self.y);
-    if (d < bestD) {
-      bestD = d;
-      best = e;
-    }
-  }
-  return best;
-}
-
-/** Focus target if still attackable, else the nearest on-screen foe —
- *  combat participants first so a dead focus stays inside the current
- *  fight. */
-function closestEnemy(self: WorldEntity): WorldEntity | undefined {
+/** The player's selected focus if it is a living attackable enemy. Skills
+ * never auto-acquire a foe — this is the only aim assist the client does. */
+function focusedEnemyTarget(self: WorldEntity | undefined): WorldEntity | undefined {
   const { entities } = useGame.getState();
-  const focusId = selfTargetId() ?? self.target_id;
+  const focusId = selfTargetId() ?? self?.target_id;
   const focus = focusId ? entities[focusId] : undefined;
-  if (focus && isTargetableEnemy(focus)) return focus;
-  return (
-    nearestEnemy(self, combatEntityList().filter(onScreen)) ??
-    nearestEnemy(self, Object.values(entities).filter(onScreen))
-  );
-}
-
-function livingEnemyTarget(self: WorldEntity): WorldEntity | undefined {
-  return closestEnemy(self);
-}
-
-/** Enemy to focus when the current focus is missing, dead, or not an enemy; undefined if focus is already viable. */
-function nextViableEnemy(self: WorldEntity): WorldEntity | undefined {
-  const { entities } = useGame.getState();
-  const focusId = selfTargetId() ?? self.target_id;
-  const focus = focusId ? entities[focusId] : undefined;
-  if (focus && isTargetableEnemy(focus)) return undefined;
-  return closestEnemy(self);
+  return focus && isTargetableEnemy(focus) ? focus : undefined;
 }
 
 function castEnemySkill(actionId: string, self: WorldEntity | undefined) {
-  const target = self ? livingEnemyTarget(self) : undefined;
-  // Send the focus target if it still works, otherwise the nearest visible
-  // enemy. If none exists at all, send with no target — the server picks the
-  // nearest attackable entity on its side.
-  const targetId = target?.id ?? selfTargetId() ?? "";
+  // Send the selected target only — no nearest-enemy substitution. With no
+  // attackable focus the server answers "No valid target."
+  const targetId = focusedEnemyTarget(self)?.id ?? "";
   send("action", { action_id: actionId, target_id: targetId });
   useGame.setState({ selectedAction: null });
 }
 
 let ws: WebSocket | null = null;
 let intentionalClose = false;
+
+/** Backstop for a transfer request the server never answers — the overlay
+ * normally clears when the destination's state message lands. */
+let transitionTimer: ReturnType<typeof setTimeout> | null = null;
+
+function beginTransition(to: "house" | "world") {
+  if (transitionTimer) clearTimeout(transitionTimer);
+  useGame.setState({ transition: to });
+  transitionTimer = setTimeout(() => {
+    transitionTimer = null;
+    const s = useGame.getState();
+    if (s.transition === to) useGame.setState({ transition: null });
+  }, 15000);
+}
+
+function endTransition() {
+  if (transitionTimer) {
+    clearTimeout(transitionTimer);
+    transitionTimer = null;
+  }
+  if (useGame.getState().transition) useGame.setState({ transition: null });
+}
 
 function send(type: MessageType, payload?: unknown) {
   if (getGameTransport()) {
@@ -404,12 +392,15 @@ export const net = {
     this.useWorldSkill(skillId);
   },
   enterHouse(ownerName: string) {
+    beginTransition("house");
     send("enter_house", { owner_name: ownerName });
   },
   leaveHouse() {
+    beginTransition("world");
     send("leave_house");
   },
   houseInteract(target: "door" | "storage") {
+    if (target === "door") beginTransition("world");
     send("house_interact", { target });
     if (target === "storage") {
       useGame.setState({ openWindow: "house_storage" });
@@ -544,12 +535,6 @@ export const net = {
       if (!skillWeaponMatches(sk, profile)) return;
       const self = selfCombatEntity();
       if (self && !self.alive) return;
-      // Retarget first so pressing a skill on cooldown still fixes a dead or
-      // missing focus.
-      if (self && !skillTargetsAlly(sk)) {
-        const next = nextViableEnemy(self);
-        if (next) this.setTarget(next.id);
-      }
       if (entityIsCasting(self)) {
         pushChat("system", "Already casting.");
         return;
@@ -565,7 +550,7 @@ export const net = {
       const selfId = useGame.getState().selfId;
       if (skillTargetsAlly(sk)) {
         if (selfId) this.armOrSelfCast(actionFromSkill(sk), selfId);
-      } else if (sk.id === "capture" && (!self || !livingEnemyTarget(self))) {
+      } else if (sk.id === "capture" && (!self || !focusedEnemyTarget(self))) {
         this.toggleAction(actionFromSkill(sk));
       } else {
         // castEnemySkill handles self being undefined — it falls back to
@@ -653,10 +638,14 @@ export function handleMessage(env: Envelope) {
           const exists = s.characters.some((c) => c.name === summary.name);
           const characters = exists ? s.characters : [...s.characters, summary];
           const selfWeapon = mainWeaponTypeFromProfile(p.profile);
+          const selfSubWeapon = subWeaponTypeFromProfile(p.profile);
           const selfEnt = s.entities[p.player_id];
           const entities =
             selfEnt && selfWeapon
-              ? { ...s.entities, [p.player_id]: { ...selfEnt, weapon: selfWeapon } }
+              ? {
+                  ...s.entities,
+                  [p.player_id]: { ...selfEnt, weapon: selfWeapon, sub_weapon: selfSubWeapon },
+                }
               : s.entities;
           // Profile refreshes (equip, house furniture, storage) also send welcome.
           // Do not yank the player out of house/world mid-session.
@@ -702,6 +691,9 @@ export function handleMessage(env: Envelope) {
       for (const jc of p.job_changers ?? []) jobChangers[jc.id] = jc;
       const camps: Record<string, WorldCamp> = {};
       for (const camp of p.camps ?? []) camps[camp.owner_name] = camp;
+      // A world-bound transfer is complete once the destination's snapshot
+      // lands — house joins also emit world_state, so only clear for "world".
+      if (g.getState().transition === "world") endTransition();
       g.setState({
         entities,
         savePoints,
@@ -720,6 +712,7 @@ export function handleMessage(env: Envelope) {
     }
     case "house_state": {
       const house = env.payload as HouseStatePayload;
+      endTransition();
       g.setState((s) => ({
         screen: "house" as const,
         house,
@@ -731,6 +724,9 @@ export function handleMessage(env: Envelope) {
     }
     case "house_return": {
       clearHousePlace();
+      // The return transfer re-joins the world hub after this message — keep
+      // the overlay until its world_state lands (also covers eviction).
+      beginTransition("world");
       g.setState({ screen: "world", house: null, openWindow: null });
       break;
     }
@@ -849,6 +845,7 @@ export function handleMessage(env: Envelope) {
     }
     case "error": {
       const p = env.payload as { message: string };
+      endTransition();
       const screen = g.getState().screen;
       if (screen === "auth" || screen === "create" || screen === "select") {
         g.setState({ loginError: p.message });

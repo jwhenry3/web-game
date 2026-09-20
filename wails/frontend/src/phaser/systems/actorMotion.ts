@@ -21,11 +21,15 @@ import { ActorVisual, ISO_ACTOR_DEPTH_EPS, type ActorVisualRole } from "./actorV
 
 const PLAYER_SNAP_DIST = 80;
 const PLAYER_LERP = 0.25;
-const NPC_SNAP_DIST = 120;
+// Snap distances sit well above what normal interpolation lag produces —
+// crossing one teleports the actor and flags it stopped, which cuts a run
+// animation mid-stride. Remote actors get generous headroom so only real
+// teleports snap; everything else stays on the smooth lerp path.
+const NPC_SNAP_DIST = 260;
 const NPC_LERP = 0.2;
-const COMBAT_EXTRA_SNAP_DIST = 120;
+const COMBAT_EXTRA_SNAP_DIST = 260;
 const COMBAT_EXTRA_LERP = 0.25;
-const PET_SNAP_DIST = 120;
+const PET_SNAP_DIST = 260;
 const PET_LERP = 0.2;
 
 export interface SelfMotionHooks {
@@ -35,6 +39,9 @@ export interface SelfMotionHooks {
   dodging(): boolean;
   /** Called after the first authoritative self placement/facing update. */
   onSpawn(visual: ActorVisual): void;
+  /** Called when the self avatar teleports — position snapped, not lerped —
+   * so the camera can jump instead of sliding to catch up. */
+  onSnap?(visual: ActorVisual): void;
   /** Publish the rendered self position for POI prompts and other systems. */
   onPosition(x: number, y: number): void;
 }
@@ -123,6 +130,7 @@ function updateSelf(
     setPosition(visual, entity.x, entity.y);
     setLastWorldFacing(facingOf(entity, getLastWorldFacing(), !!visual.iso));
     visual.sprite.setFacing(getLastWorldFacing());
+    opts.self.onSnap?.(visual);
   }
   opts.self.onPosition(visual.wrapper.x, visual.wrapper.y);
   visual.sprite.update(delta);

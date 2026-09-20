@@ -79,23 +79,34 @@ export function layersForAppearance(): typeof H99_LAYER_ORDER {
 export const SPINE_CHAR_BASE = "/assets/spine";
 export const SPINE_CHAR_SKEL = "h99doll";
 export const SPINE_CHAR_ATLAS = "h99doll";
+export const SPINE_DOLL_SKEL = "paperdoll";
+export const SPINE_DOLL_ATLAS = "paperdoll";
+export const SPINE_QUAD_SKEL = "quaddoll";
+export const SPINE_QUAD_ATLAS = "quaddoll";
 
-let spinePromise: Promise<void> | null = null;
-let spineScene: Phaser.Scene | null = null;
+const spinePromises = new Map<string, Promise<void>>();
+const spineScenes = new Map<string, Phaser.Scene>();
 
-/** Load the shared Spine doll atlas + skeleton once (game-global caches). */
-export function ensureSpineCharacterAssets(scene: Phaser.Scene): Promise<void> {
+/** Load a Spine atlas + skeleton once (game-global caches), keyed per asset. */
+export function ensureSpineAssets(
+  scene: Phaser.Scene,
+  skelKey: string,
+  atlasKey: string,
+): Promise<void> {
+  const id = `${skelKey}|${atlasKey}`;
   // Parsed data lives in game-global caches — skip the promise entirely once
   // the raw files are in, so a stale pending load can never wedge new sprites.
   const cache = scene.game.cache;
-  if (cache.json.exists(SPINE_CHAR_SKEL) && cache.text.exists(SPINE_CHAR_ATLAS)) {
-    spinePromise = Promise.resolve();
-    return spinePromise;
+  if (cache.json.exists(skelKey) && cache.text.exists(atlasKey)) {
+    spinePromises.set(id, Promise.resolve());
+    return spinePromises.get(id)!;
   }
   // A pending load bound to a sleeping/stopped scene's loader can stall
   // forever — abandon it and start fresh on the calling (live) scene.
-  if (spinePromise && spineScene?.sys.isActive() && !spineScene.sys.isSleeping()) {
-    return spinePromise;
+  const pendingScene = spineScenes.get(id);
+  const pendingPromise = spinePromises.get(id);
+  if (pendingPromise && pendingScene?.sys.isActive() && !pendingScene.sys.isSleeping()) {
+    return pendingPromise;
   }
   const promise = new Promise<void>((resolve, reject) => {
     const cleanup = () => {
@@ -107,9 +118,9 @@ export function ensureSpineCharacterAssets(scene: Phaser.Scene): Promise<void> {
       cleanup();
       // Only clear if this promise is still the shared one — an abandoned
       // promise must not wipe a newer in-flight load.
-      if (spinePromise === promise) {
-        spinePromise = null;
-        spineScene = null;
+      if (spinePromises.get(id) === promise) {
+        spinePromises.delete(id);
+        spineScenes.delete(id);
       }
       reject(new Error(reason));
     };
@@ -118,8 +129,8 @@ export function ensureSpineCharacterAssets(scene: Phaser.Scene): Promise<void> {
       resolve();
     };
     const onError = (file: { key?: string }) => {
-      if (file.key !== SPINE_CHAR_SKEL && file.key !== SPINE_CHAR_ATLAS) return;
-      fail("Failed to load spine character assets");
+      if (file.key !== skelKey && file.key !== atlasKey) return;
+      fail(`Failed to load spine assets: ${skelKey}`);
     };
     // A scene that shuts down mid-load never emits COMPLETE — fail fast so
     // callers can retry instead of awaiting a dead promise forever.
@@ -127,11 +138,16 @@ export function ensureSpineCharacterAssets(scene: Phaser.Scene): Promise<void> {
     scene.load.once(Phaser.Loader.Events.COMPLETE, onComplete);
     scene.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, onShutdown);
-    scene.load.spineAtlas(SPINE_CHAR_ATLAS, `${SPINE_CHAR_BASE}/h99doll.atlas`);
-    scene.load.spineSkeleton(SPINE_CHAR_SKEL, `${SPINE_CHAR_BASE}/h99doll.json`);
+    scene.load.spineAtlas(atlasKey, `${SPINE_CHAR_BASE}/${atlasKey}.atlas`);
+    scene.load.spineSkeleton(skelKey, `${SPINE_CHAR_BASE}/${skelKey}.json`);
     if (!scene.load.isLoading()) scene.load.start();
   });
-  spinePromise = promise;
-  spineScene = scene;
+  spinePromises.set(id, promise);
+  spineScenes.set(id, scene);
   return promise;
+}
+
+/** Load the shared Heroes 99 doll atlas + skeleton once (game-global caches). */
+export function ensureSpineCharacterAssets(scene: Phaser.Scene): Promise<void> {
+  return ensureSpineAssets(scene, SPINE_CHAR_SKEL, SPINE_CHAR_ATLAS);
 }

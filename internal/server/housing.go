@@ -2,9 +2,7 @@ package server
 
 import (
 	"encoding/json"
-	"math"
 	"strings"
-	"time"
 
 	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
@@ -13,6 +11,21 @@ import (
 
 const campInteractRange = 80.0
 
+// houseMapIDPrefix prefixes dynamic house instance ids so they can never
+// collide with a configured map id.
+const houseMapIDPrefix = "house:"
+
+// HouseMapID returns the dynamic instance id for a player's house.
+func HouseMapID(owner string) string { return houseMapIDPrefix + owner }
+
+// ParseHouseMapID extracts the owner name from a dynamic house instance id.
+func ParseHouseMapID(id string) (owner string, ok bool) {
+	if strings.HasPrefix(id, houseMapIDPrefix) && len(id) > len(houseMapIDPrefix) {
+		return id[len(houseMapIDPrefix):], true
+	}
+	return "", false
+}
+
 type worldCamp struct {
 	OwnerName     string
 	OwnerClientID string
@@ -20,35 +33,12 @@ type worldCamp struct {
 	Skin          string
 }
 
-// housePet is a pet that followed its owner into the house. It mirrors the
-// world pet entity (same record ID) while the owner is inside.
-type housePet struct {
-	ID     string
-	Name   string
-	Sprite string // pet kind / enemy sprite key
-	X, Y   float64
-	Facing float64
+// SetHouseContext marks this hub as a dynamic house instance. Called once by
+// the map node at construction; nil keeps the hub a normal map hub.
+func (h *Hub) SetHouseContext(ctx *HouseContext) { h.houseCtx = ctx }
 
-	wanderAt time.Time
-	wx, wy   float64
-	hasSpot  bool
-}
-
-type houseGuest struct {
-	ClientID string
-	Name     string
-	X, Y     float64
-	Facing   float64
-	Pets     []*housePet
-}
-
-type houseRoom struct {
-	OwnerName     string
-	OwnerClientID string
-	CampX, CampY  float64
-	Skin          string
-	Guests        map[string]*houseGuest // clientID -> guest (includes owner)
-}
+// InHouse reports whether this hub is a dynamic house instance.
+func (h *Hub) InHouse() bool { return h.houseCtx != nil }
 
 func (h *Hub) campList() []protocol.WorldCamp {
 	out := make([]protocol.WorldCamp, 0, len(h.camps))
@@ -70,14 +60,14 @@ func (h *Hub) broadcastCamps() {
 
 func (h *Hub) placeCamp(c *Client, e *entity) {
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
+	if e == nil || cc == nil || cc.inCombat || h.houseCtx != nil {
 		h.sendError(c, "You cannot pitch a camp right now.")
 		return
 	}
 	skin := h.store.CampSkinFor(c.Name)
 	// Relocate: kick guests from previous camp if any.
 	if _, ok := h.camps[c.Name]; ok {
-		h.despawnCamp(c.Name, "Camp relocated.", false)
+		h.DespawnCamp(c.Name, "Camp relocated.")
 	}
 	// Offset south of the caster so the tent isn't buried under their sprite.
 	campX, campY := e.X, e.Y+float64(game.HouseTileSize)+8
@@ -95,64 +85,21 @@ func (h *Hub) placeCamp(c *Client, e *entity) {
 	})
 }
 
-func (h *Hub) despawnCamp(ownerName, reason string, broadcastWorld bool) {
+// DespawnCamp removes a player's pitched camp and evicts + tears down its
+// live house instance (a no-op when nobody is inside). Safe to call for any
+// character name; safe from any goroutine only via PostTask.
+func (h *Hub) DespawnCamp(ownerName, reason string) {
 	ownerName = strings.TrimSpace(ownerName)
 	if ownerName == "" {
 		return
 	}
-	h.closeHouse(ownerName, reason)
 	if _, ok := h.camps[ownerName]; ok {
 		delete(h.camps, ownerName)
 		h.broadcastCamps()
 	}
-	_ = broadcastWorld
-}
-
-func (h *Hub) closeHouse(ownerName, reason string) {
-	room, ok := h.houses[ownerName]
-	if !ok {
-		return
-	}
-	guests := make([]*houseGuest, 0, len(room.Guests))
-	for _, g := range room.Guests {
-		guests = append(guests, g)
-	}
-	delete(h.houses, ownerName)
-	for _, g := range guests {
-		h.releaseFromHouse(g.ClientID, reason)
-	}
-}
-
-func (h *Hub) releaseFromHouse(clientID, reason string) {
-	c := h.clients[clientID]
-	if e := h.playerEnt(clientID); e != nil {
-		if cc := clientControlOf(e); cc != nil {
-			cc.inHouse = false
-			cc.houseOwner = ""
-		}
-		e.hidden = false
-		// Pets come back out at the owner's side.
-		i := 0
-		h.eachEntity(kindPet, func(pet *entity) {
-			if pet.OwnerID != clientID {
-				return
-			}
-			pet.targetID = ""
-			pet.X, pet.Y = housePetSpot(e.X, e.Y, e.Facing, i)
-			h.entityDirty = true
-			i++
-		})
-		// Must reach every observer, not just owner+party: in_house on the
-		// shared entity record is the only channel that makes remote clients
-		// show this player's overworld avatar again (entity_state ignores
-		// players; combat_tick skips hidden ones).
-		h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
-		h.petSyncDirty = true
-		h.syncPetEntities()
-	}
-	if c != nil {
-		c.HouseOwner = ""
-		h.send(c, protocol.TypeHouseReturn, protocol.HouseReturnPayload{Reason: reason})
+	// Evict + tear down the live instance (no-op when nobody is inside).
+	if h.OnCloseHouse != nil {
+		h.OnCloseHouse(ownerName, reason)
 	}
 }
 
@@ -163,7 +110,7 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 	}
 	e := h.playerEnt(c.ID)
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
+	if e == nil || cc == nil || cc.inCombat || h.houseCtx != nil || h.OnTransfer == nil {
 		h.sendError(c, "You cannot enter a house right now.")
 		return
 	}
@@ -177,81 +124,71 @@ func (h *Hub) handleEnterHouse(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Move closer to the camp.")
 		return
 	}
-	room := h.houses[owner]
-	if room == nil {
-		room = &houseRoom{
-			OwnerName:     owner,
-			OwnerClientID: camp.OwnerClientID,
-			CampX:         camp.X,
-			CampY:         camp.Y,
-			Skin:          camp.Skin,
-			Guests:        map[string]*houseGuest{},
-		}
-		h.houses[owner] = room
-	}
 	sx, sy := game.HouseSpawnCenter()
-	guest := &houseGuest{ClientID: c.ID, Name: c.Name, X: sx, Y: sy, Facing: e.Facing}
-	// Active pets come inside: mirror each slotted pet record as a house pet
-	// at the spawn point, and drop any fight the entity was in at the door.
-	if prof, ok := h.store.Get(c.Name); ok {
-		for i, petID := range activePetIDs(prof) {
-			rec, ok := prof.FindPet(petID)
-			if !ok {
-				continue
-			}
-			px, py := housePetSpot(sx, sy, guest.Facing, i)
-			px, py = game.ClampHousePos(px, py)
-			guest.Pets = append(guest.Pets, &housePet{
-				ID: rec.ID, Name: rec.Name, Sprite: rec.Kind,
-				X: px, Y: py, Facing: guest.Facing,
-			})
-		}
-	}
+	// Drop any fight at the door; pets despawn with the entity and respawn
+	// inside the instance on join via syncPetEntities.
 	e.engageID = ""
 	h.eachEntity(kindPet, func(pe *entity) {
 		if pe.OwnerID == c.ID {
 			pe.targetID = ""
 		}
 	})
-	room.Guests[c.ID] = guest
-	cc.inHouse = true
-	cc.houseOwner = owner
-	cc.mounted, cc.mountSprite = false, ""
-	e.hidden = true
-	c.HouseOwner = owner
-	// Broadcast (not owner-scoped sendPlayerSync): remote clients hide this
-	// player's sprite via the in_house flag, and player_sync is the only
-	// message that carries it for player entities.
-	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
-	h.sendHouseState(room)
+	// Transferring marks the detach as a house-ward transfer so the world
+	// hub's disconnect path keeps the camp pitched.
+	c.Transferring = true
+	h.OnTransfer(c.ID, TransferDest{
+		Map:    HouseMapID(owner),
+		X:      sx,
+		Y:      sy,
+		Facing: e.Facing,
+		House: &HouseSpec{
+			Owner:     owner,
+			Skin:      camp.Skin,
+			ReturnMap: h.mapID,
+			ReturnX:   camp.X,
+			ReturnY:   camp.Y,
+		},
+	})
 }
 
 func (h *Hub) handleLeaveHouse(c *Client) {
-	if c.HouseOwner == "" {
+	h.leaveHouse(c, "Left the house.")
+}
+
+// leaveHouse returns an occupant to the camp position on the world map.
+func (h *Hub) leaveHouse(c *Client, reason string) {
+	ctx := h.houseCtx
+	if ctx == nil || h.OnTransfer == nil {
 		return
 	}
-	owner := c.HouseOwner
-	room := h.houses[owner]
-	if room != nil {
-		delete(room.Guests, c.ID)
-		if len(room.Guests) == 0 {
-			delete(h.houses, owner)
-		} else {
-			h.sendHouseState(room)
-		}
+	facing := c.SpawnFacing
+	if e := h.playerEnt(c.ID); e != nil {
+		facing = e.Facing
 	}
-	// Return near camp on overworld.
-	if camp, ok := h.camps[owner]; ok {
-		if e := h.playerEnt(c.ID); e != nil {
-			e.X, e.Y = camp.X, camp.Y
-			h.persistWorldLocation(c, e, true)
-			h.refreshRegionOwnership(c, e)
-			h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-				ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
-			}))
-		}
+	c.Transferring = true
+	h.send(c, protocol.TypeHouseReturn, protocol.HouseReturnPayload{Reason: reason})
+	h.OnTransfer(c.ID, TransferDest{
+		Map:    ctx.ReturnMap,
+		X:      ctx.ReturnX,
+		Y:      ctx.ReturnY,
+		Facing: facing,
+	})
+}
+
+// EvictHouse transfers every occupant back to the camp position. Called when
+// the owning camp despawns (relocate or owner logout).
+func (h *Hub) EvictHouse(reason string) {
+	ctx := h.houseCtx
+	if ctx == nil {
+		return
 	}
-	h.releaseFromHouse(c.ID, "Left the house.")
+	guests := make([]*Client, 0, len(h.clients))
+	for _, c := range h.clients {
+		guests = append(guests, c)
+	}
+	for _, c := range guests {
+		h.leaveHouse(c, reason)
+	}
 }
 
 func (h *Hub) handleHouseInteract(c *Client, raw json.RawMessage) {
@@ -259,13 +196,10 @@ func (h *Hub) handleHouseInteract(c *Client, raw json.RawMessage) {
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return
 	}
-	room := h.houses[c.HouseOwner]
-	if room == nil {
+	ctx := h.houseCtx
+	e := h.playerEnt(c.ID)
+	if ctx == nil || e == nil {
 		h.sendError(c, "You are not inside a house.")
-		return
-	}
-	guest := room.Guests[c.ID]
-	if guest == nil {
 		return
 	}
 	switch strings.ToLower(strings.TrimSpace(p.Target)) {
@@ -273,32 +207,36 @@ func (h *Hub) handleHouseInteract(c *Client, raw json.RawMessage) {
 		dc, dr := game.HouseDoorTile()
 		dx := (float64(dc) + 0.5) * game.HouseTileSize
 		dy := (float64(dr) + 0.5) * game.HouseTileSize
-		if dist(guest.X, guest.Y, dx, dy) > campInteractRange {
+		if dist(e.X, e.Y, dx, dy) > campInteractRange {
 			h.sendError(c, "Move closer to the door.")
 			return
 		}
-		h.handleLeaveHouse(c)
+		h.leaveHouse(c, "Left the house.")
 	case "storage":
-		if !strings.EqualFold(c.Name, room.OwnerName) {
+		if !strings.EqualFold(c.Name, ctx.Owner) {
 			h.sendError(c, "Only the house owner can use storage.")
 			return
 		}
 		sc, sr := game.HouseStorageTile()
 		sx := (float64(sc) + 0.5) * game.HouseTileSize
 		sy := (float64(sr) + 0.5) * game.HouseTileSize
-		if dist(guest.X, guest.Y, sx, sy) > campInteractRange {
+		if dist(e.X, e.Y, sx, sy) > campInteractRange {
 			h.sendError(c, "Move closer to the storage chest.")
 			return
 		}
-		h.sendHouseState(room) // refresh storage for owner UI
+		h.sendHouseState() // refresh storage for owner UI
 	default:
 		h.sendError(c, "Unknown house interact target.")
 	}
 }
 
+// houseOwnerOnly reports whether c is the owner of this house instance.
+func (h *Hub) houseOwnerOnly(c *Client) bool {
+	return h.houseCtx != nil && strings.EqualFold(c.Name, h.houseCtx.Owner)
+}
+
 func (h *Hub) handleHouseStorageDeposit(c *Client, raw json.RawMessage) {
-	room := h.houses[c.HouseOwner]
-	if room == nil || !strings.EqualFold(c.Name, room.OwnerName) {
+	if !h.houseOwnerOnly(c) {
 		h.sendError(c, "Only the house owner can deposit items.")
 		return
 	}
@@ -312,12 +250,11 @@ func (h *Hub) handleHouseStorageDeposit(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendProfileRefresh(c, profile)
-	h.sendHouseState(room)
+	h.sendHouseState()
 }
 
 func (h *Hub) handleHouseStorageWithdraw(c *Client, raw json.RawMessage) {
-	room := h.houses[c.HouseOwner]
-	if room == nil || !strings.EqualFold(c.Name, room.OwnerName) {
+	if !h.houseOwnerOnly(c) {
 		h.sendError(c, "Only the house owner can withdraw items.")
 		return
 	}
@@ -331,12 +268,11 @@ func (h *Hub) handleHouseStorageWithdraw(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendProfileRefresh(c, profile)
-	h.sendHouseState(room)
+	h.sendHouseState()
 }
 
 func (h *Hub) handleHousePlaceFurniture(c *Client, raw json.RawMessage) {
-	room := h.houses[c.HouseOwner]
-	if room == nil || !strings.EqualFold(c.Name, room.OwnerName) {
+	if !h.houseOwnerOnly(c) {
 		h.sendError(c, "Only the house owner can place furniture.")
 		return
 	}
@@ -350,12 +286,11 @@ func (h *Hub) handleHousePlaceFurniture(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendProfileRefresh(c, profile)
-	h.sendHouseState(room)
+	h.sendHouseState()
 }
 
 func (h *Hub) handleHousePickFurniture(c *Client, raw json.RawMessage) {
-	room := h.houses[c.HouseOwner]
-	if room == nil || !strings.EqualFold(c.Name, room.OwnerName) {
+	if !h.houseOwnerOnly(c) {
 		h.sendError(c, "Only the house owner can pick up furniture.")
 		return
 	}
@@ -369,7 +304,7 @@ func (h *Hub) handleHousePickFurniture(c *Client, raw json.RawMessage) {
 		return
 	}
 	h.sendProfileRefresh(c, profile)
-	h.sendHouseState(room)
+	h.sendHouseState()
 }
 
 func (h *Hub) handleSetCampSkin(c *Client, raw json.RawMessage) {
@@ -378,8 +313,8 @@ func (h *Hub) handleSetCampSkin(c *Client, raw json.RawMessage) {
 		h.sendError(c, "Malformed camp skin request.")
 		return
 	}
-	room := h.houses[c.HouseOwner]
-	if room == nil || !strings.EqualFold(c.Name, room.OwnerName) {
+	ctx := h.houseCtx
+	if ctx == nil || !strings.EqualFold(c.Name, ctx.Owner) {
 		h.sendError(c, "Only the owner can change the tent skin inside their house.")
 		return
 	}
@@ -388,46 +323,69 @@ func (h *Hub) handleSetCampSkin(c *Client, raw json.RawMessage) {
 		h.sendError(c, errMsg)
 		return
 	}
-	skin := game.NormalizeCampSkin(profile.CampSkin)
-	room.Skin = skin
-	if camp := h.camps[room.OwnerName]; camp != nil {
-		camp.Skin = skin
-		h.broadcastCamps()
+	ctx.Skin = game.NormalizeCampSkin(profile.CampSkin)
+	if h.OnCampSkinChanged != nil {
+		h.OnCampSkinChanged(ctx.Owner, ctx.Skin)
 	}
 	h.sendProfileRefresh(c, profile)
-	h.sendHouseState(room)
+	h.sendHouseState()
 }
 
-func (h *Hub) sendHouseState(room *houseRoom) {
-	if room == nil {
+// UpdateCampSkin restyles a pitched camp's overworld tent. Runs on the hub
+// that owns the camp (the instance's return map).
+func (h *Hub) UpdateCampSkin(owner, skin string) {
+	if camp, ok := h.camps[owner]; ok {
+		camp.Skin = game.NormalizeCampSkin(skin)
+		h.broadcastCamps()
+	}
+}
+
+// sendHouseState broadcasts the instance payload to every occupant. Players
+// and pets are synthesized from the hub's entity map — the house is a normal
+// entity space — while furniture/POIs/storage stay owner-scoped per client.
+func (h *Hub) sendHouseState() {
+	h.sendHouseStateTo(nil)
+}
+
+// sendHouseStateTo is sendHouseState plus an explicit extra recipient: a
+// join replay can run before the client's register channel drains, leaving
+// them out of h.clients when the broadcast iterates it.
+func (h *Hub) sendHouseStateTo(extra *Client) {
+	ctx := h.houseCtx
+	if ctx == nil {
 		return
 	}
 	col0, row0 := game.HouseWalkOrigin()
 	dc, dr := game.HouseDoorTile()
 	sc, sr := game.HouseStorageTile()
-	players := make([]protocol.HousePlayer, 0, len(room.Guests))
-	for _, g := range room.Guests {
-		pets := make([]protocol.HousePet, 0, len(g.Pets))
-		for _, p := range g.Pets {
-			pets = append(pets, protocol.HousePet{
-				ID: p.ID, Name: p.Name, Sprite: p.Sprite,
-				X: p.X, Y: p.Y, Facing: p.Facing,
-			})
+	petsByOwner := map[string][]protocol.HousePet{}
+	h.eachEntity(kindPet, func(p *entity) {
+		if p.hidden {
+			return
+		}
+		petsByOwner[p.OwnerID] = append(petsByOwner[p.OwnerID], protocol.HousePet{
+			ID: p.ID, Name: p.Name, Sprite: p.Sprite,
+			X: p.X, Y: p.Y, Facing: p.Facing,
+		})
+	})
+	players := make([]protocol.HousePlayer, 0, len(h.clients))
+	h.eachEntity(kindPlayer, func(pe *entity) {
+		if pe.hidden {
+			return
 		}
 		players = append(players, protocol.HousePlayer{
-			ID: g.ClientID, Name: g.Name, X: g.X, Y: g.Y, Facing: g.Facing,
-			Owner: strings.EqualFold(g.Name, room.OwnerName),
-			Pets:  pets,
+			ID: pe.ID, Name: pe.Name, X: pe.X, Y: pe.Y, Facing: pe.Facing,
+			Owner: strings.EqualFold(pe.Name, ctx.Owner),
+			Pets:  petsByOwner[pe.ID],
 		})
-	}
-	furniture := h.store.HouseFurnitureSnapshot(room.OwnerName)
+	})
 	pois := []protocol.HousePOI{
 		{ID: "door", Kind: "door", Name: "Door", X: (float64(dc) + 0.5) * game.HouseTileSize, Y: (float64(dr) + 0.5) * game.HouseTileSize},
 		{ID: "storage", Kind: "storage", Name: "Storage", X: (float64(sc) + 0.5) * game.HouseTileSize, Y: (float64(sr) + 0.5) * game.HouseTileSize},
 	}
 	base := protocol.HouseStatePayload{
-		OwnerName:     room.OwnerName,
-		Skin:          room.Skin,
+		OwnerName:     ctx.Owner,
+		Skin:          ctx.Skin,
 		MapCols:       game.HouseMapCols,
 		MapRows:       game.HouseMapRows,
 		WalkCols:      game.HouseWalkCols,
@@ -436,140 +394,48 @@ func (h *Hub) sendHouseState(room *houseRoom) {
 		WalkOriginRow: row0,
 		TileSize:      game.HouseTileSize,
 		Players:       players,
-		Furniture:     furniture,
+		Furniture:     h.store.HouseFurnitureSnapshot(ctx.Owner),
 		POIs:          pois,
 	}
-	for _, g := range room.Guests {
-		cl := h.clients[g.ClientID]
-		if cl == nil {
-			continue
-		}
+	payloadFor := func(cl *Client) protocol.HouseStatePayload {
 		payload := base
-		payload.IsOwner = strings.EqualFold(g.Name, room.OwnerName)
+		payload.IsOwner = strings.EqualFold(cl.Name, ctx.Owner)
 		if payload.IsOwner {
-			if prof, ok := h.store.Get(room.OwnerName); ok {
+			if prof, ok := h.store.Get(ctx.Owner); ok {
 				payload.Storage = append([]game.Item(nil), prof.HouseStorage...)
 				payload.StorageCapacity = game.DefaultHouseStorageCapacity
 			}
 		}
-		h.send(cl, protocol.TypeHouseState, payload)
+		return payload
 	}
-}
-
-func (h *Hub) moveInHouse(c *Client, e *entity, x, y float64, facing *float64) {
-	room := h.houses[c.HouseOwner]
-	if room == nil {
-		return
+	for _, cl := range h.clients {
+		h.send(cl, protocol.TypeHouseState, payloadFor(cl))
 	}
-	guest := room.Guests[c.ID]
-	if guest == nil {
-		return
-	}
-	nx, ny := game.SlideMoveHousePlayer(guest.X, guest.Y, x, y)
-	nx, ny = game.ClampHousePos(nx, ny)
-	guest.Facing = game.ResolveFacingYaw(nx-guest.X, ny-guest.Y, derefFacing(facing), facing != nil, guest.Facing)
-	guest.X, guest.Y = nx, ny
-	_ = e
-	h.sendHouseState(room)
-}
-
-// housePetSpot returns the follow position for the i-th house pet: behind the
-// owner like the overworld followOffset, fanned out sideways so pets don't stack.
-func housePetSpot(x, y, facing float64, i int) (float64, float64) {
-	gx, gy := followOffset(x, y, facing)
-	fx, fy := game.FacingDir(facing)
-	side := float64((i%2)*2-1) * (1 + float64(i/2))
-	return gx - fy*side*20, gy + fx*side*20
-}
-
-// stepHousePets mirrors the overworld followOwner leash so pets behave the
-// same indoors: inside the wander radius they mill to a new spot every
-// petWanderInterval, and beyond it they close distance at catch-up-scaled
-// speed — stopping at the leash edge — rather than pinning to an exact
-// trailing spot. Runs on the entity tick; returns true when any pet moved.
-func (h *Hub) stepHousePets(guest *houseGuest, now time.Time, dt float64) bool {
-	moved := false
-	for _, p := range guest.Pets {
-		d := dist(p.X, p.Y, guest.X, guest.Y)
-		if d <= petWanderDist {
-			if h.stepHousePetWander(p, guest, now, dt) {
-				moved = true
+	if extra != nil {
+		if _, ok := h.clients[extra.ID]; !ok {
+			// The joiner may not be in h.clients yet; h.send drops
+			// non-members, so write the frame straight to the channel.
+			// Called only on the hub goroutine — c.Send cannot close here.
+			select {
+			case extra.Send <- protocol.Encode(protocol.TypeHouseState, payloadFor(extra)):
+			default:
+				h.noteDrop(extra.ID)
 			}
-			continue
-		}
-		step := math.Min(petFollowSpeed(d)*dt, d-petFollowDist)
-		p.X += (guest.X - p.X) / d * step
-		p.Y += (guest.Y - p.Y) / d * step
-		p.X, p.Y = game.ClampHousePos(p.X, p.Y)
-		p.Facing = guest.Facing
-		moved = true
-	}
-	return moved
-}
-
-// stepHousePetWander mirrors followOwner.wander indoors: every
-// petWanderInterval the pet picks a walkable spot inside the wander radius
-// around its owner and ambles over. Returns true when the pet moved.
-func (h *Hub) stepHousePetWander(p *housePet, guest *houseGuest, now time.Time, dt float64) bool {
-	if !p.hasSpot || !now.Before(p.wanderAt) || dist(p.wx, p.wy, guest.X, guest.Y) > petWanderDist+8 {
-		p.wx, p.wy, p.hasSpot = h.housePetWanderSpot(guest)
-		p.wanderAt = now.Add(petWanderInterval)
-	}
-	if !p.hasSpot {
-		return false
-	}
-	d := dist(p.X, p.Y, p.wx, p.wy)
-	if d <= 4 {
-		return false
-	}
-	step := math.Min(petWanderSpeed*dt, d)
-	nx, ny := p.X+(p.wx-p.X)/d*step, p.Y+(p.wy-p.Y)/d*step
-	if !game.HouseCircleWalkableAt(nx, ny, game.PlayerCollisionRadius) {
-		p.hasSpot = false // blocked — repick next tick
-		return false
-	}
-	px, py := p.X, p.Y
-	p.X, p.Y = nx, ny
-	p.Facing = game.ResolveFacingYaw(p.X-px, p.Y-py, 0, false, p.Facing)
-	return true
-}
-
-// housePetWanderSpot is petWanderSpot for the house floor: a random point
-// in the ring around the guest that still fits the walkable island.
-func (h *Hub) housePetWanderSpot(guest *houseGuest) (x, y float64, ok bool) {
-	for i := 0; i < 6; i++ {
-		a := h.rng.Float64() * 2 * math.Pi
-		r := 16 + h.rng.Float64()*(petWanderDist-16)
-		nx, ny := guest.X+math.Cos(a)*r, guest.Y+math.Sin(a)*r
-		if game.HouseCircleWalkableAt(nx, ny, game.PlayerCollisionRadius) {
-			return nx, ny, true
 		}
 	}
-	return 0, 0, false
 }
 
 func (h *Hub) onHousingDisconnect(c *Client) {
 	if c == nil {
 		return
 	}
-	// Owner logout: despawn camp and kick everyone.
-	if _, ok := h.camps[c.Name]; ok {
-		h.despawnCamp(c.Name, "The camp was packed up.", true)
+	// Transferring out (enter/leave/evict): keep the camp pitched. The proxy
+	// posts the despawn itself when a session inside an instance truly drops.
+	if c.Transferring || h.houseCtx != nil {
 		return
 	}
-	// Guest leave only.
-	if c.HouseOwner != "" {
-		owner := c.HouseOwner
-		if room := h.houses[owner]; room != nil {
-			delete(room.Guests, c.ID)
-			if len(room.Guests) == 0 {
-				delete(h.houses, owner)
-			} else {
-				h.sendHouseState(room)
-			}
-		}
-		c.HouseOwner = ""
-	}
+	// Owner logout in the world: despawn camp and evict its house instance.
+	h.DespawnCamp(c.Name, "The camp was packed up.")
 }
 
 // ensure profileToInfo gets house storage — called from existing path.

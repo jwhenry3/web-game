@@ -333,8 +333,8 @@ export class WorldScene extends Phaser.Scene {
   private syncPlayerVisuals() {
     syncPlayerVisuals(this.ecs, this, {
       clickEntity: (id) => this.onEntityClicked(id),
-      resolveAppearance: (id, race, weapon, wire) =>
-        this.resolveAppearance(id, race, weapon, wire),
+      resolveAppearance: (id, race, weapon, subWeapon, wire) =>
+        this.resolveAppearance(id, race, weapon, subWeapon, wire),
     });
   }
 
@@ -371,6 +371,14 @@ export class WorldScene extends Phaser.Scene {
             this.cameras.main.startFollow(this.camProxy, true, 0.15, 0.15);
           }
           this.selfSpawned = true;
+        },
+        onSnap: (visual) => {
+          // Avatar teleported (zone transfer, return skill): jump the camera
+          // to it — the follow lerp would otherwise slide over for ~1s.
+          const sx = isoX(visual.wrapper.x, visual.wrapper.y);
+          const sy = isoY(visual.wrapper.x, visual.wrapper.y);
+          this.camProxy?.setPosition(sx, sy);
+          this.cameras.main.centerOn(sx, sy);
         },
         onPosition: (x, y) => setWorldLocalPos(x, y),
       },
@@ -412,6 +420,7 @@ export class WorldScene extends Phaser.Scene {
     playerId: string,
     race?: string,
     weapon?: string,
+    subWeapon?: string,
     wire?: CharacterAppearanceWire,
   ) {
     const state = useGame.getState();
@@ -421,6 +430,7 @@ export class WorldScene extends Phaser.Scene {
       profile: state.profile,
       race,
       weapon,
+      subWeapon,
       wire,
     });
   }

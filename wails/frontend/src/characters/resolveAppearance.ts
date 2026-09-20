@@ -6,7 +6,7 @@ import {
   type CharacterAppearance,
 } from "./heroes99";
 import type { CharacterAppearanceWire, ProfileInfo } from "../types";
-import { mainWeaponTypeFromProfile } from "../types";
+import { mainWeaponTypeFromProfile, subWeaponTypeFromProfile } from "../types";
 
 /** Build a composed appearance, mapping the equipped weapon type to Heroes 99 sprites. */
 export function resolveCharacterAppearance(opts: {
@@ -15,17 +15,19 @@ export function resolveCharacterAppearance(opts: {
   profile: ProfileInfo | null;
   race?: string;
   weapon?: string;
+  subWeapon?: string;
   wire?: CharacterAppearanceWire;
 }): CharacterAppearance {
   const fromWire = appearanceFromWire(opts.wire);
+  const isSelf = opts.playerId === opts.selfId;
   const base =
     fromWire ??
-    (opts.playerId === opts.selfId
+    (isSelf
       ? loadAppearance(opts.playerId, opts.race)
       : appearanceFromRace(opts.race ?? "humanus"));
-  const equipped =
-    opts.playerId === opts.selfId ? mainWeaponTypeFromProfile(opts.profile) : undefined;
+  const equipped = isSelf ? mainWeaponTypeFromProfile(opts.profile) : undefined;
+  const subEquipped = isSelf ? subWeaponTypeFromProfile(opts.profile) : undefined;
   // The entity/preview weapon is authoritative ("" = unarmed → bare hands);
   // the profile lookup only fills in when no weapon info was supplied.
-  return applyGameWeapon(base, opts.weapon ?? equipped);
+  return applyGameWeapon(base, opts.weapon ?? equipped, opts.subWeapon ?? subEquipped);
 }

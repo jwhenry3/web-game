@@ -515,18 +515,10 @@ func (h *Hub) tickEntities(now time.Time) {
 		bStart := time.Now()
 		h.broadcastEntityState()
 		logSlow("hub tickEntities.entityState", time.Since(bStart), 30*time.Millisecond)
-	}
-	// Camp pets follow on the same tick cadence as overworld pets; a moved
-	// pet pushes a fresh house_state so guests see it trail and settle.
-	for _, room := range h.houses {
-		moved := false
-		for _, g := range room.Guests {
-			if h.stepHousePets(g, now, dt) {
-				moved = true
-			}
-		}
-		if moved {
-			h.sendHouseState(room)
+		// HouseScene reads positions from house_state, so entity motion inside
+		// an instance (pets wandering, NPC-free) also refreshes the roster.
+		if h.houseCtx != nil {
+			h.sendHouseState()
 		}
 	}
 	if !h.combatActive() {

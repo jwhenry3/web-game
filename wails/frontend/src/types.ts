@@ -291,6 +291,13 @@ export function mainWeaponTypeFromProfile(profile: ProfileInfo | null | undefine
   return profile!.inventory.find((i) => i.id === itemId)?.type;
 }
 
+/** Equipped sub-hand weapon type from profile inventory (sub job required). */
+export function subWeaponTypeFromProfile(profile: ProfileInfo | null | undefined): string | undefined {
+  const itemId = profile?.equipped?.sub_weapon;
+  if (!itemId) return undefined;
+  return profile!.inventory.find((i) => i.id === itemId)?.type;
+}
+
 /** Weapon type equipped for a skill (main or sub hand depending on job). */
 export function weaponTypeForSkill(sk: SkillInfo, profile: ProfileInfo): string | undefined {
   const slot =

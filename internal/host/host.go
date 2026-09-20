@@ -210,6 +210,9 @@ func (rt *Runtime) Close() error {
 		n.Stop()
 	}
 	rt.nodes = nil
+	if rt.Proxy != nil {
+		rt.Proxy.StopInstances()
+	}
 	// Hubs are stopped — flush any pending profile writes before returning.
 	if rt.profiles != nil {
 		rt.profiles.Close()

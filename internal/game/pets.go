@@ -43,6 +43,8 @@ func PetDisplayName(kind string) string {
 		return "Dire Wolf"
 	case "stone_imp":
 		return "Stone Imp"
+	case "imp":
+		return "Imp"
 	default:
 		if kind == "" {
 			return "Pet"

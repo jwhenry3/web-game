@@ -344,7 +344,9 @@ func (h *Hub) canResumeAt(x, y float64) bool {
 }
 
 func (h *Hub) persistWorldLocation(c *Client, e *entity, flush bool) {
-	if c == nil || e == nil || c.Name == "" {
+	if c == nil || e == nil || c.Name == "" || h.houseCtx != nil {
+		// House instances never persist: interior coords must not leak into
+		// the profile's world resume position.
 		return
 	}
 	doFlush := flush || time.Since(c.lastWorldSave) >= worldPosSaveInterval

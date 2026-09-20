@@ -32,10 +32,10 @@ func (pr *projector) project(e *entity, now time.Time) protocol.WorldEntity {
 	case kindPlayer:
 		if cc := clientControlOf(e); cc != nil {
 			we.Weapon, we.MainJob, we.SubJob = cc.weaponName, cc.mainJobName, cc.subJobName
+			we.SubWeapon = cc.subWeaponName
 			we.Appearance = cc.appearance
 			we.Engaged = cc.inCombat
 			we.Stamina = cc.staminaNow(now)
-			we.InHouse, we.HouseOwner = cc.inHouse, cc.houseOwner
 			we.Mounted = cc.mounted
 			if cc.mounted {
 				we.MountSprite = cc.mountSprite

@@ -12,7 +12,7 @@ import {
 import { bindingToPhaserKeyCode, mergeKeybinds } from "../input/keybinds";
 import type { HouseFurniture, HousePet, HousePlayer, HousePOI, HouseStatePayload } from "../types";
 import { enemyKindFromName, type EnemyKind } from "../characters/enemies";
-import { CharacterSprite } from "./CharacterSprite";
+import { CharacterSprite, PLAYER_RIG } from "./CharacterSprite";
 import { EnemySprite } from "./EnemySprite";
 import { entityShadow } from "./entityShadow";
 import { trackContentZoom } from "./contentZoom";
@@ -281,6 +281,7 @@ export class HouseScene extends Phaser.Scene {
       profile: state.profile,
       race: wp?.sprite,
       weapon: wp?.weapon,
+      subWeapon: wp?.sub_weapon,
       wire: wp?.appearance,
     });
     const appKey = appearanceKey(appearance);
@@ -299,7 +300,7 @@ export class HouseScene extends Phaser.Scene {
     }
     const shadow = entityShadow(this);
     if (isoLayer(this)) shadow.setScale(1, 0.45);
-    const sprite = new CharacterSprite(this, 0, 0, appearance);
+    const sprite = new CharacterSprite(this, 0, 0, appearance, PLAYER_RIG);
     wrapper.add([shadow, sprite.container]);
     av = { wrapper, sprite, appearanceKey: appKey };
     this.avatars.set(p.id, av);

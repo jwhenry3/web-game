@@ -23,11 +23,41 @@ type Node struct {
 	World     *game.WorldDefinition
 	WorldSpec cluster.WorldSpec
 
+	// Instance is non-nil for dynamic nodes (e.g. house interiors) created at
+	// runtime rather than from cluster config.
+	Instance *server.HouseContext
+
 	mu       sync.Mutex
 	sessions map[string]*server.Client
+	closed   bool // set by MarkClosed during instance teardown
 
 	Forward  func(clientID string, msg []byte)
 	Transfer func(req cluster.TransferRequest)
+}
+
+// wireTransfer installs the hub's OnTransfer callback so house/instance
+// transfers flow through the node's Transfer hook like map transfers.
+func (n *Node) wireTransfer() {
+	n.Hub.OnTransfer = func(clientID string, dest server.TransferDest) {
+		if n.Transfer != nil {
+			var house *cluster.HouseSpec
+			if dest.House != nil {
+				house = &cluster.HouseSpec{
+					Owner:     dest.House.Owner,
+					Skin:      dest.House.Skin,
+					ReturnMap: dest.House.ReturnMap,
+					ReturnX:   dest.House.ReturnX,
+					ReturnY:   dest.House.ReturnY,
+				}
+			}
+			n.Transfer(cluster.TransferRequest{
+				ClientID: clientID, DestMap: dest.Map,
+				DestX: dest.X, DestY: dest.Y, Facing: dest.Facing,
+				Edge: string(dest.Edge), EdgeT: dest.EdgeT,
+				House: house,
+			})
+		}
+	}
 }
 
 func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountStore, layout map[string][2]int) (*Node, error) {
@@ -62,17 +92,41 @@ func Start(spec cluster.MapSpec, profiles *store.Store, accounts *store.AccountS
 		OW:       ow,
 		sessions: map[string]*server.Client{},
 	}
-	hub.OnTransfer = func(clientID string, dest server.TransferDest) {
-		if n.Transfer != nil {
-			n.Transfer(cluster.TransferRequest{
-				ClientID: clientID, DestMap: dest.Map,
-				DestX: dest.X, DestY: dest.Y, Facing: dest.Facing,
-				Edge: string(dest.Edge), EdgeT: dest.EdgeT,
-			})
-		}
-	}
+	n.wireTransfer()
 	go hub.Run()
 	log.Printf("map %s (%s) overworld %s", spec.ID, spec.Name, ow.Path)
+	return n, nil
+}
+
+// StartHouse starts a dynamic house instance node: a generated interior
+// overworld on a full hub — no map file, no NPC workers, no persistence of
+// the interior position. Occupants enter/leave via the normal transfer path.
+func StartHouse(spec *cluster.HouseSpec, profiles *store.Store, accounts *store.AccountStore) (*Node, error) {
+	hub, err := server.NewHub(profiles, accounts, nil)
+	if err != nil {
+		return nil, err
+	}
+	ow := game.NewHouseOverworld()
+	id := server.HouseMapID(spec.Owner)
+	ctx := &server.HouseContext{
+		Owner:     spec.Owner,
+		Skin:      spec.Skin,
+		ReturnMap: spec.ReturnMap,
+		ReturnX:   spec.ReturnX,
+		ReturnY:   spec.ReturnY,
+	}
+	hub.SetMap(id, "House", ow)
+	hub.SetHouseContext(ctx)
+	n := &Node{
+		Spec:     cluster.MapSpec{ID: id, Name: "House"},
+		Hub:      hub,
+		OW:       ow,
+		Instance: ctx,
+		sessions: map[string]*server.Client{},
+	}
+	n.wireTransfer()
+	go hub.Run()
+	log.Printf("house instance %s started for %s", id, spec.Owner)
 	return n, nil
 }
 
@@ -106,6 +160,7 @@ func StartWorld(spec cluster.WorldSpec, profiles *store.Store, accounts *store.A
 		OW:        world.Overworld,
 		sessions:  map[string]*server.Client{},
 	}
+	n.wireTransfer()
 	go hub.Run()
 	log.Printf("world %s (%s) overworld %s", spec.ID, spec.Name, world.Overworld.Path)
 	return n, nil
@@ -114,6 +169,9 @@ func StartWorld(spec cluster.WorldSpec, profiles *store.Store, accounts *store.A
 func (n *Node) Attach(req cluster.AttachRequest) *server.Client {
 	n.mu.Lock()
 	defer n.mu.Unlock()
+	if n.closed {
+		return nil
+	}
 	if c, ok := n.sessions[req.ClientID]; ok {
 		return c
 	}
@@ -130,7 +188,7 @@ func (n *Node) Attach(req cluster.AttachRequest) *server.Client {
 		SpawnEdge:   game.BorderEdge(req.Edge),
 		SpawnEdgeT:  req.EdgeT,
 		CloseFn: func() {
-			n.Detach(req.ClientID)
+			n.Detach(req.ClientID, false)
 		},
 	}
 	n.sessions[req.ClientID] = c
@@ -163,7 +221,10 @@ func (n *Node) ReloadOverworld() error {
 	return nil
 }
 
-func (n *Node) Detach(clientID string) {
+// Detach unregisters a session. transferring marks proxy-driven transfers so
+// the hub can distinguish them from real disconnects (e.g. a camp should not
+// be packed up when its owner merely steps inside the house instance).
+func (n *Node) Detach(clientID string, transferring bool) {
 	n.mu.Lock()
 	c, ok := n.sessions[clientID]
 	if ok {
@@ -171,6 +232,7 @@ func (n *Node) Detach(clientID string) {
 	}
 	n.mu.Unlock()
 	if ok {
+		c.Transferring = transferring
 		n.Hub.Unregister(c)
 	}
 }
@@ -186,6 +248,21 @@ func (n *Node) SessionIDs() []string {
 	return out
 }
 
+// MarkClosed refuses further Attach calls; used before stopping a dynamic
+// instance so a racing attach cannot orphan a session on a dying node.
+func (n *Node) MarkClosed() {
+	n.mu.Lock()
+	n.closed = true
+	n.mu.Unlock()
+}
+
+// Closed reports whether MarkClosed has run.
+func (n *Node) Closed() bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.closed
+}
+
 // StatusCounts returns online players and engaged-foe counts for this map.
 func (n *Node) StatusCounts() (players, engaged int) {
 	return n.Hub.StatusCounts()
@@ -193,6 +270,7 @@ func (n *Node) StatusCounts() (players, engaged int) {
 
 // Stop detaches remaining sessions and shuts down the hub loop.
 func (n *Node) Stop() {
+	n.MarkClosed()
 	n.mu.Lock()
 	ids := make([]string, 0, len(n.sessions))
 	for id := range n.sessions {
@@ -200,7 +278,7 @@ func (n *Node) Stop() {
 	}
 	n.mu.Unlock()
 	for _, id := range ids {
-		n.Detach(id)
+		n.Detach(id, false)
 	}
 	game.UnregisterSavePointsForMap(n.Spec.ID)
 	n.Hub.Stop()

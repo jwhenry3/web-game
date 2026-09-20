@@ -110,7 +110,7 @@ func (h *Hub) handleUseWorldSkill(c *Client, raw json.RawMessage) {
 	}
 	e := h.playerEnt(c.ID)
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
+	if e == nil || cc == nil || cc.inCombat || h.houseCtx != nil {
 		h.sendError(c, "You cannot use that right now.")
 		return
 	}
@@ -260,7 +260,7 @@ func (h *Hub) completeWorldCast(c *Client) {
 	e := h.playerEnt(c.ID)
 	h.clearWorldCast(c, e)
 	cc := clientControlOf(e)
-	if e == nil || cc == nil || cc.inCombat || cc.inHouse {
+	if e == nil || cc == nil || cc.inCombat || h.houseCtx != nil {
 		if e != nil {
 			h.sendPlayerSync(e)
 		}

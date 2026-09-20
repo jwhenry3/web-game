@@ -105,6 +105,7 @@ export interface AppearanceState {
   ownerId?: string;
   isAlly: boolean;
   weapon?: string;
+  subWeapon?: string;
   mainJob?: string;
   subJob?: string;
   appearance?: CharacterAppearance;

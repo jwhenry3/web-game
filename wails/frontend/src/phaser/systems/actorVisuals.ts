@@ -29,7 +29,7 @@ import {
   isoLayer,
   isoParent,
 } from "../../world/iso";
-import { CharacterSprite } from "../CharacterSprite";
+import { CharacterSprite, PLAYER_RIG } from "../CharacterSprite";
 import { EnemySprite } from "../EnemySprite";
 import type { IEntitySprite } from "../entitySprite";
 import { createSpriteForEntity, ENTITY_PRESENTATION } from "../spriteFactory";
@@ -97,7 +97,7 @@ export const PET_FOLLOW_SCALE = 0.55;
 /** Mounts draw bigger than follow pets but still under NPC scale. */
 const MOUNT_SCALE = 0.85;
 /** Rider sits this far above the mount's ground point. */
-const RIDER_OFFSET_Y = -8;
+const RIDER_OFFSET_Y = -14;
 
 /** The creature under a mounted player, or undefined when on foot. */
 function mountKindOf(entity: WorldEntity): EnemyKind | undefined {
@@ -146,6 +146,7 @@ export interface PlayerVisualOptions extends ActorVisualInteractions {
     id: string,
     race?: string,
     weapon?: string,
+    subWeapon?: string,
     wire?: CharacterAppearanceWire,
   ): CharacterAppearance;
 }
@@ -237,6 +238,7 @@ export function syncPlayerVisuals(
       snapshot.id,
       appearanceState.sprite,
       appearanceState.weapon,
+      appearanceState.subWeapon,
       appearanceState.appearance,
     );
     const key = appearanceKey(appearance);
@@ -262,7 +264,7 @@ export function syncPlayerVisuals(
     const ring = scene.add
       .circle(0, H99_WORLD_RING_Y, H99_WORLD_RING_RADIUS, 0xffe9a8, 0)
       .setVisible(false);
-    const sprite = new CharacterSprite(scene, 0, 0, appearance);
+    const sprite = new CharacterSprite(scene, 0, 0, appearance, PLAYER_RIG);
     wrapper.add([
       actorShadow(scene, ENTITY_PRESENTATION.defaultShadowScale),
       ring,
@@ -326,7 +328,7 @@ export function syncNpcVisuals(
       .setDepth(ENTITY_PRESENTATION.foeDepth);
     const iso = adoptIso(scene, wrapper, pose.x, pose.y);
     const enemy = new EnemySprite(scene, 0, 0, kind);
-    wrapper.add([actorShadow(scene), enemy.container]);
+    wrapper.add([actorShadow(scene, ENTITY_PRESENTATION.defaultShadowScale), enemy.container]);
     enemy.setInteractive(() => interactions.clickEntity(snapshot.id));
 
     world.set(ActorVisual, entity, {

@@ -439,7 +439,7 @@ func (p *Proxy) evacuateMap(mapID string) error {
 			p.sendToClient(s.id, protocol.Encode(protocol.TypeError, protocol.ErrorPayload{
 				Message: "This zone is closing; reconnect to continue.",
 			}))
-			n.Detach(s.id)
+			n.Detach(s.id, false)
 			s.mapID = ""
 			continue
 		}

@@ -113,6 +113,15 @@ func (p *Proxy) buildStatusSnapshot() StatusSnapshot {
 			out.Battles += battles
 		}
 		out.Maps = append(out.Maps, entry)
+		// Instance occupants count toward totals without their own map rows.
+		for _, n := range nodes {
+			if n.Instance == nil {
+				continue
+			}
+			players, battles := n.StatusCounts()
+			out.Players += players
+			out.Battles += battles
+		}
 		return out
 	}
 	for _, spec := range specs {

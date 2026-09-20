@@ -8,9 +8,9 @@ import (
 )
 
 // registerHousingModule wires the camp/house routes into the hub's route
-// registry. House teardown on logout runs through the registry's disconnect
+// registry. Camp despawn on logout runs through the registry's disconnect
 // hook (previously an explicit call in handleDisconnect); the hook still sees
-// the client's Name/HouseOwner because it fires before those fields are reset.
+// the client's Name/Transferring flag because it fires before teardown.
 func (h *Hub) registerHousingModule() error {
 	routes := []struct {
 		messageType protocol.MessageType

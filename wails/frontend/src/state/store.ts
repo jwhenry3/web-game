@@ -110,6 +110,9 @@ interface GameState {
   jobChangeDialog: { id: string; name: string; mode: "main" | "sub" } | null;
   teleportConfirm: { id: string; name: string } | null;
   atlas: AtlasMap[];
+  /** In-flight camp↔world transfer; the loading overlay stays up and input is
+   * gated until the destination's state lands (house_state / world_state). */
+  transition: "house" | "world" | null;
 
   setScreen: (s: Screen) => void;
   setSelectedAction: (a: SelectedAction | null) => void;
@@ -200,6 +203,7 @@ const initial = {
   jobChangeDialog: null as { id: string; name: string; mode: "main" | "sub" } | null,
   teleportConfirm: null as { id: string; name: string } | null,
   atlas: [] as AtlasMap[],
+  transition: null as "house" | "world" | null,
 };
 
 /** True while a menu, dialog, or game window is open and owns keyboard input. */
@@ -212,9 +216,11 @@ export function gameDialogOpen(
     | "npcDialog"
     | "jobChangeDialog"
     | "teleportConfirm"
+    | "transition"
   >,
 ): boolean {
   return !!(
+    s.transition ||
     s.mainMenuOpen ||
     s.openWindow ||
     s.worldSkillDialog ||

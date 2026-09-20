@@ -172,6 +172,7 @@ function syncEntities(
         ownerId: w.owner_id,
         isAlly: !!w.is_ally,
         weapon: w.weapon,
+        subWeapon: w.sub_weapon,
         mainJob: w.main_job,
         subJob: w.sub_job,
         appearance: w.appearance,

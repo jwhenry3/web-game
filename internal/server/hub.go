@@ -96,13 +96,23 @@ type Hub struct {
 	partyInvites map[string]*partyInvite
 	partySeq     int
 	camps        map[string]*worldCamp // owner character name -> camp
-	houses       map[string]*houseRoom // owner character name -> instance
 
 	overworld  *game.Overworld
 	world      *game.WorldDefinition // non-nil selects singular-world ownership mode
 	mapID      string
 	mapName    string
 	OnTransfer func(clientID string, dest TransferDest)
+
+	// houseCtx is non-nil when this hub is a dynamic house instance: house
+	// routes resolve against it and occupants return to its camp position.
+	houseCtx *HouseContext
+	// OnCloseHouse fires when the world hub despawns a camp whose house
+	// instance lives on another node; the proxy evacuates + tears it down.
+	OnCloseHouse func(owner, reason string)
+	// OnCampSkinChanged fires when the owner changes the tent skin from
+	// inside their house; the proxy forwards it to the return-map hub so the
+	// overworld tent restyles while the instance lives elsewhere.
+	OnCampSkinChanged func(owner, skin string)
 
 	// Singular-world NPC workers own mutable NPC entities. Hub.entities keeps
 	// projection copies for targeting and wire output. npcEffects is non-nil
@@ -136,6 +146,31 @@ type TransferDest struct {
 	// ("north"|"south"|"east"|"west"); EdgeT is the 0..1 fraction along it.
 	Edge  game.BorderEdge
 	EdgeT float64
+	// House carries instance context when Map is a dynamic house id
+	// (house:<owner>); the proxy lazily creates the instance node from it.
+	House *HouseSpec
+}
+
+// HouseSpec describes a dynamic house instance for the transfer layer:
+// which camp owns it and where occupants return when they leave or are
+// evicted.
+type HouseSpec struct {
+	Owner     string
+	Skin      string
+	ReturnMap string
+	ReturnX   float64
+	ReturnY   float64
+}
+
+// HouseContext marks a hub as a dynamic house instance. Set once at node
+// construction; the hub behaves like a normal map hub but scopes house
+// routes/state to HouseSpec.Owner and returns occupants to the camp.
+type HouseContext struct {
+	Owner     string
+	Skin      string
+	ReturnMap string
+	ReturnX   float64
+	ReturnY   float64
 }
 
 func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.TokenIssuer) (*Hub, error) {
@@ -158,7 +193,6 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		clientParty:      make(map[string]string),
 		partyInvites:     make(map[string]*partyInvite),
 		camps:            make(map[string]*worldCamp),
-		houses:           make(map[string]*houseRoom),
 		farEntityClients: make(map[string]bool),
 		movedPlayers:     make(map[string]bool),
 		overworld:        game.Loaded(),
@@ -182,6 +216,15 @@ func NewHub(profiles *store.Store, accounts *store.AccountStore, tokens *auth.To
 		}
 	}
 	return h, nil
+}
+
+// PostTask queues fn on the hub loop; safe from any goroutine. No-op once
+// the hub is stopped.
+func (h *Hub) PostTask(fn func()) {
+	select {
+	case h.tasks <- fn:
+	case <-h.done:
+	}
 }
 
 func (h *Hub) Register(c *Client) { h.register <- c }
@@ -318,6 +361,32 @@ func (h *Hub) Run() {
 		// Every pass may move/spawn/remove entities (event handlers, entity
 		// ticks, tasks); the first spatial query of the pass rebuilds once.
 		h.spatialInvalidate()
+		// Membership changes are drained before queued work so events and
+		// tasks always see a consistent roster: a transfer's attach
+		// (register) lands before the join replay that follows it, and a
+		// detach lands before any task enumerating clients. Registers run
+		// before unregisters because an attach always precedes its detach.
+		for {
+			select {
+			case client := <-h.register:
+				h.mu.Lock()
+				h.clients[client.ID] = client
+				h.mu.Unlock()
+				log.Printf("client %s connected", client.ID)
+				continue
+			default:
+			}
+			break
+		}
+		for {
+			select {
+			case client := <-h.unregister:
+				h.handleDisconnect(client)
+				continue
+			default:
+			}
+			break
+		}
 		select {
 		case <-h.quit:
 			return
@@ -428,6 +497,14 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	if c.Joined {
 		return
 	}
+	// A queued join can outlive its session: the client's unregister is
+	// always processed first, so a non-member here is already gone.
+	h.mu.RLock()
+	member := h.clients[c.ID] == c
+	h.mu.RUnlock()
+	if !member {
+		return
+	}
 	var p protocol.JoinWorldPayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		h.sendError(c, "Malformed join request.")
@@ -522,6 +599,12 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerJoin, h.entitySync(e)))
 	h.sendSocialState(c)
 	h.refreshFriendsSocial(c.Name)
+	// Instance joins finish with house_state so the client flips to the
+	// house screen after world_state. The joiner is passed explicitly — its
+	// register may still be queued behind this join event.
+	if h.houseCtx != nil {
+		h.sendHouseStateTo(c)
+	}
 	log.Printf("%s joined the world as %s/%s (lv %d)", name, profile.MainJob, profile.SubJob, profile.MainJobLevel())
 }
 
@@ -533,6 +616,7 @@ func (h *Hub) applyProfilePresence(e *entity, profile store.Profile) {
 		return
 	}
 	cc.weaponName = string(profile.EquippedWeaponType())
+	cc.subWeaponName = string(profile.EquippedSubWeaponType())
 	cc.race = profile.Race
 	cc.mainJobName = profile.MainJob
 	cc.subJobName = profile.SubJob
@@ -553,10 +637,6 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	}
 	cc := clientControlOf(e)
 	if cc == nil {
-		return
-	}
-	if cc.inHouse {
-		h.moveInHouse(c, e, p.X, p.Y, p.Facing)
 		return
 	}
 	prevX, prevY := e.X, e.Y
@@ -600,6 +680,12 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	}
 	h.broadcastPlayerMoved(c.ID, e)
 	h.checkAggroAt(c.ID, e.X, e.Y)
+	// House instances drive HouseScene positions from house_state, so each
+	// accepted move also pushes the occupant roster (same cadence as the
+	// former guest-table path).
+	if h.houseCtx != nil {
+		h.sendHouseState()
+	}
 }
 
 func (h *Hub) handleChat(c *Client, raw json.RawMessage) {
@@ -633,6 +719,7 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	h.refreshCombatStats(c, e)
 	if cc := clientControlOf(e); cc != nil {
 		cc.weaponName = string(profile.EquippedWeaponType())
+		cc.subWeaponName = string(profile.EquippedSubWeaponType())
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
@@ -654,6 +741,7 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	h.refreshCombatStats(c, e)
 	if cc := clientControlOf(e); cc != nil {
 		cc.weaponName = string(profile.EquippedWeaponType())
+		cc.subWeaponName = string(profile.EquippedSubWeaponType())
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)

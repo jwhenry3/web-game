@@ -291,20 +291,19 @@ func TestNPCTickSkipsImmunePlayer(t *testing.T) {
 	}
 }
 
-func TestNPCTickSkipsInHousePlayer(t *testing.T) {
+func TestNPCTickSkipsHiddenPlayer(t *testing.T) {
 	px, py := wildernessXY()
 	h, _, pe := testHubWithPlayer(t, px, py)
 	cc := clientControlOf(pe)
-	// In-house players are hidden from the world; set both so the flag holds
-	// regardless of which entity the tick visits first.
-	cc.inHouse = true
+	// Hidden players (dead NPC placeholders, internal actors) must not be
+	// engaged — players inside a house instance simply aren't on this hub.
 	pe.hidden = true
 	n := hostileNPC(h, "npc-1", px+aggroRadius-4, py)
 	for i := 0; i < 6; i++ {
 		h.tickEntities(time.Now())
 	}
 	if npcEngaged(n) || cc.inCombat {
-		t.Fatal("npcs must not engage players who are inside a house")
+		t.Fatal("npcs must not engage hidden players")
 	}
 }
 

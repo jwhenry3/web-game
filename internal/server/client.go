@@ -29,17 +29,19 @@ type Client struct {
 	CloseFn func()
 
 	// The fields below are owned by the hub goroutine.
-	AccountID      string
-	Username       string
-	Name           string
-	Joined         bool
-	SpawnX         float64
-	SpawnY         float64
-	UseSpawn       bool
-	SpawnFacing    float64
-	SpawnEdge      game.BorderEdge // entry edge for border transfers ("" = use SpawnX/Y)
-	SpawnEdgeT     float64
-	HouseOwner     string
+	AccountID   string
+	Username    string
+	Name        string
+	Joined      bool
+	SpawnX      float64
+	SpawnY      float64
+	UseSpawn    bool
+	SpawnFacing float64
+	SpawnEdge   game.BorderEdge // entry edge for border transfers ("" = use SpawnX/Y)
+	SpawnEdgeT  float64
+	// Transferring marks a detach as a map/instance transfer rather than a
+	// real disconnect, so teardown hooks (camp despawn) are skipped.
+	Transferring   bool
 	lastWorldSave  time.Time
 	lastWorldSkill time.Time
 

@@ -398,6 +398,7 @@ type WorldEntity struct {
 	CastEndsAt     int64   `json:"cast_ends_at,omitempty"` // unix millis
 	// Player presence extras.
 	Weapon      string              `json:"weapon,omitempty"`
+	SubWeapon   string              `json:"sub_weapon,omitempty"`
 	MainJob     string              `json:"main_job,omitempty"`
 	SubJob      string              `json:"sub_job,omitempty"`
 	Appearance  CharacterAppearance `json:"appearance,omitempty"`

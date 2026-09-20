@@ -117,18 +117,19 @@ export function facingToFlipX(facing: CharacterFacing): boolean {
   return facing === "left";
 }
 
-/** In-world display scale (100×40 source frames → ~125×50 px at 1.25). */
-export const H99_DISPLAY_SCALE = 1.25;
+/** In-world display scale (100×40 source frames → 200×80 px at 2.0 — the
+ * doll rigs' art is drawn at 2px per cell unit, so this renders it at its
+ * native pixel size instead of downscaled). */
+export const H99_DISPLAY_SCALE = 2.0;
 
 export const H99_DISPLAY_WIDTH = H99_SHEET.frameWidth * H99_DISPLAY_SCALE;
 export const H99_DISPLAY_HEIGHT = H99_SHEET.frameHeight * H99_DISPLAY_SCALE;
 /**
- * Feet-centered collision circle. The iso projection renders a world circle
- * of radius r as a ground-plane ellipse 2√2r wide (~44px here — about a
- * third of the sprite's width). Kept under half a tile so 1-tile lanes
- * between blocked cells stay passable.
+ * Feet-centered collision circle. Deliberately NOT derived from display
+ * scale — it must stay under half a 32px tile so 1-tile lanes between
+ * blocked cells stay passable regardless of how large sprites render.
  */
-export const H99_COLLISION_RADIUS = H99_DISPLAY_WIDTH / 8;
+export const H99_COLLISION_RADIUS = 15;
 export const H99_NAME_LABEL_Y = -(H99_DISPLAY_HEIGHT + 10);
 /** Selection / status rings sized to the sprite footprint. */
 export const H99_WORLD_RING_RADIUS = H99_DISPLAY_HEIGHT * 0.64;
@@ -163,6 +164,29 @@ export interface CharacterAppearance {
   clothColor: string;
   weapon: string;
   weaponColor: string;
+  /**
+   * Sub weapon — paperdoll rig only. Drawn on the far hand (weapon_bot slots,
+   * behind the torso); unset/"" = empty off-hand. The h99 rig ignores it.
+   */
+  subWeapon?: string;
+  subWeaponColor?: string;
+  /**
+   * Optional creature parts — paperdoll rig only. Ears ("point", "long") and
+   * tail ("spade") render in the chosen skin tone; horns ("imp") and wings
+   * ("bat", "stone") have fixed palettes. Unset = no attachment.
+   */
+  ears?: string;
+  horns?: string;
+  wings?: string;
+  tail?: string;
+  /**
+   * Shape keys — bone-scale morphs for body diversity ("height", "chest",
+   * "head", "armLen", "armWidth", "legWidth", "ears", "horns", "wings",
+   * "tail", "weaponSize", "subWeaponSize"). Values are scale multipliers;
+   * absent key = neutral (1.0). Mirrors SHAPE_KEYS in tools/gen_paperdoll.py;
+   * the h99 rig honors the shared bone names only.
+   */
+  shape?: Record<string, number>;
 }
 
 export const DEFAULT_APPEARANCE: CharacterAppearance = {
@@ -201,7 +225,9 @@ export const RACE_APPEARANCE_PRESETS: Record<string, Partial<CharacterAppearance
 
 /**
  * Map in-game weapon types to Heroes 99 weapon folders.
- * Pack layout: weapon1 sword, weapon2 axe, weapon3 dagger, weapon4 spear, weapon5 staff.
+ * Pack layout: weapon1 sword, weapon2 axe, weapon3 dagger, weapon4 spear,
+ * weapon5 staff. weapon6 pitchfork is paperdoll-only; weapon7 shield is
+ * paperdoll-only art (no H99 sheet) for the sub-hand slot.
  */
 export const GAME_WEAPON_TO_H99: Record<string, string> = {
   sword: "weapon1",
@@ -209,6 +235,7 @@ export const GAME_WEAPON_TO_H99: Record<string, string> = {
   dagger: "weapon3",
   spear: "weapon4",
   staff: "weapon5",
+  shield: "weapon7",
 };
 
 export function appearanceFromRace(race: string): CharacterAppearance {
@@ -277,12 +304,20 @@ export function appearanceFromWire(w?: CharacterAppearanceWire | null): Characte
 export function applyGameWeapon(
   appearance: CharacterAppearance,
   gameWeapon?: string,
+  gameSubWeapon?: string,
 ): CharacterAppearance {
   // undefined = no weapon info (keep the base choice); "" = explicitly
   // unarmed (bare hands); a known type maps to its Heroes 99 folder.
-  if (gameWeapon === undefined) return appearance;
-  const weapon = gameWeapon === "" ? "" : (GAME_WEAPON_TO_H99[gameWeapon] ?? appearance.weapon);
-  return { ...appearance, weapon };
+  if (gameWeapon !== undefined) {
+    const weapon = gameWeapon === "" ? "" : (GAME_WEAPON_TO_H99[gameWeapon] ?? appearance.weapon);
+    appearance = { ...appearance, weapon };
+  }
+  if (gameSubWeapon !== undefined) {
+    const subWeapon =
+      gameSubWeapon === "" ? "" : (GAME_WEAPON_TO_H99[gameSubWeapon] ?? appearance.subWeapon ?? "");
+    appearance = { ...appearance, subWeapon };
+  }
+  return appearance;
 }
 
 export function appearanceKey(appearance: CharacterAppearance): string {

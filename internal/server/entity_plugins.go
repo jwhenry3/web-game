@@ -38,14 +38,13 @@ type clientControl struct {
 	lastResourceSync time.Time
 
 	// World presence details (formerly protocol.WorldPlayer fields).
-	weaponName  string
-	race        string
-	mainJobName string
-	subJobName  string
-	appearance  protocol.CharacterAppearance
-	inHouse     bool
-	houseOwner  string
-	immuneUntil int64 // unix millis
+	weaponName    string
+	subWeaponName string
+	race          string
+	mainJobName   string
+	subJobName    string
+	appearance    protocol.CharacterAppearance
+	immuneUntil   int64 // unix millis
 
 	// Field cast (Teleport): client interpolates from receipt + castTimeMs.
 	fieldCastSkillID string
@@ -98,7 +97,6 @@ func (cc *clientControl) weaponForSkill(skill game.Skill) game.WeaponType {
 }
 
 func (cc *clientControl) Tick(h *Hub, e *entity, now time.Time, dt float64) {
-	e.hidden = cc.inHouse
 	cc.staminaRate = regenPerSec
 	if h.inSanctuary(e) {
 		cc.staminaRate = regenPerSecSanctuary

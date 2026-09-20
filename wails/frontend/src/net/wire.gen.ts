@@ -373,6 +373,7 @@ export interface WorldEntity {
   cast_time_ms?: number;
   cast_ends_at?: number;
   weapon?: string;
+  sub_weapon?: string;
   main_job?: string;
   sub_job?: string;
   appearance?: CharacterAppearance;
