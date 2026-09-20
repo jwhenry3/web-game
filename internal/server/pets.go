@@ -137,6 +137,10 @@ func (h *Hub) handleMountToggle(c *Client, _ json.RawMessage) {
 			Message: "You dismount.",
 		})
 	}
+	// A rider can't have a companion out: mounting despawns the battle pet,
+	// dismounting resummons it at the owner's side.
+	h.petSyncDirty = true
+	h.syncPetEntities()
 	// Broadcast (not sendPlayerSync): mounted state must reach every observer,
 	// not just owner+party — remote clients render the mount sprite.
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
@@ -154,6 +158,8 @@ func (h *Hub) syncMountState(c *Client, prof store.Profile) {
 	rec, ok := prof.FindPet(prof.MountPetID)
 	cc.mounted = ok
 	cc.mountSprite = rec.Kind
+	h.petSyncDirty = true
+	h.syncPetEntities()
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerSync, h.entitySync(e)))
 }
 
@@ -250,6 +256,9 @@ func (h *Hub) syncPetEntities() {
 		c := h.clients[owner.ID]
 		if c == nil || !c.Joined {
 			return
+		}
+		if cc := clientControlOf(owner); cc != nil && cc.mounted {
+			return // the battle pet is stabled while its owner rides
 		}
 		prof, ok := h.store.Get(c.Name)
 		if !ok {

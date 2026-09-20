@@ -3,6 +3,9 @@
 All drawing stays in the generator's shared cell coordinates so every variant
 uses the same bone pivots. The base never contains face, hair or clothing art.
 """
+import colorsys
+import os
+
 from PIL import Image
 
 SKINS = [
@@ -28,7 +31,21 @@ def rgba(rgb):
 
 
 def shade(rgb, factor):
-    return tuple(max(0, min(255, round(c * factor))) for c in rgb[:3]) + (255,)
+    """Build a saturated SNES-style ramp instead of a flat RGB multiply.
+
+    Shadows lean slightly cooler and retain chroma; highlights lean slightly
+    warmer and lose a touch of saturation.  The small hue separation keeps
+    cloth, hair, hide and metal readable inside the heavy shared outline.
+    """
+    h, s, v = colorsys.rgb_to_hsv(*(c / 255 for c in rgb[:3]))
+    if factor < 1:
+        h = (h + .035) % 1.0
+        s = min(1.0, s * 1.08)
+    elif factor > 1:
+        h = (h - .018) % 1.0
+        s *= .9
+    v = max(0.0, min(1.0, v * factor))
+    return tuple(round(c * 255) for c in colorsys.hsv_to_rgb(h, s, v)) + (255,)
 
 
 def recolor(image, mapping):
@@ -37,44 +54,72 @@ def recolor(image, mapping):
     return out
 
 
-def face(g, variant):
+# Extracted MapleStory faces (tools/faces/ms<N>.png via fetch_ms_faces.py).
+# Nexon placeholder art — the variants show up in the editor as face_msN.
+MS_FACES = [f"ms{i}" for i in range(1, 15)]
+MS_EYE_Y = 11.4   # paperdoll eye line (cell units)
+MS_EYE_X = 41.9   # center of the eye span (cell units)
+MS_SPAN = 52      # target eye-span width in draw px (~6.5 cell units)
+
+
+def ms_face(g, key):
+    """Composite an extracted MapleStory face sprite into cell coords.
+
+    Scaled NEAREST to preserve the pixel clusters, then anchored by its
+    densest dark row (the eye line) rather than the sprite origin — the
+    female-series origins float well above the eyes.
+    """
     im = g.new_part()
-    d = g.SDraw(im)
-    iris = rgba(EYE_COLORS[variant - 1])
-    # Sclera, colored iris, dark upper lash, pupil and a tiny catchlight.
-    # Expression changes eyelid/brow angles without repainting the skin.
-    for x in (39, 43.5):
-        top = 10.5 + (.5 if variant in (3, 5) else 0)
-        d.rectangle([x, top, x + 2, 13], fill=(255, 241, 209, 255))
-        d.rectangle([x + .5, top + .5, x + 1.5, 13], fill=iris)
-        d.rectangle([x + 1, top + .5, x + 1, 12.5], fill=g.OUTLINE)
-        d.line([(x, top), (x + 2, top + (.5 if variant == 3 else 0))], fill=g.OUTLINE, width=.5)
-        d.rectangle([x + .5, top + .5, x + .5, top + .5], fill=(255, 255, 239, 255))
-        brow = -.5 if variant in (2, 6) else (.5 if variant in (3, 5) else 0)
-        d.line([(x, 9.5), (x + 2, 9.5 + brow)], fill=g.OUTLINE, width=.5)
-    d.line([(42, 15), (43.5, 15 + (.5 if variant == 7 else 0))], fill=(149, 80,  70, 255), width=.5)
+    src = Image.open(os.path.join(g.ROOT, "tools", "faces", f"{key}.png"))
+    src = src.convert("RGBA").transpose(Image.FLIP_LEFT_RIGHT)
+    px = src.load()
+
+    def dark(x, y):
+        p = px[x, y]
+        return p[3] > 128 and sum(p[:3]) < 300
+
+    # Eye line = densest dark row; eye span = dark x-extent across the rows
+    # around it. Sprites vary in source size, so the scale is derived per
+    # face to map every eye span onto the same target width — a fixed px
+    # scale would let wide sprites render larger than narrow ones.
+    best_y, best_n = 0, -1
+    for y in range(src.height):
+        n = sum(1 for x in range(src.width) if dark(x, y))
+        if n > best_n:
+            best_y, best_n = y, n
+    xs = [x for y in range(max(0, best_y - 1), min(src.height, best_y + 2))
+          for x in range(src.width) if dark(x, y)]
+    span = (max(xs) - min(xs) + 1) if xs else src.width
+    cx = (min(xs) + max(xs)) / 2 if xs else src.width / 2
+    s = max(1.8, min(3.4, MS_SPAN / span))
+    scaled = src.resize((round(src.width * s), round(src.height * s)),
+                        Image.NEAREST)
+    im.alpha_composite(scaled, (round(MS_EYE_X * g.DS - cx * s),
+                                round(MS_EYE_Y * g.DS - best_y * s)))
     return im
 
 
-def monster_face(g, variant):
-    """Creature faces c8+: glowing eyes, angry brows, tusked grins."""
-    im = g.new_part()
-    d = g.SDraw(im)
-    iris, core = {
-        8:  ((255, 217, 74), (20, 20, 10)),     # goblin amber
-        9:  ((255, 160, 60), (140, 24, 18)),    # imp ember
-        10: ((143, 242, 255), (232, 253, 255)), # stone hollow glow
-    }[variant]
-    for x in (39, 43.5):
-        d.rectangle([x, 10.5, x + 2, 13], fill=rgba(iris))
-        d.rectangle([x + 1, 11, x + 1, 12.5], fill=rgba(core))
-        d.line([(x - .5, 9.5), (x + 2.5, 10)], fill=g.OUTLINE, width=.75)
-    # Wide toothy grin; tusks point up from the lower lip.
-    d.line([(40, 15), (45.5, 15)], fill=g.OUTLINE, width=1)
-    teeth = (244, 240, 221, 255)
-    d.polygon([(41, 15), (41.8, 16.6), (42.6, 15)], fill=teeth, outline=g.OUTLINE)
-    d.polygon([(43.6, 15), (44.4, 16.6), (45.2, 15)], fill=teeth, outline=g.OUTLINE)
-    d.line([(42.5, 15), (44, 15)], fill=teeth, width=.5)
+# Creature recolors of the ms faces. The extracted sprites are monochrome
+# linework (black features + white sclera), so a multiply tint does the work:
+# dark lines keep their shape while the whites pick up the creature's
+# eye-glow color — amber for goblins, ember for imps, hollow cyan for stone.
+MS_CREATURE_TINTS = {
+    "gob":   (255, 205, 92),
+    "imp":   (255, 132, 60),
+    "stone": (150, 226, 255),
+}
+
+
+def ms_face_creature(g, key, kind):
+    """Creature-tinted ms face — multiplies the sprite by the creature color."""
+    tr, tg, tb = MS_CREATURE_TINTS[kind]
+    im = ms_face(g, key)
+    px = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            r, gg, b, a = px[x, y]
+            if a:
+                px[x, y] = (r * tr // 255, gg * tg // 255, b * tb // 255, a)
     return im
 
 
@@ -161,20 +206,29 @@ def hair(g, style, color, back=False):
                        (42, length - 1), (35, length + 1)], fill=main, outline=g.OUTLINE)
             d.line([(36, 11), (36, length - 1)], fill=light, width=.5)
         return im
-    crown = 4 + (idx // 4) * .5
-    d.polygon([(35, 8), (35, 6), (37, 6), (37, crown + .5), (40, crown),
-               (43, crown), (46, 5.5), (47, 7), (47, 9), (45, 9),
-               (44, 8), (42, 10), (41, 8.5), (39, 10), (38, 9),
-               (37.5, 13), (35.5, 13), (34.5, 10)], fill=main, outline=g.OUTLINE)
+    crown = 3.5 + (idx // 4) * .5
+    # Large stepped crown and side masses frame the face, matching the visual
+    # weight of helmets and hoods instead of reading as a thin decal.
+    d.polygon([(33, 9), (33.5, 6.5), (36, 6.5), (36, crown + 1),
+               (39, crown), (43, crown), (46, 4.5), (48, 6.5),
+               (48.5, 10), (47, 13.5), (44.5, 13.5), (44, 9),
+               (42, 11), (40.5, 8.5), (38, 11), (37, 9),
+               (36.5, 14), (34, 14), (32.5, 11)], fill=main, outline=g.OUTLINE)
     if family == 3:
         d.polygon([(36, 6), (37, 3.5), (39, 5), (41, 3), (43, 5),
                    (45, 4), (46, 7)], fill=main, outline=g.OUTLINE)
-    d.polygon([(36, 7), (38, crown + 1), (42, crown + .5), (45, 6.5),
-               (42, 6.5), (39, 7.5), (37, 9)], fill=light)
+    d.polygon([(34.5, 7), (38, crown + 1), (43, crown + .5), (46.5, 6.5),
+               (43, 6.5), (39, 7.5), (36, 9)], fill=light)
     # Different partings within a family; all existing style IDs remain usable.
     part = 38 + idx % 5
     d.line([(part, crown + 1), (part - 1, 8)], fill=dark, width=.5)
     d.polygon([(35, 9), (37, 9), (37, 12.5), (35.5, 12.5)], fill=dark)
+    # Keep the leading eye readable in every style. The face layer is drawn
+    # below foreground hair, so this shared transparent window prevents the
+    # wide side-lock from erasing the eye while leaving the brow/bangs intact.
+    im.paste((0, 0, 0, 0),
+             (round(44 * g.DS), round(10 * g.DS),
+              round(46 * g.DS), round(13.5 * g.DS)))
     return im
 
 
@@ -186,9 +240,11 @@ def outfit(g, part, style, color):
     trim = (244, 204, 120, 255) if style % 2 else (200, 213, 220, 255)
     if part == 'torso':
         hem = 27 + (.5 if family in (1, 3) else 0)
-        d.polygon([(37, 18), (41, 17.5), (44, 19), (44, 23),
-                   (43, 24), (44.5, hem), (35.5, hem), (37, 23)], fill=main, outline=g.OUTLINE)
-        d.polygon([(37, 19), (39, 19), (39, 24), (37, hem-1), (36, hem-1)], fill=dark)
+        d.polygon([(35.5, 19), (39, 17.5), (42, 17.5), (45, 19),
+                   (46, 23), (44, 24.5), (46, hem), (34, hem), (36, 23)],
+                  fill=main, outline=g.OUTLINE)
+        d.polygon([(35.5, 19.5), (38.5, 19), (38.5, 24),
+                   (36.5, hem-1), (34.5, hem-1)], fill=dark)
         d.polygon([(40, 19), (42.5, 19), (43, 22), (40, 23)], fill=light)
         if family == 2:  # breastplate
             d.rectangle([38, 19, 43, 23], fill=shade(color, 1.2), outline=trim)
@@ -209,23 +265,180 @@ def outfit(g, part, style, color):
         sh, elbow, wrist = (g.SH_B, g.ELB_B, g.WRI_B) if side == 'B' else (g.SH_F, g.ELB_F, g.WRI_F)
         if part.endswith('_u'):
             if family != 4:
-                g.capsule(d, sh, elbow, 2.5, main, g.OUTLINE, cap_r=1.8)
+                g.capsule(d, sh, elbow, 3, main, g.OUTLINE, cap_r=2.1, tip=False)
                 d.line([sh, (elbow[0], elbow[1]-1)], fill=light, width=.5)
         else:
             if family in (1, 3):
-                g.capsule(d, elbow, wrist, 2, main, g.OUTLINE, cap_r=1.5)
-            d.rectangle([wrist[0]-1.5, wrist[1]-1, wrist[0]+1.5, wrist[1]+.5], fill=g.LEATHER, outline=g.OUTLINE)
+                g.capsule(d, elbow, wrist, 2.5, main, g.OUTLINE, cap_r=1.6)
+            d.rectangle([wrist[0]-2, wrist[1]-1, wrist[0]+2, wrist[1]+1], fill=g.LEATHER, outline=g.OUTLINE)
             d.line([(wrist[0]-1, wrist[1]-.5), (wrist[0]+1, wrist[1]-.5)], fill=trim, width=.5)
     elif part.startswith('leg'):
         hip, knee, ankle = (g.HIP_B, g.KNEE_B, g.ANK_B) if part[3] == 'B' else (g.HIP_F, g.KNEE_F, g.ANK_F)
         if part.endswith('_u'):
-            g.capsule(d, hip, knee, 3, dark, g.OUTLINE, cap_r=2)
+            g.capsule(d, hip, knee, 3.5, dark, g.OUTLINE, cap_r=2.0, tip=False)
             d.line([(hip[0], hip[1]+1), (knee[0], knee[1]-1)], fill=main, width=1)
         else:
             g._shin(knee, ankle, g.SKIN, im)
             im = recolor(im, {g.SKIN: g.LEATHER, g.SKIN_LIGHT: g.LEATHER_LIGHT})
             d = g.SDraw(im)
             d.line([(knee[0]-1, knee[1]+1), (knee[0]+1, knee[1]+1)], fill=trim, width=.5)
+    return im
+
+
+def body_object(g, style, color):
+    """Reference-style broad torso costume plate.
+
+    These are intentionally larger than the old per-limb cloth decals: one
+    attachment owns the main silhouette, then the existing limb cloth slots can
+    add cuffs, sleeves or bare-arm variation underneath.
+    """
+    im = g.new_part()
+    d = g.SDraw(im)
+    main, light, dark = rgba(color), shade(color, 1.45), shade(color, .58)
+    trim = (232, 202, 128, 255) if style % 2 else (204, 216, 225, 255)
+    if style == 1:
+        d.rounded_rectangle([34.5, 18.2, 45.8, 27.8], radius=2.0, fill=main, outline=g.OUTLINE)
+        d.polygon([(35.2, 21), (38.2, 19), (38.0, 27.2), (34.8, 27.2)], fill=dark)
+        d.polygon([(39.5, 18.8), (44.4, 19.2), (43.6, 22.4), (40.2, 23.2)], fill=light)
+        d.rectangle([36, 25.6, 44.2, 26.7], fill=g.LEATHER, outline=g.OUTLINE)
+        d.rectangle([40.4, 25.4, 42.1, 26.9], fill=trim)
+    elif style == 2:
+        d.polygon([(34.8, 18.5), (39.2, 17.5), (42.4, 17.5), (46.4, 19.5),
+                   (46.8, 24.4), (44.4, 26.7), (36.5, 26.8), (34.2, 24)],
+                  fill=main, outline=g.OUTLINE)
+        d.polygon([(36, 20), (40, 18.4), (44.8, 19.7), (43.4, 23.4),
+                   (40.4, 24.4), (37.2, 23.2)], fill=light)
+        for y in (24.8, 26.4):
+            d.line([(35.6, y), (45.2, y - .2)], fill=trim, width=.8)
+    elif style == 3:
+        d.polygon([(34.2, 18.8), (39, 17.4), (42.7, 17.8), (46.4, 19.8),
+                   (45.4, 27.8), (42.4, 28.4), (40.5, 26.2),
+                   (38.2, 28.2), (35.2, 27.4)], fill=main, outline=g.OUTLINE)
+        d.polygon([(35, 20.5), (39.2, 18.3), (38.4, 27.2), (35.5, 26.5)], fill=dark)
+        d.line([(40.5, 18.5), (40.5, 26.4)], fill=trim, width=1)
+        d.line([(36.5, 25.2), (44.8, 25.2)], fill=g.LEATHER, width=1)
+    elif style == 4:
+        d.polygon([(33.8, 19.2), (37.8, 17.2), (43.2, 17.4), (47, 20.3),
+                   (45.3, 25.4), (43, 27.8), (37.2, 27.8), (34.5, 25)],
+                  fill=dark, outline=g.OUTLINE)
+        d.polygon([(36.2, 18.8), (42.5, 18.8), (44.5, 21.5), (42.8, 24.4),
+                   (38.4, 24.8), (35.8, 22.2)], fill=main)
+        d.rectangle([37.2, 20, 43.4, 23.4], fill=shade(color, 1.18), outline=trim)
+        d.line([(37.6, 24.4), (43.2, 24.2)], fill=trim, width=.8)
+    else:
+        d.polygon([(34.5, 18.6), (39.4, 17.4), (42.8, 17.8), (46.2, 19.2),
+                   (46.2, 22.6), (44.2, 24.8), (45.4, 28.4), (35, 28.1),
+                   (36.2, 24.8), (34, 22.8)], fill=main, outline=g.OUTLINE)
+        d.polygon([(35.6, 19.8), (38.2, 18.8), (38.2, 27.2), (35.2, 27)], fill=dark)
+        d.polygon([(40, 18.5), (44.5, 19.2), (43.2, 21.5), (39.5, 22.4)], fill=light)
+        d.line([(37.2, 24.4), (44.5, 24.4)], fill=trim, width=1)
+        d.line([(36.8, 26.8), (44.5, 26.8)], fill=trim, width=.8)
+    return im
+
+
+def cloak_object(g, style, color):
+    im = g.new_part()
+    d = g.SDraw(im)
+    main, light, dark = rgba(color), shade(color, 1.35), shade(color, .48)
+    if style == 1:
+        d.polygon([(35.2, 18.6), (39.5, 17), (45.2, 19.4), (47.5, 31),
+                   (44.5, 34), (39.8, 28.2), (36.2, 34), (32.5, 31.6)],
+                  fill=main, outline=g.OUTLINE)
+        d.polygon([(33.2, 21), (37.8, 18.4), (36.5, 32.4), (33.4, 30.6)], fill=dark)
+        d.line([(41.2, 19), (45.8, 30.5)], fill=light, width=.8)
+    elif style == 2:
+        d.polygon([(34.2, 19), (39, 17.5), (44.8, 19.2), (46.2, 27.8),
+                   (43.6, 30.5), (40, 28), (36.2, 30.6), (33.4, 27.8)],
+                  fill=main, outline=g.OUTLINE)
+        d.polygon([(34.2, 21.5), (38, 19), (37.2, 29.2), (34.2, 27.2)], fill=dark)
+        d.line([(37.2, 19.2), (44, 19.8)], fill=light, width=.8)
+    elif style == 3:
+        d.polygon([(35.4, 18.8), (40.2, 17.2), (45, 19.4), (48, 30.8),
+                   (44.4, 33.2), (41, 29.4), (37.8, 33), (34.2, 31)],
+                  fill=dark, outline=g.OUTLINE)
+        d.polygon([(37, 19), (43.5, 20), (45.6, 29), (41.2, 27.8), (37.6, 30)],
+                  fill=main)
+        d.line([(43.4, 21), (45.5, 28.2)], fill=light, width=.8)
+    else:
+        d.polygon([(33.8, 19.4), (38.5, 17.6), (44.4, 18.8), (45.6, 25.5),
+                   (43, 26.8), (40.5, 24.8), (38.4, 27), (35.2, 25.8)],
+                  fill=main, outline=g.OUTLINE)
+        d.polygon([(34.4, 21.2), (38, 18.8), (37.2, 25.4), (35, 24.8)], fill=dark)
+        d.line([(38.5, 18.8), (43.8, 19.5)], fill=light, width=.8)
+    return im
+
+
+def head_object(g, style, color):
+    im = g.new_part()
+    d = g.SDraw(im)
+    main, light, dark = rgba(color), shade(color, 1.42), shade(color, .55)
+    trim = (232, 202, 128, 255) if style % 2 else (204, 216, 225, 255)
+    if style == 1:
+        d.polygon([(33.5, 8), (36.2, 4.8), (42.8, 4.2), (47.2, 7.3),
+                   (48.5, 10.4), (46.5, 12.4), (43.2, 9.4), (38, 10),
+                   (35.4, 12.3), (33, 10.8)], fill=main, outline=g.OUTLINE)
+        d.line([(36.5, 6.2), (45.2, 7)], fill=light, width=1)
+    elif style == 2:
+        d.polygon([(34.8, 9), (37.6, 4.8), (43.8, 5), (47.5, 8.2),
+                   (47.2, 12.8), (44, 13.5), (40.5, 11.2), (37, 13.2),
+                   (34, 12)], fill=dark, outline=g.OUTLINE)
+        d.polygon([(36.5, 7), (42.8, 5.9), (46, 8.5), (44, 10.5), (38.2, 10.2)],
+                  fill=main)
+        d.line([(39, 6.2), (43.4, 9.5)], fill=trim, width=.8)
+    elif style == 3:
+        d.polygon([(33.5, 9.5), (36.8, 6), (42.6, 5.5), (47.8, 8.5),
+                   (49.2, 11.8), (46, 14), (42.8, 12), (39.5, 13.6),
+                   (35, 13.3)], fill=main, outline=g.OUTLINE)
+        d.rectangle([35.4, 10.8, 48.2, 12.2], fill=trim, outline=g.OUTLINE)
+    elif style == 4:
+        d.polygon([(35.2, 7.5), (39.4, 3.4), (43.2, 4.8), (47, 7.8),
+                   (47.4, 11.8), (44.4, 13.6), (39.5, 12.2), (35, 13)],
+                  fill=main, outline=g.OUTLINE)
+        d.polygon([(38.6, 4.4), (42, 3.8), (43.2, 7.8), (38, 8.4)], fill=light)
+        d.line([(36, 10.6), (46.2, 10.6)], fill=dark, width=1)
+    else:
+        d.polygon([(34, 8.5), (37.5, 4.5), (43.5, 4.5), (48.2, 8),
+                   (48.6, 12.4), (45, 14.2), (41.2, 12.8), (37.2, 14),
+                   (33.6, 12.2)], fill=dark, outline=g.OUTLINE)
+        d.polygon([(36.2, 7), (42, 5.4), (46.5, 8.2), (45.2, 10.4), (37.2, 10.6)],
+                  fill=main)
+        d.line([(37.2, 6.7), (45.4, 8.4)], fill=light, width=.8)
+    return im
+
+
+def hand_object(g, style, color, anchor=None):
+    im = g.new_part()
+    d = g.SDraw(im)
+    x, y = anchor or g.HAND_F
+    main, light, dark = rgba(color), shade(color, 1.35), shade(color, .55)
+    trim = (232, 202, 128, 255) if style % 2 else (204, 216, 225, 255)
+    if style == 1:
+        d.rounded_rectangle([x - 2.8, y - 2.2, x + 3.2, y + 3.2], radius=1.2, fill=main, outline=g.OUTLINE)
+        d.line([(x - 1.8, y - 1.2), (x + 2.2, y - 1.2)], fill=light, width=.7)
+        d.rectangle([x - 2.4, y + 1.4, x + 2.7, y + 2.4], fill=trim)
+    elif style == 2:
+        d.polygon([(x - 3, y - 2), (x + 2.5, y - 3), (x + 4, y),
+                   (x + 2.2, y + 3.4), (x - 2.6, y + 2.8), (x - 3.6, y)],
+                  fill=main, outline=g.OUTLINE)
+        d.line([(x - 1.8, y - 1.8), (x + 2.8, y)], fill=light, width=.8)
+    elif style == 3:
+        d.polygon([(x - 2.5, y - 2.5), (x + 2.8, y - 2.2), (x + 3.8, y + .6),
+                   (x + 1.8, y + 4), (x - 2.6, y + 3.2), (x - 3.4, y)],
+                  fill=dark, outline=g.OUTLINE)
+        d.polygon([(x - 1.2, y - 1.4), (x + 2.1, y - 1.2), (x + 2.4, y + 1.5),
+                   (x - 1, y + 2.4)], fill=main)
+        d.line([(x - 1.6, y + 2.8), (x + 2, y + 3.2)], fill=trim, width=.8)
+    elif style == 4:
+        d.rounded_rectangle([x - 2.6, y - 1.8, x + 3.6, y + 3.8], radius=1.6, fill=main, outline=g.OUTLINE)
+        d.polygon([(x - 1.8, y - 1), (x + 2.8, y - .8), (x + 1.5, y + 1.5),
+                   (x - 2, y + 1.2)], fill=light)
+        d.line([(x - 2.2, y + 2.2), (x + 3, y + 2.2)], fill=dark, width=.8)
+    else:
+        d.polygon([(x - 3.2, y - 2), (x + 3, y - 2.6), (x + 4.2, y + .4),
+                   (x + 2.5, y + 3.8), (x - 2.4, y + 3.4), (x - 4, y + .6)],
+                  fill=main, outline=g.OUTLINE)
+        d.line([(x - 2, y - 1.2), (x + 2.8, y - .8)], fill=light, width=.8)
+        d.line([(x - 2.5, y + 2.3), (x + 2.8, y + 2.6)], fill=trim, width=.8)
     return im
 
 
@@ -274,8 +487,14 @@ def build_layers(g):
     styles = [f'{s}{i}' for s, n in [('f',9), ('m',14)] for i in range(1,n+1)]
     hair_variants = lambda back: {f'hair_{s}_c{c}': hair(g,s,color,back)
                                   for s in styles for c,color in enumerate(HAIR_COLORS,1)}
-    faces = {f'face_c{i}': face(g,i) for i in range(1,8)}
-    faces.update({f'face_c{i}': monster_face(g,i) for i in (8,9,10)})
+    # Extracted MapleStory faces + creature recolors — registered only when
+    # the PNGs exist (tools/faces/ms<N>.png via fetch_ms_faces.py).
+    faces = {}
+    for key in MS_FACES:
+        if os.path.exists(os.path.join(g.ROOT, "tools", "faces", f"{key}.png")):
+            faces[f'face_{key}'] = ms_face(g, key)
+            for kind in MS_CREATURE_TINTS:
+                faces[f'face_{key}_{kind}'] = ms_face_creature(g, key, kind)
     ears_v = {f'ears_{s}_{k}': img for s in ('point','long')
               for k, img in skin_variants(g, ears(g,s)).items()}
     tail_v = {f'tail_{s}_{k}': img for s in ('spade',)
@@ -317,7 +536,29 @@ def build_layers(g):
     over_layer = ('weapon_over_weaponB', 'weaponB', None, over_v, over_r)
     # Near-hand over_arm gear (shields) — the topmost slot, over everything.
     front_layer = ('weapon_front_weapon', 'weapon', None, front_v, front_r)
+    body_object_v = {
+        f'bodyObject_{s}_c{c}': body_object(g, s, color)
+        for s in range(1, 6) for c, color in enumerate(CLOTH_COLORS, 1)
+    }
+    cloak_object_v = {
+        f'cloakObject_{s}_c{c}': cloak_object(g, s, color)
+        for s in range(1, 5) for c, color in enumerate(CLOTH_COLORS, 1)
+    }
+    head_object_v = {
+        f'headObject_{s}_c{c}': head_object(g, s, color)
+        for s in range(1, 6) for c, color in enumerate(CLOTH_COLORS, 1)
+    }
+    hand_object_f = {
+        f'handObject_{s}_c{c}': hand_object(g, s, color, g.HAND_F)
+        for s in range(1, 6) for c, color in enumerate(CLOTH_COLORS, 1)
+    }
+    hand_object_b = {
+        f'handObject_{s}_c{c}': hand_object(g, s, color, g.HAND_B)
+        for s in range(1, 6) for c, color in enumerate(CLOTH_COLORS, 1)
+    }
     for part in g.SLOT_ORDER:
+        if part == 'torso':
+            layers.append(('cloak_object_torso', 'torso', None, cloak_object_v, {}))
         if part == 'armB_l':
             layers.append(stave_layer)
         if part == 'armF_l':
@@ -335,16 +576,22 @@ def build_layers(g):
         else:
             # Ears and horns draw over hair so styles can't hide them; they
             # ride their own head-child bones so shape keys can size them.
-            layers.append(('face_head', 'head', 'face_c1', faces, {}))
+            layers.append(('face_head', 'head', 'face_ms1', faces, {}))
             layers.append(('hair_top_head', 'head', 'hair_m1_c1', hair_variants(False), {}))
+            layers.append(('head_object_head', 'head', None, head_object_v, {}))
             layers.append(('ears_ears', 'ears', None, ears_v, {}))
             layers.append(('horns_horns', 'horns', None,
                            {f'horns_{s}': horns(g,s) for s in ('imp',)}, {}))
         if part == 'torso':
+            layers.append(('body_object_torso', 'torso', None, body_object_v, {}))
             # Over-arm sub gear (shields) — over the torso and everything it
             # covers (head draws earlier too), while the near-side limbs and
             # main weapon still paint on top.
             layers.append(over_layer)
+        if part == 'armB_l':
+            layers.append(('hand_object_weaponB', 'weaponB', None, hand_object_b, {}))
+        if part == 'armF_l':
+            layers.append(('hand_object_weapon', 'weapon', None, hand_object_f, {}))
     layers.append(front_layer)
     return layers
 
@@ -356,14 +603,14 @@ CREATURE_PRESETS = {
     "goblin": {
         "scale": 0.85,
         "shape": {"head": 1.15, "height": 0.9, "ears": 1.35},
-        "appearance": {"skin": "c7", "face": "c8", "hair": "", "cloth": "cloth5",
+        "appearance": {"skin": "c7", "face": "ms6_gob", "hair": "", "cloth": "cloth5",
                        "cloth_color": "c3", "weapon": "weapon3", "ears": "point",
                        "sub_weapon": "weapon7", "sub_weapon_color": "c3"},
     },
     "imp": {
         "scale": 0.75,
         "shape": {"height": 0.9, "ears": 1.2, "horns": 1.15},
-        "appearance": {"skin": "c8", "face": "c9", "hair": "", "cloth": "cloth10",
+        "appearance": {"skin": "c8", "face": "ms9_imp", "hair": "", "cloth": "cloth10",
                        "cloth_color": "c8", "weapon": "weapon6", "ears": "long",
                        "horns": "imp", "wings": "bat", "tail": "spade"},
     },
@@ -371,8 +618,24 @@ CREATURE_PRESETS = {
         "scale": 0.75,
         "shape": {"chest": 1.2, "armWidth": 1.15, "legWidth": 1.1,
                   "height": 0.95, "head": 0.9, "horns": 1.2, "wings": 1.25},
-        "appearance": {"skin": "c9", "face": "c10", "hair": "", "cloth": "",
+        "appearance": {"skin": "c9", "face": "ms12_stone", "hair": "", "cloth": "",
                        "weapon": "", "ears": "long", "horns": "imp",
                        "wings": "stone", "tail": "spade"},
+    },
+    # Friendly townsfolk — service NPCs (job masters, quest givers) rendered
+    # on the shared doll. Mirrored by NPC_DOLL_PRESETS in
+    # wails/frontend/src/characters/npcs.ts — keep the two in sync.
+    "npc": {
+        "scale": 1.0,
+        "appearance": {"skin": "c2", "face": "ms2", "hair": "m3",
+                       "hair_color": "c1", "cloth": "cloth12",
+                       "cloth_color": "c6", "weapon": ""},
+    },
+    "job_master": {
+        "scale": 1.0,
+        "appearance": {"skin": "c3", "face": "ms4", "hair": "m2",
+                       "hair_color": "c5", "cloth": "cloth9",
+                       "cloth_color": "c4", "weapon": "weapon5",
+                       "weapon_color": "c3"},
     },
 }

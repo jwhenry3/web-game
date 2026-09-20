@@ -8,7 +8,6 @@ import {
   isJumpAction,
   playActionArc,
   playBattleVfx,
-  playCastStartVfx,
   playDodgeVfx,
   playFizzleVfx,
   playJumpCrash,
@@ -131,11 +130,11 @@ function animateCombatEvent(scene: Phaser.Scene, ev: CombatEvent, host: CombatEv
     return;
   }
 
+  // The cast channel itself is state-driven (syncCastChannel in actorMotion)
+  // — this event only carries the cast tell toward the target.
   if (result.cast_started) {
     if (actor) {
       actor.sprite.setCasting(true);
-      const p = screenPos(scene, actor.wrapper);
-      playCastStartVfx(scene, p.x, p.y - 20, result.action_id, speed);
       if (target && target !== actor) {
         playActionArc(scene, livePos(scene, actor.wrapper), livePos(scene, target.wrapper), result.action_id, speed);
       }

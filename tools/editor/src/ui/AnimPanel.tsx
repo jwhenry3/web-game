@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Doc } from "../App";
+import type { Doc } from "../model/types";
 import { animDuration, sampleRot, sampleTrans } from "../model/rig";
 import type { BoneTracks, RotKey, Spec, SpineAnim, TransKey } from "../model/types";
 

@@ -1,0 +1,174 @@
+/* Effects workspace — battle VFX profile editor. Reuses ed-* chrome. */
+.efx-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.efx-cat {
+  color: #ddd;
+  font-weight: 600;
+}
+
+.efx-banner {
+  padding: 4px 10px;
+  background: #5a4a20;
+  color: #f0d090;
+  font-size: 12px;
+  border-bottom: 1px solid #191919;
+}
+
+.efx-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.efx-cats {
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel, #383838);
+  border: 1px solid var(--border, #202020);
+  overflow: auto;
+}
+
+.efx-cats .item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-align: left;
+}
+
+.efx-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  border: 1px solid #0008;
+}
+
+.efx-stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #16181d;
+  min-width: 0;
+}
+
+.efx-stage-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+}
+
+.efx-canvas {
+  width: 320px;
+  height: 240px;
+  border: 1px solid #2c2f38;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px #0008;
+}
+
+.efx-stage-hint {
+  color: #777;
+  font-size: 11px;
+}
+
+.efx-inspector {
+  width: 340px;
+  background: var(--panel, #383838);
+  border: 1px solid var(--border, #202020);
+  overflow: auto;
+}
+
+.efx-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #c4c4c4;
+}
+
+.efx-field input[type="number"] {
+  width: 58px;
+}
+
+.efx-field input[type="color"] {
+  width: 26px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid #232323;
+}
+
+.efx-field code {
+  color: #8a8f9c;
+  font-size: 10px;
+}
+
+.efx-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #c4c4c4;
+}
+
+.efx-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.efx-swatch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.efx-swatch input[type="color"] {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+}
+
+.efx-swatch button,
+.efx-del {
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0 4px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.efx-burst {
+  border: 1px solid #2a2a2a;
+  background: #3d3d3d;
+  padding: 5px 7px;
+  margin: 5px 0;
+  border-radius: 2px;
+}
+
+.efx-burst .ed-row {
+  margin: 3px 0;
+}
+
+.dim {
+  color: #9aa0ae;
+}
+
+/* Nested emitter fields under a circle profile. */
+.efx-emit {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 2px solid #2b2b2b;
+}

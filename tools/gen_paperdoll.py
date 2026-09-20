@@ -31,10 +31,12 @@ FRAME_W, FRAME_H = 100, 40
 FOOT_X, FOOT_Y = 39.5, 34.0
 PAD = 2
 
-# Draw directly on a two-pixels-per-unit grid. Nearest filtering preserves
-# deliberate pixel clusters; skeleton coordinates and world scale stay fixed.
-DS = 2    # deliberate pixel grid, two pixels per cell unit
-ART = 2   # retain that grid in the atlas
+# Parts draw on a fine internal grid (DS px per cell unit) and each atlas
+# region downsamples LANCZOS to ART px/unit — smooth anti-aliased edges at
+# the same texel density the old 2x NEAREST supersample only simulated.
+# Skeleton coordinates and world scale stay fixed.
+DS = 8    # internal draw grid, px per cell unit
+ART = 4   # atlas density, px per cell unit
 
 
 class SDraw:
@@ -53,34 +55,46 @@ class SDraw:
             return [v * DS for v in pts]
         return [(x * DS, y * DS) for x, y in pts]
 
+    @staticmethod
+    def _fill_only(kw):
+        """Strip Pillow's per-part contour; Phaser outlines the composite."""
+        kw.pop("outline", None)
+        kw.pop("width", None)
+        return kw
+
     def line(self, pts, width=1, **kw):
         self.d.line(self._pts(pts), width=max(1, round(width * DS)), **kw)
 
     def ellipse(self, box, **kw):
-        self.d.ellipse(self._box(box), **kw)
+        self.d.ellipse(self._box(box), **self._fill_only(kw))
 
     def rectangle(self, box, **kw):
-        self.d.rectangle(self._box(box), **kw)
+        self.d.rectangle(self._box(box), **self._fill_only(kw))
 
     def rounded_rectangle(self, box, radius=0, **kw):
-        self.d.rounded_rectangle(self._box(box), radius=radius * DS, **kw)
+        self.d.rounded_rectangle(self._box(box), radius=radius * DS,
+                                 **self._fill_only(kw))
 
     def arc(self, box, start, end, **kw):
         self.d.arc(self._box(box), start=start, end=end, **kw)
 
     def polygon(self, pts, **kw):
-        self.d.polygon(self._pts(pts), **kw)
+        self.d.polygon(self._pts(pts), **self._fill_only(kw))
 
 # ---------------------------------------------------------------------------
-# Palette — classic kraft-paper doll
+# Palette — warm high-fantasy SNES house style.
+#
+# The palette deliberately shares one near-black plum outline and a three-step
+# ramp per material.  That is the most important visual rule for keeping the
+# modular layers coherent: hue may change, but value grouping does not.
 # ---------------------------------------------------------------------------
-SKIN = (238, 195, 154, 255)        # warm tan paper-doll flesh
-SKIN_DARK = (224, 178, 138, 255)   # far-side limbs, slightly shaded
-OUTLINE = (43, 35, 52, 255)       # cool ink outline
-SKIN_LIGHT = (255, 219, 159, 255)
-TEAL = (52, 126, 127, 255)
-TEAL_DARK = (39, 76, 91, 255)
-TEAL_LIGHT = (104, 183, 157, 255)
+SKIN = (231, 174, 128, 255)
+SKIN_DARK = (177, 112, 94, 255)
+OUTLINE = (44, 30, 54, 255)
+SKIN_LIGHT = (255, 218, 156, 255)
+TEAL = (45, 132, 126, 255)
+TEAL_DARK = (35, 70, 86, 255)
+TEAL_LIGHT = (104, 194, 157, 255)
 HAIR = (108, 61, 51, 255)
 HAIR_DARK = (60, 40, 49, 255)
 HAIR_LIGHT = (180, 104, 62, 255)
@@ -101,35 +115,35 @@ BLUSH = (235, 160, 140, 140)
 # flipX mirrors it for left-facing. Brads sit at every pivot.
 # ---------------------------------------------------------------------------
 NECK = (40.5, 18.0)
-# Compact storybook proportions: broad head, short torso and sturdy limbs.
+# Compact heroic proportions: oversized head and costume masses, short torso,
+# wide-set shoulders, large hands and grounded boots.  The stance stays a
+# readable three-quarter view so the existing single-direction rig can mirror.
 # F/B name the rendered side, not the silhouette edge: F limbs are the near
 # (camera) side drawn over the torso, B limbs the far side drawn behind it.
-SH_F, ELB_F, WRI_F = (37.5, 19.5), (36.5, 22.5), (36.5, 25.0)
-SH_B, ELB_B, WRI_B = (42.5, 19.5), (43.5, 22.5), (44.0, 25.0)
-HIP_F, KNEE_F, ANK_F = (38.5, 26.0), (38.5, 30.0), (38.5, 33.5)
-HIP_B, KNEE_B, ANK_B = (42.0, 26.0), (42.0, 30.0), (42.0, 33.5)
+SH_F, ELB_F, WRI_F = (36.5, 20.7), (35.0, 23.7), (35.0, 26.2)
+SH_B, ELB_B, WRI_B = (43.5, 20.7), (45.0, 23.7), (45.5, 26.2)
+HIP_F, KNEE_F, ANK_F = (38.0, 26.0), (37.5, 30.0), (37.5, 33.5)
+HIP_B, KNEE_B, ANK_B = (42.5, 26.0), (43.0, 30.0), (43.0, 33.5)
 # Weapon mounts pivot on the fist — the hand blob hangs ~2 units below the
 # wrist joint, so the grip sits mid-fist rather than on the wrist.
 HAND_F = (WRI_F[0], WRI_F[1] + 1.75)
 HAND_B = (WRI_B[0], WRI_B[1] + 1.75)
 
 
-def capsule(d, p0, p1, width, fill, outline, cap_r=2.6):
+def capsule(d, p0, p1, width, fill, outline, cap_r=2.6, tip=True):
     """Draw between the actual joint pivots. Rounded ends provide overlap
     without extending the segment or moving its joint cap off the pivot.
-    cap_r draws the joint-covering disc centered at p0."""
-    d.line([p0, p1], fill=outline, width=width + 2)
-    r = (width + 2) / 2
-    for p in (p0, p1):
-        d.ellipse([p[0] - r, p[1] - r, p[0] + r, p[1] + r], fill=outline)
+    cap_r draws the joint-covering disc centered at p0. tip=False leaves
+    the p1 end flat at the pivot so the segment can't overhang the joint —
+    the child part's cap covers the seam instead."""
     d.line([p0, p1], fill=fill, width=width)
     r = width / 2
-    for p in (p0, p1):
+    for p in ((p0, p1) if tip else (p0,)):
         d.ellipse([p[0] - r, p[1] - r, p[0] + r, p[1] + r], fill=fill)
     # Joint cap — a disc centred on the pivot, slightly wider than the limb,
     # hides the seam at any rotation angle.
     d.ellipse([p0[0] - cap_r, p0[1] - cap_r, p0[0] + cap_r, p0[1] + cap_r],
-              fill=fill, outline=fill)
+              fill=fill)
 
 
 def new_part():
@@ -140,57 +154,78 @@ def new_part():
 # the joint cap on the CHILD part stays centered as the limb rotates.
 def draw_head(img):
     d = SDraw(img)
-    d.rectangle([39, 16, 42, 19.5], fill=SKIN_DARK, outline=OUTLINE)
-    # Broad, compact three-quarter face: tiny dark eyes, no projecting nose
-    # or oversized white sclera. The silhouette still faces right.
-    d.polygon([(35.5, 8), (38, 5.5), (44, 5.5), (47, 8),
-               (47, 14.5), (45, 17), (38.5, 17), (36, 15)],
+    d.rectangle([39, 16.5, 42, 19.5], fill=SKIN_DARK, outline=OUTLINE)
+    # Angular anime head — the cranium stays broad while the cheeks taper
+    # through two planes to a pointed chin, instead of the old round ball
+    # ending in a flat bottom. Profile reads as a 3/4 view facing +x.
+    d.polygon([(33.5, 9.5), (35, 6.5), (38, 4.5), (44, 4.5),
+               (46.5, 6.5), (47.5, 9.5), (47, 12.5), (45, 15.5),
+               (41.5, 18), (39.5, 17.5), (37, 16), (34.5, 14)],
               fill=SKIN, outline=OUTLINE)
-    d.polygon([(36, 11), (38, 12), (38, 15), (40, 16),
-               (45, 16), (44.5, 17), (38.5, 17), (36, 15)], fill=SKIN_DARK)
+    # Under-jaw shadow hugs the taper — deepest under the chin point and
+    # the far cheek, so the lower face reads as angled planes.
+    d.polygon([(34.5, 12), (37, 13), (37.5, 15.8), (39.8, 17.4),
+               (41.5, 17.8), (43.8, 16.2), (44.8, 14.8),
+               (44.5, 16.3), (38.5, 16.3), (34.5, 14)],
+              fill=SKIN_DARK)
+    # Two deliberate highlight clusters survive at game scale and keep all
+    # faces compatible with hair/helmet overlays.
+    d.polygon([(36, 7.5), (39, 5.5), (44, 5.5), (46.5, 7.5),
+               (44, 8.5), (38, 8.5)],
+              fill=SKIN_LIGHT)
+    d.rectangle([44.5, 10, 45.5, 11], fill=OUTLINE)
 
 
 def draw_torso(img):
     d = SDraw(img)
-    d.polygon([(37, 18), (41, 17.5), (44, 19), (44, 23),
-               (43, 24), (44, 27), (36, 27), (37, 23)], fill=SKIN, outline=OUTLINE)
-    d.polygon([(37, 19), (38, 19), (38, 24), (37, 26), (36.5, 26)], fill=SKIN_DARK)
+    # Tapered heroic torso, with a strong shoulder-to-waist rhythm shared by
+    # human, goblin and imp silhouettes. The pelvis narrows to the hip span
+    # and ends at the joint line with a shallow crotch point — a wide slab
+    # below the hips reads as a flap once the near thigh covers the front.
+    d.polygon([(35.5, 19), (39, 17.5), (42, 17.5), (45, 19),
+               (45.5, 23), (44, 24.5), (43.5, 26.5), (40.2, 27.25),
+               (36.8, 26.5), (36, 24)],
+              fill=SKIN, outline=OUTLINE)
+    d.polygon([(35.5, 19.5), (38, 19), (38, 24.5), (37.2, 26), (36.2, 25.2)],
+              fill=SKIN_DARK)
+    d.line([(39, 18.5), (42, 18.5)], fill=SKIN_LIGHT, width=.5)
 
 
 def _arm(sh, elb, wri, fill, img):
     d = SDraw(img)
-    capsule(d, sh, elb, 2.5, fill, OUTLINE, cap_r=1.8)
-    d.line([sh, (elb[0], elb[1] - 1)], fill=SKIN_LIGHT, width=.5)
+    capsule(d, sh, elb, 3.0, fill, OUTLINE, cap_r=2.1, tip=False)
+    d.line([(sh[0], sh[1] - .5), (elb[0], elb[1] - 1)], fill=SKIN_LIGHT, width=.5)
 
 
 def _forearm(elb, wri, fill, img):
     d = SDraw(img)
-    capsule(d, elb, wri, 2, fill, OUTLINE, cap_r=1.5)
+    capsule(d, elb, wri, 2.5, fill, OUTLINE, cap_r=1.6)
     d.line([(elb[0], elb[1]), (wri[0], wri[1])], fill=SKIN_LIGHT, width=.5)
-    d.polygon([(wri[0] - 1, wri[1] + .5), (wri[0] + 1, wri[1] + .5),
-               (wri[0] + 1.5, wri[1] + 2), (wri[0] + 1, wri[1] + 3),
-               (wri[0] - 1, wri[1] + 3), (wri[0] - 1.5, wri[1] + 2)],
+    d.polygon([(wri[0] - 1.5, wri[1] + .5), (wri[0] + 1.5, wri[1] + .5),
+               (wri[0] + 2, wri[1] + 2), (wri[0] + 1.5, wri[1] + 3.5),
+               (wri[0] - 1.5, wri[1] + 3.5), (wri[0] - 2, wri[1] + 2)],
               fill=SKIN, outline=OUTLINE)
     d.line([(wri[0], wri[1] + 1), (wri[0], wri[1] + 2.5)], fill=SKIN_LIGHT, width=.5)
 
 
 def _thigh(hip, knee, fill, img):
     d = SDraw(img)
-    capsule(d, hip, knee, 3, fill, OUTLINE, cap_r=2)
-    d.line([(hip[0], hip[1] + 1), (knee[0], knee[1] - 1)], fill=SKIN_LIGHT, width=1)
+    capsule(d, hip, knee, 3.5, fill, OUTLINE, cap_r=2.0, tip=False)
+    d.line([(hip[0] - .5, hip[1] + .5), (knee[0] - .5, knee[1] - 1)],
+           fill=SKIN_LIGHT, width=.5)
 
 
 def _shin(knee, ank, fill, img):
     d = SDraw(img)
-    capsule(d, knee, ank, 2.5, fill, OUTLINE, cap_r=1.8)
+    capsule(d, knee, ank, 3, fill, OUTLINE, cap_r=1.85)
     d.line([(knee[0], knee[1] + 1), (ank[0], ank[1] - .5)], fill=SKIN_LIGHT, width=1)
     # Clip the ankle at the flat sole; keep the corrected heel height.
     sole_y = ank[1] + 1.5
     cut_y = round(sole_y * DS) + 1
     img.paste((0, 0, 0, 0), (0, cut_y, img.width, img.height))
-    d.polygon([(ank[0] - 2, ank[1] - .5), (ank[0] - 1, ank[1] - 1),
-               (ank[0] + 1, ank[1] - .5), (ank[0] + 3.2, ank[1] + .3),
-               (ank[0] + 3.2, sole_y), (ank[0] - 2, sole_y)], fill=fill, outline=OUTLINE)
+    d.polygon([(ank[0] - 2.5, ank[1] - .5), (ank[0] - 1, ank[1] - 1.5),
+               (ank[0] + 1.5, ank[1] - .5), (ank[0] + 4, ank[1] + .3),
+               (ank[0] + 4, sole_y), (ank[0] - 2.5, sole_y)], fill=fill, outline=OUTLINE)
     d.line([(ank[0] - .5, ank[1]), (ank[0] + 2, ank[1] + .5)], fill=SKIN_LIGHT, width=.5)
 
 
@@ -208,11 +243,12 @@ PARTS = {
     "head": draw_head,
 }
 SLOT_ORDER = [
-    # Spine draws first to last. B (far-side) limbs sit behind the torso, F
-    # (near-side) limbs in front of it; the head draws under the collar so
-    # the neck never paints over the chest.
-    "armB_u", "armB_l", "legB_u", "legB_l", "head", "torso",
-    "legF_u", "legF_l", "armF_u", "armF_l",
+    # Spine draws first to last. B (far-side) limbs sit behind the torso;
+    # the near leg also tucks under it so tunics and the hip joint read
+    # correctly, while the near arm stays in front. The head draws under
+    # the collar so the neck never paints over the chest.
+    "armB_u", "armB_l", "legB_u", "legB_l", "head",
+    "legF_u", "legF_l", "torso", "armF_u", "armF_l",
 ]
 
 # Bones — every pivot sits on its joint pin.
@@ -274,6 +310,14 @@ SHAPE_KEYS = [
     {"name": "legWidth", "label": "Leg width", "group": "Body", "min": 0.7,
      "max": 1.6,
      "bones": {"legF_u": "x", "legF_l": "x", "legB_u": "x", "legB_l": "x"}},
+    # Leg length scales the upper-leg bones on Y — the lower-leg bones aren't
+    # keyed, so they inherit the parent's scale and the whole chain stretches
+    # uniformly (art and joint offsets). Hips lift by the grown chain length
+    # so the feet stay planted, like the quaddoll's leg-driven "height".
+    {"name": "legLen", "label": "Leg length", "group": "Body", "min": 0.75,
+     "max": 1.5,
+     "bones": {"legF_u": "y", "legB_u": "y"},
+     "translate": {"hips": {"y": 34.0 - 26.0}}},
     {"name": "head", "label": "Head", "group": "Head", "min": 0.7,
      "max": 1.6, "bones": {"head": "xy"}},
     {"name": "ears", "label": "Ears", "group": "Head", "min": 0.6,
@@ -298,6 +342,19 @@ SHAPE_KEYS = [
 # scale so only their offsets move — no art stretches. Their own shape keys
 # (weaponSize, chest, legWidth, ...) still apply on top.
 SHAPE_NEUTRAL = ["weapon", "weaponB", "torso", "legF_u", "legB_u"]
+
+# Rig baseline morphs — the authored doll is chibi/stocky, so the adult
+# proportions are the neutral baseline. Mirrors RIG_BASE_SHAPE["paperdoll"]
+# in wails/frontend/src/phaser/CharacterSprite.ts — keep them in sync.
+SHAPE_DEFAULTS = {
+    "height": 1.3,
+    "legLen": 1.25,
+    "head": 0.78,
+    "chest": 0.9,
+    "armLen": 1.1,
+    "armWidth": 0.85,
+    "legWidth": 0.85,
+}
 
 SLOT_BONE = {  # each part hangs on the bone at its pivot joint
     "head": "head", "torso": "torso",
@@ -343,9 +400,53 @@ def pack(regions):
 def main():
     if __package__:
         from .paperdoll_layers import build_layers, CREATURE_PRESETS
+        from . import hair_docs as hair_mod
     else:
         from paperdoll_layers import build_layers, CREATURE_PRESETS
+        import hair_docs as hair_mod
     layers = build_layers(sys.modules[__name__])
+
+    # Rigged hair docs — each painted part is a weighted mesh skinned to a
+    # 3-bone chain (root pinned to the head, mid/tip carry the sway so the
+    # wave travels outward). Slots follow the "{layer}_{bone}" convention;
+    # draw order mirrors flat hair (tail behind the body, top and bangs
+    # over the face).
+    hair_docs = hair_mod.load_hair_docs()
+    tail_layers, front_layers = [], []
+    hair_flex = {}   # slot -> (part, pivot, chain bone names)
+    for hd in hair_docs:
+        for part in ("tail", "top", "bangs"):
+            p = hd["parts"].get(part)
+            if not p:
+                continue
+            bbox_px = p["img"].getbbox()
+            if bbox_px is None:
+                continue
+            bbox = tuple(v / DS for v in bbox_px)
+            span = hair_mod.hair_flow_span(part, p["pivot"], bbox)
+            chain = hair_mod.hair_chain(hd["id"], part)
+            cells = hair_mod.hair_chain_cells(part, p["pivot"], span)
+            parents = ("head", chain[0], chain[1])
+            for name, parent, cc in zip(chain, parents, cells):
+                if name not in BONE_PARENT:
+                    BONES.append((name, parent))
+                    BONE_PARENT[name] = parent
+                    _BONES_WORLD[name] = S(*cc)
+            variants = {f"hair_{hd['id']}_{k}": img
+                        for k, img in hair_mod.hair_color_variants(p["img"]).items()}
+            slot = hair_mod.hair_slot(hd["id"], part)
+            hair_flex[slot] = (part, p["pivot"], chain, span)
+            entry = (slot, chain[0], None, variants, {})
+            (tail_layers if part == "tail" else front_layers).append(entry)
+
+    def insert_after(slot_name, tuples):
+        idx = next(i for i, l in enumerate(layers) if l[0] == slot_name)
+        layers[idx + 1:idx + 1] = tuples
+
+    if tail_layers:
+        insert_after("hair_bot_head", tail_layers)
+    if front_layers:
+        insert_after("hair_top_head", front_layers)
     os.makedirs(OUT_DIR, exist_ok=True)
     regions, bboxes = {}, {}
     assembled = new_part()
@@ -358,14 +459,23 @@ def main():
             if bbox is None:
                 bbox = (0, 0, 1, 1)
             path = f'{slot}__{key}'
-            regions[path] = img.crop(bbox)
+            region = img.crop(bbox)
+            # Downsample the DS-res crop to the ART atlas density — the
+            # LANCZOS pass is what turns the fine draw grid into AA edges.
+            regions[path] = region.resize(
+                (max(1, round(region.width * ART / DS)),
+                 max(1, round(region.height * ART / DS))),
+                Image.Resampling.LANCZOS)
             bboxes[path] = tuple(v / DS for v in bbox)
         if default:
             assembled.alpha_composite(variants[default])
             if slot.startswith('skin_'):
                 bare.alpha_composite(variants[default])
-    assembled.save(PREVIEW)
-    bare.save(os.path.join(OUT_DIR, 'paperdoll_base_preview.png'))
+    assembled.resize((FRAME_W * ART, FRAME_H * ART),
+                     Image.Resampling.LANCZOS).save(PREVIEW)
+    bare.resize((FRAME_W * ART, FRAME_H * ART),
+                Image.Resampling.LANCZOS).save(
+                    os.path.join(OUT_DIR, 'paperdoll_base_preview.png'))
 
     # Baked creature previews — a 100x40 cell (H99 convention) plus a tight
     # icon per preset so the map editor and pet UI can render doll-based
@@ -406,11 +516,15 @@ def main():
             key = preset_key(slot, preset["appearance"])
             if key and key in variants:
                 comp.alpha_composite(variants[key])
-        comp.resize((FRAME_W, FRAME_H), Image.NEAREST).save(
+        comp.resize((FRAME_W, FRAME_H), Image.Resampling.LANCZOS).save(
             os.path.join(OUT_DIR, f"doll_{kind}.png"))
         bbox = comp.getbbox()
         if bbox:
-            comp.crop(bbox).save(os.path.join(OUT_DIR, f"doll_{kind}_icon.png"))
+            icon = comp.crop(bbox)
+            icon.resize((max(1, round(icon.width * ART / DS)),
+                         max(1, round(icon.height * ART / DS))),
+                        Image.Resampling.LANCZOS).save(
+                os.path.join(OUT_DIR, f"doll_{kind}_icon.png"))
 
     atlas_img, placements = pack(regions)
     os.makedirs(OUT_DIR, exist_ok=True)
@@ -449,6 +563,7 @@ def main():
 
     slots_json = []
     skin_atts = {}
+    bone_index = {n: i for i, (n, _p) in enumerate(BONES)}
     for slot, bone, default, variants, rots in layers:
         entry = {'name': slot, 'bone': bone}
         if default:
@@ -460,10 +575,30 @@ def main():
             x0, y0, x1, y1 = bboxes[path]
             sx, sy = (x0 + x1) / 2 - FOOT_X, FOOT_Y - (y0 + y1) / 2
             bx, by = _BONES_WORLD[bone]
+            if slot in hair_flex:
+                # Weighted mesh — grid skinned to the part's deform chain;
+                # identical geometry across the color variants.
+                part, pivot, chain, span = hair_flex[slot]
+                bw = [_BONES_WORLD[b] for b in chain]
+                bi = [bone_index[b] for b in chain]
+                skin_atts[slot][key] = {
+                    'type': 'mesh', 'path': path,
+                    'x': round(sx - bx, 3), 'y': round(sy - by, 3),
+                    'width': x1 - x0, 'height': y1 - y0,
+                    **hair_mod.hair_mesh((x0, y0, x1, y1), (x0, y0, x1, y1),
+                                         pivot, part, span, bw, bi),
+                }
+                continue
             att = {
                 'path': path, 'x': round(sx-bx, 3), 'y': round(sy-by, 3),
                 'width': x1-x0, 'height': y1-y0,
             }
+            if key.startswith('face_ms'):
+                # Extracted MS faces share one fixed mount — the sprites are
+                # pre-scaled per-face, so the anchor is tuned by eye rather
+                # than derived from the bbox.
+                att['x'], att['y'] = 1, 4.5
+                att['scaleX'] = att['scaleY'] = 1.2
             deg = rots.get(key, 0)
             if deg:
                 # Rotate the center offset about the bone too — Spine pivots a
@@ -562,14 +697,17 @@ def main():
     # Continuous stride, knee lift during recovery, and a delayed arm swing.
     run = animations['run']['bones']
     run.clear()
-    run['root'] = {'translate': cycle(RUN, lambda p: .4 * (1 - math.cos(2 * p)), True)}
-    run['torso'] = {'rotate': cycle(RUN, lambda p: -4 + 1.4 * math.sin(2 * p - .25))}
+    run['root'] = {'translate': cycle(RUN, lambda p: .5 * (1 - math.cos(2 * p)), True)}
+    run['torso'] = {'rotate': cycle(RUN, lambda p: -6 + 1.4 * math.sin(2 * p - .25))}
     run['head'] = {'rotate': cycle(RUN, lambda p: 3 - 1.2 * math.sin(2 * p - .6))}
     for side, phase in [('F', 0), ('B', math.pi)]:
-        run[f'leg{side}_u'] = {'rotate': cycle(RUN, lambda p, q=phase: 24 * math.cos(p + q))}
-        run[f'leg{side}_l'] = {'rotate': cycle(RUN, lambda p, q=phase: -5 - 39 * max(0, -math.sin(p + q)) ** 2)}
-        run[f'arm{side}_u'] = {'rotate': cycle(RUN, lambda p, q=phase: -20 * math.cos(p + q - .25))}
-        run[f'arm{side}_l'] = {'rotate': cycle(RUN, lambda p, q=phase: 18 + 9 * math.sin(p + q - .65))}
+        run[f'leg{side}_u'] = {'rotate': cycle(RUN, lambda p, q=phase: 26 * math.cos(p + q))}
+        # Knees never fully extend (baseline -8) and fold hard through
+        # recovery (-72 peak) — the bent-knee carry is what reads as a run.
+        run[f'leg{side}_l'] = {'rotate': cycle(RUN, lambda p, q=phase: -8 - 64 * max(0, -math.sin(p + q)) ** 1.6)}
+        run[f'arm{side}_u'] = {'rotate': cycle(RUN, lambda p, q=phase: -24 * math.cos(p + q - .25))}
+        # Elbows stay cocked (~55°) and pump rather than hanging straight.
+        run[f'arm{side}_l'] = {'rotate': cycle(RUN, lambda p, q=phase: 55 + 17 * math.sin(p + q - .65))}
 
     # Creature feature bones — gentle wing flap and tail sway riding the body.
     idle['wings'] = {'rotate': cycle(IDLE, lambda p: 5 * math.sin(p - .5))}
@@ -600,6 +738,47 @@ def main():
         "armF_u": atk["armB_u"], "armF_l": atk["armB_l"],
         "weapon": atk["weaponB"],
     }}
+
+    # Rigged hair sway — tracks on the mid/tip chain bones only; the root
+    # stays glued to the head. Amplitude grows and phase lags down the
+    # chain so the wave travels from scalp to tip. Mirrors
+    # hairChainTracks in tools/editor/src/model/hair.ts.
+    for hd in hair_docs:
+        sway = hd["sway"]
+        for part in hd["parts"]:
+            ia, ip, ra, rp, aa, bob = hair_mod.HAIR_SWAY[part]
+            _root, mid, tip = hair_mod.hair_chain(hd["id"], part)
+            for b, amp_scale, lag in ((mid, hair_mod.CHAIN_AMP[0], hair_mod.CHAIN_LAG[0]),
+                                      (tip, hair_mod.CHAIN_AMP[1], hair_mod.CHAIN_LAG[1])):
+                idle[b] = {"rotate": cycle(
+                    IDLE, lambda p, a=ia * amp_scale, ph=ip + lag:
+                    sway * a * math.sin(p - ph))}
+                run[b] = {"rotate": cycle(
+                    RUN, lambda p, a=ra * amp_scale, ph=rp + lag:
+                    sway * a * math.sin(2 * p - ph))}
+                animations["ride_idle"]["bones"][b] = {"rotate": cycle(
+                    RIDE_IDLE, lambda p, a=ia * amp_scale, ph=ip + lag:
+                    sway * 0.8 * a * math.sin(p - ph))}
+                animations["ride_run"]["bones"][b] = {"rotate": cycle(
+                    RIDE, lambda p, a=ra * amp_scale, ph=rp + lag:
+                    sway * a * math.sin(2 * p - ph))}
+                flick = {"rotate": rot(
+                    (0, 0), (.1, -.5 * aa * amp_scale * sway),
+                    (.22, aa * amp_scale * sway),
+                    (.4, .3 * aa * amp_scale * sway), (.55, 0))}
+                attack[b] = flick
+                animations["attackB"]["bones"][b] = flick
+            # Tip bob — a vertical bounce that trails the rotation, most
+            # visible on bangs and tails.
+            if bob:
+                idle[tip]["translate"] = cycle(
+                    IDLE, lambda p: sway * bob * 0.5 * math.sin(p - ip - .7), True)
+                run[tip]["translate"] = cycle(
+                    RUN, lambda p: sway * bob * math.sin(2 * p - rp - .7), True)
+                animations["ride_idle"]["bones"][tip]["translate"] = cycle(
+                    RIDE_IDLE, lambda p: sway * bob * 0.5 * math.sin(p - ip - .7), True)
+                animations["ride_run"]["bones"][tip]["translate"] = cycle(
+                    RIDE, lambda p: sway * bob * math.sin(2 * p - rp - .7), True)
 
     # Partial pose overlays — anims that key only a few bones. Played on a
     # higher Spine track (or merged in previews/editor), they override just
@@ -650,6 +829,8 @@ def main():
             e = {"key": key, "slot": slot}
             if rots.get(key):
                 e["rotation"] = rots[key]
+            if key.startswith("face_ms"):
+                e["scaleX"] = e["scaleY"] = 1.2
             entries.append(e)
         if lname in seen_layers:
             continue
@@ -673,6 +854,7 @@ def main():
                    "y": round(_BONES_WORLD[name][1], 2)}
                   for name, parent in BONES],
         "shapeKeys": SHAPE_KEYS,
+        "shapeDefaults": SHAPE_DEFAULTS,
         "shapeNeutral": SHAPE_NEUTRAL,
         "catalog": catalog,
         "animations": animations,
@@ -688,7 +870,7 @@ def main():
         a = preset["appearance"]
         pspec = dict(spec)
         pspec["preset"] = {
-            "skin": a.get("skin", "c1"), "face": a.get("face", "c1"),
+            "skin": a.get("skin", "c1"), "face": a.get("face", "ms1"),
             "hair": a.get("hair", ""), "hairColor": a.get("hair_color", "c1"),
             "cloth": a.get("cloth", ""), "clothColor": a.get("cloth_color", "c1"),
             "weapon": a.get("weapon", ""), "weaponColor": a.get("weapon_color", "c1"),

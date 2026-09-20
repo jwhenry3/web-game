@@ -13,9 +13,11 @@ import sys
 from PIL import Image
 
 if __package__:
-    from .gen_paperdoll import SDraw, capsule, new_part, pack, OUT_DIR, PAD
+    from .gen_paperdoll import (
+        SDraw, capsule, new_part, pack, OUT_DIR, PAD, DS, ART)
 else:
-    from gen_paperdoll import SDraw, capsule, new_part, pack, OUT_DIR, PAD
+    from gen_paperdoll import (
+        SDraw, capsule, new_part, pack, OUT_DIR, PAD, DS, ART)
 
 OUT_IMG = "quaddoll.png"
 OUT_ATLAS = "quaddoll.atlas"
@@ -32,12 +34,14 @@ def S(cx, cy):
 
 
 # ---------------------------------------------------------------------------
-# Palette — canonical fur is a mid gray; variants recolor it.
+# Palette — each coat uses a hue-shifted shadow/base/light ramp.  The dark
+# value leans violet/cool while the lit planes move warmer; this is the same
+# compact three-value language used by the humanoid dolls.
 # ---------------------------------------------------------------------------
-FUR = (96, 100, 114, 255)
-FUR_DARK = (62, 66, 78, 255)      # far-side limbs, back ridge, tail tip
-FUR_LIGHT = (138, 142, 158, 255)
-BELLY = (168, 172, 184, 255)
+FUR = (102, 112, 132, 255)
+FUR_DARK = (57, 52, 78, 255)      # far-side limbs, back ridge, tail tip
+FUR_LIGHT = (156, 166, 178, 255)
+BELLY = (194, 184, 170, 255)
 OUTLINE = (30, 26, 40, 255)
 NOSE = (28, 25, 34, 255)
 EYE = (240, 176, 60, 255)         # amber
@@ -46,12 +50,12 @@ EYE = (240, 176, 60, 255)         # amber
 # skin palette numbering (c1..c10 are humanoid skins; c11+ are furs).
 FUR_VARIANTS = {
     "c11": (FUR, FUR_DARK, FUR_LIGHT, BELLY),                 # dire gray
-    "c12": ((120, 90, 62, 255), (78, 58, 42, 255),           # timber brown
-            (152, 120, 88, 255), (180, 150, 120, 255)),
-    "c13": ((54, 56, 66, 255), (34, 36, 44, 255),            # shadow black
-            (84, 88, 100, 255), (108, 112, 124, 255)),
-    "c14": ((198, 202, 212, 255), (148, 152, 166, 255),      # snow
-            (222, 225, 233, 255), (234, 236, 242, 255)),
+    "c12": ((139, 91, 55, 255), (76, 45, 59, 255),           # timber brown
+            (205, 143, 75, 255), (226, 187, 126, 255)),
+    "c13": ((57, 62, 78, 255), (31, 27, 46, 255),            # shadow black
+            (101, 112, 132, 255), (148, 142, 145, 255)),
+    "c14": ((202, 210, 218, 255), (119, 112, 143, 255),      # snow
+            (242, 230, 208, 255), (250, 241, 220, 255)),
 }
 # Eyes per variant — amber, amber, ice blue, dark.
 EYE_VARIANTS = {"c11": EYE, "c12": EYE,
@@ -142,25 +146,35 @@ SHAPE_KEYS = [
 ]
 SHAPE_NEUTRAL = []
 
+# Rig baseline morphs — mirrors RIG_BASE_SHAPE["quaddoll"] in
+# wails/frontend/src/phaser/CharacterSprite.ts — keep them in sync.
+SHAPE_DEFAULTS = {
+    "height": 1.15,
+    "bodyLen": 1.08,
+    "legWidth": 0.8,
+    "head": 0.9,
+}
+
 
 # ---------------------------------------------------------------------------
 # Parts — drawn in canonical fur; variants recolor.
 # ---------------------------------------------------------------------------
 def draw_body(img):
     d = SDraw(img)
-    # Barrel: deep chest in front tapering to a tucked waist behind.
-    capsule(d, (44, 20.5), (55, 20), 9.5, FUR, OUTLINE, cap_r=3)
-    capsule(d, (28, 20.5), (46, 20.5), 8, FUR, OUTLINE, cap_r=3)
-    d.line([(30, 16.8), (52, 16.1)], fill=FUR_DARK, width=1.2)  # back ridge
-    d.line([(33, 24.1), (49, 23.7)], fill=BELLY, width=1.6)     # belly
-    # Haunch curve over the hindquarters.
-    d.ellipse([26, 16, 36, 25], fill=FUR, outline=OUTLINE)
-    d.line([(33, 24.1), (36, 24.5)], fill=BELLY, width=1.4)
+    # Broad, overlapping masses replace the old tubular torso: a high
+    # shoulder block, round haunch and compact waist read at game scale.
+    capsule(d, (41, 20.0), (54, 19.5), 11.0, FUR, OUTLINE, cap_r=4)
+    capsule(d, (29, 20.5), (44, 20.2), 9.5, FUR, OUTLINE, cap_r=4)
+    d.ellipse([25, 15.5, 37, 26], fill=FUR, outline=OUTLINE)
+    d.line([(29, 16.3), (52, 15.6)], fill=FUR_DARK, width=1.8)
+    d.line([(34, 24.5), (49, 24.0)], fill=BELLY, width=2.2)
+    # One hard light plane keeps the volume readable without internal ink.
+    d.line([(38, 17.5), (50, 17.1)], fill=FUR_LIGHT, width=1.4)
 
 
 def draw_neck(img):
     d = SDraw(img)
-    capsule(d, (51, 19.5), (57.5, 13.5), 6, FUR, OUTLINE, cap_r=2.5)
+    capsule(d, (50.5, 20), (58, 13), 8, FUR, OUTLINE, cap_r=3.2)
     # Scruff silhouette along the neck's top edge.
     d.polygon([(50.5, 16.5), (53, 13), (55, 15), (57, 11), (59, 13.5)],
               fill=FUR_DARK)
@@ -168,15 +182,16 @@ def draw_neck(img):
 
 def draw_head(img):
     d = SDraw(img)
-    # Skull wedge.
-    d.polygon([(55, 14.5), (56, 10), (60, 8.5), (64, 10), (65.5, 13),
-               (62.5, 16.5), (57, 16.5)], fill=FUR, outline=OUTLINE)
+    # Large stepped skull and short muzzle echo the squat humanoid dolls.
+    d.polygon([(54.5, 15), (55.5, 9.5), (60, 7.5), (65, 9.5),
+               (67, 13), (63.5, 17), (57, 17)], fill=FUR,
+              outline=OUTLINE)
     # Ears — back ear darker (far side).
     d.polygon([(56.5, 9.5), (58, 6), (60.5, 9.5)], fill=FUR_DARK,
               outline=OUTLINE)
     d.polygon([(61, 9.5), (63, 5.5), (65, 10)], fill=FUR, outline=OUTLINE)
     # Snout + jaw line.
-    d.polygon([(62, 12.5), (70.5, 13.5), (71.5, 15.5), (63, 16)],
+    d.polygon([(62, 12), (71, 13), (72, 15.8), (63, 16.5)],
               fill=FUR, outline=OUTLINE)
     d.line([(63, 15.6), (70, 15.6)], fill=FUR_DARK, width=1)
     d.rectangle([69.5, 13.3, 71.8, 15.6], fill=NOSE)  # nose
@@ -191,26 +206,27 @@ def draw_face(img, eye=EYE):
 
 def leg_upper(img, pivot, joint, fill):
     d = SDraw(img)
-    capsule(d, pivot, joint, 3.2, fill, OUTLINE, cap_r=1.8)
+    capsule(d, pivot, joint, 4.2, fill, OUTLINE, cap_r=2.2)
 
 
 def leg_lower(img, joint, paw_x, fill):
     d = SDraw(img)
-    capsule(d, joint, (paw_x, PAW_Y - 0.8), 2.4, fill, OUTLINE, cap_r=1.4)
-    # Paw block — toes slightly ahead of the leg line.
-    d.rectangle([paw_x - 1.4, PAW_Y - 1.4, paw_x + 2.8, PAW_Y + 0.4],
+    capsule(d, joint, (paw_x, PAW_Y - 0.8), 3.2, fill, OUTLINE, cap_r=1.8)
+    # Oversized paw block anchors the silhouette and survives animation.
+    d.rectangle([paw_x - 2.0, PAW_Y - 1.8, paw_x + 3.5, PAW_Y + 0.4],
                 fill=FUR_DARK, outline=OUTLINE)
 
 
 def draw_tail_u(img):
     d = SDraw(img)
-    capsule(d, TAIL_U, TAIL_L, 3.4, FUR, OUTLINE, cap_r=1.8)
+    capsule(d, TAIL_U, TAIL_L, 4.8, FUR, OUTLINE, cap_r=2.4)
 
 
 def draw_tail_l(img):
     d = SDraw(img)
-    capsule(d, TAIL_L, (17.5, 10.5), 2.8, FUR, OUTLINE, cap_r=1.5)
-    d.ellipse([14.5, 8, 19.5, 13], fill=FUR_LIGHT, outline=OUTLINE)  # bushy tip
+    capsule(d, TAIL_L, (17.5, 10.5), 4.2, FUR, OUTLINE, cap_r=2.1)
+    d.ellipse([13.5, 7, 20.5, 14], fill=FUR_LIGHT,
+              outline=OUTLINE)  # bushy tip
 
 
 def recolor(img, mapping):
@@ -294,14 +310,21 @@ def main():
         for key, img in variants.items():
             bbox = img.getbbox() or (0, 0, 1, 1)
             path = f'{slot}__{key}'
-            regions[path] = img.crop(bbox)
-            bboxes[path] = tuple(v / 2 for v in bbox)  # DS = 2
+            region = img.crop(bbox)
+            regions[path] = region.resize(
+                (max(1, round(region.width * ART / DS)),
+                 max(1, round(region.height * ART / DS))),
+                Image.Resampling.LANCZOS)
+            bboxes[path] = tuple(v / DS for v in bbox)
         if default:
             assembled.alpha_composite(variants[default])
             if slot.startswith('skin_'):
                 bare.alpha_composite(variants[default])
-    assembled.save(PREVIEW)
-    bare.save(os.path.join(OUT_DIR, 'quaddoll_base_preview.png'))
+    assembled.resize((FRAME_W * ART, FRAME_H * ART),
+                     Image.Resampling.LANCZOS).save(PREVIEW)
+    bare.resize((FRAME_W * ART, FRAME_H * ART),
+                Image.Resampling.LANCZOS).save(
+                    os.path.join(OUT_DIR, 'quaddoll_base_preview.png'))
 
     # Baked per-kind previews — 100x40 cell + tight icon, like doll_*.
     for kind, preset in BEAST_PRESETS.items():
@@ -316,11 +339,15 @@ def main():
                 continue
             if key in variants:
                 comp.alpha_composite(variants[key])
-        comp.resize((FRAME_W, FRAME_H), Image.NEAREST).save(
+        comp.resize((FRAME_W, FRAME_H), Image.Resampling.LANCZOS).save(
             os.path.join(OUT_DIR, f"doll_{kind}.png"))
         bbox = comp.getbbox()
         if bbox:
-            comp.crop(bbox).save(os.path.join(OUT_DIR, f"doll_{kind}_icon.png"))
+            icon = comp.crop(bbox)
+            icon.resize((max(1, round(icon.width * ART / DS)),
+                         max(1, round(icon.height * ART / DS))),
+                        Image.Resampling.LANCZOS).save(
+                os.path.join(OUT_DIR, f"doll_{kind}_icon.png"))
 
     atlas_img, placements = pack(regions)
     atlas_img.save(os.path.join(OUT_DIR, OUT_IMG))
@@ -488,6 +515,7 @@ def main():
                    "y": round(_BONES_WORLD[name][1], 2)}
                   for name, parent in BONES],
         "shapeKeys": SHAPE_KEYS,
+        "shapeDefaults": SHAPE_DEFAULTS,
         "shapeNeutral": SHAPE_NEUTRAL,
         "catalog": catalog,
         "animations": animations,

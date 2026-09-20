@@ -1,3 +1,4 @@
+import type { HairDoc } from "./model/hair";
 import type { Skeleton, Spec } from "./model/types";
 
 export interface CharacterInfo {
@@ -60,6 +61,103 @@ export async function regenerate(char: string): Promise<string> {
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "regenerate failed");
   return body.output as string;
+}
+
+// --- rigged hair docs (tools/hairs/*.hair.json) ------------------------------
+
+export interface HairInfo {
+  id: string;
+  label: string;
+  preset: boolean;
+}
+
+export async function listHairs(): Promise<HairInfo[]> {
+  const res = await fetch("/editor-api/hairs");
+  if (!res.ok) throw new Error(`hairs: ${res.status}`);
+  return (await res.json()).hairs as HairInfo[];
+}
+
+export async function loadHair(id: string): Promise<HairDoc | null> {
+  const res = await fetch(`/editor-api/hair?id=${encodeURIComponent(id)}`);
+  if (!res.ok) return null;
+  return (await res.json()).hair as HairDoc;
+}
+
+export async function saveHair(doc: HairDoc): Promise<void> {
+  const res = await fetch("/editor-api/hair/save", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ hair: doc }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error ?? `save failed: ${res.status}`);
+}
+
+// --- saved parts library (tools/parts/*.part.json) ---------------------------
+
+import type { Attachment } from "./model/types";
+
+/** A reusable part: attachment mount metadata + its atlas pixels as a
+ * base64 PNG. Mountable onto any character's slots from the Parts dock. */
+export interface PartDoc {
+  id: string;
+  label?: string;
+  /** Source context — hints for which layer/slot it mounts on. */
+  char?: string;
+  layer?: string;
+  slot?: string;
+  /** Attachment fields in skeleton units (x/y/rotation/scale/width/height). */
+  attachment: Attachment;
+  /** The part's pixels — a PNG data-URL payload (no prefix). */
+  pngBase64: string;
+  /** Atlas px per skeleton unit at save time — lets the mount rescale
+   * attachment width/height if the target rig's density differs. */
+  pxPerUnit?: number;
+}
+
+export interface PartInfo {
+  id: string;
+  label: string;
+  layer: string;
+  slot: string;
+}
+
+export async function listParts(): Promise<PartInfo[]> {
+  const res = await fetch("/editor-api/parts");
+  if (!res.ok) throw new Error(`parts: ${res.status}`);
+  return (await res.json()).parts as PartInfo[];
+}
+
+export async function loadPart(id: string): Promise<PartDoc | null> {
+  const res = await fetch(`/editor-api/part?id=${encodeURIComponent(id)}`);
+  if (!res.ok) return null;
+  return (await res.json()).part as PartDoc;
+}
+
+export async function savePart(doc: PartDoc): Promise<void> {
+  const res = await fetch("/editor-api/part/save", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ part: doc }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error ?? `save failed: ${res.status}`);
+}
+
+export async function deletePart(id: string): Promise<void> {
+  const res = await fetch("/editor-api/part/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error ?? `delete failed: ${res.status}`);
+}
+
+export async function deleteHair(id: string): Promise<void> {
+  const res = await fetch("/editor-api/hair/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  if (!res.ok) throw new Error((await res.json()).error ?? `delete failed: ${res.status}`);
 }
 
 export async function deleteCharacter(id: string): Promise<void> {

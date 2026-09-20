@@ -1,0 +1,249 @@
+/* Map workspace — supplements the shared ed-* chrome in styles.css. */
+
+.ed-map-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.ed-map-divider {
+  width: 1px;
+  align-self: stretch;
+  background: #282828;
+  margin: 0 4px;
+}
+
+.ed-map-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c4c4c4;
+  white-space: nowrap;
+}
+
+.ed-map-zoom {
+  min-width: 42px;
+  text-align: center;
+  color: #c7c7c7;
+  font-variant-numeric: tabular-nums;
+}
+
+.ed-map-icon {
+  color: #8ab4f8;
+}
+
+.ed-map-ovr {
+  margin-left: auto;
+  color: #deb36c;
+  font-size: 9px;
+}
+
+.ed-map-host {
+  cursor: grab;
+}
+.ed-map-host:active {
+  cursor: grabbing;
+}
+.ed-map-host canvas {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.ed-map-prop-key {
+  color: #9aa0ae;
+  padding-right: 10px;
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.ed-map-override-note {
+  margin: 8px 0 0;
+  color: #deb36c;
+}
+
+.ed-map-search {
+  padding: 0;
+  margin: 4px 0 8px;
+  background: transparent;
+  border-bottom: 0;
+}
+
+.ed-map-count {
+  color: #9aa0ae;
+  font-weight: 400;
+}
+
+.ed-map-swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  flex: none;
+  border-radius: 2px;
+}
+
+/* --- feature stamps ------------------------------------------------------- */
+
+.ed-map-modes {
+  display: inline-flex;
+  border: 1px solid #232323;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ed-map-modes button {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 22px;
+}
+
+.ed-map-modes button.active {
+  background: #39678c;
+  color: #fff;
+}
+
+.ed-map-host.mode-stamp {
+  cursor: crosshair;
+}
+.ed-map-host.mode-stamp:active {
+  cursor: crosshair;
+}
+.ed-map-host.mode-collision {
+  cursor: default;
+}
+.ed-map-host.mode-paint {
+  cursor: crosshair;
+}
+.ed-map-host.mode-paint:active {
+  cursor: crosshair;
+}
+
+/* Paint category swatches reuse the segmented .ed-map-modes button chrome. */
+.ed-map-paint-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.ed-map-palette {
+  flex: 1 1 0;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+/* When the palette is open the maps list shrinks to make room. */
+.ed-hierarchy:has(.ed-map-palette) .ed-tree {
+  flex: none;
+  max-height: 35%;
+}
+
+.ed-map-palette-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 8px;
+}
+
+.ed-map-palette-cat {
+  margin: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #d4d4d4;
+}
+
+.ed-map-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 4px;
+  padding: 0 8px;
+}
+
+.ed-map-feature {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+  background: #323232;
+  border: 1px solid #262626;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.ed-map-feature:hover {
+  background: #3d3d3d;
+}
+
+.ed-map-feature.armed {
+  border-color: #56ccf2;
+  background: #2f4c5c;
+}
+
+.ed-map-feature img {
+  max-width: 52px;
+  max-height: 40px;
+  image-rendering: pixelated;
+  background: repeating-conic-gradient(#383838 0% 25%, #2e2e2e 0% 50%) 0 0 / 10px 10px;
+}
+
+.ed-map-feature span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  color: #aaa;
+}
+
+.ed-map-numfield {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #c4c4c4;
+}
+
+.ed-map-numfield input {
+  width: 64px;
+}
+
+/* --- bake status ------------------------------------------------------------ */
+
+.ed-map-bake-stale {
+  color: #deb36c;
+  border: 1px solid #6b5426;
+  border-radius: 3px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.ed-map-bake-err {
+  color: #ff7a6b;
+  font-size: 11px;
+  cursor: help;
+  white-space: nowrap;
+}
+
+/* --- inspect tree ----------------------------------------------------------- */
+
+.ed-map-chev {
+  background: none;
+  border: none;
+  color: #8a93a5;
+  width: 16px;
+  margin-right: 2px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 10px;
+  line-height: inherit;
+  flex-shrink: 0;
+}
+.ed-map-chev:hover {
+  color: #dfe3ea;
+}

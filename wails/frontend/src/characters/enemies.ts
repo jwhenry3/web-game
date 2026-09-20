@@ -58,7 +58,7 @@ export const ENEMY_DOLL_PRESETS: Partial<
     scale: 0.85,
     appearance: {
       skin: "c7",
-      face: "c8",
+      face: "ms6_gob",
       hair: "",
       cloth: "cloth5",
       clothColor: "c3",
@@ -73,7 +73,7 @@ export const ENEMY_DOLL_PRESETS: Partial<
     scale: 0.75,
     appearance: {
       skin: "c8",
-      face: "c9",
+      face: "ms9_imp",
       hair: "",
       cloth: "cloth10",
       clothColor: "c8",
@@ -89,7 +89,7 @@ export const ENEMY_DOLL_PRESETS: Partial<
     scale: 0.75,
     appearance: {
       skin: "c9",
-      face: "c10",
+      face: "ms12_stone",
       hair: "",
       cloth: "",
       weapon: "",
@@ -108,10 +108,10 @@ export const ENEMY_DOLL_PRESETS: Partial<
       },
     },
   },
-  // Quadruped — the quaddoll rig; a touch larger than the drawn cell reads
-  // so the "dire" wolf looms over a player.
+  // Quadruped — the quaddoll rig. Scale 1.0 renders it at the player's
+  // display scale: still shorter than a humanoid, but "dire" in bulk.
   dire_wolf: {
-    scale: 1.15,
+    scale: 1.0,
     rig: "quaddoll",
     appearance: { skin: "c11", face: "c11" },
   },

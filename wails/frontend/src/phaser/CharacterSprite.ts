@@ -32,6 +32,14 @@ const ATTACK_FADE_OUT = 0.15;
 /** Retry window for failed spine loads — ~6s covers scene transitions. */
 const SPINE_RETRY_MS = 400;
 const SPINE_RETRY_MAX = 15;
+/** One composite silhouette contour. Individual atlas parts intentionally
+ * contain no baked border, so joints and overlapping equipment do not grow
+ * dark seams. Distance 2 matches the 2x nearest-neighbor display scale. */
+const OUTLINE_COLOR = 0x2c1e36;
+const OUTLINE_STRENGTH = 8;
+const OUTLINE_DISTANCE = 2;
+/** Outline radius in skeleton units — ~2 atlas px at the 4px/unit density. */
+const OUTLINE_THICKNESS = 0.5;
 
 // Weapons with palette variants (staff orbs, shield heraldry) key their
 // attachments "<weapon>_<color>" instead of the bare weapon name.
@@ -49,11 +57,27 @@ const FAR_SIDE_SLOT = /(?:armB_[ul]|legB_[ul])$|^weapon_(?:bot|over)_/;
 function attachmentForSlot(slot: string, a: CharacterAppearance): string | null {
   if (slot.startsWith("skin_")) return `skin_${a.skin}`;
   if (slot.startsWith("face_")) return `face_${a.face}`;
-  if (slot.startsWith("hair_bot_") || slot.startsWith("hair_top_")) {
+  // Flat styles mount on hair_bot_*/hair_top_*; rigged styles (editor Hair
+  // workspace docs) mount on their own hair_bangs_*/hair_top_*/hair_tail_*
+  // part slots. Each slot only contains its own style's keys, so the unused
+  // slots clear automatically.
+  if (slot.startsWith("hair_")) {
     return a.hair ? `hair_${a.hair}_${a.hairColor}` : null;
   }
   if (slot.startsWith("cloth_bot_") || slot.startsWith("cloth_top_")) {
     return a.cloth ? `${a.cloth}_${a.clothColor}` : null;
+  }
+  if (slot.startsWith("body_object_")) {
+    return a.bodyObject ? `${a.bodyObject}_${a.clothColor}` : null;
+  }
+  if (slot.startsWith("cloak_object_")) {
+    return a.cloakObject ? `${a.cloakObject}_${a.clothColor}` : null;
+  }
+  if (slot.startsWith("head_object_")) {
+    return a.headObject ? `${a.headObject}_${a.clothColor}` : null;
+  }
+  if (slot.startsWith("hand_object_")) {
+    return a.handObject ? `${a.handObject}_${a.clothColor}` : null;
   }
   // Sub weapon on the far hand: weapon_bot_* draws under the arm, while
   // weapon_over_* (shields) straps over the forearm — still behind the
@@ -112,6 +136,14 @@ const SHAPE_KEYS: Record<
   chest: { bones: { torso: "x" } },
   head: { bones: { head: "xy" } },
   armLen: { bones: { armF_u: "y", armF_l: "y", armB_u: "y", armB_l: "y" } },
+  // Leg length scales only the upper-leg bones — the shin bones aren't
+  // keyed, so they inherit the parent scale and the whole chain stretches
+  // uniformly. The hips lift by the grown chain length (~8 cells) so feet
+  // stay planted, like the quaddoll's leg-driven "height".
+  legLen: {
+    bones: { legF_u: "y", legB_u: "y" },
+    translate: { hips: { y: 8.0 } },
+  },
   armWidth: { bones: { armF_u: "x", armF_l: "x", armB_u: "x", armB_l: "x" } },
   legWidth: {
     bones: {
@@ -148,10 +180,42 @@ const SHAPE_KEYS: Record<
  * without any artwork stretching. Their own keys still apply on top. */
 const SHAPE_NEUTRAL = new Set(["weapon", "weaponB", "torso", "legF_u", "legB_u"]);
 
+/**
+ * Per-rig default morphs — the authored dolls are chibi/stocky by design,
+ * so the adult baseline (smaller head, deeper waist, longer legs, slimmer
+ * limbs on humanoids; longer legs and barrel, slimmer legs on quadrupeds)
+ * is the rig's neutral. An appearance's `shape` overrides per key — enemy
+ * presets still set their explicit axes, and a key set back to 1 restores
+ * the authored proportion for that axis only.
+ */
+const RIG_BASE_SHAPE: Partial<Record<CharacterRig, Record<string, number>>> = {
+  paperdoll: {
+    height: 1.3,
+    legLen: 1.25,
+    head: 0.78,
+    chest: 0.9,
+    armLen: 1.1,
+    armWidth: 0.85,
+    legWidth: 0.85,
+  },
+  quaddoll: {
+    height: 1.15,
+    bodyLen: 1.08,
+    legWidth: 0.8,
+    head: 0.9,
+  },
+};
+
 const RIGS: Record<CharacterRig, { skel: string; atlas: string }> = {
   h99doll: { skel: SPINE_CHAR_SKEL, atlas: SPINE_CHAR_ATLAS },
   paperdoll: { skel: SPINE_DOLL_SKEL, atlas: SPINE_DOLL_ATLAS },
   quaddoll: { skel: SPINE_QUAD_SKEL, atlas: SPINE_QUAD_ATLAS },
+};
+
+const RIG_DISPLAY_SCALE: Record<CharacterRig, number> = {
+  h99doll: H99_DISPLAY_SCALE,
+  paperdoll: H99_DISPLAY_SCALE,
+  quaddoll: H99_DISPLAY_SCALE,
 };
 
 /** Rig used for all player characters — the layered pixel-art paper doll. */
@@ -181,6 +245,7 @@ export class CharacterSprite implements IEntitySprite {
   private hitCallback: (() => void) | null = null;
   private scene: Phaser.Scene;
   private hitFlash?: Phaser.Tweens.Tween;
+  private outline?: Phaser.Filters.Glow;
   private destroyed = false;
   private retryIn = 0;
   private retries = 0;
@@ -344,8 +409,71 @@ export class CharacterSprite implements IEntitySprite {
         this.scheduleRetry("spine object creation", err);
         return;
       }
-      obj.setScale(H99_DISPLAY_SCALE);
+      const displayScale = RIG_DISPLAY_SCALE[this.rig];
+      obj.setScale(displayScale);
       this.container.add(obj);
+      if (this.rig !== "h99doll") {
+        // Give the filter camera explicit character bounds. Enabling filters
+        // on a zero-size Container makes Phaser fall back to a full-context
+        // framebuffer for every actor, which is both expensive and imprecise.
+        const filterWidth = obj.width * displayScale;
+        const filterHeight = obj.height * displayScale;
+        this.container.setSize(filterWidth, filterHeight);
+        // Filter the assembled container, not individual Spine attachments.
+        // Phaser filters are WebGL-only; enableFilters is a safe no-op under
+        // the Canvas renderer.
+        this.container.enableFilters();
+        // Re-measure at render time, after Spine has updated its pose. Setup
+        // bounds omit animated/morphed extremities, and the root is not the
+        // bottom of the art. Keep a symmetric envelope so flipping is safe.
+        this.container.focusFilters = () => {
+          const bounds = obj.skeleton.getBoundsRect();
+          if (!Number.isFinite(bounds.width) || !Number.isFinite(bounds.height)) {
+            return this.container;
+          }
+          const padding = OUTLINE_DISTANCE + 2;
+          const halfWidth = Math.ceil(Math.max(
+            Math.abs(bounds.x + obj.renderOffsetX),
+            Math.abs(bounds.x + bounds.width + obj.renderOffsetX),
+          ) * Math.abs(obj.scaleX) + Math.abs(obj.x) + padding);
+          const halfHeight = Math.ceil(Math.max(
+            Math.abs(bounds.y + obj.renderOffsetY),
+            Math.abs(bounds.y + bounds.height + obj.renderOffsetY),
+          ) * Math.abs(obj.scaleY) + Math.abs(obj.y) + padding);
+          // The wolf's ears, muzzle and swinging tail need extra clearance.
+          // Expand both sides for facing changes, and lift the top edge
+          // without moving the character or reducing clearance below it.
+          const sideSpace = this.rig === "quaddoll"
+            ? Math.ceil(8 * Math.abs(obj.scaleX)) : 0;
+          const topSpace = this.rig === "quaddoll"
+            ? Math.ceil(8 * Math.abs(obj.scaleY)) : 0;
+          this.container.focusFiltersOverride(
+            halfWidth + sideSpace, halfHeight + topSpace,
+            (halfWidth + sideSpace) * 2, halfHeight * 2 + topSpace,
+          );
+          // Keep the outline proportional to the character like the
+          // editor's filtered view: distance × scale = OUTLINE_THICKNESS
+          // skeleton units on screen (unit = H99_DISPLAY_SCALE × zoom px).
+          if (this.outline) {
+            this.outline.scale = OUTLINE_THICKNESS * displayScale *
+              this.scene.cameras.main.zoom *
+              (window.devicePixelRatio || 1) / OUTLINE_DISTANCE;
+          }
+          // focusFiltersOverride disables autofocus; retain our per-render
+          // measurement for the next animation frame.
+          this.container.filtersAutoFocus = true;
+          return this.container;
+        };
+        this.outline = this.container.filters?.internal.addGlow(
+          OUTLINE_COLOR,
+          OUTLINE_STRENGTH,
+          0,
+          1,
+          false,
+          8,
+          OUTLINE_DISTANCE,
+        );
+      }
       // setMix throws for clips a rig doesn't have (quaddoll has no ride_*),
       // so only register pairs that exist in this skeleton.
       const mix = obj.animationStateData;
@@ -482,7 +610,7 @@ export class CharacterSprite implements IEntitySprite {
   private applyShape(): void {
     const skel = this.spine?.skeleton;
     if (!skel) return;
-    const shape = this.appearance.shape ?? {};
+    const shape = { ...RIG_BASE_SHAPE[this.rig], ...this.appearance.shape };
     const scales = new Map<string, { x: number; y: number }>();
     const shifts = new Map<string, { x: number; y: number }>();
     for (const [key, def] of Object.entries(SHAPE_KEYS)) {

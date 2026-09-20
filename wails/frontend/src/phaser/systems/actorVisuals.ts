@@ -25,9 +25,9 @@ import type { CharacterAppearanceWire, WorldEntity } from "../../types";
 import { entityShadow } from "../entityShadow";
 import {
   applyIsoCounter,
-  isoDepth,
   isoLayer,
   isoParent,
+  sortDepth,
 } from "../../world/iso";
 import { CharacterSprite, PLAYER_RIG } from "../CharacterSprite";
 import { EnemySprite } from "../EnemySprite";
@@ -67,6 +67,8 @@ export interface ActorVisual {
   stillMs?: number;
   chaseSpeed?: number;
   moving?: boolean;
+  /** Sustained channeling effect while casting — stopped on resolve/cancel. */
+  castVfx?: { stop(): void };
 }
 export const ActorVisual = component<ActorVisual>();
 
@@ -86,7 +88,7 @@ function adoptIso(
 ): boolean {
   if (!isoParent(scene, wrapper)) return false;
   applyIsoCounter(wrapper);
-  wrapper.setDepth(isoDepth(x, y) + ISO_ACTOR_DEPTH_EPS);
+  wrapper.setDepth(sortDepth(scene, x, y) + ISO_ACTOR_DEPTH_EPS);
   return true;
 }
 
@@ -100,11 +102,10 @@ function actorShadow(
   return shadow;
 }
 
-/** Follow pets use the battle foe sprite at a reduced size. */
-export const PET_FOLLOW_SCALE = 0.55;
-
-/** Mounts draw bigger than follow pets but still under NPC scale. */
-const MOUNT_SCALE = 0.85;
+/** Mounted riders shrink so the pair reads as one creature — the rider's
+ * world scale relative to its on-foot size. 1.0 keeps the rider at parity
+ * with the mount (quaddoll enemies render at the player's display scale). */
+const MOUNT_RIDER_SCALE = 1.0;
 /** Rider sits this far above the mount's ground point. */
 const RIDER_OFFSET_Y = -14;
 
@@ -141,7 +142,9 @@ function syncMountVisual(
   }
   if (!kind) return;
   const mount = new EnemySprite(scene, 0, 0, kind);
-  mount.container.setScale(MOUNT_SCALE);
+  // Mounts render at the same scale as enemy NPCs of the kind — the doll
+  // preset scale already applies inside EnemySprite.
+  const mountScale = mount.container.scaleY;
   visual.wrapper.addAt(mount.container, 1); // above the shadow, under the rider
   // Clicks on the creature still target the rider (self stays non-interactive).
   if (!visual.isSelf) mount.setInteractive(() => interactions.clickEntity(entity.id));
@@ -150,11 +153,11 @@ function syncMountVisual(
   const rider = visual.character?.container;
   if (rider) {
     // Parent the rider to the mount so all mount movement carries it;
-    // counter-scale so the rider keeps its own size inside the scaled
-    // mount container, then drop it on the fallback seat.
+    // counter the mount container's scale so the rider lands at
+    // MOUNT_RIDER_SCALE world size, then drop it on the fallback seat.
     mount.container.add(rider);
-    rider.setScale(1 / MOUNT_SCALE);
-    rider.setPosition(0, RIDER_OFFSET_Y / MOUNT_SCALE);
+    rider.setScale(MOUNT_RIDER_SCALE / mountScale);
+    rider.setPosition(0, RIDER_OFFSET_Y / mountScale);
   }
 }
 
@@ -198,6 +201,7 @@ export interface PlayerVisualOptions extends ActorVisualInteractions {
 }
 
 function destroyActorVisual(visual: ActorVisual): void {
+  visual.castVfx?.stop();
   visual.wrapper.destroy();
 }
 
@@ -426,8 +430,8 @@ export function syncPetVisuals(
       .setDepth(ENTITY_PRESENTATION.petDepth);
     const iso = adoptIso(scene, wrapper, pose.x, pose.y);
     const enemy = new EnemySprite(scene, 0, 0, kind);
-    enemy.container.setScale(PET_FOLLOW_SCALE);
-    wrapper.add([actorShadow(scene, PET_FOLLOW_SCALE), enemy.container]);
+    // Pets render at the same scale as enemy NPCs of the kind.
+    wrapper.add([actorShadow(scene, ENTITY_PRESENTATION.defaultShadowScale), enemy.container]);
     enemy.setInteractive(() => interactions.clickEntity(snapshot.id));
 
     world.set(ActorVisual, entity, {

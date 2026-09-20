@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { slotLayer, type Doc, type Tool } from "../App";
+import Phaser from "phaser";
+import { slotLayer, type Doc, type Tool } from "../model/types";
 import { animDuration, moveBoneWorld, poseAt } from "../model/rig";
 import { variantKeyForLayer, type BoneTracks, type VariantSel } from "../model/types";
 import { drawRig, pickAttachment, pickBone, toWorld, type View } from "../render/renderer";
@@ -29,7 +30,9 @@ export function Viewport({
   atlasCanvas,
   stateRef,
   actions,
+  filtered,
 }: {
+  filtered: boolean;
   doc: Doc;
   sel: VariantSel;
   attForSlot: (slot: string) => string | undefined;
@@ -38,6 +41,9 @@ export function Viewport({
   actions: Actions;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const filterHostRef = useRef<HTMLDivElement>(null);
+  const filteredRef = useRef(filtered);
+  filteredRef.current = filtered;
   const viewRef = useRef<View>({ cx: 0, cy: 0, scale: 9 });
   const dragRef = useRef<
     | { kind: "pan"; x: number; y: number }
@@ -50,6 +56,45 @@ export function Viewport({
   docRef.current = doc;
   const selRef = useRef(sel);
   selRef.current = sel;
+
+  // Feed the live edited composite to the same Phaser Glow filter used in
+  // game. Guides never enter this texture, so only the character is outlined.
+  useEffect(() => {
+    if (!filtered) return;
+    const host = filterHostRef.current!;
+    class PreviewScene extends Phaser.Scene {
+      private texture!: Phaser.Textures.CanvasTexture;
+      private sprite!: Phaser.GameObjects.Image;
+      private glow!: Phaser.Filters.Glow;
+      create() {
+        this.texture = this.textures.createCanvas("edited-character", 1, 1)!;
+        this.sprite = this.add.image(0, 0, "edited-character").setOrigin(0);
+        this.sprite.enableFilters();
+        this.glow = this.sprite.filters!.internal.addGlow(0x2c1e36, 8, 0, 1, false, 8, 2);
+      }
+      update() {
+        const source = canvasRef.current;
+        if (!source || !source.width || !source.height) return;
+        if (this.texture.width !== source.width || this.texture.height !== source.height) {
+          this.scale.resize(source.width, source.height);
+          this.texture.setSize(source.width, source.height);
+          this.sprite.setSize(source.width, source.height);
+        }
+        this.texture.context.clearRect(0, 0, source.width, source.height);
+        this.texture.context.drawImage(source, 0, 0);
+        this.texture.refresh();
+        // Runtime renders at two screen pixels per skeleton unit.
+        this.glow.scale = viewRef.current.scale * (window.devicePixelRatio || 1) / 2;
+        this.sprite.renderFilters = docRef.current.spec.output?.name !== "h99doll";
+      }
+    }
+    const game = new Phaser.Game({
+      type: Phaser.WEBGL, parent: host, width: 1, height: 1,
+      transparent: true, pixelArt: true, audio: { noAudio: true },
+      banner: false, scene: PreviewScene,
+    });
+    return () => { game.destroy(true); };
+  }, [filtered]);
 
   /** Partial-pose overlays mirroring the runtime's guard tracks: guardB
    * applies when the selected sub weapon mounts on a weapon_over_* slot,
@@ -95,7 +140,10 @@ export function Viewport({
   // Init view once sized.
   useEffect(() => {
     const c = canvasRef.current!;
-    viewRef.current = { cx: c.clientWidth / 2, cy: c.clientHeight * 0.72, scale: 9 };
+    viewRef.current = {
+      cx: c.clientWidth / 2, cy: c.clientHeight * 0.72,
+      scale: Math.min(9, c.clientWidth / 80, c.clientHeight / 55),
+    };
     sizeRef.current = { w: c.clientWidth, h: c.clientHeight };
   }, []);
 
@@ -143,7 +191,8 @@ export function Viewport({
         const ctx = c.getContext("2d")!;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, c.clientWidth, c.clientHeight);
-        // ground line + feet origin marker
+        // ground line + feet origin marker (editing view only)
+        if (!filteredRef.current) {
         const grid = v.scale * 8;
         ctx.strokeStyle = "#323232";
         ctx.lineWidth = 1;
@@ -164,10 +213,11 @@ export function Viewport({
         ctx.moveTo(0, v.cy);
         ctx.lineTo(c.clientWidth, v.cy);
         ctx.stroke();
+        }
         drawRig(ctx, v, atlasCanvas.current, d.atlas, d.spec, d.skeleton, pose, {
-          showBones: ui.tool !== "pixels" || !!ui.selAtt,
+          showBones: !filteredRef.current && (ui.tool !== "pixels" || !!ui.selAtt),
           selBone: ui.selBone,
-          selAttachment: ui.selAtt,
+          selAttachment: filteredRef.current ? null : ui.selAtt,
           attForSlot,
         });
       }
@@ -191,6 +241,7 @@ export function Viewport({
       canvasRef.current!.setPointerCapture(e.pointerId);
       return;
     }
+    if (filteredRef.current) return;
     const [wx, wy] = toWorld(viewRef.current, sx, sy);
     const pose = evalPose(d, ui, ui.animTime);
     if (ui.tool === "pixels") {
@@ -240,6 +291,7 @@ export function Viewport({
   return (
     <div className="ed-viewport">
       <canvas
+        style={{ opacity: filtered ? 0 : 1 }}
         ref={canvasRef}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -247,6 +299,7 @@ export function Viewport({
         onWheel={onWheel}
         onContextMenu={(e) => e.preventDefault()}
       />
+      <div ref={filterHostRef} className="ed-filter-preview" />
     </div>
   );
 }

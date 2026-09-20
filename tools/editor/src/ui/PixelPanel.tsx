@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { slotLayer, type Doc } from "../App";
+import { slotLayer, type Doc } from "../model/types";
 import type { CatalogEntry, Skeleton, Spec, VariantSel } from "../model/types";
 
 interface Actions {
@@ -12,7 +12,7 @@ interface Actions {
 
 type Tool = "pencil" | "eraser" | "picker";
 
-const ZOOM = 14;
+const DEFAULT_ZOOM = 14;
 
 function hexToRgba(hex: string, alpha: number): [number, number, number, number] {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex);
@@ -38,6 +38,9 @@ export function PixelPanel({
   const [color, setColor] = useState("#e8b090");
   const [alpha, setAlpha] = useState(255);
   const [newVariant, setNewVariant] = useState("");
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const [dimW, setDimW] = useState("");
+  const [dimH, setDimH] = useState("");
   const painting = useRef(false);
 
   const skins = doc.skeleton.skins[0]?.attachments ?? {};
@@ -46,13 +49,19 @@ export function PixelPanel({
   const att = selAtt ? atts[selAtt.att] : undefined;
   const region = att?.path ? doc.atlas.regions.get(att.path) : undefined;
 
+  // Keep the size inputs tracking the selected region.
+  useEffect(() => {
+    setDimW(region ? String(region.w) : "");
+    setDimH(region ? String(region.h) : "");
+  }, [selAtt?.slot, selAtt?.att, region?.w, region?.h]);
+
   // Redraw the zoomed region view whenever selection/art changes.
   const redraw = () => {
     const c = canvasRef.current;
     const src = atlasCanvas.current;
     if (!c || !src || !region) return;
-    c.width = region.w * ZOOM;
-    c.height = region.h * ZOOM;
+    c.width = region.w * zoom;
+    c.height = region.h * zoom;
     const ctx = c.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, c.width, c.height);
@@ -60,26 +69,120 @@ export function PixelPanel({
     ctx.strokeStyle = "rgba(255,255,255,0.08)";
     for (let i = 0; i <= region.w; i++) {
       ctx.beginPath();
-      ctx.moveTo(i * ZOOM + 0.5, 0);
-      ctx.lineTo(i * ZOOM + 0.5, c.height);
+      ctx.moveTo(i * zoom + 0.5, 0);
+      ctx.lineTo(i * zoom + 0.5, c.height);
       ctx.stroke();
     }
     for (let i = 0; i <= region.h; i++) {
       ctx.beginPath();
-      ctx.moveTo(0, i * ZOOM + 0.5);
-      ctx.lineTo(c.width, i * ZOOM + 0.5);
+      ctx.moveTo(0, i * zoom + 0.5);
+      ctx.lineTo(c.width, i * zoom + 0.5);
       ctx.stroke();
     }
   };
   useEffect(redraw);
+
+  /** Resize the selected region — copies existing pixels 1:1 (top-left
+   * anchored, pad/crop, no stretch), repacks the atlas, and rescales the
+   * attachment's skeleton-space size so the quad still fits the art. */
+  const resizeRegion = (w: number, h: number) => {
+    const src = atlasCanvas.current;
+    if (!selAtt || !att?.path || !region || !src) return;
+    w = Math.max(1, Math.round(w));
+    h = Math.max(1, Math.round(h));
+    if (w === region.w && h === region.h) return;
+    const copy = document.createElement("canvas");
+    copy.width = w;
+    copy.height = h;
+    copy
+      .getContext("2d")!
+      .drawImage(src, region.x, region.y, Math.min(region.w, w), Math.min(region.h, h), 0, 0, Math.min(region.w, w), Math.min(region.h, h));
+    // Region px ↔ skeleton units — keep the attachment quad proportional.
+    // Mesh attachments carry no width/height (uvs are normalized) — skip.
+    if (att.width && att.height && att.type !== "mesh") {
+      const density = region.w / att.width;
+      const nw = w / density;
+      const nh = h / density;
+      actions.setSkeleton((s) => {
+        const skins = [{ ...s.skins[0]!, attachments: { ...s.skins[0]!.attachments } }, ...s.skins.slice(1)];
+        const slotAtts = { ...skins[0]!.attachments[selAtt.slot] };
+        slotAtts[selAtt.att] = { ...att, width: nw, height: nh };
+        skins[0]!.attachments[selAtt.slot] = slotAtts;
+        return { ...s, skins };
+      });
+    }
+    actions.repack(new Map([[att.path, copy]]));
+  };
+
+  const applySize = () => resizeRegion(Number(dimW) || region!.w, Number(dimH) || region!.h);
+
+  /** Paste a clipboard image into the region — 1:1 anchored at the region's
+   * top-left, clipped to the region. If the art is larger than the region,
+   * the region grows to fit it (repack). */
+  const pasteImage = (img: CanvasImageSource, iw: number, ih: number) => {
+    const src = atlasCanvas.current;
+    if (!src || !region || !att?.path) return;
+    if (iw <= region.w && ih <= region.h) {
+      const actx = src.getContext("2d")!;
+      actx.save();
+      actx.beginPath();
+      actx.rect(region.x, region.y, region.w, region.h);
+      actx.clip();
+      actx.drawImage(img, region.x, region.y);
+      actx.restore();
+      actions.markAtlasDirty();
+      redraw();
+      return;
+    }
+    // Larger than the region — grow it (existing pixels preserved top-left).
+    const w = Math.max(region.w, iw);
+    const h = Math.max(region.h, ih);
+    const copy = document.createElement("canvas");
+    copy.width = w;
+    copy.height = h;
+    const ctx = copy.getContext("2d")!;
+    ctx.drawImage(src, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
+    ctx.drawImage(img, 0, 0);
+    if (att.width && att.height && att.type !== "mesh") {
+      const density = region.w / att.width;
+      actions.setSkeleton((s) => {
+        const skins = [{ ...s.skins[0]!, attachments: { ...s.skins[0]!.attachments } }, ...s.skins.slice(1)];
+        const slotAtts = { ...skins[0]!.attachments[selAtt!.slot] };
+        slotAtts[selAtt!.att] = { ...att, width: w / density, height: h / density };
+        skins[0]!.attachments[selAtt!.slot] = slotAtts;
+        return { ...s, skins };
+      });
+    }
+    actions.repack(new Map([[att.path, copy]]));
+  };
+
+  // Clipboard image paste — active while a region is selected.
+  useEffect(() => {
+    if (!region) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const item = [...(e.clipboardData?.items ?? [])].find((i) => i.type.startsWith("image/"));
+      const file = item?.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        pasteImage(img, img.naturalWidth, img.naturalHeight);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  });
 
   const paintAt = (e: React.PointerEvent) => {
     const c = canvasRef.current;
     const src = atlasCanvas.current;
     if (!c || !src || !region) return;
     const r = c.getBoundingClientRect();
-    const px = Math.floor((e.clientX - r.left) / ZOOM);
-    const py = Math.floor((e.clientY - r.top) / ZOOM);
+    const px = Math.floor((e.clientX - r.left) / zoom);
+    const py = Math.floor((e.clientY - r.top) / zoom);
     if (px < 0 || py < 0 || px >= region.w || py >= region.h) return;
     const actx = src.getContext("2d")!;
     const ax = region.x + px;
@@ -130,6 +233,8 @@ export function PixelPanel({
         if (!list.some((e) => e.key === name && e.slot === selAtt.slot)) {
           const e: CatalogEntry = { key: name, slot: selAtt.slot };
           if (att.rotation) e.rotation = att.rotation;
+          if (att.scaleX !== undefined && att.scaleX !== 1) e.scaleX = att.scaleX;
+          if (att.scaleY !== undefined && att.scaleY !== 1) e.scaleY = att.scaleY;
           list.push(e);
         }
         cat[lname] = list;
@@ -173,6 +278,33 @@ export function PixelPanel({
           {region && (
             <>
               <div className="ed-row">
+                <label>size</label>
+                <input
+                  type="number"
+                  min={1}
+                  style={{ width: 52 }}
+                  value={dimW}
+                  onChange={(e) => setDimW(e.target.value)}
+                />
+                ×
+                <input
+                  type="number"
+                  min={1}
+                  style={{ width: 52 }}
+                  value={dimH}
+                  onChange={(e) => setDimH(e.target.value)}
+                />
+                <button
+                  onClick={applySize}
+                  disabled={
+                    (Number(dimW) || region.w) === region.w &&
+                    (Number(dimH) || region.h) === region.h
+                  }
+                >
+                  Resize
+                </button>
+              </div>
+              <div className="ed-row">
                 {(["pencil", "eraser", "picker"] as Tool[]).map((t) => (
                   <button
                     key={t}
@@ -182,6 +314,9 @@ export function PixelPanel({
                     {t}
                   </button>
                 ))}
+                <button title="zoom out" onClick={() => setZoom((z) => Math.max(2, z - 2))}>−</button>
+                <span className="ed-hint">{zoom}×</span>
+                <button title="zoom in" onClick={() => setZoom((z) => Math.min(40, z + 2))}>+</button>
                 <input
                   type="color"
                   value={color}
@@ -209,8 +344,9 @@ export function PixelPanel({
               />
               <div className="ed-hint">
                 {region.w}×{region.h} region in atlas — edits write straight into the
-                atlas pixels (clamped to the region). Paint is visible on the rig
-                immediately.
+                atlas pixels (clamped to the region). Paste (Ctrl+V) drops clipboard
+                art at the region's top-left; oversized art grows the region.
+                Resize pads/crops without stretching and repacks the atlas.
               </div>
               <h3>Add variant</h3>
               <div className="ed-row">

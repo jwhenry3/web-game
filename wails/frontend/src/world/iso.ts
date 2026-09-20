@@ -165,6 +165,31 @@ export function isoProject(
   return isoLayer(scene) ? { x: isoX(x, y), y: isoY(x, y) } : { x, y };
 }
 
+/** Depth sort key for a world point — projected Y under iso, plain Y ortho. */
+export function sortDepth(scene: Phaser.Scene, x: number, y: number): number {
+  return isoLayer(scene) ? isoY(x, y) : y;
+}
+
+/**
+ * Screen-space move input → world-space direction. Iso scenes snap the
+ * intent to the nearest grid-aligned direction (keys mean screen axes);
+ * orthogonal scenes just normalize it.
+ */
+export function moveDirFor(
+  scene: Phaser.Scene,
+  dx: number,
+  dy: number,
+): { x: number; y: number } {
+  if (isoLayer(scene)) return screenDirToWorldGrid(dx, dy);
+  const len = Math.hypot(dx, dy);
+  return len < 1e-6 ? { x: 0, y: 0 } : { x: dx / len, y: dy / len };
+}
+
+/** Iso projection speed correction — 1 for orthogonal scenes. */
+export function moveSpeedScaleFor(scene: Phaser.Scene, dx: number, dy: number): number {
+  return isoLayer(scene) ? isoMoveSpeedScale(dx, dy) : 1;
+}
+
 /**
  * World-space unit vector that moves the rendered point straight *up* on
  * screen: (−1,−1) under iso (drops isoY by 1 per world px), (0,−1) otherwise.

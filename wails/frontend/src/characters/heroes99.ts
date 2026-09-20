@@ -138,7 +138,12 @@ export const H99_WORLD_RING_Y = 0;
 export const H99_BATTLE_RING_RADIUS = H99_DISPLAY_HEIGHT * 0.72;
 
 export const H99_SKINS = ["c1", "c2", "c3", "c4", "c5", "c6"] as const;
-export const H99_FACES = ["c1", "c2", "c3", "c4", "c5", "c6", "c7"] as const;
+export const H99_FACES = [
+  // Extracted MapleStory face sprites (paperdoll only) — baked eye art,
+  // not recolorable. Dev/placeholder art, not shippable as-is.
+  "ms1", "ms2", "ms3", "ms4", "ms5", "ms6", "ms7",
+  "ms8", "ms9", "ms10", "ms11", "ms12", "ms13", "ms14",
+] as const;
 export const H99_HAIR_COLORS = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "c10"] as const;
 export const H99_CLOTH_COLORS = ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"] as const;
 export const H99_WEAPON_COLORS = ["c1", "c2", "c3", "c4"] as const;
@@ -146,6 +151,9 @@ export const H99_WEAPON_COLORS = ["c1", "c2", "c3", "c4"] as const;
 export const H99_HAIR_STYLES = [
   "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9",
   "m1", "m2", "m3", "m4", "m5", "m6", "m7", "m8", "m9", "m10", "m11", "m12", "m13", "m14",
+  // Rigged styles authored in the editor's Hair workspace (paperdoll only —
+  // they resolve to nothing on the h99 rig).
+  "short_spikey", "short_combover", "tall_spikey", "long_wavy",
 ] as const;
 
 export const H99_CLOTH_STYLES = [
@@ -154,6 +162,10 @@ export const H99_CLOTH_STYLES = [
 ] as const;
 
 export const H99_WEAPONS = ["weapon1", "weapon2", "weapon3", "weapon4", "weapon5"] as const;
+export const PAPERDOLL_BODY_OBJECTS = ["", "bodyObject_1", "bodyObject_2", "bodyObject_3", "bodyObject_4", "bodyObject_5"] as const;
+export const PAPERDOLL_CLOAK_OBJECTS = ["", "cloakObject_1", "cloakObject_2", "cloakObject_3", "cloakObject_4"] as const;
+export const PAPERDOLL_HEAD_OBJECTS = ["", "headObject_1", "headObject_2", "headObject_3", "headObject_4", "headObject_5"] as const;
+export const PAPERDOLL_HAND_OBJECTS = ["", "handObject_1", "handObject_2", "handObject_3", "handObject_4", "handObject_5"] as const;
 
 export interface CharacterAppearance {
   skin: string;
@@ -180,6 +192,16 @@ export interface CharacterAppearance {
   wings?: string;
   tail?: string;
   /**
+   * Reference-style object plates — paperdoll rig only. These mirror the
+   * assets/spine-character methodology: one broad attachment controls the
+   * coherent body/head/hand/cloak silhouette while the older skin/cloth
+   * slots remain available underneath.
+   */
+  bodyObject?: string;
+  cloakObject?: string;
+  headObject?: string;
+  handObject?: string;
+  /**
    * Shape keys — bone-scale morphs for body diversity ("height", "chest",
    * "head", "armLen", "armWidth", "legWidth", "ears", "horns", "wings",
    * "tail", "weaponSize", "subWeaponSize"). Values are scale multipliers;
@@ -191,7 +213,7 @@ export interface CharacterAppearance {
 
 export const DEFAULT_APPEARANCE: CharacterAppearance = {
   skin: "c1",
-  face: "c1",
+  face: "ms1",
   hair: "m1",
   hairColor: "c1",
   cloth: "cloth1",
@@ -216,11 +238,11 @@ export const WIZARD_HAIR = ["m1", "m2", "m3", "f1", "f2", "f3", "m5", "f5"] as c
 export const WIZARD_CLOTH = ["cloth1", "cloth3", "cloth5", "cloth10", "cloth12", "cloth15"] as const;
 
 export const RACE_APPEARANCE_PRESETS: Record<string, Partial<CharacterAppearance>> = {
-  humanus: { skin: "c1", face: "c1", hair: "m1", hairColor: "c2", cloth: "cloth1", clothColor: "c1", weapon: "weapon1" },
-  altus: { skin: "c1", face: "c2", hair: "f2", hairColor: "c8", cloth: "cloth10", clothColor: "c2", weapon: "weapon1" },
-  parvus: { skin: "c3", face: "c3", hair: "m5", hairColor: "c5", cloth: "cloth5", clothColor: "c4", weapon: "weapon5" },
-  felis: { skin: "c4", face: "c4", hair: "f3", hairColor: "c1", cloth: "cloth3", clothColor: "c6", weapon: "weapon3" },
-  saxum: { skin: "c6", face: "c5", hair: "m2", hairColor: "c1", cloth: "cloth12", clothColor: "c3", weapon: "weapon2" },
+  humanus: { skin: "c1", face: "ms1", hair: "m1", hairColor: "c2", cloth: "cloth1", clothColor: "c1", weapon: "weapon1" },
+  altus: { skin: "c1", face: "ms3", hair: "f2", hairColor: "c8", cloth: "cloth10", clothColor: "c2", weapon: "weapon1" },
+  parvus: { skin: "c3", face: "ms5", hair: "m5", hairColor: "c5", cloth: "cloth5", clothColor: "c4", weapon: "weapon5" },
+  felis: { skin: "c4", face: "ms7", hair: "f3", hairColor: "c1", cloth: "cloth3", clothColor: "c6", weapon: "weapon3" },
+  saxum: { skin: "c6", face: "ms9", hair: "m2", hairColor: "c1", cloth: "cloth12", clothColor: "c3", weapon: "weapon2" },
 };
 
 /**
@@ -270,6 +292,10 @@ export interface CharacterAppearanceWire {
   hair_color: string;
   cloth: string;
   cloth_color: string;
+  body_object?: string;
+  cloak_object?: string;
+  head_object?: string;
+  hand_object?: string;
   weapon: string;
   weapon_color: string;
 }
@@ -282,6 +308,10 @@ export function appearanceToWire(appearance: CharacterAppearance): CharacterAppe
     hair_color: appearance.hairColor,
     cloth: appearance.cloth,
     cloth_color: appearance.clothColor,
+    body_object: appearance.bodyObject,
+    cloak_object: appearance.cloakObject,
+    head_object: appearance.headObject,
+    hand_object: appearance.handObject,
     weapon: appearance.weapon,
     weapon_color: appearance.weaponColor,
   };
@@ -296,6 +326,10 @@ export function appearanceFromWire(w?: CharacterAppearanceWire | null): Characte
     hairColor: w.hair_color,
     cloth: w.cloth,
     clothColor: w.cloth_color,
+    bodyObject: w.body_object,
+    cloakObject: w.cloak_object,
+    headObject: w.head_object,
+    handObject: w.hand_object,
     weapon: w.weapon,
     weaponColor: w.weapon_color,
   };

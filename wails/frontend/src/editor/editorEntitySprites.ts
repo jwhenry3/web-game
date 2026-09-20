@@ -24,31 +24,81 @@ const ENEMY_SHEET: Record<EnemyKind, string> = {
   imp: "/assets/spine/doll_imp.png",
 };
 
-const enemyImages = new Map<EnemyKind, HTMLImageElement>();
-let enemyLoadPromise: Promise<void> | null = null;
+/**
+ * Baked previews for non-combat objects — the same 100x40 foot-anchored
+ * cells the propdoll/paperdoll generators emit (tools/gen_props.py,
+ * tools/gen_paperdoll.py), so map markers match the in-game art.
+ */
+const PROP_SHEET = {
+  save_point: "/assets/spine/prop_crystal.png",
+  save_point_active: "/assets/spine/prop_crystal_active.png",
+  quest_trigger: "/assets/spine/prop_quest.png",
+  item: "/assets/spine/prop_item.png",
+  job_master: "/assets/spine/doll_job_master.png",
+  npc: "/assets/spine/doll_npc.png",
+} as const;
 
-async function loadEnemyImage(kind: EnemyKind): Promise<HTMLImageElement> {
-  const cached = enemyImages.get(kind);
+const previewImages = new Map<string, HTMLImageElement>();
+let previewLoadPromise: Promise<void> | null = null;
+
+async function loadPreviewImage(src: string): Promise<HTMLImageElement> {
+  const cached = previewImages.get(src);
   if (cached) return cached;
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error(`Failed to decode ${kind}`));
-    el.src = ENEMY_SHEET[kind];
+    el.onerror = () => reject(new Error(`Failed to decode ${src}`));
+    el.src = src;
   });
-  enemyImages.set(kind, img);
+  previewImages.set(src, img);
   return img;
 }
 
-/** Preload enemy sheets used by combat NPC previews in the map editor. */
+/** Preload enemy + prop previews used by map-editor object sprites. */
 export function ensureEditorSpritesLoaded(): Promise<void> {
-  if (enemyImages.size >= ENEMY_KINDS.length) return Promise.resolve();
-  if (!enemyLoadPromise) {
-    enemyLoadPromise = Promise.all(
-      (Object.keys(ENEMY_SHEET) as EnemyKind[]).map((kind) => loadEnemyImage(kind)),
-    ).then(() => undefined);
+  if (previewImages.size >= ENEMY_KINDS.length + Object.keys(PROP_SHEET).length) {
+    return Promise.resolve();
   }
-  return enemyLoadPromise;
+  if (!previewLoadPromise) {
+    const srcs = [
+      ...(Object.keys(ENEMY_SHEET) as EnemyKind[]).map((k) => ENEMY_SHEET[k]),
+      ...Object.values(PROP_SHEET),
+    ];
+    previewLoadPromise = Promise.all(srcs.map(loadPreviewImage)).then(
+      () => undefined,
+    );
+  }
+  return previewLoadPromise;
+}
+
+/** Blit a baked 100x40 cell preview, foot-anchored like the game world. */
+function drawCellPreview(
+  ctx: CanvasRenderingContext2D,
+  src: string,
+  x: number,
+  y: number,
+  z: number,
+  scale: number,
+  fallbackColor: string,
+): void {
+  const img = previewImages.get(src);
+  if (img) {
+    const { frameWidth, frameHeight } = H99_SHEET;
+    const drawScale = H99_DISPLAY_SCALE * z * scale;
+    const drawW = frameWidth * drawScale;
+    const drawH = frameHeight * drawScale;
+    const ox = x - drawW * H99_ORIGIN.x;
+    const oy = y - drawH * H99_ORIGIN.y;
+    const smoothing = ctx.imageSmoothingEnabled;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, 0, 0, frameWidth, frameHeight, ox, oy, drawW, drawH);
+    ctx.imageSmoothingEnabled = smoothing;
+  } else {
+    ctx.fillStyle = fallbackColor;
+    ctx.beginPath();
+    ctx.arc(x, y - 8 * z, 8 * z, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function objectLayerOrder(obj: EditorObject): number {
@@ -86,8 +136,8 @@ function drawResizeHandles(ctx: CanvasRenderingContext2D, x: number, y: number, 
     [x + w, y + h / 2],
     [x + w, y + h],
     [x + w / 2, y + h],
-    [x, y + h],
     [x, y + h / 2],
+    [x, y + h],
   ];
   ctx.fillStyle = "#f5d76e";
   ctx.strokeStyle = "#1a1028";
@@ -109,67 +159,26 @@ function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, text: st
 }
 
 function drawSavePoint(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, name: string, active: boolean) {
-  const glow = active ? "rgba(255, 233, 168, 0.22)" : "rgba(136, 221, 255, 0.14)";
-  const body = active ? "#ffe9a8" : "#a8e8ff";
-  const label = active ? "#fff6c8" : "#a8e8ff";
-
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(x, y - 14 * z, 30 * z, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = body;
-  ctx.beginPath();
-  ctx.moveTo(x - 10 * z, y + 6 * z);
-  ctx.lineTo(x + 10 * z, y + 6 * z);
-  ctx.lineTo(x, y - 20 * z);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(255,255,255,0.7)";
-  ctx.beginPath();
-  ctx.arc(x, y - 10 * z, 5 * z, 0, Math.PI * 2);
-  ctx.fill();
-
-  drawLabel(ctx, x, y + 18 * z, name, label, z);
+  drawCellPreview(
+    ctx,
+    active ? PROP_SHEET.save_point_active : PROP_SHEET.save_point,
+    x, y, z, 1, "#a8e8ff",
+  );
+  drawLabel(ctx, x, y + 18 * z, name, active ? "#fff6c8" : "#a8e8ff", z);
 }
 
 function drawJobMaster(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, name: string) {
-  ctx.fillStyle = "rgba(196, 163, 90, 0.18)";
-  ctx.beginPath();
-  ctx.arc(x, y - 14 * z, 28 * z, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#e8c96a";
-  ctx.beginPath();
-  ctx.arc(x, y - 12 * z, 12 * z, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = "#4a3820";
-  ctx.fillRect(x - 8 * z, y - 2 * z, 16 * z, 14 * z);
-
+  drawCellPreview(ctx, PROP_SHEET.job_master, x, y, z, 1, "#e8c96a");
   drawLabel(ctx, x, y + 18 * z, name, "#e8c96a", z);
 }
 
 function drawQuestTrigger(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, name: string) {
-  ctx.fillStyle = "rgba(167, 139, 250, 0.25)";
-  ctx.beginPath();
-  ctx.arc(x, y - 12 * z, 14 * z, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#a78bfa";
-  ctx.font = `bold ${10 * z}px sans-serif`;
-  ctx.textAlign = "center";
-  ctx.fillText("?", x, y - 8 * z);
+  drawCellPreview(ctx, PROP_SHEET.quest_trigger, x, y, z, 1, "#a78bfa");
   drawLabel(ctx, x, y + 18 * z, name, "#c4b5fd", z);
 }
 
 function drawWorldItem(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, name: string) {
-  ctx.fillStyle = "rgba(52, 211, 153, 0.25)";
-  ctx.beginPath();
-  ctx.arc(x, y - 10 * z, 10 * z, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#34d399";
-  ctx.fillRect(x - 6 * z, y - 14 * z, 12 * z, 8 * z);
+  drawCellPreview(ctx, PROP_SHEET.item, x, y, z, 1, "#34d399");
   drawLabel(ctx, x, y + 18 * z, name, "#6ee7b7", z);
 }
 
@@ -180,45 +189,20 @@ function drawInteractableNpc(ctx: CanvasRenderingContext2D, obj: EditorObject, x
     drawJobMaster(ctx, x, y, z, name);
     return;
   }
-  ctx.fillStyle = "rgba(245, 158, 11, 0.2)";
-  ctx.beginPath();
-  ctx.arc(x, y - 14 * z, 22 * z, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#f59e0b";
-  ctx.beginPath();
-  ctx.arc(x, y - 12 * z, 10 * z, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#4a3820";
-  ctx.fillRect(x - 6 * z, y - 2 * z, 12 * z, 12 * z);
+  drawCellPreview(ctx, PROP_SHEET.npc, x, y, z, 1, "#f59e0b");
   drawLabel(ctx, x, y + 18 * z, name, "#fbbf24", z);
 }
 
 function drawCombatNpc(ctx: CanvasRenderingContext2D, obj: EditorObject, x: number, y: number, z: number) {
   const kind = enemyKindFromName(propString(obj.properties, "name"), propString(obj.properties, "kind"));
-  const img = enemyImages.get(kind);
   const name = propString(obj.properties, "name") || kind;
-
-  if (img) {
-    // Draw the sheet's idle frame (cell 0) at world scale, foot-anchored like
-    // the game. Doll kinds bake at full rig size — apply the preset's
-    // creature scale so previews match in-game proportions.
-    const { frameWidth, frameHeight } = H99_SHEET;
-    const scale = H99_DISPLAY_SCALE * z * (ENEMY_DOLL_PRESETS[kind]?.scale ?? 1);
-    const drawW = frameWidth * scale;
-    const drawH = frameHeight * scale;
-    const ox = x - drawW * H99_ORIGIN.x;
-    const oy = y - drawH * H99_ORIGIN.y;
-    const smoothing = ctx.imageSmoothingEnabled;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, 0, frameWidth, frameHeight, ox, oy, drawW, drawH);
-    ctx.imageSmoothingEnabled = smoothing;
-  } else {
-    ctx.fillStyle = "#fbbf24";
-    ctx.beginPath();
-    ctx.arc(x, y - 8 * z, 8 * z, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
+  drawCellPreview(
+    ctx,
+    ENEMY_SHEET[kind],
+    x, y, z,
+    ENEMY_DOLL_PRESETS[kind]?.scale ?? 1,
+    "#fbbf24",
+  );
   drawLabel(ctx, x, y + 18 * z, name, "#fbbf24", z);
 }
 

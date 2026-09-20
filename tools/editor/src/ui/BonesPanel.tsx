@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Doc } from "../App";
+import type { Doc } from "../model/types";
 
 interface Actions {
   setSpec: (fn: (s: Doc["spec"]) => Doc["spec"]) => void;

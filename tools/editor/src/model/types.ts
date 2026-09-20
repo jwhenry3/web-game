@@ -1,10 +1,10 @@
 // Shared model types for the H99 character editor.
 //
 // Two documents are edited:
-//  - Spec (tools/h99doll.spec.json): slicing params, part rules, layer map,
+//  - Spec (tools/paperdoll.spec.json): slicing params, part rules, layer map,
 //    bone positions (spine world coords), animations — the generator input.
-//  - Skeleton (h99doll.json): the emitted Spine rig — bones/slots/skins/anims.
-// The atlas (h99doll.atlas + .png) holds the region art.
+//  - Skeleton (paperdoll.json): the emitted Spine rig — bones/slots/skins/anims.
+// The atlas (paperdoll.atlas + .png) holds the region art.
 
 export type Cond = [string, number]; // e.g. ["y<", 18]
 
@@ -35,6 +35,9 @@ export interface CatalogEntry {
   slot: string;
   /** Carry rotation baked into the attachment, degrees. */
   rotation?: number;
+  /** Attachment scale factors (Spine scaleX/scaleY); omitted = 1. */
+  scaleX?: number;
+  scaleY?: number;
   /** Optional display label for the catalog UI. */
   label?: string;
 }
@@ -102,6 +105,11 @@ export interface Spec {
   preset?: Partial<VariantSel>;
   /** Morph sliders for runtime body diversity. */
   shapeKeys?: ShapeKeyDef[];
+  /** Rig baseline morphs applied under `shape` — the adult proportions the
+   * runtime defaults to (mirrors RIG_BASE_SHAPE in CharacterSprite.ts). A
+   * shape value set explicitly still overrides its key; resetting shape
+   * restores this baseline, not the authored chibi pose. */
+  shapeDefaults?: Record<string, number>;
   /** Bones that cancel inherited body-morph scale (weapons keep authored
    * size); their own shape keys still apply. */
   shapeNeutral?: string[];
@@ -129,6 +137,19 @@ export interface Attachment {
   width?: number;
   height?: number;
   rotation?: number;
+  /** Attachment scale factors (Spine scaleX/scaleY); omitted = 1. */
+  scaleX?: number;
+  scaleY?: number;
+  /** "mesh" = weighted skinned mesh (rigged hair parts). */
+  type?: string;
+  /** Mesh: normalized uv pairs, one per vertex. */
+  uvs?: number[];
+  /** Mesh: vertex indices, three per triangle. */
+  triangles?: number[];
+  /** Mesh: flat influence list — per vertex [count, boneIx, x, y, w]... */
+  vertices?: number[];
+  /** Mesh: number of leading vertices on the hull. */
+  hull?: number;
 }
 
 export interface Skeleton {
@@ -206,14 +227,17 @@ function weaponVariantKey(w: string, color: string): string {
 /** Attachment key for a layer, mirroring CharacterSprite.attachmentForSlot.
  * "" clears the slot; undefined (unknown layer) keeps the slot's default. */
 export function variantKeyForLayer(layer: string, sel: VariantSel): string | undefined {
+  // Every hair layer resolves the same key — flat styles only exist on
+  // hair_bot/hair_top slots; rigged styles on their own part slots, so the
+  // missing variants clear the unused slots automatically.
+  if (layer.startsWith("hair_")) {
+    return sel.hair ? `hair_${sel.hair}_${sel.hairColor}` : "";
+  }
   switch (layer) {
     case "skin":
       return `skin_${sel.skin}`;
     case "face":
       return `face_${sel.face}`;
-    case "hair_bot":
-    case "hair_top":
-      return sel.hair ? `hair_${sel.hair}_${sel.hairColor}` : "";
     case "cloth_bot":
     case "cloth_top":
       return sel.cloth ? `${sel.cloth}_${sel.clothColor}` : "";
@@ -236,4 +260,22 @@ export function variantKeyForLayer(layer: string, sel: VariantSel): string | und
     default:
       return undefined;
   }
+}
+
+/** The character workspace's open document. */
+export interface Doc {
+  spec: Spec;
+  skeleton: Skeleton;
+  atlas: Atlas;
+}
+
+/** Character workspace inspector tools. */
+export type Tool = "variants" | "bones" | "anim" | "pixels" | "spec" | "catalog";
+
+/** Slot name "cloth_bot_torso" -> layer "cloth_bot". */
+export function slotLayer(spec: Spec, slot: string): string | null {
+  for (const l of spec.layers) {
+    if (slot === l.name || slot.startsWith(l.name + "_")) return l.name;
+  }
+  return null;
 }

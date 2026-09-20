@@ -1,4 +1,8 @@
 import react from "@vitejs/plugin-react";
+import { effectsApi } from "./vite/effectsApi.ts";
+import { hairApi } from "./vite/hairApi.ts";
+import { mapsApi } from "./vite/mapsApi.ts";
+import { partsApi } from "./vite/partsApi.ts";
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -12,6 +16,9 @@ const specDir = path.join(repoRoot, "tools");
 
 const specPath = (id: string) => path.join(specDir, `${id}.spec.json`);
 const VALID_ID = /^[a-zA-Z0-9_-]+$/;
+
+/** Retired rigs — kept on disk for the runtime but unlisted in the editor. */
+const EDITOR_HIDDEN_CHARS = new Set(["h99doll"]);
 
 /** 1x1 transparent PNG for blank rigs. */
 const BLANK_PNG =
@@ -76,7 +83,7 @@ function editorApi(): Plugin {
   return {
     name: "editor-api",
     configureServer(server) {
-      server.middlewares.use("/editor-api", (req, res) => {
+      server.middlewares.use("/editor-api", (req, res, next) => {
         const url = new URL(req.url ?? "/", "http://x");
         const route = url.pathname;
 
@@ -88,7 +95,10 @@ function editorApi(): Plugin {
           for (const f of readdirSync(specDir)) {
             if (f.endsWith(".spec.json")) ids.add(f.slice(0, -".spec.json".length));
           }
-          const characters = [...ids].sort().map((id) => {
+          const characters = [...ids]
+            .filter((id) => !EDITOR_HIDDEN_CHARS.has(id))
+            .sort()
+            .map((id) => {
             const spec = specOf(id);
             // Preset specs share another rig's assets via output.name.
             const assetId =
@@ -266,14 +276,15 @@ function editorApi(): Plugin {
           return;
         }
 
-        json(res, 404, { error: "unknown endpoint" });
+        // Unknown route — yield to the sibling API plugins (maps, effects).
+        next();
       });
     },
   };
 }
 
 export default defineConfig({
-  plugins: [react(), editorApi()],
+  plugins: [react(), editorApi(), hairApi(), mapsApi(), effectsApi(), partsApi()],
   // Serve the game's public assets so /assets/spine/* and /assets/heroes99/*
   // resolve to the same files the game loads.
   publicDir: path.join(repoRoot, "wails/frontend/public"),

@@ -113,3 +113,8 @@ unity/Fantasy/InitTestScene*.unity*
 tmp/
 temp/
 nul
+node_modules/
+tools/node_modules/
+tools/__pycache__/
+.playwright-mcp/
+.codex-tmp/

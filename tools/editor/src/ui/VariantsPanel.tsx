@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { slotLayer, type Doc } from "../App";
+import { slotLayer, type Doc } from "../model/types";
 import type { VariantSel } from "../model/types";
 
 interface Opts {
@@ -36,7 +36,7 @@ function scanVariants(doc: Doc): Opts {
     for (const att of Object.keys(skins[slot]!)) {
       if (layer === "skin") add(out.skin, att.slice(5));
       else if (layer === "face") add(out.face, att.slice(5));
-      else if (layer === "hair_bot" || layer === "hair_top") {
+      else if (layer?.startsWith("hair_")) {
         const m = /^hair_(\w+?)_(c\d+)$/.exec(att);
         if (m) {
           add(out.hair, m[1]!);
@@ -82,7 +82,7 @@ export function VariantsPanel({
   selAtt: { slot: string; att: string } | null;
 }) {
   const opts = useMemo(() => scanVariants(doc), [doc]);
-  const shapeKeys = doc.spec.shapeKeys ?? [];
+  const shapeKeys = Array.isArray(doc.spec.shapeKeys) ? doc.spec.shapeKeys : [];
   const shapeGroups = useMemo(() => {
     const groups = new Map<string, typeof shapeKeys>();
     for (const k of shapeKeys) {
@@ -130,7 +130,9 @@ export function VariantsPanel({
             <div key={group}>
               <h4>{group}</h4>
               {keys.map((k) => {
-                const v = sel.shape[k.name] ?? 1;
+                // Show the effective value — unset keys sit at the rig's
+                // baseline (spec.shapeDefaults), not the authored pose.
+                const v = sel.shape[k.name] ?? doc.spec.shapeDefaults?.[k.name] ?? 1;
                 return (
                   <div className="ed-row" key={k.name}>
                     <label>
@@ -159,7 +161,8 @@ export function VariantsPanel({
           <button onClick={() => setSel({ ...sel, shape: {} })}>Reset shape</button>
           <div className="ed-hint">
             Bone-scale morphs for body diversity — saved as a preset spec's
-            defaults. Double-click a slider to reset it.
+            defaults. Unset keys use the rig's adult baseline; double-click a
+            slider to return it there.
           </div>
         </>
       )}

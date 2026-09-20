@@ -1,0 +1,131 @@
+propdoll.png
+size: 1024,512
+format: RGBA8888
+filter: Nearest,Nearest
+repeat: none
+crystal_crystal__crystal
+  rotate: false
+  xy: 420, 132
+  size: 88, 22
+  orig: 88, 22
+  offset: 0, 0
+  index: -1
+crystal_crystal__crystal_active
+  rotate: false
+  xy: 510, 132
+  size: 88, 22
+  orig: 88, 22
+  offset: 0, 0
+  index: -1
+fire_fire__fire
+  rotate: false
+  xy: 712, 132
+  size: 56, 28
+  orig: 56, 28
+  offset: 0, 0
+  index: -1
+flame_flame__flame
+  rotate: false
+  xy: 770, 132
+  size: 30, 42
+  orig: 30, 42
+  offset: 0, 0
+  index: -1
+item_item__item
+  rotate: false
+  xy: 370, 132
+  size: 48, 80
+  orig: 48, 80
+  offset: 0, 0
+  index: -1
+quest_quest__quest
+  rotate: false
+  xy: 192, 132
+  size: 68, 110
+  orig: 68, 110
+  offset: 0, 0
+  index: -1
+shard_l_shard_l__shard_l
+  rotate: false
+  xy: 656, 132
+  size: 26, 64
+  orig: 26, 64
+  offset: 0, 0
+  index: -1
+shard_l_shard_l__shard_l_active
+  rotate: false
+  xy: 684, 132
+  size: 26, 64
+  orig: 26, 64
+  offset: 0, 0
+  index: -1
+shard_m_shard_m__shard_m
+  rotate: false
+  xy: 262, 132
+  size: 52, 100
+  orig: 52, 100
+  offset: 0, 0
+  index: -1
+shard_m_shard_m__shard_m_active
+  rotate: false
+  xy: 316, 132
+  size: 52, 100
+  orig: 52, 100
+  offset: 0, 0
+  index: -1
+shard_r_shard_r__shard_r
+  rotate: false
+  xy: 600, 132
+  size: 26, 72
+  orig: 26, 72
+  offset: 0, 0
+  index: -1
+shard_r_shard_r__shard_r_active
+  rotate: false
+  xy: 628, 132
+  size: 26, 72
+  orig: 26, 72
+  offset: 0, 0
+  index: -1
+tent_tent__tent_arctic
+  rotate: false
+  xy: 572, 2
+  size: 188, 128
+  orig: 188, 128
+  offset: 0, 0
+  index: -1
+tent_tent__tent_basic
+  rotate: false
+  xy: 2, 2
+  size: 188, 128
+  orig: 188, 128
+  offset: 0, 0
+  index: -1
+tent_tent__tent_desert
+  rotate: false
+  xy: 382, 2
+  size: 188, 128
+  orig: 188, 128
+  offset: 0, 0
+  index: -1
+tent_tent__tent_forest
+  rotate: false
+  xy: 192, 2
+  size: 188, 128
+  orig: 188, 128
+  offset: 0, 0
+  index: -1
+tent_tent__tent_royal
+  rotate: false
+  xy: 2, 132
+  size: 188, 128
+  orig: 188, 128
+  offset: 0, 0
+  index: -1
+tent_tent__tent_volcanic
+  rotate: false
+  xy: 762, 2
+  size: 188, 128
+  orig: 188, 128
+  offset: 0, 0
+  index: -1

@@ -16,7 +16,9 @@ import type { EntityWorld } from "../../ecs/world";
 import type { WorldEntity } from "../../types";
 import { moveFacingAxis } from "../../characters/heroes99";
 import { facingOf, getLastWorldFacing, setLastWorldFacing } from "../movement";
-import { isoDepth } from "../../world/iso";
+import { DEFAULT_BATTLE_SPEED } from "../battleAnim";
+import { startCastVfx, vfxCategoryForAction } from "../battleVfx";
+import { isoProject, sortDepth } from "../../world/iso";
 import {
   ActorVisual,
   ISO_ACTOR_DEPTH_EPS,
@@ -51,6 +53,12 @@ const CHASE_HOLD_MS = 500;
 const CHASE_DECAY_MS = 350;
 /** Catch-up floor — arrive within ~one hop even before a speed sample. */
 const CHASE_FLOOR_SEC = 0.28;
+/** Pets trail a moving owner — heavier speed smoothing damps hop jitter,
+ * and the ease rate fraction-lerps the wrapper toward the target each
+ * second so arrivals glide instead of stopping dead. The measured chase
+ * speed stays as a floor so the run anim never stalls mid-stride. */
+const PET_CHASE_SMOOTH = 0.18;
+const PET_EASE_RATE = 5;
 
 function isMoving(dx: number, dy: number): boolean {
   return Math.hypot(dx, dy) > 0.3;
@@ -70,6 +78,7 @@ function chaseAuthority(
   entity: WorldEntity,
   delta: number,
   snapDist: number,
+  tune?: { smooth?: number; easeRate?: number },
 ): { dx: number; dy: number; snapped: boolean } {
   if (visual.entX === undefined) {
     visual.entX = entity.x;
@@ -81,12 +90,13 @@ function chaseAuthority(
   }
   // A new authority position = one hop; hop size over hop interval is the
   // entity's speed. Blend samples so a single laggy tick can't spike it.
+  const smooth = tune?.smooth ?? CHASE_SPEED_SMOOTH;
   const hop = Math.hypot(entity.x - visual.entX, entity.y - visual.entY!);
   if (hop > 0.4) {
     const secs = Math.max(0.03, (visual.entAccMs ?? 0) / 1000);
     const measured = hop / secs;
     visual.chaseSpeed =
-      (visual.chaseSpeed ?? 0) * (1 - CHASE_SPEED_SMOOTH) + measured * CHASE_SPEED_SMOOTH;
+      (visual.chaseSpeed ?? 0) * (1 - smooth) + measured * smooth;
     visual.entAccMs = 0;
     visual.stillMs = 0;
   } else {
@@ -110,7 +120,12 @@ function chaseAuthority(
     ? 1
     : Math.max(0, 1 - (still - CHASE_HOLD_MS) / CHASE_DECAY_MS);
   const speed = Math.max((visual.chaseSpeed ?? 0) * decay, dist / CHASE_FLOOR_SEC);
-  const step = Math.min(dist, speed * (delta / 1000));
+  let step = Math.min(dist, speed * (delta / 1000));
+  // Optional fraction-lerp: never slower than the chase floor — it only
+  // softens motion when the measured speed would undershoot the trail.
+  if (tune?.easeRate) {
+    step = Math.max(step, dist * Math.min(1, tune.easeRate * (delta / 1000)));
+  }
   if (step <= 0.02) {
     return { dx: 0, dy: 0, snapped: false };
   }
@@ -184,6 +199,36 @@ function isCasting(entity: WorldEntity, combat: CombatState, role: ActorVisualRo
   if (combat.inCombat) return !!entity.casting_skill_id;
   if (role === "player") return !!entity.casting_skill_id && (entity.cast_time_ms ?? 0) > 0;
   return !!entity.casting_skill_id;
+}
+
+/**
+ * The cast channel (orbit ring + rising motes) follows replicated cast
+ * state — the same predicate that drives the sprite's cast anim — not the
+ * cast_started event. An actor whose event is missed (AoI entry mid-cast,
+ * scene wake) still shows the channel, and it stops the tick
+ * `casting_skill_id` clears: resolve, cancel, and fizzle all converge here.
+ */
+function syncCastChannel(
+  visual: ActorVisual,
+  entity: WorldEntity,
+  combat: CombatState,
+): void {
+  const skill = isCasting(entity, combat, visual.role)
+    ? entity.casting_skill_id
+    : undefined;
+  if (skill && !visual.castVfx) {
+    const scene = visual.wrapper.scene;
+    const wrapper = visual.wrapper;
+    visual.castVfx = startCastVfx(
+      scene,
+      () => isoProject(scene, wrapper.x, wrapper.y),
+      vfxCategoryForAction(skill!),
+      DEFAULT_BATTLE_SPEED,
+    );
+  } else if (!skill && visual.castVfx) {
+    visual.castVfx.stop();
+    visual.castVfx = undefined;
+  }
 }
 
 function updatePlayerState(
@@ -313,7 +358,10 @@ function updatePet(
   opts: ActorMotionOptions,
 ): void {
   if (!opts.jumping.has(entity.id)) {
-    const { dx, dy, snapped } = chaseAuthority(visual, entity, delta, PET_SNAP_DIST);
+    const { dx, dy, snapped } = chaseAuthority(visual, entity, delta, PET_SNAP_DIST, {
+      smooth: PET_CHASE_SMOOTH,
+      easeRate: PET_EASE_RATE,
+    });
     if (snapped) {
       visual.sprite.setMoving(false);
       visual.sprite.setFacing(facingOf(entity, visual.sprite.getFacing(), !!visual.iso));
@@ -343,6 +391,7 @@ export function syncActorMotion(
 
     const inView = opts.isNear(visual.wrapper.x, visual.wrapper.y);
     visual.sprite.setCasting(isCasting(entity, combat, visual.role));
+    syncCastChannel(visual, entity, combat);
 
     switch (visual.role) {
       case "player": {
@@ -387,13 +436,12 @@ export function syncActorMotion(
       }
     }
 
-    // Iso scenes depth-sort the world layer by projected screen Y — higher
-    // on screen draws behind lower. Orthogonal scenes keep role depths.
-    if (visual.iso) {
-      visual.wrapper.setDepth(
-        isoDepth(visual.wrapper.x, visual.wrapper.y) + ISO_ACTOR_DEPTH_EPS,
-      );
-    }
+    // Actors depth-sort by their screen-space Y — the projected Y under
+    // iso, plain world Y orthogonally — so they weave in front of and
+    // behind props, stamps, and each other.
+    visual.wrapper.setDepth(
+      sortDepth(visual.wrapper.scene, visual.wrapper.x, visual.wrapper.y) + ISO_ACTOR_DEPTH_EPS,
+    );
   }
 }
 

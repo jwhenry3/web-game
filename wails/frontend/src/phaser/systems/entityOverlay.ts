@@ -7,7 +7,6 @@
 import { H99_NAME_LABEL_Y } from "../../characters/types";
 import {
   ActorVisual,
-  PET_FOLLOW_SCALE,
   type ActorVisualRole,
 } from "./actorVisuals";
 import {
@@ -113,8 +112,7 @@ export function collectEntityOverlayMarks(
     if (!isSelf && !opts.isNear(x, y)) continue;
 
     const { label, variant } = labelFor(visual.role, entity, combat, opts.now);
-    const nameLocalY =
-      visual.role === "pet" ? Math.round(H99_NAME_LABEL_Y * PET_FOLLOW_SCALE) - 2 : H99_NAME_LABEL_Y;
+    const nameLocalY = H99_NAME_LABEL_Y;
     const feet = opts.projectPoint(x, y);
     const nameOff = opts.projectOffset(0, nameLocalY);
     const castOff = opts.projectOffset(0, CAST_BAR_Y);

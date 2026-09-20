@@ -231,6 +231,12 @@
       }
     }
   ],
+  "shapeDefaults": {
+    "height": 1.15,
+    "bodyLen": 1.08,
+    "legWidth": 0.8,
+    "head": 0.9
+  },
   "shapeNeutral": [],
   "catalog": {
     "skin": [

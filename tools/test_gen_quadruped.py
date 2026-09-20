@@ -3,6 +3,11 @@
 import json
 import os
 import unittest
+from pathlib import Path
+
+from PIL import Image
+
+from tools import gen_quadruped as quad
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, "wails/frontend/public/assets/spine")
@@ -83,6 +88,15 @@ class QuadrupedRigTest(unittest.TestCase):
             pspec = json.load(f)
         self.assertEqual(pspec["output"]["name"], "quaddoll")
         self.assertEqual(pspec["preset"]["skin"], "c11")
+
+    def test_exported_atlas_has_no_baked_part_contour(self):
+        atlas = Image.open(os.path.join(ASSETS, "quaddoll.png")).convert("RGBA")
+        self.assertNotIn(quad.OUTLINE, set(atlas.getdata()))
+
+    def test_quadruped_uses_the_composite_character_outline_filter(self):
+        source = Path(ROOT, "wails/frontend/src/phaser/CharacterSprite.ts").read_text(
+            encoding="utf-8")
+        self.assertIn('this.rig !== "h99doll"', source)
 
 
 if __name__ == "__main__":

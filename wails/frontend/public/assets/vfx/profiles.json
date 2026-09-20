@@ -1,0 +1,518 @@
+{
+  "colors": {
+    "physical": 15790320,
+    "fire": 16737843,
+    "ice": 8965375,
+    "thunder": 16777062,
+    "wind": 11206570,
+    "earth": 13408614,
+    "water": 4500223,
+    "holy": 16777164,
+    "dark": 6697898,
+    "poison": 6736964,
+    "heal": 4906624,
+    "buff": 16766720
+  },
+  "profiles": {
+    "physical": {
+      "palette": [
+        16777215,
+        14147048,
+        8950438
+      ],
+      "bursts": [
+        {
+          "texture": "streak",
+          "count": 12,
+          "color": 16777215,
+          "spread": 34,
+          "size": 7,
+          "alpha": 0.75,
+          "directional": true,
+          "duration": 360
+        },
+        {
+          "texture": "spark",
+          "count": 10,
+          "color": 14147048,
+          "spread": 28,
+          "size": 3,
+          "alpha": 0.8,
+          "duration": 300
+        },
+        {
+          "texture": "smoke",
+          "count": 6,
+          "color": 8292248,
+          "spread": 24,
+          "size": 6,
+          "alpha": 0.28,
+          "duration": 560
+        }
+      ],
+      "flash": {
+        "color": 16777215,
+        "alpha": 0.18,
+        "scale": 2.6
+      }
+    },
+    "fire": {
+      "palette": [
+        16773544,
+        16751151,
+        14236703,
+        6232096
+      ],
+      "bursts": [
+        {
+          "texture": "ember",
+          "count": 26,
+          "color": 16751151,
+          "spread": 56,
+          "size": 6,
+          "alpha": 0.9,
+          "rise": true,
+          "duration": 620
+        },
+        {
+          "texture": "spark",
+          "count": 18,
+          "color": 16773544,
+          "spread": 42,
+          "size": 3,
+          "alpha": 0.95,
+          "rise": true,
+          "duration": 420
+        },
+        {
+          "texture": "smoke",
+          "count": 14,
+          "color": 4859440,
+          "spread": 52,
+          "size": 8,
+          "alpha": 0.24,
+          "rise": true,
+          "duration": 850
+        }
+      ],
+      "flash": {
+        "color": 16773544,
+        "alpha": 0.24,
+        "scale": 3.3
+      }
+    },
+    "ice": {
+      "palette": [
+        16777215,
+        12316415,
+        6600703,
+        3430584
+      ],
+      "bursts": [
+        {
+          "texture": "shard",
+          "count": 24,
+          "color": 12316415,
+          "spread": 48,
+          "size": 7,
+          "alpha": 0.92,
+          "duration": 720
+        },
+        {
+          "texture": "spark",
+          "count": 18,
+          "color": 16777215,
+          "spread": 32,
+          "size": 3,
+          "alpha": 0.92,
+          "duration": 520
+        },
+        {
+          "texture": "streak",
+          "count": 10,
+          "color": 6600703,
+          "spread": 44,
+          "size": 6,
+          "alpha": 0.72,
+          "directional": true,
+          "duration": 640
+        }
+      ]
+    },
+    "thunder": {
+      "palette": [
+        16777164,
+        16772693,
+        10134271,
+        3813000
+      ],
+      "bursts": [
+        {
+          "texture": "streak",
+          "count": 22,
+          "color": 16777096,
+          "spread": 62,
+          "size": 8,
+          "alpha": 0.95,
+          "directional": true,
+          "duration": 330
+        },
+        {
+          "texture": "spark",
+          "count": 22,
+          "color": 16777215,
+          "spread": 46,
+          "size": 3,
+          "alpha": 0.95,
+          "rise": true,
+          "duration": 380
+        },
+        {
+          "texture": "orb",
+          "count": 10,
+          "color": 10134271,
+          "spread": 34,
+          "size": 5,
+          "alpha": 0.55,
+          "duration": 560
+        }
+      ],
+      "flash": {
+        "color": 16777164,
+        "alpha": 0.28,
+        "scale": 3.8
+      }
+    },
+    "wind": {
+      "palette": [
+        15794150,
+        11206570,
+        5885852,
+        2849903
+      ],
+      "bursts": [
+        {
+          "texture": "streak",
+          "count": 24,
+          "color": 13434828,
+          "spread": 68,
+          "size": 8,
+          "alpha": 0.55,
+          "directional": true,
+          "duration": 700
+        },
+        {
+          "texture": "spark",
+          "count": 14,
+          "color": 15794150,
+          "spread": 48,
+          "size": 3,
+          "alpha": 0.78,
+          "rise": true,
+          "duration": 620
+        },
+        {
+          "texture": "orb",
+          "count": 10,
+          "color": 5885852,
+          "spread": 54,
+          "size": 5,
+          "alpha": 0.35,
+          "duration": 760
+        }
+      ]
+    },
+    "earth": {
+      "palette": [
+        14860938,
+        11764818,
+        8017463,
+        4206635
+      ],
+      "bursts": [
+        {
+          "texture": "stone",
+          "count": 20,
+          "color": 10119749,
+          "spread": 38,
+          "size": 7,
+          "alpha": 0.9,
+          "gravity": 22,
+          "duration": 620
+        },
+        {
+          "texture": "smoke",
+          "count": 18,
+          "color": 6115398,
+          "spread": 48,
+          "size": 8,
+          "alpha": 0.3,
+          "duration": 850
+        },
+        {
+          "texture": "spark",
+          "count": 8,
+          "color": 14860938,
+          "spread": 26,
+          "size": 3,
+          "alpha": 0.7,
+          "duration": 400
+        }
+      ]
+    },
+    "water": {
+      "palette": [
+        14220287,
+        8115455,
+        2395647,
+        1594536
+      ],
+      "bursts": [
+        {
+          "texture": "droplet",
+          "count": 28,
+          "color": 4500223,
+          "spread": 46,
+          "size": 6,
+          "alpha": 0.85,
+          "duration": 690
+        },
+        {
+          "texture": "spark",
+          "count": 14,
+          "color": 14220287,
+          "spread": 34,
+          "size": 3,
+          "alpha": 0.86,
+          "rise": true,
+          "duration": 480
+        },
+        {
+          "texture": "streak",
+          "count": 12,
+          "color": 8115455,
+          "spread": 48,
+          "size": 7,
+          "alpha": 0.5,
+          "directional": true,
+          "duration": 620
+        }
+      ]
+    },
+    "holy": {
+      "palette": [
+        16777215,
+        16777164,
+        16768890,
+        10217471
+      ],
+      "bursts": [
+        {
+          "texture": "rune",
+          "count": 14,
+          "color": 16777164,
+          "spread": 42,
+          "size": 7,
+          "alpha": 0.72,
+          "rise": true,
+          "duration": 780
+        },
+        {
+          "texture": "spark",
+          "count": 28,
+          "color": 16777215,
+          "spread": 36,
+          "size": 3,
+          "alpha": 0.95,
+          "rise": true,
+          "duration": 560
+        },
+        {
+          "texture": "orb",
+          "count": 12,
+          "color": 10217471,
+          "spread": 30,
+          "size": 5,
+          "alpha": 0.45,
+          "rise": true,
+          "duration": 700
+        }
+      ],
+      "flash": {
+        "color": 16777215,
+        "alpha": 0.25,
+        "scale": 3.6
+      }
+    },
+    "dark": {
+      "palette": [
+        11701503,
+        6697898,
+        2757194,
+        524815
+      ],
+      "bursts": [
+        {
+          "texture": "smoke",
+          "count": 26,
+          "color": 2757194,
+          "spread": 54,
+          "size": 9,
+          "alpha": 0.42,
+          "rise": true,
+          "duration": 860
+        },
+        {
+          "texture": "spark",
+          "count": 14,
+          "color": 11701503,
+          "spread": 34,
+          "size": 3,
+          "alpha": 0.78,
+          "duration": 540
+        },
+        {
+          "texture": "orb",
+          "count": 10,
+          "color": 524815,
+          "spread": 40,
+          "size": 6,
+          "alpha": 0.6,
+          "duration": 720
+        }
+      ]
+    },
+    "poison": {
+      "palette": [
+        13959024,
+        6736964,
+        2984520,
+        2249272
+      ],
+      "bursts": [
+        {
+          "texture": "orb",
+          "count": 20,
+          "color": 6736964,
+          "spread": 36,
+          "size": 6,
+          "alpha": 0.7,
+          "rise": true,
+          "duration": 800
+        },
+        {
+          "texture": "smoke",
+          "count": 22,
+          "color": 2249272,
+          "spread": 46,
+          "size": 8,
+          "alpha": 0.34,
+          "rise": true,
+          "duration": 980
+        },
+        {
+          "texture": "spark",
+          "count": 10,
+          "color": 13959024,
+          "spread": 26,
+          "size": 3,
+          "alpha": 0.82,
+          "rise": true,
+          "duration": 500
+        }
+      ]
+    },
+    "heal": {
+      "palette": [
+        15532020,
+        8843180,
+        4906624,
+        2072418
+      ],
+      "bursts": [
+        {
+          "texture": "rune",
+          "count": 12,
+          "color": 8843180,
+          "spread": 30,
+          "size": 7,
+          "alpha": 0.64,
+          "rise": true,
+          "duration": 900
+        },
+        {
+          "texture": "spark",
+          "count": 30,
+          "color": 15532020,
+          "spread": 26,
+          "size": 3,
+          "alpha": 0.9,
+          "rise": true,
+          "duration": 740
+        },
+        {
+          "texture": "orb",
+          "count": 14,
+          "color": 4906624,
+          "spread": 24,
+          "size": 5,
+          "alpha": 0.5,
+          "rise": true,
+          "duration": 860
+        }
+      ],
+      "ring": {
+        "color": 4906624,
+        "alpha": 0.42,
+        "scale": 6.8,
+        "duration": 720
+      }
+    },
+    "buff": {
+      "palette": [
+        16774338,
+        16766720,
+        16752451,
+        9396000
+      ],
+      "bursts": [
+        {
+          "texture": "rune",
+          "count": 16,
+          "color": 16771496,
+          "spread": 32,
+          "size": 7,
+          "alpha": 0.72,
+          "rise": true,
+          "duration": 840
+        },
+        {
+          "texture": "spark",
+          "count": 22,
+          "color": 16774338,
+          "spread": 26,
+          "size": 3,
+          "alpha": 0.9,
+          "rise": true,
+          "duration": 650
+        },
+        {
+          "texture": "streak",
+          "count": 8,
+          "color": 16752451,
+          "spread": 30,
+          "size": 6,
+          "alpha": 0.52,
+          "directional": true,
+          "duration": 640
+        }
+      ],
+      "ring": {
+        "color": 16771496,
+        "alpha": 0.45,
+        "scale": 6.4,
+        "duration": 680
+      }
+    }
+  }
+}

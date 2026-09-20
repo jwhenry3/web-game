@@ -64,6 +64,9 @@ func (h *Hub) defeatPlayer(clientID string) {
 	cc.inCombat = false
 	wasMounted := cc.mounted
 	cc.mounted, cc.mountSprite = false, ""
+	if wasMounted {
+		h.petSyncDirty = true // resummon the stabled battle pet
+	}
 	h.flushSkillUsage(e)
 	for _, n := range h.entities {
 		if n.Kind == kindNPC {

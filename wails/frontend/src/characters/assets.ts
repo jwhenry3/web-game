@@ -83,9 +83,33 @@ export const SPINE_DOLL_SKEL = "paperdoll";
 export const SPINE_DOLL_ATLAS = "paperdoll";
 export const SPINE_QUAD_SKEL = "quaddoll";
 export const SPINE_QUAD_ATLAS = "quaddoll";
+export const SPINE_PROP_SKEL = "propdoll";
+export const SPINE_PROP_ATLAS = "propdoll";
 
 const spinePromises = new Map<string, Promise<void>>();
 const spineScenes = new Map<string, Phaser.Scene>();
+
+/**
+ * spine-phaser applies the atlas `filter:` line only if the GL texture
+ * exists when the page is bound — during `load.spineAtlas` it doesn't,
+ * so Phaser texture wrappers keep their default LINEAR and deforming
+ * meshes shimmer as texels resample. Re-apply the atlas-declared filter
+ * once textures are up — the paperdoll atlas is supersampled 2x so its
+ * declared `Nearest` keeps sprites blur-free in motion while halving
+ * texel wobble. Page textures are keyed `<atlasKey>!<page.png>`.
+ */
+function setSpineTextureFilter(scene: Phaser.Scene, atlasKey: string): void {
+  const atlasText = scene.cache.text.get(atlasKey) as string | undefined;
+  const declared = /^filter:\s*(\w+)/m.exec(atlasText ?? "")?.[1];
+  const mode = /^linear$/i.test(declared ?? "")
+    ? Phaser.Textures.FilterMode.LINEAR
+    : Phaser.Textures.FilterMode.NEAREST;
+  scene.textures.each((texture) => {
+    if (texture.key.startsWith(`${atlasKey}!`)) {
+      texture.setFilter(mode);
+    }
+  }, scene.textures);
+}
 
 /** Load a Spine atlas + skeleton once (game-global caches), keyed per asset. */
 export function ensureSpineAssets(
@@ -98,14 +122,23 @@ export function ensureSpineAssets(
   // the raw files are in, so a stale pending load can never wedge new sprites.
   const cache = scene.game.cache;
   if (cache.json.exists(skelKey) && cache.text.exists(atlasKey)) {
+    setSpineTextureFilter(scene, atlasKey);
     spinePromises.set(id, Promise.resolve());
     return spinePromises.get(id)!;
   }
   // A pending load bound to a sleeping/stopped scene's loader can stall
-  // forever — abandon it and start fresh on the calling (live) scene.
+  // forever — abandon it and start fresh on the calling (live) scene. The
+  // promise maps are module-global but each Phaser.Game owns its cache, so
+  // a load started by a different game instance never satisfies this scene —
+  // preview games (character creation, equipment) must load their own copy.
   const pendingScene = spineScenes.get(id);
   const pendingPromise = spinePromises.get(id);
-  if (pendingPromise && pendingScene?.sys.isActive() && !pendingScene.sys.isSleeping()) {
+  if (
+    pendingPromise &&
+    pendingScene?.sys.isActive() &&
+    !pendingScene.sys.isSleeping() &&
+    pendingScene.game === scene.game
+  ) {
     return pendingPromise;
   }
   const promise = new Promise<void>((resolve, reject) => {
@@ -126,6 +159,7 @@ export function ensureSpineAssets(
     };
     const onComplete = () => {
       cleanup();
+      setSpineTextureFilter(scene, atlasKey);
       resolve();
     };
     const onError = (file: { key?: string }) => {

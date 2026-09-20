@@ -20,14 +20,14 @@ import { findPath, type PathPoint } from "../world/pathfind";
 import { playDodgeVfx } from "./battleVfx";
 import { battleDuration, DEFAULT_BATTLE_SPEED } from "./battleAnim";
 import {
-  isoDepth,
   isoLayer,
-  isoMoveSpeedScale,
   isoParent,
   isoProject,
-  screenDirToWorldGrid,
+  moveDirFor,
+  moveSpeedScaleFor,
   screenToWorldX,
   screenToWorldY,
+  sortDepth,
 } from "../world/iso";
 import { setWorldLocalPos } from "../world/worldLocalPos";
 import type { OverworldMap, WorldEntity } from "../types";
@@ -240,9 +240,8 @@ export class WorldMovement {
       .circle(last.x, last.y, 11)
       .setStrokeStyle(2, 0xe8c96a)
       .setDepth(6);
-    if (isoParent(this.scene, ring)) {
-      ring.setDepth(isoDepth(last.x, last.y) - 1);
-    }
+    isoParent(this.scene, ring);
+    ring.setDepth(sortDepth(this.scene, last.x, last.y) - 1);
     this.scene.tweens.add({
       targets: ring,
       scale: 0.4,
@@ -286,9 +285,8 @@ export class WorldMovement {
         .circle(x, y, 2.5, 0xe8c96a, 0)
         .setDepth(6)
         .setScale(0.4);
-      if (isoParent(this.scene, dot)) {
-        dot.setDepth(isoDepth(x, y) - 1);
-      }
+      isoParent(this.scene, dot);
+      dot.setDepth(sortDepth(this.scene, x, y) - 1);
       this.scene.tweens.add({
         targets: dot,
         alpha: 0.55,
@@ -354,7 +352,7 @@ export class WorldMovement {
     const rx = av.wrapper.x + (iso ? H99_WORLD_RING_Y : 0);
     const ry = av.wrapper.y + H99_WORLD_RING_Y;
     g.setPosition(rx, ry);
-    if (iso) g.setDepth(isoDepth(rx, ry) + 0.05);
+    g.setDepth(sortDepth(this.scene, rx, ry) + 0.05);
     g.lineStyle(3, 0x9fb6c9, 0.55);
     g.beginPath();
     g.arc(0, 0, H99_WORLD_RING_RADIUS * 0.8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * pct);
@@ -489,11 +487,11 @@ export class WorldMovement {
     if (this.isMoveDown("move_down")) dy += 1;
     // Iso scenes: keys mean *screen* directions (W = up-screen); snap the
     // intent to the nearest grid-aligned world direction so combos walk
-    // along tile edges instead of at arbitrary angles. Click-path deltas
-    // below are already world-space.
+    // along tile edges. Orthogonal scenes just normalize the input — free
+    // 8-way movement. Click-path deltas below are already world-space.
     const iso = !!isoLayer(this.scene);
-    if (iso && (dx !== 0 || dy !== 0)) {
-      const w = screenDirToWorldGrid(dx, dy);
+    if (dx !== 0 || dy !== 0) {
+      const w = moveDirFor(this.scene, dx, dy);
       dx = w.x;
       dy = w.y;
     }
@@ -559,7 +557,7 @@ export class WorldMovement {
 
     const len = Math.hypot(dx, dy);
     const speed =
-      SPEED * (wp.mounted ? MOUNT_SPEED_MULT : 1) * (iso ? isoMoveSpeedScale(dx / len, dy / len) : 1);
+      SPEED * (wp.mounted ? MOUNT_SPEED_MULT : 1) * moveSpeedScaleFor(this.scene, dx / len, dy / len);
     const { w: worldW, h: worldH } = this.host.worldBounds();
     const nx = Phaser.Math.Clamp(
       av.wrapper.x + (dx / len) * speed * dt,

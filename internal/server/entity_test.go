@@ -826,3 +826,53 @@ func TestMountToggleAndDismountRules(t *testing.T) {
 		t.Fatal("releasing the mount pet should dismount the rider")
 	}
 }
+
+func TestMountDespawnsBattlePet(t *testing.T) {
+	px, py := wildernessXY()
+	h, c, pe := testHubWithPlayer(t, px, py)
+	cc := clientControlOf(pe)
+
+	battle := slotBattlePet(t, h, "goblin", "Gob", 1)
+	_, rec, errMsg := h.store.AddPet("Bartz", "dire_wolf", "Wolf", 1)
+	if errMsg != "" {
+		t.Fatalf("AddPet: %s", errMsg)
+	}
+	if _, errMsg := h.store.SetMountPet("Bartz", rec.ID); errMsg != "" {
+		t.Fatalf("SetMountPet: %s", errMsg)
+	}
+
+	h.syncPetEntities()
+	if h.entities[battle.ID] == nil {
+		t.Fatal("battle pet should be out before mounting")
+	}
+
+	h.handleMountToggle(c, nil)
+	if !cc.mounted {
+		t.Fatal("mount toggle should seat the rider")
+	}
+	if h.entities[battle.ID] != nil {
+		t.Fatal("mounting should despawn the battle pet")
+	}
+
+	h.handleMountToggle(c, nil)
+	if cc.mounted {
+		t.Fatal("second toggle should dismount")
+	}
+	if got := h.entities[battle.ID]; got == nil {
+		t.Fatal("dismounting should resummon the battle pet")
+	}
+
+	// Force-dismounts (mount pet released) resummon the battle pet too.
+	h.handleMountToggle(c, nil)
+	if h.entities[battle.ID] != nil {
+		t.Fatal("remounting should despawn the battle pet again")
+	}
+	release, _ := json.Marshal(protocol.PetIDPayload{PetID: rec.ID})
+	h.handlePetRelease(c, release)
+	if cc.mounted {
+		t.Fatal("releasing the mount pet should dismount the rider")
+	}
+	if h.entities[battle.ID] == nil {
+		t.Fatal("a forced dismount should resummon the battle pet")
+	}
+}

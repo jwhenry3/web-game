@@ -23,8 +23,6 @@ export const ENTITY_PRESENTATION = {
   foeDepth: 9,
   /** Depth for pet followers. */
   petDepth: 8,
-  /** Scale applied to pet follower sprites. */
-  petFollowScale: 0.55,
 } as const;
 
 /**
@@ -61,15 +59,13 @@ export function createSpriteForEntity(
 }
 
 /**
- * Build a sprite adapter for a pet follower. Pets are always rendered with
- * the enemy sprite sheet at a reduced scale.
+ * Build a sprite adapter for a pet follower. Pets render at the same scale
+ * as enemy NPCs of the kind.
  */
 export function createPetSprite(
   scene: Phaser.Scene,
   entity: WorldEntity,
 ): IEntitySprite {
   const kind = enemyKindFromName(entity.name, entity.sprite);
-  const sprite = new EnemySprite(scene, 0, 0, kind);
-  sprite.container.setScale(ENTITY_PRESENTATION.petFollowScale);
-  return sprite;
+  return new EnemySprite(scene, 0, 0, kind);
 }

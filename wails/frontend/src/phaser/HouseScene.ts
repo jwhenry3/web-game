@@ -30,15 +30,15 @@ import {
   ISO_ROT,
   ISO_SQUASH_Y,
   applyIsoCounter,
-  isoDepth,
   isoLayer,
-  isoMoveSpeedScale,
   isoParent,
   isoProject,
-  screenDirToWorldGrid,
+  moveDirFor,
+  moveSpeedScaleFor,
   screenToWorldX,
   screenToWorldY,
   setIsoLayer,
+  sortDepth,
 } from "../world/iso";
 import { ISO_ACTOR_DEPTH_EPS } from "./systems/actorVisuals";
 import { CollisionGizmo, type CollisionGizmoEntry } from "./systems/collisionGizmo";
@@ -61,8 +61,7 @@ const POI_PROMPT_Y = -28;
 const POI_LABEL_Y = -28;
 const FURNITURE_LABEL_Y = -16;
 const CAST_BAR_Y = 10;
-/** House pets draw at the same reduced scale as field follow pets. */
-const PET_SCALE = 0.55;
+
 const PET_LERP = 0.3;
 const PET_SNAP_DIST = 64;
 
@@ -296,7 +295,7 @@ export class HouseScene extends Phaser.Scene {
     const wrapper = this.add.container(p.x, p.y).setDepth(10);
     if (isoParent(this, wrapper)) {
       applyIsoCounter(wrapper);
-      wrapper.setDepth(isoDepth(p.x, p.y) + ISO_ACTOR_DEPTH_EPS);
+      wrapper.setDepth(sortDepth(this, p.x, p.y) + ISO_ACTOR_DEPTH_EPS);
     }
     const shadow = entityShadow(this);
     if (isoLayer(this)) shadow.setScale(1, 0.45);
@@ -324,7 +323,7 @@ export class HouseScene extends Phaser.Scene {
         const wrapper = this.add.container(x, y).setDepth(6);
         if (isoParent(this, wrapper)) {
           applyIsoCounter(wrapper);
-          wrapper.setDepth(isoDepth(x, y));
+          wrapper.setDepth(sortDepth(this, x, y));
         }
         const box = this.add
           .rectangle(0, 0, 22, 18, 0x7a5a3a)
@@ -343,7 +342,7 @@ export class HouseScene extends Phaser.Scene {
         node.x = x;
         node.y = y;
         node.name = f.item.name.slice(0, 10);
-        if (isoLayer(this)) node.wrapper.setDepth(isoDepth(x, y));
+        if (isoLayer(this)) node.wrapper.setDepth(sortDepth(this, x, y));
       }
       node.wrapper.setAlpha(pickMode ? 0.95 : 1);
       const box = node.wrapper.list[0] as Phaser.GameObjects.Rectangle | undefined;
@@ -397,7 +396,7 @@ export class HouseScene extends Phaser.Scene {
         const wrapper = this.add.container(poi.x, poi.y).setDepth(5);
         if (isoParent(this, wrapper)) {
           applyIsoCounter(wrapper);
-          wrapper.setDepth(isoDepth(poi.x, poi.y));
+          wrapper.setDepth(sortDepth(this, poi.x, poi.y));
         }
         const isDoor = poi.kind === "door";
         const glow = this.add.circle(0, 0, 18, isDoor ? 0x6a9ad4 : 0xd4a05a, 0.35);
@@ -411,7 +410,7 @@ export class HouseScene extends Phaser.Scene {
         m.x = poi.x;
         m.y = poi.y;
         m.name = poi.name;
-        if (isoLayer(this)) m.wrapper.setDepth(isoDepth(poi.x, poi.y));
+        if (isoLayer(this)) m.wrapper.setDepth(sortDepth(this, poi.x, poi.y));
       }
     }
   }
@@ -442,12 +441,12 @@ export class HouseScene extends Phaser.Scene {
       const wrapper = this.add.container(pet.x, pet.y).setDepth(9);
       if (isoParent(this, wrapper)) {
         applyIsoCounter(wrapper);
-        wrapper.setDepth(isoDepth(pet.x, pet.y) + ISO_ACTOR_DEPTH_EPS);
+        wrapper.setDepth(sortDepth(this, pet.x, pet.y) + ISO_ACTOR_DEPTH_EPS);
       }
+      // Pets render at the same scale as enemy NPCs of the kind.
       const enemy = new EnemySprite(this, 0, 0, kind);
-      enemy.container.setScale(PET_SCALE);
-      const shadow = entityShadow(this, PET_SCALE);
-      if (isoLayer(this)) shadow.setScale(PET_SCALE, PET_SCALE * 0.45);
+      const shadow = entityShadow(this);
+      if (isoLayer(this)) shadow.setScale(1, 0.45);
       wrapper.add([shadow, enemy.container]);
       marker = { wrapper, enemy, kind };
       this.pets.set(pet.id, marker);
@@ -472,7 +471,7 @@ export class HouseScene extends Phaser.Scene {
       const mdy = marker.wrapper.y - prevY;
       marker.enemy.setMoving(Math.hypot(mdx, mdy) > 0.25, moveFacingAxis(mdx, mdy, true), mdy);
     }
-    marker.wrapper.setDepth(isoDepth(marker.wrapper.x, marker.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
+    marker.wrapper.setDepth(sortDepth(this, marker.wrapper.x, marker.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
     marker.enemy.update(delta);
     return [{ id: pet.id, label: pet.name }];
   }
@@ -547,7 +546,7 @@ export class HouseScene extends Phaser.Scene {
         av.sprite.setMoving(Math.hypot(dx, dy) > 0.25, moveFacingAxis(dx, dy, true), dy);
         av.sprite.setFacing(this.facingOf(p, av.sprite.getFacing()));
       }
-      av.wrapper.setDepth(isoDepth(av.wrapper.x, av.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
+      av.wrapper.setDepth(sortDepth(this, av.wrapper.x, av.wrapper.y) + ISO_ACTOR_DEPTH_EPS);
       av.sprite.update(delta);
       // Nameplates filled after camera settle so stage transform matches sprites.
       entities.push({
@@ -598,9 +597,9 @@ export class HouseScene extends Phaser.Scene {
     if (mx || my) {
       // Keys mean screen directions (W = up-screen); snap to the nearest
       // grid-aligned world direction so combos follow tile edges.
-      const w = screenDirToWorldGrid(mx, my);
+      const w = moveDirFor(this, mx, my);
       const len = Math.hypot(w.x, w.y) || 1;
-      const step = (SPEED * isoMoveSpeedScale(w.x / len, w.y / len) * delta) / 1000;
+      const step = (SPEED * moveSpeedScaleFor(this, w.x / len, w.y / len) * delta) / 1000;
       const nx = selfAv.wrapper.x + (w.x / len) * step;
       const ny = selfAv.wrapper.y + (w.y / len) * step;
       const slid = slideMoveHousePlayer(house, selfAv.wrapper.x, selfAv.wrapper.y, nx, ny);
@@ -612,7 +611,7 @@ export class HouseScene extends Phaser.Scene {
       selfAv.sprite.setFacing(this.facingOf(selfGuest, selfAv.sprite.getFacing()));
     }
     selfAv.wrapper.setDepth(
-      isoDepth(selfAv.wrapper.x, selfAv.wrapper.y) + ISO_ACTOR_DEPTH_EPS,
+      sortDepth(this, selfAv.wrapper.x, selfAv.wrapper.y) + ISO_ACTOR_DEPTH_EPS,
     );
     this.worldLayer?.sort("depth");
     this.updateCollisionGizmo(state);
@@ -654,7 +653,7 @@ export class HouseScene extends Phaser.Scene {
           marker.wrapper.x,
           marker.wrapper.y,
           transform,
-          Math.round(H99_NAME_LABEL_Y * PET_SCALE) - 2,
+          H99_NAME_LABEL_Y,
         ),
       );
     }

@@ -126,9 +126,9 @@ def main():
     variants = Image.new("RGB", (900, 248), "#242736")
     for i, (label, selection) in enumerate([
         ("Bare base", None), ("Default / blue eyes", {}),
-        ("Green eyes", {"skin": "skin_c3", "face": "face_c2", "hair_top": "hair_f1_c3", "hair_bot": "hair_f1_c3", "cloth_top": "cloth3_c2"}),
-        ("Violet eyes", {"skin": "skin_c5", "face": "face_c4", "hair_top": "hair_m4_c6", "hair_bot": "hair_m4_c6", "cloth_top": "cloth4_c4"}),
-        ("Amber eyes", {"skin": "skin_c2", "face": "face_c5", "hair_top": "hair_m2_c4", "hair_bot": "hair_m2_c4", "cloth_top": "cloth5_c6"}),
+        ("MS face 3", {"skin": "skin_c3", "face": "face_ms3", "hair_top": "hair_f1_c3", "hair_bot": "hair_f1_c3", "cloth_top": "cloth3_c2"}),
+        ("MS face 7", {"skin": "skin_c5", "face": "face_ms7", "hair_top": "hair_m4_c6", "hair_bot": "hair_m4_c6", "cloth_top": "cloth4_c4"}),
+        ("MS face 11", {"skin": "skin_c2", "face": "face_ms11", "hair_top": "hair_m2_c4", "hair_bot": "hair_m2_c4", "cloth_top": "cloth5_c6"}),
     ]):
         tile = render(skeleton, regions, {}, 0, selection, bare=i == 0)
         ImageDraw.Draw(tile).text((8, 10), label, fill="white")
@@ -137,20 +137,20 @@ def main():
     # Creature presets — the doll reused for humanoid enemies. Slot-prefix
     # keys mirror the frontend's attachmentForSlot.
     creature_looks = [
-        ("Goblin", {"skin": "skin_c7", "face": "face_c8",
+        ("Goblin", {"skin": "skin_c7", "face": "face_ms6_gob",
                     "hair_top": "", "hair_bot": "",
                     "cloth_top": "cloth5_c3", "cloth_bot": "cloth5_c3",
                     "weapon_top": "weapon3", "weapon_over": "weapon7_c3",
                     "ears": "ears_point_c7"},
          {"head": 1.15, "height": 0.9, "ears": 1.35}),
-        ("Imp", {"skin": "skin_c8", "face": "face_c9",
+        ("Imp", {"skin": "skin_c8", "face": "face_ms9_imp",
                  "hair_top": "", "hair_bot": "",
                  "cloth_top": "cloth10_c8", "cloth_bot": "cloth10_c8",
                  "weapon_top": "weapon6", "ears": "ears_long_c8",
                  "horns": "horns_imp", "wings": "wings_bat",
                  "tail": "tail_spade_c8"},
          {"height": 0.9, "ears": 1.2, "horns": 1.15}),
-        ("Stone Imp", {"skin": "skin_c9", "face": "face_c10",
+        ("Stone Imp", {"skin": "skin_c9", "face": "face_ms12_stone",
                        "hair_top": "", "hair_bot": "",
                        "cloth_top": "", "cloth_bot": "", "weapon_top": "",
                        "ears": "ears_long_c9", "horns": "horns_imp",

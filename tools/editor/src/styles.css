@@ -105,6 +105,14 @@ input[type="range"], input[type="checkbox"] { accent-color: #6599c4; }
 .ed-dock-title .ed-scene-tab { color: #eee; font-size: 12px; border-top: 2px solid #709fc5; align-self: stretch; display: flex; align-items: center; padding: 0 8px; margin-left: -9px; background: #3c3c3c; }
 .ed-scene-toolbar { display: flex; align-items: center; gap: 2px; padding: 4px 7px; background: #3b3b3b; border-bottom: 1px solid #282828; color: #c7c7c7; font-size: 11px; }
 .ed-scene-toolbar button { min-width: 31px; }
+.ed-ws-tabs { display: flex; align-self: stretch; margin-left: 14px; }
+.ed-ws-tabs button { border: 0; border-top: 2px solid transparent; border-radius: 0; background: transparent; padding: 0 12px; color: #bfbfbf; font-size: 11px; }
+.ed-ws-tabs button.active { border-top-color: #709fc5; background: #3c3c3c; color: #fff; }
+.ed-view-tabs { display: flex; align-self: stretch; margin-left: -9px; }
+.ed-view-tabs button { border: 0; border-top: 2px solid transparent; border-radius: 0; background: transparent; }
+.ed-view-tabs button.active { border-top-color: #709fc5; background: #3c3c3c; color: #fff; }
+.ed-filter-preview { position: absolute; inset: 0; pointer-events: none; }
+.ed-filter-preview canvas { width: 100% !important; height: 100% !important; }
 .ed-scene-toolbar button[aria-pressed="true"] { background: #39678c; }
 .ed-viewport { background: #292929; min-height: 0; overflow: hidden; }
 .ed-viewport canvas { position: absolute; inset: 0; touch-action: none; }
@@ -188,3 +196,34 @@ table.ed-table td, table.ed-table th { border-bottom-color: #484848; }
   content: ""; position: absolute; top: 0; left: -4px;
   border: 4.5px solid transparent; border-top-color: #e05555;
 }
+
+/* Parts dock — full-width body-part manager under the scene viewport. */
+.ed-partdock { flex: none; height: 320px; min-height: 0; display: flex; flex-direction: column; background: var(--panel); border-top: 1px solid var(--border); }
+.ed-partdock-body { flex: 1; display: flex; min-height: 0; }
+.ed-partdock-layers { width: 168px; flex: none; overflow-y: auto; background: #333; border-right: 1px solid var(--border); padding: 4px 0; }
+.ed-partdock-layers .ed-tree-item .count { margin-left: auto; color: #999; font-size: 10px; }
+.ed-partdock-slots { flex: none; display: flex; flex-wrap: wrap; gap: 3px; padding: 6px 8px; border-top: 1px solid #2b2b2b; position: sticky; bottom: 0; background: #333; }
+.ed-partdock-slots button { font-size: 10px; padding: 0 6px; min-height: 18px; }
+.ed-partdock-slots button.active { background: var(--selection); color: #fff; border-color: #3d74bd; }
+.ed-partdock-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ed-partdock-list { flex: 1; min-height: 0; overflow: auto; background: #2a2a2a; padding: 6px; }
+.ed-partdock-list .ed-cat-grid { margin: 0; }
+.ed-partdock-detail { width: 268px; flex: none; overflow: auto; border-left: 1px solid var(--border); padding: 8px 10px; }
+.ed-partdock-detail h3 { margin: 8px 0 6px; font-size: 12px; color: #ddd; }
+.ed-partdock-detail h3:first-child { margin-top: 0; }
+.ed-partdock-detail .ed-cat-thumb { display: block; margin: 0 auto 6px; }
+.ed-partdock-detail input[type="number"] { width: 58px; }
+.ed-partdock-table { font-size: 11px; }
+.ed-partdock-table th { position: sticky; top: -6px; z-index: 2; background: #333; cursor: pointer; user-select: none; white-space: nowrap; }
+.ed-partdock-table tbody tr { cursor: pointer; }
+.ed-partdock-table tbody tr:hover td { background: #383838; }
+.ed-partdock-table tbody tr.sel td { background: var(--selection); color: #fff; }
+.ed-partdock-table input[type="checkbox"] { margin: 0; }
+.ed-cat-card.sel { border-color: #77b5e5; background: #39485a; }
+.ed-cat-check { position: absolute; top: 2px; left: 2px; margin: 0; }
+.ed-batch { display: inline-flex; align-items: center; gap: 5px; color: #c4c4c4; }
+.ed-batch input[type="number"] { width: 52px; }
+.ed-view-active { background: #39678c; }
+.ed-partdock-preview-chip { display: inline-flex; align-items: center; gap: 4px; color: #8fd0ff; }
+.ed-partdock-preview-chip button { padding: 0 4px; min-height: 16px; font-size: 10px; line-height: 14px; }
+button.ed-previewing { background: #39678c; border-color: #4d86b8; }

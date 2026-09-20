@@ -1,4 +1,4 @@
-import type { Doc } from "../App";
+import type { Doc } from "../model/types";
 import type { Spec } from "../model/types";
 
 const COND_OPS = ["x<", "x<=", "x>", "x>=", "y<", "y<=", "y>", "y>="];

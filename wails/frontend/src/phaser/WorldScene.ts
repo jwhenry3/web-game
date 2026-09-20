@@ -6,30 +6,27 @@ import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { WorldMovement } from "./movement";
 import { FILL, tileAt, WALKABLE } from "../world/overworld";
 import {
+  rasterizeTerrainRect,
   terrainLayerKey,
   terrainLayersFromSnapshot,
   type TerrainLayerData,
 } from "../world/terrainRaster";
 import { getLoadedPipoyaSheets, loadPipoyaSheets } from "../world/pipoyaTilesets";
+import { isoParent, isoProject } from "../world/iso";
 import {
-  ISO_LAYER_SCALE,
-  ISO_LEVEL_H,
-  ISO_ROT,
-  ISO_SQUASH_Y,
-  isoBounds,
-  isoProject,
-  isoX,
-  isoY,
-  screenToWorldX,
-  screenToWorldY,
-  setIsoLayer,
-} from "../world/iso";
-import { loadIsoTiles, type IsoTiles } from "../world/isoTiles";
+  bakedChunkUrl,
+  bakedTerrainMatches,
+  fetchBakedTerrain,
+  type BakedTerrain,
+} from "../world/bakedTerrain";
 import {
-  rasterizeIsoChunk,
-  type IsoBlockPlacement,
-  type IsoPropPlacement,
-} from "../world/isoRaster";
+  liveStampFeature,
+  mapFeatureCatalog,
+  mapFeatureStamps,
+  stampAnchorY,
+  type FeatureStamp,
+  type MapFeature,
+} from "../world/featureStamps";
 import { colorForGid } from "../editor/tilePalette";
 import {
   portalKey,
@@ -113,11 +110,11 @@ const TERRAIN_CHUNK_TILES = 64;
 
 interface TerrainChunk {
   baseKey: string;
-  base: Phaser.GameObjects.Image;
-  /** Iso prop billboards extracted from this chunk's cells. */
-  props?: Phaser.GameObjects.Image[];
-  /** Elevated block columns extracted from this chunk's cells. */
-  blocks?: Phaser.GameObjects.Container[];
+  /** Set once the image exists — baked chunks create it after the PNG loads. */
+  base?: Phaser.GameObjects.Image;
+  /** Walk-under canopy texture key + image (rasterized or baked `over`). */
+  overKey?: string;
+  over?: Phaser.GameObjects.Image;
 }
 
 export class WorldScene extends Phaser.Scene {
@@ -126,24 +123,38 @@ export class WorldScene extends Phaser.Scene {
   private selfSpawned = false;
   private followedWrapper?: Phaser.GameObjects.Container;
   /**
-   * Iso world layer: squash(scaleY 0.5) → rotate(45°, √2) → world-space
-   * children. Everything inside keeps server/world coordinates; the chain
-   * projects them to screen. `camProxy` shadows the followed actor's
-   * projected position so camera follow works in screen space.
+   * World layer — orthogonal now, so it is a plain identity container kept
+   * for callsites that parent world-space objects. `camProxy` shadows the
+   * followed actor's projected position so camera follow works in whatever
+   * space the camera sees.
    */
   private worldLayer?: Phaser.GameObjects.Container;
   private camProxy?: Phaser.GameObjects.Zone;
-  private isoTiles: IsoTiles | null = null;
-  /** True when the iso sheet fetch failed — chunks fall back to flat colors. */
-  private isoTilesFailed = false;
+  /** True when the Pipoya sheet fetch failed — chunks fall back to flat colors. */
+  private pipoyaFailed = false;
   private terrain?: Phaser.GameObjects.Graphics;
   private terrainLayerData: TerrainLayerData | null = null;
   /** Rasterized terrain chunks keyed "cx,cy" — only chunks near the camera exist. */
   private terrainChunks = new Map<string, TerrainChunk>();
+  /**
+   * Validated bake manifest for the current terrain layers — undefined while
+   * the fetch/validation is in flight, null when runtime rasterization owns
+   * the map (no bake or stale bake).
+   */
+  private bakedManifest: BakedTerrain | null | undefined = null;
+  /** Baked chunks whose PNG 404'd — those permanently rasterize at runtime. */
+  private bakedChunkFailed = new Set<string>();
+  /** In-flight lazy image loads, keyed by texture key. */
+  private pendingTex = new Map<string, Promise<boolean>>();
+  /** Map-feature stamp props (buildings) — rebuilt when the map id changes. */
+  private stampProps: Phaser.GameObjects.Image[] = [];
+  private stampsMapId: string | null = null;
   private portalsGfx?: Phaser.GameObjects.Graphics;
   private terrainInputs: TerrainSyncInputs | null = null;
   private terrainPortalKey = "";
   private terrainTextureKey = "";
+  /** Map id the current terrain inputs belong to — part of the sync key. */
+  private terrainMapId = "";
   private terrainUnsub?: () => void;
   private worldW = 5120;
   private worldH = 3840;
@@ -177,13 +188,11 @@ export class WorldScene extends Phaser.Scene {
 
   create() {
     trackContentZoom(this);
-    // Iso world layer — world-coordinate children render through
-    // S(1,0.5)·R(45°)·√2, i.e. screen = (x−y, (x+y)/2).
-    const squash = this.add.container(0, 0).setScale(1, ISO_SQUASH_Y).setDepth(0);
-    const rotate = this.add.container(0, 0).setRotation(ISO_ROT).setScale(ISO_LAYER_SCALE);
-    squash.add(rotate);
-    this.worldLayer = rotate;
-    setIsoLayer(this, rotate);
+    // Orthogonal world — world-space objects live directly on the display
+    // list so they depth-sort against actors (isoParent no-ops without a
+    // registered iso layer). The container stays for callsites that hold a
+    // world-layer reference.
+    this.worldLayer = this.add.container(0, 0).setDepth(0);
     this.camProxy = this.add.zone(0, 0, 4, 4);
 
     this.resetEcs();
@@ -200,32 +209,8 @@ export class WorldScene extends Phaser.Scene {
         this.syncTerrainFromStore();
       })
       .catch((err) => {
+        this.pipoyaFailed = true;
         console.warn("Pipoya tilesets failed to load; using flat terrain colors", err);
-      });
-    void loadIsoTiles()
-      .then((tiles) => {
-        if (!this.sys.isActive()) return;
-        this.isoTiles = tiles;
-        // Register the sheet once so prop billboards can draw frames.
-        if (!this.textures.exists("isoTiles")) {
-          this.textures.addImage("isoTiles", tiles.img);
-          const tx = this.textures.get("isoTiles");
-          for (const [name, r] of Object.entries(tiles.atlas.props)) {
-            tx.add(name, 0, r.x, r.y, tiles.atlas.prop[0], tiles.atlas.prop[1]);
-          }
-          // Fill tiles as "fill:<name>" frames — block top faces draw them
-          // inside the world layer, where they squash into diamonds.
-          for (const [name, r] of Object.entries(tiles.atlas.fills)) {
-            tx.add(`fill:${name}`, 0, r.x, r.y, tiles.atlas.tile, tiles.atlas.tile);
-          }
-        }
-        this.terrainInputs = null;
-        this.terrainTextureKey = "";
-        this.syncTerrainFromStore();
-      })
-      .catch((err) => {
-        this.isoTilesFailed = true;
-        console.warn("Iso tileset failed to load; using flat terrain colors", err);
         this.terrainInputs = null;
         this.terrainTextureKey = "";
         this.syncTerrainFromStore();
@@ -249,6 +234,11 @@ export class WorldScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.terrainUnsub?.();
       this.terrainUnsub = undefined;
+      // The display list teardown destroys every GameObject — drop the chunk
+      // and stamp bookkeeping too so a scene restart rebuilds from scratch.
+      this.clearTerrain();
+      this.terrainInputs = null;
+      this.terrainPortalKey = "";
       this.jumping.clear();
       this.targetRing.destroy();
       this.collisionGizmo.destroy();
@@ -361,12 +351,11 @@ export class WorldScene extends Phaser.Scene {
         dodging: () => this.movement.dodging,
         onSpawn: (visual) => {
           this.followedWrapper = visual.wrapper;
-          // Camera follows a screen-space proxy — the wrapper lives in the
-          // iso layer's world coordinates, so follow its projected position.
-          const sx = isoX(visual.wrapper.x, visual.wrapper.y);
-          const sy = isoY(visual.wrapper.x, visual.wrapper.y);
-          this.camProxy?.setPosition(sx, sy);
-          this.cameras.main.centerOn(sx, sy);
+          // Camera follows a screen-space proxy — the wrapper keeps world
+          // coordinates, so follow its projected position (identity ortho).
+          const p = isoProject(this, visual.wrapper.x, visual.wrapper.y);
+          this.camProxy?.setPosition(p.x, p.y);
+          this.cameras.main.centerOn(p.x, p.y);
           if (this.camProxy) {
             this.cameras.main.startFollow(this.camProxy, true, 0.15, 0.15);
           }
@@ -375,10 +364,9 @@ export class WorldScene extends Phaser.Scene {
         onSnap: (visual) => {
           // Avatar teleported (zone transfer, return skill): jump the camera
           // to it — the follow lerp would otherwise slide over for ~1s.
-          const sx = isoX(visual.wrapper.x, visual.wrapper.y);
-          const sy = isoY(visual.wrapper.x, visual.wrapper.y);
-          this.camProxy?.setPosition(sx, sy);
-          this.cameras.main.centerOn(sx, sy);
+          const p = isoProject(this, visual.wrapper.x, visual.wrapper.y);
+          this.camProxy?.setPosition(p.x, p.y);
+          this.cameras.main.centerOn(p.x, p.y);
         },
         onPosition: (x, y) => setWorldLocalPos(x, y),
       },
@@ -441,11 +429,9 @@ export class WorldScene extends Phaser.Scene {
     const rows = map?.rows ?? 120;
     this.worldW = cols * t;
     this.worldH = rows * t;
-    // The map's projected footprint is a diamond — bound the camera to it
-    // (plus a small pad so edges don't snap).
-    const b = isoBounds(cols, rows, t);
+    // Ortho footprint is a plain rect (plus a small pad so edges don't snap).
     const pad = 4 * t;
-    this.cameras.main.setBounds(b.x - pad, b.y - pad, b.w + pad * 2, b.h + pad * 2);
+    this.cameras.main.setBounds(-pad, -pad, this.worldW + pad * 2, this.worldH + pad * 2);
   }
 
   private syncTerrain(
@@ -456,22 +442,31 @@ export class WorldScene extends Phaser.Scene {
     if (!map) {
       this.collisionGrid = null;
       this.collisionGizmo.setGrid(null);
+      for (const p of this.stampProps) p.destroy();
+      this.stampProps = [];
+      this.stampsMapId = null;
       return;
     }
 
+    this.syncMapStamps();
     const nextInputs: TerrainSyncInputs = {
       cells: map.cells,
       portals,
       terrainLayers,
     };
     const nextPortalKey = portalKey(portals);
-    const sameTerrain = !terrainInputsChanged(this.terrainInputs, nextInputs);
+    // Map id is part of the inputs: identical terrain on a new map must still
+    // re-resolve the bake manifest + stamp props for the new map's assets.
+    const mapId = useGame.getState().mapInfo?.id ?? "";
+    const sameTerrain =
+      !terrainInputsChanged(this.terrainInputs, nextInputs) && mapId === this.terrainMapId;
     const samePortals = nextPortalKey === this.terrainPortalKey;
 
     if (sameTerrain && samePortals) return;
 
     this.terrainInputs = nextInputs;
     this.terrainPortalKey = nextPortalKey;
+    this.terrainMapId = mapId;
     this.applyWorldBounds(map);
 
     const layerData = terrainLayersFromSnapshot(map, terrainLayers);
@@ -515,6 +510,11 @@ export class WorldScene extends Phaser.Scene {
     }
     this.terrainChunks.clear();
     this.terrainTextureKey = "";
+    this.bakedManifest = null;
+    this.bakedChunkFailed.clear();
+    for (const p of this.stampProps) p.destroy();
+    this.stampProps = [];
+    this.stampsMapId = null;
     this.portalsGfx?.destroy();
     this.portalsGfx = undefined;
   }
@@ -534,55 +534,44 @@ export class WorldScene extends Phaser.Scene {
     this.terrainLayerData = data;
     this.terrainTextureKey = texKey;
     this.drawPortals(portals);
-    // Baked orthogonal chunks can't be reused under the iso projection
-    // (baked props would shear) — runtime rasterization only for now.
+    // Pre-baked chunk PNGs (tools/bake_terrain.py) — while the manifest is in
+    // flight chunk creation defers; a missing/stale bake resolves null and
+    // runtime rasterization takes over.
+    this.bakedManifest = undefined;
+    const mapId = useGame.getState().mapInfo?.id ?? "";
+    const layerData = data;
+    void fetchBakedTerrain(mapId).then((m) => {
+      if (this.terrainLayerData !== layerData) return; // stale — a newer sync owns the field
+      this.bakedManifest = bakedTerrainMatches(m, layerData, TERRAIN_CHUNK_TILES)
+        ? m
+        : null;
+    });
     this.syncTerrainChunks();
   }
 
   /**
-   * Ensure rasterized terrain chunks exist for every chunk intersecting the
-   * camera view (+ margin) and drop the rest. World-scale maps cannot live in
-   * one canvas — browsers cap texture sizes far below a 40960px bitmap.
-   */
-  /**
-   * Camera-visible chunk window, clamped to the map. The camera's worldView
-   * is in iso screen space — unproject its corners into the world-tile plane
-   * to get a candidate range, then keep only chunks whose projected diamond
-   * footprint actually intersects the view.
+   * Camera-visible chunk window, clamped to the map. Orthogonal projection —
+   * the camera's worldView IS world space, so a chunk is just a rect. The
+   * grid follows the bake manifest's chunk_tiles when a valid bake exists.
    */
   private terrainChunkWindow(): { cc0: number; cr0: number; cc1: number; cr1: number } | null {
     const data = this.terrainLayerData;
     if (!data) return null;
     const view = this.cameras.main.worldView;
     const pad = 96;
-    const corners = [
-      screenToWorldX(view.x - pad, view.y - pad),
-      screenToWorldX(view.right + pad, view.y - pad),
-      screenToWorldX(view.x - pad, view.bottom + pad),
-      screenToWorldX(view.right + pad, view.bottom + pad),
-    ];
-    const rows = [
-      screenToWorldY(view.x - pad, view.y - pad),
-      screenToWorldY(view.right + pad, view.y - pad),
-      screenToWorldY(view.x - pad, view.bottom + pad),
-      screenToWorldY(view.right + pad, view.bottom + pad),
-    ];
-    const t = data.tileSize;
-    const minC = Math.floor(Math.min(...corners) / t);
-    const maxC = Math.ceil(Math.max(...corners) / t);
-    const minR = Math.floor(Math.min(...rows) / t);
-    const maxR = Math.ceil(Math.max(...rows) / t);
-    const chunksX = Math.ceil(data.cols / TERRAIN_CHUNK_TILES);
-    const chunksY = Math.ceil(data.rows / TERRAIN_CHUNK_TILES);
+    const k = this.bakedManifest?.chunkTiles ?? TERRAIN_CHUNK_TILES;
+    const chunkPx = k * data.tileSize;
+    const chunksX = Math.ceil(data.cols / k);
+    const chunksY = Math.ceil(data.rows / k);
     return {
-      cc0: Math.max(0, Math.floor(minC / TERRAIN_CHUNK_TILES)),
-      cr0: Math.max(0, Math.floor(minR / TERRAIN_CHUNK_TILES)),
-      cc1: Math.min(chunksX - 1, Math.floor(maxC / TERRAIN_CHUNK_TILES)),
-      cr1: Math.min(chunksY - 1, Math.floor(maxR / TERRAIN_CHUNK_TILES)),
+      cc0: Math.max(0, Math.floor((view.x - pad) / chunkPx)),
+      cr0: Math.max(0, Math.floor((view.y - pad) / chunkPx)),
+      cc1: Math.min(chunksX - 1, Math.floor((view.right + pad) / chunkPx)),
+      cr1: Math.min(chunksY - 1, Math.floor((view.bottom + pad) / chunkPx)),
     };
   }
 
-  /** Does chunk (cx,cy)'s projected diamond footprint intersect the view? */
+  /** Does chunk (cx,cy)'s world-space rect intersect the view? */
   private chunkOnScreen(
     cx: number,
     cy: number,
@@ -591,27 +580,26 @@ export class WorldScene extends Phaser.Scene {
     const data = this.terrainLayerData;
     if (!data) return false;
     const t = data.tileSize;
-    const K = TERRAIN_CHUNK_TILES;
+    const K = this.bakedManifest?.chunkTiles ?? TERRAIN_CHUNK_TILES;
     const pad = 64;
-    const c0 = cx * K;
-    const r0 = cy * K;
-    const c1 = Math.min(c0 + K, data.cols);
-    const r1 = Math.min(r0 + K, data.rows);
-    const minSX = (c0 - r1) * t;
-    const maxSX = (c1 - r0) * t;
-    const minSY = ((c0 + r0) * t) / 2;
-    const maxSY = ((c1 + r1) * t) / 2;
+    const x = cx * K * t;
+    const y = cy * K * t;
+    const w = Math.min(K, data.cols - cx * K) * t;
+    const h = Math.min(K, data.rows - cy * K) * t;
     return (
-      maxSX >= view.x - pad &&
-      minSX <= view.right + pad &&
-      maxSY >= view.y - pad &&
-      minSY <= view.bottom + pad
+      x + w >= view.x - pad &&
+      x <= view.right + pad &&
+      y + h >= view.y - pad &&
+      y <= view.bottom + pad
     );
   }
 
   private syncTerrainChunks() {
     const data = this.terrainLayerData;
     if (!data) return;
+    // Defer chunk creation until the bake manifest resolves — otherwise the
+    // camera window rasterizes chunks the bake is about to serve as PNGs.
+    if (this.bakedManifest === undefined) return;
     const w = this.terrainChunkWindow();
     if (!w) return;
 
@@ -635,126 +623,225 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private destroyChunk(chunk: TerrainChunk) {
-    chunk.base.destroy();
-    if (chunk.props) for (const p of chunk.props) p.destroy();
-    if (chunk.blocks) for (const b of chunk.blocks) b.destroy(true);
-    if (this.textures.exists(chunk.baseKey)) this.textures.remove(chunk.baseKey);
-  }
-
-  /** Runtime-rasterized iso chunk — diamond ground + billboard props. */
-  private createRasterChunk(cx: number, cy: number) {
-    const data = this.terrainLayerData;
-    // Wait for the iso sheet unless it failed — then draw flat color diamonds.
-    if (!data || (!this.isoTiles && !this.isoTilesFailed)) return;
-    const c0 = cx * TERRAIN_CHUNK_TILES;
-    const r0 = cy * TERRAIN_CHUNK_TILES;
-    const baseKey = `${this.terrainTextureKey}-ch${cx}-${cy}`;
-    if (!this.isoTiles) {
-      this.createFlatChunk(data, cx, cy, c0, r0, baseKey);
-      return;
+    chunk.base?.destroy();
+    chunk.over?.destroy();
+    if (chunk.baseKey && this.textures.exists(chunk.baseKey)) {
+      this.textures.remove(chunk.baseKey);
     }
-    const sheets = getLoadedPipoyaSheets();
-    const art = rasterizeIsoChunk(data, sheets ?? [], this.isoTiles, c0, r0, TERRAIN_CHUNK_TILES);
-    if (this.textures.exists(baseKey)) this.textures.remove(baseKey);
-    this.textures.addCanvas(baseKey, art.canvas);
-    const tilePx = data.tileSize;
-    const base = this.add
-      .image(c0 * tilePx, r0 * tilePx, baseKey)
-      .setOrigin(0, 0)
-      .setDepth(-20);
-    this.worldLayer?.add(base);
-    const chunk: TerrainChunk = { baseKey, base, props: [], blocks: [] };
-
-    // Prop billboards — upright sprites anchored at each cell's bottom edge,
-    // depth-sorted by projected Y so actors weave in front of and behind them.
-    for (const p of art.props) {
-      chunk.props!.push(this.isoPropBillboard(p));
+    if (chunk.overKey && this.textures.exists(chunk.overKey)) {
+      this.textures.remove(chunk.overKey);
     }
-    // Elevated blocks — top diamond + shaded side faces, depth-sorted like
-    // props so actors occlude and are occluded correctly.
-    for (const b of art.blocks) {
-      chunk.blocks!.push(this.isoBlockObject(b, tilePx));
-    }
-    this.terrainChunks.set(`${cx},${cy}`, chunk);
-  }
-
-  private isoPropBillboard(p: IsoPropPlacement): Phaser.GameObjects.Image {
-    const img = this.add
-      .image(p.wx, p.wy, "isoTiles", p.frame)
-      .setOrigin(0.5, 1)
-      .setDepth(p.depth);
-    const s = p.big ? 1.5 : 1;
-    img.setRotation(-ISO_ROT).setScale(
-      (1 / ISO_LAYER_SCALE) * s,
-      ISO_LAYER_SCALE * s,
-    );
-    this.worldLayer?.add(img);
-    return img;
   }
 
   /**
-   * Elevated block column: side faces are parallelograms drawn in world
-   * coords (a vertical screen edge is the world (−1,−1) direction); the top
-   * face is a fill tile image squashed into a diamond by the layer transform.
+   * Create one camera-window chunk: a pre-baked PNG pair when the manifest
+   * covers it, else a runtime-rasterized canvas (flat colors until the
+   * Pipoya sheets land).
    */
-  private isoBlockObject(b: IsoBlockPlacement, t: number): Phaser.GameObjects.Container {
-    const hi = b.level * ISO_LEVEL_H;
-    const cont = this.add.container(b.wx, b.wy).setDepth(b.depth);
-    const g = this.add.graphics();
-
-    // +x face (east edge → screen down-right) — shadowed side. The exposed
-    // band runs from the neighbor's height (level − faceE) up to the top.
-    let lo = (b.level - b.faceE) * ISO_LEVEL_H;
-    if (hi > lo) {
-      g.fillStyle(b.def.faceDark, 1);
-      g.fillPoints(
-        [
-          new Phaser.Math.Vector2(t - lo, -lo),
-          new Phaser.Math.Vector2(t - lo, t - lo),
-          new Phaser.Math.Vector2(t - hi, t - hi),
-          new Phaser.Math.Vector2(t - hi, -hi),
-        ],
-        true,
-      );
+  private createRasterChunk(cx: number, cy: number) {
+    const data = this.terrainLayerData;
+    if (!data) return;
+    const key = `${cx},${cy}`;
+    const baked = this.bakedManifest;
+    if (baked?.base.has(key) && !this.bakedChunkFailed.has(key)) {
+      // Reserve the slot before the async PNG load so the sync loop doesn't
+      // queue duplicate loads while it's in flight.
+      const chunk: TerrainChunk = { baseKey: `baked:${baked.map}:${key}` };
+      this.terrainChunks.set(key, chunk);
+      void this.loadBakedChunk(baked, chunk, cx, cy);
+      return;
     }
-    // +y face (south edge → screen down-left) — lit side.
-    lo = (b.level - b.faceS) * ISO_LEVEL_H;
-    if (hi > lo) {
-      g.fillStyle(b.def.faceLight, 1);
-      g.fillPoints(
-        [
-          new Phaser.Math.Vector2(-lo, t - lo),
-          new Phaser.Math.Vector2(t - lo, t - lo),
-          new Phaser.Math.Vector2(t - hi, t - hi),
-          new Phaser.Math.Vector2(-hi, t - hi),
-        ],
-        true,
-      );
+    const sheets = getLoadedPipoyaSheets();
+    const k = this.bakedManifest?.chunkTiles ?? TERRAIN_CHUNK_TILES;
+    const c0 = cx * k;
+    const r0 = cy * k;
+    const baseKey = `${this.terrainTextureKey}-ch${cx}-${cy}`;
+    if (!sheets?.length) {
+      // Wait for the sheets unless the fetch failed — then flat colors.
+      if (!this.pipoyaFailed) return;
+      this.createFlatChunk(data, cx, cy, c0, r0, k, baseKey);
+      return;
     }
-    cont.add(g);
-    cont.add(
-      this.add.image(t / 2 - hi, t / 2 - hi, "isoTiles", `fill:${b.def.top}`),
+    const art = rasterizeTerrainRect(
+      data,
+      c0,
+      r0,
+      c0 + k,
+      r0 + k,
+      1,
+      null,
+      sheets,
     );
-    this.worldLayer?.add(cont);
-    return cont;
+    if (this.textures.exists(baseKey)) this.textures.remove(baseKey);
+    this.textures.addCanvas(baseKey, art.base);
+    const t = data.tileSize;
+    const chunk: TerrainChunk = {
+      baseKey,
+      base: this.add.image(c0 * t, r0 * t, baseKey).setOrigin(0, 0).setDepth(-20),
+    };
+    if (art.overhead) {
+      // Canopy tops above the whole y-sort range — actors walk under trees.
+      const overKey = `${baseKey}-over`;
+      if (this.textures.exists(overKey)) this.textures.remove(overKey);
+      this.textures.addCanvas(overKey, art.overhead);
+      chunk.overKey = overKey;
+      chunk.over = this.add
+        .image(c0 * t, r0 * t, overKey)
+        .setOrigin(0, 0)
+        .setDepth(data.rows * data.tileSize + 1);
+    }
+    this.terrainChunks.set(key, chunk);
   }
 
-  /** Fallback when the iso sheet can't load — flat role-color diamonds. */
+  /** Stream a baked chunk's base (+ sparse canopy) PNGs into texture keys. */
+  private async loadBakedChunk(baked: BakedTerrain, chunk: TerrainChunk, cx: number, cy: number) {
+    const data = this.terrainLayerData;
+    const key = `${cx},${cy}`;
+    const fallback = () => {
+      // PNG 404 (partial/stale bake) — rasterize this chunk at runtime and
+      // never re-queue the missing file.
+      if (this.terrainChunks.get(key) === chunk) this.terrainChunks.delete(key);
+      this.destroyChunk(chunk);
+      this.bakedChunkFailed.add(key);
+      this.createRasterChunk(cx, cy);
+    };
+    const ok = await this.loadImageTexture(chunk.baseKey, bakedChunkUrl(baked, "base", cx, cy));
+    if (this.terrainChunks.get(key) !== chunk || !data) return;
+    if (!ok) {
+      fallback();
+      return;
+    }
+    if (!this.sys.isActive()) {
+      // Scene asleep/stopped — release the reservation so the sync loop
+      // retries once live (the loaded texture persists, so this is cheap).
+      this.terrainChunks.delete(key);
+      return;
+    }
+    const t = data.tileSize;
+    const px = cx * baked.chunkTiles * t;
+    const py = cy * baked.chunkTiles * t;
+    chunk.base = this.add.image(px, py, chunk.baseKey).setOrigin(0, 0).setDepth(-20);
+    if (!baked.over.has(key)) return;
+    const overKey = `${chunk.baseKey}-over`;
+    if (!(await this.loadImageTexture(overKey, bakedChunkUrl(baked, "over", cx, cy)))) {
+      if (this.terrainChunks.get(key) !== chunk) return;
+      fallback();
+      return;
+    }
+    if (this.terrainChunks.get(key) !== chunk || !this.sys.isActive()) return;
+    chunk.overKey = overKey;
+    chunk.over = this.add
+      .image(px, py, overKey)
+      .setOrigin(0, 0)
+      .setDepth(data.rows * data.tileSize + 1);
+  }
+
+  /**
+   * Lazy-load an image into the texture cache mid-scene (baked chunks,
+   * map-feature stamps). Resolves false when the file 404s or the scene
+   * shuts down mid-load.
+   */
+  private loadImageTexture(key: string, url: string): Promise<boolean> {
+    if (this.textures.exists(key)) return Promise.resolve(true);
+    const pending = this.pendingTex.get(key);
+    if (pending) return pending;
+    const promise = new Promise<boolean>((resolve) => {
+      const cleanup = () => {
+        this.load.off(Phaser.Loader.Events.FILE_COMPLETE, onComplete);
+        this.load.off(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+        this.events.off(Phaser.Scenes.Events.SHUTDOWN, onShutdown);
+        this.pendingTex.delete(key);
+      };
+      const onComplete = (fileKey: string) => {
+        if (fileKey !== key) return;
+        cleanup();
+        resolve(true);
+      };
+      const onError = (file: { key?: string }) => {
+        if (file.key !== key) return;
+        cleanup();
+        resolve(false);
+      };
+      const onShutdown = () => {
+        cleanup();
+        resolve(false);
+      };
+      this.load.on(Phaser.Loader.Events.FILE_COMPLETE, onComplete);
+      this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, onError);
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, onShutdown);
+      this.load.image(key, url);
+      if (!this.load.isLoading()) this.load.start();
+    });
+    this.pendingTex.set(key, promise);
+    return promise;
+  }
+
+  /** Rebuild the map-feature stamp props once the current map id is known. */
+  private syncMapStamps() {
+    const mapId = useGame.getState().mapInfo?.id ?? "";
+    if (!mapId || this.stampsMapId === mapId) return;
+    this.stampsMapId = mapId;
+    void this.buildStampProps(mapId);
+  }
+
+  /**
+   * Fetch the stamps doc + feature catalog and spawn one bottom-anchored
+   * image per live-prop stamp, depth-sorted at its transformed bottom-center
+   * so actors y-sort around buildings. Water/land stamps are baked into the
+   * terrain chunks by tools/bake_terrain.py — never rendered here.
+   */
+  private async buildStampProps(mapId: string) {
+    const [features, stamps] = await Promise.all([
+      mapFeatureCatalog(),
+      mapFeatureStamps(mapId),
+    ]);
+    const live: { stamp: FeatureStamp; feature: MapFeature }[] = [];
+    for (const s of stamps) {
+      const f = liveStampFeature(features, s);
+      if (f) live.push({ stamp: s, feature: f });
+    }
+    const used = new Map<string, MapFeature>();
+    for (const l of live) used.set(l.feature.id, l.feature);
+    const loaded = new Map<string, boolean>();
+    await Promise.all(
+      [...used.values()].map(async (f) => {
+        loaded.set(f.id, await this.loadImageTexture(`feat:${f.id}`, f.image));
+      }),
+    );
+    if (!this.sys.isActive() || this.stampsMapId !== mapId) {
+      if (this.stampsMapId === mapId) this.stampsMapId = null; // retry on next sync
+      return;
+    }
+    for (const { stamp: s, feature: f } of live) {
+      if (!loaded.get(f.id)) continue;
+      const img = this.add
+        .image(s.x, s.y, `feat:${f.id}`)
+        .setOrigin(0.5, 0.5)
+        .setFlipX(s.flipX)
+        .setScale(s.scale)
+        .setRotation((s.rotation * Math.PI) / 180)
+        .setDepth(stampAnchorY(f, s));
+      this.stampProps.push(img);
+    }
+  }
+
+  /** Fallback when the tile sheets can't load — flat role-color tiles. */
   private createFlatChunk(
     data: TerrainLayerData,
     cx: number,
     cy: number,
     c0: number,
     r0: number,
+    k: number,
     baseKey: string,
   ) {
     const t = data.tileSize;
     const canvas = document.createElement("canvas");
-    canvas.width = TERRAIN_CHUNK_TILES * t;
-    canvas.height = TERRAIN_CHUNK_TILES * t;
+    canvas.width = k * t;
+    canvas.height = k * t;
     const ctx = canvas.getContext("2d")!;
-    for (let r = r0; r < r0 + TERRAIN_CHUNK_TILES && r < data.rows; r++) {
-      for (let c = c0; c < c0 + TERRAIN_CHUNK_TILES && c < data.cols; c++) {
+    for (let r = r0; r < r0 + k && r < data.rows; r++) {
+      for (let c = c0; c < c0 + k && c < data.cols; c++) {
         const gid = data.ground[r * data.cols + c];
         if (!gid) continue;
         ctx.fillStyle = colorForGid(gid, null);
@@ -767,8 +854,7 @@ export class WorldScene extends Phaser.Scene {
       .image(c0 * t, r0 * t, baseKey)
       .setOrigin(0, 0)
       .setDepth(-20);
-    this.worldLayer?.add(base);
-    this.terrainChunks.set(`${cx},${cy}`, { baseKey, base, props: [] });
+    this.terrainChunks.set(`${cx},${cy}`, { baseKey, base });
   }
 
   private drawAsciiTerrain(
@@ -776,7 +862,7 @@ export class WorldScene extends Phaser.Scene {
     portals?: { x: number; y: number; w: number; h: number }[],
   ) {
     const g = this.add.graphics().setDepth(-20);
-    this.worldLayer?.add(g);
+    isoParent(this, g);
     const t = map.tile;
     // World-scale maps without terrain layers would need >1M graphics calls —
     // paint a flat ground fill instead of per-tile shapes.
@@ -808,7 +894,7 @@ export class WorldScene extends Phaser.Scene {
   private drawPortals(portals?: { x: number; y: number; w: number; h: number }[]) {
     this.portalsGfx?.destroy();
     const pg = this.add.graphics().setDepth(-10);
-    this.worldLayer?.add(pg);
+    isoParent(this, pg);
     for (const p of portals ?? []) {
       pg.fillStyle(0x7dd3fc, 0.28);
       pg.fillRect(p.x, p.y, p.w, p.h);
@@ -922,34 +1008,11 @@ export class WorldScene extends Phaser.Scene {
     }
     this.syncEcsSnapshot(state);
     this.syncTerrainChunks();
-    const viewWorld = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-    {
-      // Publish the world-space AABB of the iso view — the net layer's
-      // on-screen test consumes world coordinates, not screen space.
-      const v = this.cameras.main.worldView;
-      const xs = [
-        screenToWorldX(v.x, v.y),
-        screenToWorldX(v.right, v.y),
-        screenToWorldX(v.x, v.bottom),
-        screenToWorldX(v.right, v.bottom),
-      ];
-      const ys = [
-        screenToWorldY(v.x, v.y),
-        screenToWorldY(v.right, v.y),
-        screenToWorldY(v.x, v.bottom),
-        screenToWorldY(v.right, v.bottom),
-      ];
-      viewWorld.minX = Math.min(...xs);
-      viewWorld.minY = Math.min(...ys);
-      viewWorld.maxX = Math.max(...xs);
-      viewWorld.maxY = Math.max(...ys);
-      setWorldViewRect(
-        viewWorld.minX,
-        viewWorld.minY,
-        viewWorld.maxX - viewWorld.minX,
-        viewWorld.maxY - viewWorld.minY,
-      );
-    }
+    // Orthogonal: the camera's worldView is already world space — the net
+    // layer's on-screen test consumes it directly.
+    const v = this.cameras.main.worldView;
+    const viewWorld = { minX: v.x, minY: v.y, maxX: v.right, maxY: v.bottom };
+    setWorldViewRect(v.x, v.y, v.width, v.height);
     this.movement.syncMoveKeys();
     const mapId = state.mapInfo?.id ?? "";
     if (mapId !== this.lastMapId) {
@@ -988,18 +1051,21 @@ export class WorldScene extends Phaser.Scene {
     this.syncVisualHandles();
     // Shadow the followed actor's projected position for the camera.
     if (this.followedWrapper && this.camProxy) {
-      this.camProxy.setPosition(
-        isoX(this.followedWrapper.x, this.followedWrapper.y),
-        isoY(this.followedWrapper.x, this.followedWrapper.y),
-      );
+      const p = isoProject(this, this.followedWrapper.x, this.followedWrapper.y);
+      this.camProxy.setPosition(p.x, p.y);
     }
-    // Depth-sort the world layer — projected Y is the painter's order.
+    // Orthogonal: the display list depth-sorts automatically each frame;
+    // the container sort only matters if children are re-parented into
+    // worldLayer (e.g. when an iso layer is installed).
     this.worldLayer?.sort("depth");
     this.updateCollisionGizmo(state, viewWorld);
     const overlayMarks = collectEntityOverlayMarks(this.ecs, {
       now: Date.now(),
       isNear: (x, y) => this.isNearCamera(x, y),
-      projectPoint: (x, y) => worldToStagePoint(this, isoX(x, y), isoY(x, y), stageXf),
+      projectPoint: (x, y) => {
+        const p = isoProject(this, x, y);
+        return worldToStagePoint(this, p.x, p.y, stageXf);
+      },
       projectOffset: (x, y) => localOffsetToStage(x, y, stageXf),
     });
 
@@ -1019,8 +1085,10 @@ export class WorldScene extends Phaser.Scene {
       keyLabel: interactKeyLabel(state.profile?.keybinds),
       showPrompts: canShowWorldInteractPrompts(state),
       isNear: (x, y) => this.isNearCamera(x, y),
-      project: (x, y, localY) =>
-        worldLocalToStage(this, isoX(x, y), isoY(x, y), 0, localY, poiXf),
+      project: (x, y, localY) => {
+        const p = isoProject(this, x, y);
+        return worldLocalToStage(this, p.x, p.y, 0, localY, poiXf);
+      },
     });
     this.publishOverlays(overlayMarks, poiOverlay.pois, poiOverlay.interacts);
     this.cleanupEcsRemoved();

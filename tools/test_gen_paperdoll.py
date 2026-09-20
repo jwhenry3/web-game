@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tools import gen_paperdoll as doll
+from tools import paperdoll_layers as layers
 from tools.preview_paperdoll import sample
 
 
@@ -28,7 +29,10 @@ class GeneratedRigTest(unittest.TestCase):
     def test_appearance_layers_cover_existing_character_options(self):
         attachments = self.rig["skins"][0]["attachments"]
         self.assertEqual(set(attachments["skin_head"]), {f"skin_c{i}" for i in range(1, 10)})
-        self.assertEqual(set(attachments["face_head"]), {f"face_c{i}" for i in range(1, 11)})
+        self.assertEqual(
+            set(attachments["face_head"]),
+            {f"face_ms{i}{s}" for i in range(1, 15)
+             for s in ("", "_gob", "_imp", "_stone")})
         hair = {f"hair_{s}{i}_c{c}" for s, count in (("f", 9), ("m", 14))
                 for i in range(1, count+1) for c in range(1, 11)}
         self.assertEqual(set(attachments["hair_top_head"]), hair)
@@ -77,7 +81,10 @@ class GeneratedRigTest(unittest.TestCase):
         # the main weapon tucks under the near fist in front of the body.
         self.assertLess(names.index("weapon_bot_weaponB"), names.index("skin_armB_l"))
         self.assertLess(names.index("cloth_top_torso"), names.index("weapon_over_weaponB"))
-        self.assertLess(names.index("weapon_over_weaponB"), names.index("skin_legF_u"))
+        # The near arm still paints over a raised far-hand shield.
+        self.assertLess(names.index("weapon_over_weaponB"), names.index("skin_armF_u"))
+        # The near leg tucks under the torso — tunics cover the thigh top.
+        self.assertLess(names.index("skin_legF_u"), names.index("skin_torso"))
         self.assertLess(names.index("weapon_top_weapon"), names.index("skin_armF_l"))
         self.assertEqual(names[-1], "weapon_front_weapon")
         # Weapon mounts pivot mid-fist — below the wrist joint, on the hand.
@@ -153,6 +160,47 @@ class GeneratedRigTest(unittest.TestCase):
         base = next(s for s in self.rig["skins"] if s["name"] == "base")
         self.assertEqual(set(base["attachments"]), {f"skin_{part}" for part in doll.SLOT_ORDER})
 
+    def test_reference_style_attachment_families_are_available(self):
+        # The assets/spine-character rig composes humanoids from broad body,
+        # cloak, head and hand object plates. Our humanoid rig keeps the
+        # existing animation bones but exposes equivalent modular families so
+        # outfits can be built as coherent silhouettes instead of only many
+        # tiny limb decals.
+        slots = {s["name"]: s["bone"] for s in self.rig["slots"]}
+        self.assertEqual(slots["cloak_object_torso"], "torso")
+        self.assertEqual(slots["body_object_torso"], "torso")
+        self.assertEqual(slots["head_object_head"], "head")
+        self.assertEqual(slots["hand_object_weapon"], "weapon")
+        self.assertEqual(slots["hand_object_weaponB"], "weaponB")
+
+        attachments = self.rig["skins"][0]["attachments"]
+        self.assertEqual(
+            set(attachments["body_object_torso"]),
+            {f"bodyObject_{i}_c{c}" for i in range(1, 6) for c in range(1, 9)},
+        )
+        self.assertEqual(
+            set(attachments["cloak_object_torso"]),
+            {f"cloakObject_{i}_c{c}" for i in range(1, 5) for c in range(1, 9)},
+        )
+        self.assertEqual(
+            set(attachments["head_object_head"]),
+            {f"headObject_{i}_c{c}" for i in range(1, 6) for c in range(1, 9)},
+        )
+        self.assertEqual(
+            set(attachments["hand_object_weapon"]),
+            {f"handObject_{i}_c{c}" for i in range(1, 6) for c in range(1, 9)},
+        )
+        self.assertEqual(
+            set(attachments["hand_object_weaponB"]),
+            {f"handObject_{i}_c{c}" for i in range(1, 6) for c in range(1, 9)},
+        )
+
+        names = [s["name"] for s in self.rig["slots"]]
+        self.assertLess(names.index("cloak_object_torso"), names.index("skin_torso"))
+        self.assertGreater(names.index("body_object_torso"), names.index("cloth_top_torso"))
+        self.assertGreater(names.index("head_object_head"), names.index("hair_top_head"))
+        self.assertGreater(names.index("hand_object_weapon"), names.index("skin_armF_l"))
+
 
 class JointAlignmentTest(unittest.TestCase):
     def test_heel_and_forefoot_share_a_level_sole(self):
@@ -172,18 +220,19 @@ class JointAlignmentTest(unittest.TestCase):
             if not name.startswith(("arm", "leg")):
                 continue
             with self.subTest(part=name):
-                caps = []
+                circles = []
                 ellipse = doll.SDraw.ellipse
 
                 def record(d, box, **kwargs):
-                    if "outline" in kwargs and abs((box[2] - box[0]) - (box[3] - box[1])) < 1e-6:
-                        caps.append(box)
+                    if abs((box[2] - box[0]) - (box[3] - box[1])) < 1e-6:
+                        circles.append(box)
                     return ellipse(d, box, **kwargs)
 
                 with patch.object(doll.SDraw, "ellipse", record):
                     draw(doll.new_part())
-                self.assertEqual(len(caps), 1)
-                x0, y0, x1, y1 = caps[0]
+                self.assertGreaterEqual(len(circles), 1)
+                # capsule() draws its joint-covering child cap last.
+                x0, y0, x1, y1 = circles[-1]
                 pivot = doll.S((x0 + x1) / 2, (y0 + y1) / 2)
                 self.assertEqual(pivot, doll._BONES_WORLD[name])
 
@@ -198,6 +247,51 @@ class JointAlignmentTest(unittest.TestCase):
                 # Thigh outline radius is 3; other limbs have a 2.6 cap.
                 radius = 3 if name.startswith("leg") and name.endswith("_u") else 2.6
                 self.assertGreaterEqual(img.getbbox()[1], int((pivot_y - radius) * doll.DS))
+
+    def test_shape_primitives_do_not_bake_silhouette_outlines(self):
+        image = doll.new_part()
+        draw = doll.SDraw(image)
+        draw.polygon([(10, 10), (18, 10), (18, 18), (10, 18)],
+                     fill=doll.SKIN, outline=doll.OUTLINE)
+        self.assertNotIn(doll.OUTLINE, set(image.getdata()))
+
+    def test_capsules_leave_the_outer_contour_to_the_renderer(self):
+        image = doll.new_part()
+        draw = doll.SDraw(image)
+        doll.capsule(draw, (10, 10), (10, 20), 3, doll.SKIN, doll.OUTLINE)
+        self.assertNotIn(doll.OUTLINE, set(image.getdata()))
+
+
+class PhaserOutlineContractTest(unittest.TestCase):
+    def test_character_container_owns_one_internal_outline_filter(self):
+        source = (Path(__file__).parents[1] / "wails" / "frontend" / "src" /
+                  "phaser" / "CharacterSprite.ts").read_text()
+        self.assertIn("this.container.enableFilters()", source)
+        self.assertIn("filters?.internal.addGlow", source)
+
+
+class AppearanceReadabilityTest(unittest.TestCase):
+    def test_every_foreground_hairstyle_leaves_leading_eye_visible(self):
+        # The leading eye is the right-hand eye in the authored right-facing
+        # pose. Hair may frame it, but must not paint over its face pixels.
+        face = layers.ms_face(doll, "ms1")
+        x0, y0, x1, y1 = (44 * doll.DS, 10 * doll.DS,
+                          46 * doll.DS, 13.5 * doll.DS)
+        eye_pixels = {
+            (x, y) for y in range(round(y0), round(y1))
+            for x in range(round(x0), round(x1))
+            if face.getpixel((x, y))[3]
+        }
+        self.assertTrue(eye_pixels)
+        for prefix, count in (("f", 9), ("m", 14)):
+            for i in range(1, count + 1):
+                with self.subTest(style=f"{prefix}{i}"):
+                    hair = layers.hair(
+                        doll, f"{prefix}{i}", layers.HAIR_COLORS[0], False)
+                    covered = {
+                        p for p in eye_pixels if hair.getpixel(p)[3]
+                    }
+                    self.assertEqual(covered, set())
 
 
 if __name__ == "__main__":

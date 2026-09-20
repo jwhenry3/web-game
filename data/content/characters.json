@@ -154,7 +154,7 @@
         }
       },
       {
-        "id": "c1",
+        "id": "ms1",
         "group": "face",
         "slots": [
           "face"
@@ -164,7 +164,7 @@
         }
       },
       {
-        "id": "c2",
+        "id": "ms2",
         "group": "face",
         "slots": [
           "face"
@@ -174,7 +174,7 @@
         }
       },
       {
-        "id": "c3",
+        "id": "ms3",
         "group": "face",
         "slots": [
           "face"
@@ -184,7 +184,7 @@
         }
       },
       {
-        "id": "c4",
+        "id": "ms4",
         "group": "face",
         "slots": [
           "face"
@@ -194,7 +194,7 @@
         }
       },
       {
-        "id": "c5",
+        "id": "ms5",
         "group": "face",
         "slots": [
           "face"
@@ -204,7 +204,7 @@
         }
       },
       {
-        "id": "c6",
+        "id": "ms6",
         "group": "face",
         "slots": [
           "face"
@@ -214,7 +214,77 @@
         }
       },
       {
-        "id": "c7",
+        "id": "ms7",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms8",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms9",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms10",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms11",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms12",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms13",
+        "group": "face",
+        "slots": [
+          "face"
+        ],
+        "sheets": {
+          "face": "/assets/heroes99/face/face_{id}.png"
+        }
+      },
+      {
+        "id": "ms14",
         "group": "face",
         "slots": [
           "face"
@@ -776,6 +846,102 @@
         }
       },
       {
+        "id": "short_spikey",
+        "group": "hair",
+        "slots": [
+          "hair_bangs",
+          "hair_top",
+          "hair_tail"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "tags": [
+          "paperdoll"
+        ]
+      },
+      {
+        "id": "short_combover",
+        "group": "hair",
+        "slots": [
+          "hair_bangs",
+          "hair_top",
+          "hair_tail"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "tags": [
+          "paperdoll"
+        ]
+      },
+      {
+        "id": "tall_spikey",
+        "group": "hair",
+        "slots": [
+          "hair_bangs",
+          "hair_top",
+          "hair_tail"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "tags": [
+          "paperdoll"
+        ]
+      },
+      {
+        "id": "long_wavy",
+        "group": "hair",
+        "slots": [
+          "hair_bangs",
+          "hair_top",
+          "hair_tail"
+        ],
+        "variants": [
+          "c1",
+          "c2",
+          "c3",
+          "c4",
+          "c5",
+          "c6",
+          "c7",
+          "c8",
+          "c9",
+          "c10"
+        ],
+        "tags": [
+          "paperdoll"
+        ]
+      },
+      {
         "id": "cloth1",
         "group": "cloth",
         "slots": [
@@ -1239,7 +1405,7 @@
     "races": {
       "humanus": {
         "skin": "c1",
-        "face": "c1",
+        "face": "ms1",
         "hair": "m1",
         "hair_color": "c2",
         "cloth": "cloth1",
@@ -1249,7 +1415,7 @@
       },
       "altus": {
         "skin": "c1",
-        "face": "c2",
+        "face": "ms3",
         "hair": "f2",
         "hair_color": "c8",
         "cloth": "cloth10",
@@ -1259,7 +1425,7 @@
       },
       "parvus": {
         "skin": "c3",
-        "face": "c3",
+        "face": "ms5",
         "hair": "m5",
         "hair_color": "c5",
         "cloth": "cloth5",
@@ -1269,7 +1435,7 @@
       },
       "felis": {
         "skin": "c4",
-        "face": "c4",
+        "face": "ms7",
         "hair": "f3",
         "hair_color": "c1",
         "cloth": "cloth3",
@@ -1279,7 +1445,7 @@
       },
       "saxum": {
         "skin": "c6",
-        "face": "c5",
+        "face": "ms9",
         "hair": "m2",
         "hair_color": "c1",
         "cloth": "cloth12",
@@ -1289,7 +1455,7 @@
       },
       "hume": {
         "skin": "c1",
-        "face": "c1",
+        "face": "ms1",
         "hair": "m1",
         "hair_color": "c2",
         "cloth": "cloth1",
@@ -1299,7 +1465,7 @@
       },
       "elvaan": {
         "skin": "c1",
-        "face": "c2",
+        "face": "ms3",
         "hair": "f2",
         "hair_color": "c8",
         "cloth": "cloth10",
@@ -1309,7 +1475,7 @@
       },
       "tarutaru": {
         "skin": "c3",
-        "face": "c3",
+        "face": "ms5",
         "hair": "m5",
         "hair_color": "c5",
         "cloth": "cloth5",
@@ -1319,7 +1485,7 @@
       },
       "mithra": {
         "skin": "c4",
-        "face": "c4",
+        "face": "ms7",
         "hair": "f3",
         "hair_color": "c1",
         "cloth": "cloth3",
@@ -1329,7 +1495,7 @@
       },
       "galka": {
         "skin": "c6",
-        "face": "c5",
+        "face": "ms9",
         "hair": "m2",
         "hair_color": "c1",
         "cloth": "cloth12",

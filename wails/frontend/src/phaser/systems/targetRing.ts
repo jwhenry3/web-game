@@ -2,7 +2,7 @@
 // network snapshot; this owns only the Phaser ellipse and its pulse styling.
 import Phaser from "phaser";
 import { H99_WORLD_RING_Y } from "../../characters/heroes99";
-import { applyIsoCounter, isoDepth, isoParent } from "../../world/iso";
+import { applyIsoCounter, isoParent, sortDepth } from "../../world/iso";
 import { isAllyEntity, type SelectedAction, type WorldEntity } from "../../types";
 
 export interface TargetRingVisual {
@@ -35,7 +35,7 @@ export class TargetRing {
         .setStrokeStyle(2.5, 0xe05545, 0.9);
       // Iso scenes: the ring is a screen-space selection marker, not a
       // ground decal — counter-transform it like the actor billboards so it
-      // stays upright. Staying inside the layer keeps isoDepth sorting it
+      // stays upright. Staying inside the layer keeps its depth sorting it
       // under the marked actor.
       if (isoParent(scene, this.ring)) {
         applyIsoCounter(this.ring);
@@ -47,9 +47,7 @@ export class TargetRing {
     const rx = input.visual.wrapper.x + (iso ? H99_WORLD_RING_Y : 0);
     const ry = input.visual.wrapper.y + H99_WORLD_RING_Y;
     this.ring.setPosition(rx, ry);
-    if (iso) {
-      this.ring.setDepth(isoDepth(rx, ry) - 1); // under the actor it marks
-    }
+    this.ring.setDepth(sortDepth(scene, rx, ry) - 1); // under the actor it marks
     this.ring.setAlpha(0.65 + 0.3 * Math.sin(scene.time.now / 160));
     const friendly =
       input.focusEntity != null &&

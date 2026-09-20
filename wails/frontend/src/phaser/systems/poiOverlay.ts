@@ -23,12 +23,12 @@ import {
   SAVE_POINT_RANGE,
 } from "../../world/interact";
 
-/** Foot-local Y (world units) for save/job labels — matches WorldScene. */
-const POI_LABEL_Y = -28;
-/** Camp labels sit higher to clear the camp sprite. */
-const CAMP_LABEL_Y = -32;
-/** Interact prompts float above the POI label. */
-const POI_INTERACT_PROMPT_Y = -36;
+/** Foot-local Y for POI labels — clears each sprite's art height. */
+const SAVE_LABEL_Y = -52;
+const JOB_LABEL_Y = -84;
+const CAMP_LABEL_Y = -68;
+/** Interact prompts float a fixed gap above each POI's label. */
+const PROMPT_GAP = -8;
 
 export interface PoiOverlayOptions {
   /** Self position in world units — drives interact range checks. */
@@ -77,10 +77,16 @@ export function collectPoiOverlayMarks(
     pois.push({ id, label, variant, x: p.x, y: p.y });
   };
 
-  const maybeInteract = (id: string, x: number, y: number, range: number): void => {
+  const maybeInteract = (
+    id: string,
+    x: number,
+    y: number,
+    range: number,
+    labelY: number,
+  ): void => {
     if (!showPrompts) return;
     if (Math.hypot(selfX - x, selfY - y) > range) return;
-    const p = project(x, y, POI_INTERACT_PROMPT_Y);
+    const p = project(x, y, labelY + PROMPT_GAP);
     interacts.push({ id, keyLabel, x: p.x, y: p.y });
   };
 
@@ -94,19 +100,19 @@ export function collectPoiOverlayMarks(
         sp.active ? "save-active" : "save",
         sp.x,
         sp.y,
-        POI_LABEL_Y,
+        SAVE_LABEL_Y,
       );
     }
-    maybeInteract(`ix-save:${sp.id}`, sp.x, sp.y, SAVE_POINT_RANGE);
+    maybeInteract(`ix-save:${sp.id}`, sp.x, sp.y, SAVE_POINT_RANGE, SAVE_LABEL_Y);
   }
 
   for (const e of world.queryExcluding([JobChangerState], [Removed])) {
     const jc = world.get(JobChangerState, e);
     if (!jc) continue;
     if (isNear(jc.x, jc.y)) {
-      poiLabel(`job:${jc.id}`, jc.name, "job", jc.x, jc.y, POI_LABEL_Y);
+      poiLabel(`job:${jc.id}`, jc.name, "job", jc.x, jc.y, JOB_LABEL_Y);
     }
-    maybeInteract(`ix-job:${jc.id}`, jc.x, jc.y, JOB_CHANGER_RANGE);
+    maybeInteract(`ix-job:${jc.id}`, jc.x, jc.y, JOB_CHANGER_RANGE, JOB_LABEL_Y);
   }
 
   for (const e of world.queryExcluding([CampState], [Removed])) {
@@ -122,7 +128,7 @@ export function collectPoiOverlayMarks(
         CAMP_LABEL_Y,
       );
     }
-    maybeInteract(`ix-camp:${camp.ownerName}`, camp.x, camp.y, INTERACT_RANGE);
+    maybeInteract(`ix-camp:${camp.ownerName}`, camp.x, camp.y, INTERACT_RANGE, CAMP_LABEL_Y);
   }
 
   return { pois, interacts };

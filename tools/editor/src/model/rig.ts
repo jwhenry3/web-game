@@ -84,8 +84,12 @@ function shapeMaps(
 ): { scales: Map<string, { x: number; y: number }>; shifts: Map<string, { x: number; y: number }> } {
   const scales = new Map<string, { x: number; y: number }>();
   const shifts = new Map<string, { x: number; y: number }>();
-  for (const key of spec.shapeKeys ?? []) {
-    const v = shape?.[key.name];
+  const keys = Array.isArray(spec.shapeKeys) ? spec.shapeKeys : [];
+  // Rig baseline morphs (spec.shapeDefaults) sit under the explicit shape,
+  // mirroring { ...RIG_BASE_SHAPE, ...appearance.shape } in CharacterSprite.
+  const merged = { ...spec.shapeDefaults, ...shape };
+  for (const key of keys) {
+    const v = merged[key.name];
     if (v === undefined || v === 1) continue;
     for (const [bone, axes] of Object.entries(key.bones)) {
       // damp = the bone's share of the delta (default 1 = full key value).
@@ -175,7 +179,7 @@ export function poseAt(
 /** Attachment draw placement: center + rotation + scale, world space. */
 export function attachmentPlacement(
   bonePose: BonePose,
-  att: { x?: number; y?: number; rotation?: number },
+  att: { x?: number; y?: number; rotation?: number; scaleX?: number; scaleY?: number },
 ): { x: number; y: number; rot: number; sx: number; sy: number } {
   const r = (bonePose.rot * Math.PI) / 180;
   const cos = Math.cos(r);
@@ -186,8 +190,8 @@ export function attachmentPlacement(
     x: bonePose.x + ax * cos - ay * sin,
     y: bonePose.y + ax * sin + ay * cos,
     rot: bonePose.rot + (att.rotation ?? 0),
-    sx: bonePose.sx,
-    sy: bonePose.sy,
+    sx: bonePose.sx * (att.scaleX ?? 1),
+    sy: bonePose.sy * (att.scaleY ?? 1),
   };
 }
 
@@ -263,6 +267,8 @@ export function specFromSkeleton(skel: Skeleton, name: string): Spec {
     )) {
       const e: CatalogEntry = { key, slot: s.name };
       if (att.rotation) e.rotation = att.rotation;
+      if (att.scaleX !== undefined && att.scaleX !== 1) e.scaleX = att.scaleX;
+      if (att.scaleY !== undefined && att.scaleY !== 1) e.scaleY = att.scaleY;
       entries.push(e);
     }
   }
