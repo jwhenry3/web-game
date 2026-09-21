@@ -125,6 +125,8 @@ type SetJobsPayload struct {
 }
 
 type MovePayload struct {
+	Z *float64 `json:"z,omitempty"` // optional predicted elevation; server validates it
+	Jump bool `json:"jump,omitempty"`
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 	// Facing is Y-axis yaw in radians (Three.js). Omitted/null → server derives from motion.
@@ -315,6 +317,7 @@ type WelcomePayload struct {
 // topology and transfer rules are omitted, except the world-space origin +
 // border neighbors so clients can overlay adjacent maps in one scene.
 type MapSnapshot struct {
+	Scene3D *game.Scene3D `json:"scene3d,omitempty"`
 	ID            string            `json:"id"`
 	Name          string            `json:"name"`
 	Overworld     OverworldMap      `json:"overworld"`
@@ -368,6 +371,8 @@ type MapPortal struct {
 // kind stay zero-valued and are omitted on the wire. The same shape is used
 // for world_state, entity_state deltas, player join/sync, and combat ticks.
 type WorldEntity struct {
+	Z float64 `json:"z"`
+	Grounded bool `json:"grounded"`
 	ID              string                `json:"id"`
 	Name            string                `json:"name"`
 	Kind            string                `json:"kind"`             // "player" | "npc" | "pet"
@@ -502,6 +507,8 @@ type SetCampSkinPayload struct {
 }
 
 type HousePlayer struct {
+	Z float64 `json:"z"`
+	Grounded bool `json:"grounded"`
 	ID     string     `json:"id"`
 	Name   string     `json:"name"`
 	X      float64    `json:"x"`
@@ -513,6 +520,8 @@ type HousePlayer struct {
 
 // HousePet is a pet that followed its owner into the house instance.
 type HousePet struct {
+	Z float64 `json:"z"`
+	Grounded bool `json:"grounded"`
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`
 	Sprite string  `json:"sprite,omitempty"`
@@ -530,6 +539,7 @@ type HousePOI struct {
 }
 
 type HouseStatePayload struct {
+	Map *MapSnapshot `json:"map,omitempty"`
 	OwnerName       string                `json:"owner_name"`
 	Skin            string                `json:"skin"`
 	MapCols         int                   `json:"map_cols"`
@@ -568,6 +578,8 @@ type PlayerLeftPayload struct {
 }
 
 type PlayerMovedPayload struct {
+	Z float64 `json:"z"`
+	Grounded bool `json:"grounded"`
 	ID     string  `json:"id"`
 	X      float64 `json:"x"`
 	Y      float64 `json:"y"`

@@ -30,6 +30,8 @@ message MovePayload {
   double y = 2;
   // Y-axis yaw in radians (Three.js). Optional; server derives from motion when absent.
   double facing = 3;
+  optional double z = 4;
+  bool jump = 5;
 }
 
 message ChatPayload {
@@ -144,6 +146,7 @@ message HouseStatePayload {
   repeated Item storage = 13;
   int32 storage_capacity = 14;
   bool is_owner = 15;
+  MapSnapshot map = 16;
 }
 
 message HouseReturnPayload {
@@ -184,6 +187,8 @@ message PlayerMovedPayload {
   double x = 2;
   double y = 3;
   double facing = 4;
+  double z = 5;
+  bool grounded = 6;
 }
 
 message ChatMessagePayload {

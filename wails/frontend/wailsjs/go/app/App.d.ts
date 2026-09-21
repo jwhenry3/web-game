@@ -21,6 +21,8 @@ export function IsConnected():Promise<boolean>;
 
 export function IsStandalone():Promise<boolean>;
 
+export function ReloadAll(arg1:string):Promise<void>;
+
 export function SendEnvelope(arg1:string,arg2:string):Promise<void>;
 
 export function SetServerURL(arg1:string):Promise<void>;

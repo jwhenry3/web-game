@@ -249,14 +249,22 @@ export const RACE_APPEARANCE_PRESETS: Record<string, Partial<CharacterAppearance
  * Map in-game weapon types to Heroes 99 weapon folders.
  * Pack layout: weapon1 sword, weapon2 axe, weapon3 dagger, weapon4 spear,
  * weapon5 staff. weapon6 pitchfork is paperdoll-only; weapon7 shield is
- * paperdoll-only art (no H99 sheet) for the sub-hand slot.
+ * paperdoll-only art (no H99 sheet) for the sub-hand slot. Game types
+ * without dedicated art map onto the closest folder (katana→sword,
+ * hammer/axe→axe, wand→staff); knuckles maps to "" — bare fists.
  */
 export const GAME_WEAPON_TO_H99: Record<string, string> = {
   sword: "weapon1",
+  katana: "weapon1",
   mace: "weapon2",
+  axe: "weapon2",
+  hammer: "weapon2",
   dagger: "weapon3",
   spear: "weapon4",
   staff: "weapon5",
+  wand: "weapon5",
+  // Brawler fists — no held weapon on the doll or the 3D rig.
+  knuckles: "",
   shield: "weapon7",
 };
 

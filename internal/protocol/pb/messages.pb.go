@@ -172,7 +172,9 @@ type MovePayload struct {
 	X     float64                `protobuf:"fixed64,1,opt,name=x,proto3" json:"x,omitempty"`
 	Y     float64                `protobuf:"fixed64,2,opt,name=y,proto3" json:"y,omitempty"`
 	// Y-axis yaw in radians (Three.js). Optional; server derives from motion when absent.
-	Facing        float64 `protobuf:"fixed64,3,opt,name=facing,proto3" json:"facing,omitempty"`
+	Facing        float64  `protobuf:"fixed64,3,opt,name=facing,proto3" json:"facing,omitempty"`
+	Z             *float64 `protobuf:"fixed64,4,opt,name=z,proto3,oneof" json:"z,omitempty"`
+	Jump          bool     `protobuf:"varint,5,opt,name=jump,proto3" json:"jump,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -226,6 +228,20 @@ func (x *MovePayload) GetFacing() float64 {
 		return x.Facing
 	}
 	return 0
+}
+
+func (x *MovePayload) GetZ() float64 {
+	if x != nil && x.Z != nil {
+		return *x.Z
+	}
+	return 0
+}
+
+func (x *MovePayload) GetJump() bool {
+	if x != nil {
+		return x.Jump
+	}
+	return false
 }
 
 type ChatPayload struct {
@@ -1265,6 +1281,7 @@ type HouseStatePayload struct {
 	Storage         []*Item                `protobuf:"bytes,13,rep,name=storage,proto3" json:"storage,omitempty"`
 	StorageCapacity int32                  `protobuf:"varint,14,opt,name=storage_capacity,json=storageCapacity,proto3" json:"storage_capacity,omitempty"`
 	IsOwner         bool                   `protobuf:"varint,15,opt,name=is_owner,json=isOwner,proto3" json:"is_owner,omitempty"`
+	Map             *MapSnapshot           `protobuf:"bytes,16,opt,name=map,proto3" json:"map,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1402,6 +1419,13 @@ func (x *HouseStatePayload) GetIsOwner() bool {
 		return x.IsOwner
 	}
 	return false
+}
+
+func (x *HouseStatePayload) GetMap() *MapSnapshot {
+	if x != nil {
+		return x.Map
+	}
+	return nil
 }
 
 type HouseReturnPayload struct {
@@ -1730,6 +1754,8 @@ type PlayerMovedPayload struct {
 	X             float64                `protobuf:"fixed64,2,opt,name=x,proto3" json:"x,omitempty"`
 	Y             float64                `protobuf:"fixed64,3,opt,name=y,proto3" json:"y,omitempty"`
 	Facing        float64                `protobuf:"fixed64,4,opt,name=facing,proto3" json:"facing,omitempty"`
+	Z             float64                `protobuf:"fixed64,5,opt,name=z,proto3" json:"z,omitempty"`
+	Grounded      bool                   `protobuf:"varint,6,opt,name=grounded,proto3" json:"grounded,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1790,6 +1816,20 @@ func (x *PlayerMovedPayload) GetFacing() float64 {
 		return x.Facing
 	}
 	return 0
+}
+
+func (x *PlayerMovedPayload) GetZ() float64 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *PlayerMovedPayload) GetGrounded() bool {
+	if x != nil {
+		return x.Grounded
+	}
+	return false
 }
 
 type ChatMessagePayload struct {
@@ -2446,11 +2486,14 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x06weapon\x18\x06 \x01(\tR\x06weapon\x12?\n" +
 	"\n" +
 	"appearance\x18\a \x01(\v2\x1f.fantasy.v1.CharacterAppearanceR\n" +
-	"appearance\"A\n" +
+	"appearance\"n\n" +
 	"\vMovePayload\x12\f\n" +
 	"\x01x\x18\x01 \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\x02 \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\x03 \x01(\x01R\x06facing\"'\n" +
+	"\x06facing\x18\x03 \x01(\x01R\x06facing\x12\x11\n" +
+	"\x01z\x18\x04 \x01(\x01H\x00R\x01z\x88\x01\x01\x12\x12\n" +
+	"\x04jump\x18\x05 \x01(\bR\x04jumpB\x04\n" +
+	"\x02_z\"'\n" +
 	"\vChatPayload\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\";\n" +
 	"\fEquipPayload\x12\x17\n" +
@@ -2509,7 +2552,7 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x12SetCampSkinPayload\x12\x12\n" +
 	"\x04skin\x18\x01 \x01(\tR\x04skin\"?\n" +
 	"\x10CampStatePayload\x12+\n" +
-	"\x05camps\x18\x01 \x03(\v2\x15.fantasy.v1.WorldCampR\x05camps\"\xac\x04\n" +
+	"\x05camps\x18\x01 \x03(\v2\x15.fantasy.v1.WorldCampR\x05camps\"\xd7\x04\n" +
 	"\x11HouseStatePayload\x12\x1d\n" +
 	"\n" +
 	"owner_name\x18\x01 \x01(\tR\townerName\x12\x12\n" +
@@ -2527,7 +2570,8 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x04pois\x18\f \x03(\v2\x14.fantasy.v1.HousePOIR\x04pois\x12*\n" +
 	"\astorage\x18\r \x03(\v2\x10.fantasy.v1.ItemR\astorage\x12)\n" +
 	"\x10storage_capacity\x18\x0e \x01(\x05R\x0fstorageCapacity\x12\x19\n" +
-	"\bis_owner\x18\x0f \x01(\bR\aisOwner\",\n" +
+	"\bis_owner\x18\x0f \x01(\bR\aisOwner\x12)\n" +
+	"\x03map\x18\x10 \x01(\v2\x17.fantasy.v1.MapSnapshotR\x03map\",\n" +
 	"\x12HouseReturnPayload\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"U\n" +
 	"\x14RegionChangedPayload\x12\x1b\n" +
@@ -2548,12 +2592,14 @@ const file_fantasy_v1_messages_proto_rawDesc = "" +
 	"\x03map\x18\x06 \x01(\v2\x18.fantasy.v1.OverworldMapR\x03map\x12+\n" +
 	"\x05camps\x18\a \x03(\v2\x15.fantasy.v1.WorldCampR\x05camps\"#\n" +
 	"\x11PlayerLeftPayload\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"X\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x82\x01\n" +
 	"\x12PlayerMovedPayload\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\x03 \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\x04 \x01(\x01R\x06facing\"~\n" +
+	"\x06facing\x18\x04 \x01(\x01R\x06facing\x12\f\n" +
+	"\x01z\x18\x05 \x01(\x01R\x01z\x12\x1a\n" +
+	"\bgrounded\x18\x06 \x01(\bR\bgrounded\"~\n" +
 	"\x12ChatMessagePayload\x12\x17\n" +
 	"\afrom_id\x18\x01 \x01(\tR\x06fromId\x12\x1b\n" +
 	"\tfrom_name\x18\x02 \x01(\tR\bfromName\x12\x18\n" +
@@ -2666,8 +2712,8 @@ var file_fantasy_v1_messages_proto_goTypes = []any{
 	(*HouseFurniture)(nil),             // 46: fantasy.v1.HouseFurniture
 	(*HousePOI)(nil),                   // 47: fantasy.v1.HousePOI
 	(*Item)(nil),                       // 48: fantasy.v1.Item
-	(*ProfileInfo)(nil),                // 49: fantasy.v1.ProfileInfo
-	(*MapSnapshot)(nil),                // 50: fantasy.v1.MapSnapshot
+	(*MapSnapshot)(nil),                // 49: fantasy.v1.MapSnapshot
+	(*ProfileInfo)(nil),                // 50: fantasy.v1.ProfileInfo
 	(*WorldEntity)(nil),                // 51: fantasy.v1.WorldEntity
 	(*SavePoint)(nil),                  // 52: fantasy.v1.SavePoint
 	(*JobChanger)(nil),                 // 53: fantasy.v1.JobChanger
@@ -2683,26 +2729,27 @@ var file_fantasy_v1_messages_proto_depIdxs = []int32{
 	46, // 4: fantasy.v1.HouseStatePayload.furniture:type_name -> fantasy.v1.HouseFurniture
 	47, // 5: fantasy.v1.HouseStatePayload.pois:type_name -> fantasy.v1.HousePOI
 	48, // 6: fantasy.v1.HouseStatePayload.storage:type_name -> fantasy.v1.Item
-	49, // 7: fantasy.v1.WelcomePayload.profile:type_name -> fantasy.v1.ProfileInfo
-	50, // 8: fantasy.v1.WelcomePayload.map:type_name -> fantasy.v1.MapSnapshot
-	50, // 9: fantasy.v1.MapConfigPayload.map:type_name -> fantasy.v1.MapSnapshot
-	51, // 10: fantasy.v1.WorldStatePayload.entities:type_name -> fantasy.v1.WorldEntity
-	52, // 11: fantasy.v1.WorldStatePayload.save_points:type_name -> fantasy.v1.SavePoint
-	53, // 12: fantasy.v1.WorldStatePayload.job_changers:type_name -> fantasy.v1.JobChanger
-	54, // 13: fantasy.v1.WorldStatePayload.map:type_name -> fantasy.v1.OverworldMap
-	44, // 14: fantasy.v1.WorldStatePayload.camps:type_name -> fantasy.v1.WorldCamp
-	51, // 15: fantasy.v1.EntityStatePayload.entities:type_name -> fantasy.v1.WorldEntity
-	55, // 16: fantasy.v1.SocialStatePayload.friends:type_name -> fantasy.v1.FriendInfo
-	56, // 17: fantasy.v1.SocialStatePayload.party:type_name -> fantasy.v1.PartyInfo
-	34, // 18: fantasy.v1.SocialStatePayload.pending_invite:type_name -> fantasy.v1.PartyInvitePayload
-	35, // 19: fantasy.v1.SocialStatePayload.pending_friend_requests:type_name -> fantasy.v1.FriendRequestPayload
-	51, // 20: fantasy.v1.CombatTickPayload.entities:type_name -> fantasy.v1.WorldEntity
-	51, // 21: fantasy.v1.CombatEventPayload.entities:type_name -> fantasy.v1.WorldEntity
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	49, // 7: fantasy.v1.HouseStatePayload.map:type_name -> fantasy.v1.MapSnapshot
+	50, // 8: fantasy.v1.WelcomePayload.profile:type_name -> fantasy.v1.ProfileInfo
+	49, // 9: fantasy.v1.WelcomePayload.map:type_name -> fantasy.v1.MapSnapshot
+	49, // 10: fantasy.v1.MapConfigPayload.map:type_name -> fantasy.v1.MapSnapshot
+	51, // 11: fantasy.v1.WorldStatePayload.entities:type_name -> fantasy.v1.WorldEntity
+	52, // 12: fantasy.v1.WorldStatePayload.save_points:type_name -> fantasy.v1.SavePoint
+	53, // 13: fantasy.v1.WorldStatePayload.job_changers:type_name -> fantasy.v1.JobChanger
+	54, // 14: fantasy.v1.WorldStatePayload.map:type_name -> fantasy.v1.OverworldMap
+	44, // 15: fantasy.v1.WorldStatePayload.camps:type_name -> fantasy.v1.WorldCamp
+	51, // 16: fantasy.v1.EntityStatePayload.entities:type_name -> fantasy.v1.WorldEntity
+	55, // 17: fantasy.v1.SocialStatePayload.friends:type_name -> fantasy.v1.FriendInfo
+	56, // 18: fantasy.v1.SocialStatePayload.party:type_name -> fantasy.v1.PartyInfo
+	34, // 19: fantasy.v1.SocialStatePayload.pending_invite:type_name -> fantasy.v1.PartyInvitePayload
+	35, // 20: fantasy.v1.SocialStatePayload.pending_friend_requests:type_name -> fantasy.v1.FriendRequestPayload
+	51, // 21: fantasy.v1.CombatTickPayload.entities:type_name -> fantasy.v1.WorldEntity
+	51, // 22: fantasy.v1.CombatEventPayload.entities:type_name -> fantasy.v1.WorldEntity
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_fantasy_v1_messages_proto_init() }
@@ -2711,6 +2758,7 @@ func file_fantasy_v1_messages_proto_init() {
 		return
 	}
 	file_fantasy_v1_common_proto_init()
+	file_fantasy_v1_messages_proto_msgTypes[2].OneofWrappers = []any{}
 	file_fantasy_v1_messages_proto_msgTypes[26].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

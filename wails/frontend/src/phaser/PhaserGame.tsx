@@ -15,7 +15,7 @@ export function PhaserGame() {
       width: 960,
       height: 600,
       backgroundColor: "#0a0f1e",
-      scene: buildGameScenes(),
+      scene: buildGameScenes(useGame.getState().screen === "house" ? "house" : "world"),
       plugins: {
         // Scene-level Spine runtime — gives every scene `load.spineSkeleton`,
         // `load.spineAtlas`, `add.spine`, and `scene.spine`.
@@ -40,15 +40,10 @@ export function PhaserGame() {
         if (game.scene.isActive("house") || game.scene.isSleeping("house")) {
           game.scene.stop("house");
         }
-        game.scene.wake("world");
+        if (game.scene.isSleeping("world")) game.scene.wake("world");
+        else if (!game.scene.isActive("world")) game.scene.start("world");
       }
     });
-
-    const state = useGame.getState();
-    if (state.screen === "house") {
-      game.scene.sleep("world");
-      game.scene.start("house");
-    }
 
     return () => {
       unsub();

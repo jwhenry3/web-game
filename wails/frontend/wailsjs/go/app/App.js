@@ -42,6 +42,10 @@ export function IsStandalone() {
   return window['go']['app']['App']['IsStandalone']();
 }
 
+export function ReloadAll(arg1) {
+  return window['go']['app']['App']['ReloadAll'](arg1);
+}
+
 export function SendEnvelope(arg1, arg2) {
   return window['go']['app']['App']['SendEnvelope'](arg1, arg2);
 }

@@ -96,6 +96,8 @@ export interface SetJobsPayload {
 }
 
 export interface MovePayload {
+  z?: number;
+  jump?: boolean;
   x: number;
   y: number;
   facing?: number;
@@ -297,6 +299,7 @@ export interface WelcomePayload {
 }
 
 export interface MapSnapshot {
+  scene3d?: Scene3D;
   id: string;
   name: string;
   overworld: OverworldMap;
@@ -307,6 +310,92 @@ export interface MapSnapshot {
   origin_x: number;
   origin_y: number;
   neighbors?: MapNeighbor[];
+}
+
+export interface Scene3D {
+  version: number;
+  map: string;
+  environment: Record<string, any>;
+  objects: SceneObject[];
+  prefabs: ScenePrefabAsset[];
+  terrain: SceneTerrain;
+}
+
+export interface SceneObject {
+  id: string;
+  name: string;
+  parent?: string;
+  prefab: string;
+  transform: SceneTransform;
+  visible: boolean;
+  props: Record<string, any>;
+  components?: SceneComponents;
+  prefabInstance?: ScenePrefabInstance;
+}
+
+export interface SceneTransform {
+  position: number[];
+  rotation: number[];
+  scale: number[];
+}
+
+export interface SceneComponents {
+  collider?: SceneCollider;
+  npc?: SceneNPC;
+  poi?: ScenePOI;
+  item?: SceneItem;
+}
+
+export interface SceneCollider {
+  enabled: boolean;
+  shape: string;
+  size: number[];
+  offset: number[];
+  isTrigger: boolean;
+}
+
+export interface SceneNPC {
+  enabled: boolean;
+  archetype: string;
+  level: number;
+  hostile: boolean;
+  respawnSeconds: number;
+}
+
+export interface ScenePOI {
+  enabled: boolean;
+  type: string;
+  label: string;
+  interactionRadius: number;
+  destinationMap: string;
+}
+
+export interface SceneItem {
+  enabled: boolean;
+  itemId: string;
+  quantity: number;
+  respawnSeconds: number;
+}
+
+export interface ScenePrefabInstance {
+  assetId: string;
+  nodeId: string;
+  rootId: string;
+  overrides: string[];
+}
+
+export interface ScenePrefabAsset {
+  id: string;
+  name: string;
+  kind: string;
+  revision: number;
+  objects: SceneObject[];
+}
+
+export interface SceneTerrain {
+  version: number;
+  heights: Record<string, number>;
+  cells: Record<string, string>;
 }
 
 export interface OverworldMap {
@@ -345,6 +434,8 @@ export interface MapConfigPayload {
 }
 
 export interface WorldEntity {
+  z: number;
+  grounded: boolean;
   id: string;
   name: string;
   kind: EntityKind;
@@ -474,6 +565,8 @@ export interface SetCampSkinPayload {
 }
 
 export interface HousePlayer {
+  z: number;
+  grounded: boolean;
   id: string;
   name: string;
   x: number;
@@ -484,6 +577,8 @@ export interface HousePlayer {
 }
 
 export interface HousePet {
+  z: number;
+  grounded: boolean;
   id: string;
   name: string;
   sprite?: string;
@@ -501,6 +596,7 @@ export interface HousePOI {
 }
 
 export interface HouseStatePayload {
+  map?: MapSnapshot;
   owner_name: string;
   skin: string;
   map_cols: number;
@@ -544,6 +640,8 @@ export interface PlayerLeftPayload {
 }
 
 export interface PlayerMovedPayload {
+  z: number;
+  grounded: boolean;
   id: string;
   x: number;
   y: number;

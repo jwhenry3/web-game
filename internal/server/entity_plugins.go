@@ -425,7 +425,7 @@ func (h *Hub) retarget(e *entity) *entity {
 		if !h.canAttack(e, t) {
 			continue
 		}
-		if d := dist(e.X, e.Y, t.X, t.Y); d < bestD {
+		if d := entityDistance3D(e, t); d < bestD {
 			bestD, best = d, t
 		}
 	}
@@ -517,13 +517,13 @@ func (ch *chaseTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 	if len(ch.path) > 0 && h.chaseAlongPath(e, ch, t.X, t.Y, step) {
 		return
 	}
-	if h.walkableAt(nx, ny) {
+	if h.steppable3D(e, nx, ny) {
 		e.X, e.Y = nx, ny
 	} else if h.chaseAlongPath(e, ch, t.X, t.Y, step) {
 		// terrain-blocked: A* around it
-	} else if h.walkableAt(nx, e.Y) {
+	} else if h.steppable3D(e, nx, e.Y) {
 		e.X = nx
-	} else if h.walkableAt(e.X, ny) {
+	} else if h.steppable3D(e, e.X, ny) {
 		e.Y = ny
 	} else {
 		h.disengage(e, false) // unreachable (e.g. target inside sanctuary)
@@ -533,7 +533,10 @@ func (ch *chaseTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 // inMelee mirrors the legacy NPC melee test (hold slack unless deeply
 // overlapping a pack-mate).
 func (h *Hub) inMelee(e, t *entity) bool {
-	d := dist(e.X, e.Y, t.X, t.Y)
+	if !h.entityLineOfSight3D(e, t) {
+		return false
+	}
+	d := entityDistance3D(e, t)
 	if d <= meleeStopDistW {
 		return true
 	}
@@ -557,7 +560,7 @@ func (at *attackTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
 		return
 	}
 	if at.inRange > 0 {
-		if dist(e.X, e.Y, t.X, t.Y) > at.inRange {
+		if entityDistance3D(e, t) > at.inRange || !h.entityLineOfSight3D(e, t) {
 			return
 		}
 	} else if !h.inMelee(e, t) {

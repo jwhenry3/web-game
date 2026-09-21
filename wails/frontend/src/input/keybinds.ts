@@ -79,7 +79,7 @@ export function defaultKeybinds(): KeybindMap {
     move_down: "s",
     move_left: "a",
     move_right: "d",
-    interact: "Space",
+    interact: "f",
     mount: "r",
     "window:character": "c",
     "window:equipment": "e",
@@ -101,6 +101,9 @@ export function mergeKeybinds(custom?: KeybindMap | null): KeybindMap {
   for (const [action, binding] of Object.entries(custom)) {
     if (!KNOWN_ACTIONS.has(action)) continue;
     const v = binding.trim();
+    // Space was the old interact default; it is now the 3D jump key, so a
+    // saved Space binding falls back to the new default (F).
+    if (action === "interact" && v === "Space") continue;
     if (v) out[action] = v;
   }
   return out;

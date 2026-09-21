@@ -1,0 +1,28 @@
+import * as scene from './scene3d.ts';
+function check(ok: unknown, message: string): asserts ok { if (!ok) throw new Error(message); }
+const migrated = scene.normalizeScene({ version: 1, objects: [{id:'a',parent:'b'}, {id:'b',parent:'a'}, {id:'a'}] }, 'world');
+check(migrated.version === 2, 'Legacy scenes must migrate to v2');
+check(new Set(migrated.objects.map(o => o.id)).size === 3, 'Duplicate IDs must be repaired');
+for (const o of migrated.objects) check(!scene.isAncestor(migrated, o.id, o.id), 'Cycles must be broken');
+check(migrated.terrain && migrated.prefabs, 'Migration must initialize terrain and prefab assets');
+const assets = await import('./prefabAssets.ts');
+const doc = scene.emptyScene('world');
+doc.objects.push(scene.normalizeObject({id:'guard',name:'Guard',prefab:'npc',transform:{position:[4,2,6]},components:{npc:{enabled:true,archetype:'goblin',level:2}}},0));
+doc.objects.push(scene.normalizeObject({id:'hat',parent:'guard',prefab:'sphere'},1));
+const asset = assets.savePrefabAsset(doc, 'guard', 'Guard', 'npc');
+const root = assets.instantiatePrefabAsset(doc, asset.id, [10,3,10]);
+check(doc.objects.filter(o => o.prefabInstance?.rootId === root).length === 2, 'Prefab instances must copy the entire hierarchy');
+const second = doc.objects.find(o=>o.id===root)!;
+second.components!.npc!.level = 7;
+assets.refreshPrefabOverrides(doc);
+check(second.prefabInstance!.overrides.includes('components.npc.level'), 'Gameplay edits must become explicit overrides');
+const source = doc.objects.find(o=>o.id==='guard')!;
+source.components!.npc!.archetype = 'slime';
+assets.applyPrefabOverrides(doc,'guard');
+check(second.components!.npc!.archetype==='slime', 'Applied changes must propagate to linked instances');
+check(second.components!.npc!.level===7, 'Applying an asset must preserve other instance overrides');
+assets.revertPrefabOverrides(doc,root);
+check(Number(second.components!.npc!.level)===2, 'Revert must restore prefab component values');
+check(second.transform.position[0]===10, 'Revert must preserve root placement');
+check(scene.normalizeScene(JSON.parse(JSON.stringify(doc))).prefabs[0].id===asset.id, 'Prefab assets must round-trip with scenes');
+console.log('Prefab asset checks passed');

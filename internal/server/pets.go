@@ -355,10 +355,12 @@ func (h *Hub) petTeleportTo(e, owner *entity) {
 	fx, fy := followOffset(owner.X, owner.Y, owner.Facing)
 	if h.walkableAt(fx, fy) {
 		e.X, e.Y = fx, fy
+		e.physicsReady = false
 		return
 	}
 	if h.walkableAt(owner.X, owner.Y) {
 		e.X, e.Y = owner.X, owner.Y
+		e.physicsReady = false
 		return
 	}
 	for r := 4.0; r <= 24.0; r += 4 {
@@ -366,6 +368,7 @@ func (h *Hub) petTeleportTo(e, owner *entity) {
 			nx, ny := owner.X+math.Cos(a)*r, owner.Y+math.Sin(a)*r
 			if h.walkableAt(nx, ny) {
 				e.X, e.Y = nx, ny
+				e.physicsReady = false
 				return
 			}
 		}

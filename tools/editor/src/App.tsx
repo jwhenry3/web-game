@@ -6,6 +6,7 @@ import { CharacterWorkspace } from "./workspaces/CharacterWorkspace";
 // fails inside its own boundary instead of taking down the whole editor.
 const MapWorkspace = lazy(() => import("./workspaces/MapWorkspace"));
 const EffectsWorkspace = lazy(() => import("./workspaces/EffectsWorkspace"));
+const SceneWorkspace = lazy(() => import("./workspaces/SceneWorkspace"));
 const HairWorkspace = lazy(() =>
   import("./workspaces/HairWorkspace").then((m) => ({ default: m.HairWorkspace })),
 );
@@ -26,18 +27,19 @@ class WorkspaceBoundary extends Component<
   }
 }
 
-export type Workspace = "characters" | "hair" | "maps" | "effects";
+export type Workspace = "characters" | "hair" | "maps" | "effects" | "scene";
 
 const WORKSPACES: { id: Workspace; label: string }[] = [
   { id: "characters", label: "Characters" },
   { id: "hair", label: "Hair" },
   { id: "maps", label: "Maps" },
+  { id: "scene", label: "Scene (3D)" },
   { id: "effects", label: "Effects" },
 ];
 
 function workspaceFromUrl(): Workspace {
   const q = new URLSearchParams(location.search).get("ws");
-  return q === "hair" || q === "maps" || q === "effects" ? q : "characters";
+  return q === "hair" || q === "maps" || q === "effects" || q === "scene" ? q : "characters";
 }
 
 export function App() {
@@ -76,6 +78,7 @@ export function App() {
           {ws === "hair" && <HairWorkspace />}
           {ws === "maps" && <MapWorkspace />}
           {ws === "effects" && <EffectsWorkspace />}
+          {ws === "scene" && <SceneWorkspace />}
         </Suspense>
       </WorkspaceBoundary>
     </div>

@@ -229,17 +229,13 @@ func (h *Hub) resolveDodge(c *Client, e *entity) {
 	worldW, worldH := h.worldSize()
 	tx := clamp(e.X+dx*dodgeDashDist, game.PlayerCollisionRadius, worldW-game.PlayerCollisionRadius)
 	ty := clamp(e.Y+dy*dodgeDashDist, game.PlayerCollisionRadius, worldH-game.PlayerCollisionRadius)
-	if h.overworld != nil {
-		e.X, e.Y = h.overworld.SlideMovePlayer(prevX, prevY, tx, ty)
-	} else {
-		e.X, e.Y = game.SlideMovePlayer(prevX, prevY, tx, ty)
-	}
+	h.moveEntity3D(e,tx,ty,0)
 	h.spatialInvalidate()
 	e.Facing = game.ResolveFacingYaw(e.X-prevX, e.Y-prevY, 0, false, e.Facing)
 
 	h.send(c, protocol.TypePlayerSync, h.entitySync(e))
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
+		ID: c.ID, X: e.X, Y: e.Y, Z:e.Z, Grounded:e.grounded, Facing: e.Facing,
 	}))
 	h.persistWorldLocation(c, e, false)
 	h.refreshRegionOwnership(c, e)
@@ -342,7 +338,7 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 			h.sendCombatEvent(res, e.X, e.Y)
 			return
 		}
-		if dist(e.X, e.Y, t.X, t.Y) > allySkillRangeW {
+		if entityDistance3D(e,t) > allySkillRangeW {
 			res.Message = "Target out of range."
 			h.sendCombatEvent(res, e.X, e.Y)
 			return
@@ -417,7 +413,8 @@ func (h *Hub) startSkillCooldown(e, target *entity, skill game.Skill, now time.T
 }
 
 func (h *Hub) skillHits(e, t *entity, skill game.Skill) bool {
-	d := dist(e.X, e.Y, t.X, t.Y)
+	if !h.entityLineOfSight3D(e,t) {return false}
+	d := entityDistance3D(e,t)
 	if mx := game.SkillMaxRange(skill); mx > 0 {
 		return d <= mx
 	}
@@ -445,7 +442,7 @@ func (h *Hub) resolveItemUse(c *Client, e *entity, action protocol.ActionPayload
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
-	if dist(e.X, e.Y, t.X, t.Y) > allySkillRangeW {
+	if entityDistance3D(e,t) > allySkillRangeW {
 		res.Message = "Target out of range."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
@@ -502,7 +499,7 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 		return
 	}
 	res.TargetID = n.ID
-	if dist(e.X, e.Y, n.X, n.Y) > allySkillRangeW {
+	if entityDistance3D(e,n) > allySkillRangeW {
 		res.Message = "Target out of range."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return

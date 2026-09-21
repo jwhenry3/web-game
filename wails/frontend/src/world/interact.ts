@@ -10,7 +10,7 @@ export const JOB_CHANGER_RANGE = 80;
 export const INTERACT_RANGE = 80;
 
 export function interactKeyLabel(keybinds?: KeybindMap | null): string {
-  return bindingToDisplay(mergeKeybinds(keybinds).interact ?? "Space");
+  return bindingToDisplay(mergeKeybinds(keybinds).interact ?? "f");
 }
 
 type InteractPromptState = {

@@ -19,6 +19,7 @@ import {
   setHouseSkinPickerOpen,
   toggleHouseSkinPicker,
 } from "../world/houseSkinBridge";
+import { reloadBackendAndFrontend, wailsBridgeReady } from "../reload";
 
 function inGameScreen(screen: string): boolean {
   return screen === "world" || screen === "house";
@@ -84,6 +85,15 @@ export function GameHotkeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isKeybindCaptureActive()) return;
+
+      // Ctrl+Shift+R restarts the backend and reloads the app. Handled before
+      // every other gate so it works on any screen — including login, where
+      // the main menu isn't reachable when the server is wedged.
+      if (e.code === "KeyR" && (e.ctrlKey || e.metaKey) && e.shiftKey && wailsBridgeReady()) {
+        e.preventDefault();
+        void reloadBackendAndFrontend();
+        return;
+      }
 
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
@@ -169,7 +179,7 @@ export function GameHotkeys() {
       // game keybinds. Only Enter/Escape above apply while typing.
       if (inFormField || chatFocused) return;
 
-      if (bindingMatchesEvent(keybinds.interact ?? "Space", e)) {
+      if (bindingMatchesEvent(keybinds.interact ?? "f", e)) {
         e.preventDefault();
         if (dialogIsOpen(state)) return;
         if (!inGame) return;

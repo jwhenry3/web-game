@@ -1473,9 +1473,10 @@ type MapSnapshot struct {
 	// World-space placement from the border-graph layout: this map's origin
 	// plus every bordered map's origin, so clients can overlay neighbors in
 	// one scene.
-	OriginX       float64        `protobuf:"fixed64,11,opt,name=origin_x,json=originX,proto3" json:"origin_x,omitempty"`
-	OriginY       float64        `protobuf:"fixed64,12,opt,name=origin_y,json=originY,proto3" json:"origin_y,omitempty"`
-	Neighbors     []*MapNeighbor `protobuf:"bytes,13,rep,name=neighbors,proto3" json:"neighbors,omitempty"`
+	OriginX       float64          `protobuf:"fixed64,11,opt,name=origin_x,json=originX,proto3" json:"origin_x,omitempty"`
+	OriginY       float64          `protobuf:"fixed64,12,opt,name=origin_y,json=originY,proto3" json:"origin_y,omitempty"`
+	Neighbors     []*MapNeighbor   `protobuf:"bytes,13,rep,name=neighbors,proto3" json:"neighbors,omitempty"`
+	Scene3D       *structpb.Struct `protobuf:"bytes,14,opt,name=scene3d,proto3" json:"scene3d,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1580,6 +1581,13 @@ func (x *MapSnapshot) GetNeighbors() []*MapNeighbor {
 	return nil
 }
 
+func (x *MapSnapshot) GetScene3D() *structpb.Struct {
+	if x != nil {
+		return x.Scene3D
+	}
+	return nil
+}
+
 // WorldEntity is the unified snapshot for every world inhabitant: players,
 // NPCs, and pets. kind selects the entity class ("player" | "npc" | "pet");
 // fields that don't apply to a kind stay at their proto defaults.
@@ -1622,8 +1630,10 @@ type WorldEntity struct {
 	HouseOwner  string               `protobuf:"bytes,34,opt,name=house_owner,json=houseOwner,proto3" json:"house_owner,omitempty"`
 	// Mounted players ride their profile mount pet; mount_sprite is the pet
 	// kind so remote clients can draw the creature under the rider.
-	Mounted       bool   `protobuf:"varint,35,opt,name=mounted,proto3" json:"mounted,omitempty"`
-	MountSprite   string `protobuf:"bytes,36,opt,name=mount_sprite,json=mountSprite,proto3" json:"mount_sprite,omitempty"`
+	Mounted       bool    `protobuf:"varint,35,opt,name=mounted,proto3" json:"mounted,omitempty"`
+	MountSprite   string  `protobuf:"bytes,36,opt,name=mount_sprite,json=mountSprite,proto3" json:"mount_sprite,omitempty"`
+	Z             float64 `protobuf:"fixed64,37,opt,name=z,proto3" json:"z,omitempty"`
+	Grounded      bool    `protobuf:"varint,38,opt,name=grounded,proto3" json:"grounded,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1910,6 +1920,20 @@ func (x *WorldEntity) GetMountSprite() string {
 	return ""
 }
 
+func (x *WorldEntity) GetZ() float64 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *WorldEntity) GetGrounded() bool {
+	if x != nil {
+		return x.Grounded
+	}
+	return false
+}
+
 type WorldCamp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	OwnerName     string                 `protobuf:"bytes,1,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
@@ -2071,6 +2095,8 @@ type HousePlayer struct {
 	Facing        float64                `protobuf:"fixed64,5,opt,name=facing,proto3" json:"facing,omitempty"` // Y-axis yaw radians
 	Owner         bool                   `protobuf:"varint,6,opt,name=owner,proto3" json:"owner,omitempty"`
 	Pets          []*HousePet            `protobuf:"bytes,7,rep,name=pets,proto3" json:"pets,omitempty"`
+	Z             float64                `protobuf:"fixed64,8,opt,name=z,proto3" json:"z,omitempty"`
+	Grounded      bool                   `protobuf:"varint,9,opt,name=grounded,proto3" json:"grounded,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2154,6 +2180,20 @@ func (x *HousePlayer) GetPets() []*HousePet {
 	return nil
 }
 
+func (x *HousePlayer) GetZ() float64 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *HousePlayer) GetGrounded() bool {
+	if x != nil {
+		return x.Grounded
+	}
+	return false
+}
+
 type HousePet struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -2162,6 +2202,8 @@ type HousePet struct {
 	X             float64                `protobuf:"fixed64,4,opt,name=x,proto3" json:"x,omitempty"`
 	Y             float64                `protobuf:"fixed64,5,opt,name=y,proto3" json:"y,omitempty"`
 	Facing        float64                `protobuf:"fixed64,6,opt,name=facing,proto3" json:"facing,omitempty"`
+	Z             float64                `protobuf:"fixed64,7,opt,name=z,proto3" json:"z,omitempty"`
+	Grounded      bool                   `protobuf:"varint,8,opt,name=grounded,proto3" json:"grounded,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2236,6 +2278,20 @@ func (x *HousePet) GetFacing() float64 {
 		return x.Facing
 	}
 	return 0
+}
+
+func (x *HousePet) GetZ() float64 {
+	if x != nil {
+		return x.Z
+	}
+	return 0
+}
+
+func (x *HousePet) GetGrounded() bool {
+	if x != nil {
+		return x.Grounded
+	}
+	return false
 }
 
 type HousePOI struct {
@@ -2985,7 +3041,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\vMapNeighbor\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\f\n" +
 	"\x01x\x18\x02 \x01(\x01R\x01x\x12\f\n" +
-	"\x01y\x18\x03 \x01(\x01R\x01y\"\xae\x03\n" +
+	"\x01y\x18\x03 \x01(\x01R\x01y\"\xe1\x03\n" +
 	"\vMapSnapshot\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x126\n" +
@@ -2997,7 +3053,8 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	" \x01(\v2\x1c.fantasy.v1.MapTerrainLayersR\rterrainLayers\x12\x19\n" +
 	"\borigin_x\x18\v \x01(\x01R\aoriginX\x12\x19\n" +
 	"\borigin_y\x18\f \x01(\x01R\aoriginY\x125\n" +
-	"\tneighbors\x18\r \x03(\v2\x17.fantasy.v1.MapNeighborR\tneighbors\"\x93\b\n" +
+	"\tneighbors\x18\r \x03(\v2\x17.fantasy.v1.MapNeighborR\tneighbors\x121\n" +
+	"\ascene3d\x18\x0e \x01(\v2\x17.google.protobuf.StructR\ascene3d\"\xbd\b\n" +
 	"\vWorldEntity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
@@ -3042,7 +3099,9 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\vhouse_owner\x18\" \x01(\tR\n" +
 	"houseOwner\x12\x18\n" +
 	"\amounted\x18# \x01(\bR\amounted\x12!\n" +
-	"\fmount_sprite\x18$ \x01(\tR\vmountSprite\"u\n" +
+	"\fmount_sprite\x18$ \x01(\tR\vmountSprite\x12\f\n" +
+	"\x01z\x18% \x01(\x01R\x01z\x12\x1a\n" +
+	"\bgrounded\x18& \x01(\bR\bgrounded\"u\n" +
 	"\tWorldCamp\x12\x1d\n" +
 	"\n" +
 	"owner_name\x18\x01 \x01(\tR\townerName\x12\x19\n" +
@@ -3055,7 +3114,7 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x03col\x18\x02 \x01(\x05R\x03col\x12\x10\n" +
 	"\x03row\x18\x03 \x01(\x05R\x03row\x12\x14\n" +
 	"\x05owner\x18\x04 \x01(\tR\x05owner\x12$\n" +
-	"\x04item\x18\x05 \x01(\v2\x10.fantasy.v1.ItemR\x04item\"\xa5\x01\n" +
+	"\x04item\x18\x05 \x01(\v2\x10.fantasy.v1.ItemR\x04item\"\xcf\x01\n" +
 	"\vHousePlayer\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\f\n" +
@@ -3063,14 +3122,18 @@ const file_fantasy_v1_common_proto_rawDesc = "" +
 	"\x01y\x18\x04 \x01(\x01R\x01y\x12\x16\n" +
 	"\x06facing\x18\x05 \x01(\x01R\x06facing\x12\x14\n" +
 	"\x05owner\x18\x06 \x01(\bR\x05owner\x12(\n" +
-	"\x04pets\x18\a \x03(\v2\x14.fantasy.v1.HousePetR\x04pets\"z\n" +
+	"\x04pets\x18\a \x03(\v2\x14.fantasy.v1.HousePetR\x04pets\x12\f\n" +
+	"\x01z\x18\b \x01(\x01R\x01z\x12\x1a\n" +
+	"\bgrounded\x18\t \x01(\bR\bgrounded\"\xa4\x01\n" +
 	"\bHousePet\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
 	"\x06sprite\x18\x03 \x01(\tR\x06sprite\x12\f\n" +
 	"\x01x\x18\x04 \x01(\x01R\x01x\x12\f\n" +
 	"\x01y\x18\x05 \x01(\x01R\x01y\x12\x16\n" +
-	"\x06facing\x18\x06 \x01(\x01R\x06facing\"^\n" +
+	"\x06facing\x18\x06 \x01(\x01R\x06facing\x12\f\n" +
+	"\x01z\x18\a \x01(\x01R\x01z\x12\x1a\n" +
+	"\bgrounded\x18\b \x01(\bR\bgrounded\"^\n" +
 	"\bHousePOI\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -3197,18 +3260,19 @@ var file_fantasy_v1_common_proto_depIdxs = []int32{
 	12, // 17: fantasy.v1.MapSnapshot.tile_overrides:type_name -> fantasy.v1.MapTileOverrides
 	11, // 18: fantasy.v1.MapSnapshot.terrain_layers:type_name -> fantasy.v1.MapTerrainLayers
 	14, // 19: fantasy.v1.MapSnapshot.neighbors:type_name -> fantasy.v1.MapNeighbor
-	2,  // 20: fantasy.v1.WorldEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
-	0,  // 21: fantasy.v1.WorldEntity.appearance:type_name -> fantasy.v1.CharacterAppearance
-	1,  // 22: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
-	20, // 23: fantasy.v1.HousePlayer.pets:type_name -> fantasy.v1.HousePet
-	1,  // 24: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
-	26, // 25: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
-	6,  // 26: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	34, // 20: fantasy.v1.MapSnapshot.scene3d:type_name -> google.protobuf.Struct
+	2,  // 21: fantasy.v1.WorldEntity.statuses:type_name -> fantasy.v1.StatusSnapshot
+	0,  // 22: fantasy.v1.WorldEntity.appearance:type_name -> fantasy.v1.CharacterAppearance
+	1,  // 23: fantasy.v1.HouseFurniture.item:type_name -> fantasy.v1.Item
+	20, // 24: fantasy.v1.HousePlayer.pets:type_name -> fantasy.v1.HousePet
+	1,  // 25: fantasy.v1.PlayerReward.loot:type_name -> fantasy.v1.Item
+	26, // 26: fantasy.v1.PartyInfo.members:type_name -> fantasy.v1.PartyMember
+	6,  // 27: fantasy.v1.ProfileInfo.HotbarEntry.value:type_name -> fantasy.v1.HotbarBinding
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_fantasy_v1_common_proto_init() }

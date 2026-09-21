@@ -71,11 +71,7 @@ func (w *npcWorker) tick(req npcTickRequest) npcTickResult {
 			continue
 		}
 		e.regionID = w.id
-		for _, system := range e.pipeline {
-			system.Tick(w.sim, e, req.Now, req.DT)
-		}
-		w.sim.tickEntityStatuses(e)
-		w.sim.advanceCast(e, req.Now)
+		w.sim.tickEntity(e, req.Now, req.DT)
 		if npcFingerprint(e) != before[id] {
 			w.sim.entityDirty = true
 		}
@@ -284,7 +280,7 @@ func (w *npcWorker) runCommand(cmd npcCommand) npcWorkerReply {
 }
 
 type npcStateFingerprint struct {
-	x, y, facing float64
+	x, y, z, facing float64
 	hp, maxHP    int
 	mp, maxMP    int
 	alive        bool
@@ -306,7 +302,7 @@ func npcFingerprint(e *entity) npcStateFingerprint {
 	if e == nil {
 		return fp
 	}
-	fp.x, fp.y, fp.facing = e.X, e.Y, e.Facing
+	fp.x, fp.y, fp.z, fp.facing = e.X, e.Y, e.Z, e.Facing
 	fp.hp, fp.maxHP, fp.mp, fp.maxMP = e.hp, e.maxHP, e.mp, e.maxMP
 	fp.alive, fp.hidden, fp.targetID = e.alive, e.hidden, e.targetID
 	fp.statusCount = len(e.statuses)

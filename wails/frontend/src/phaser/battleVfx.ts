@@ -4,6 +4,7 @@ import { battleDuration } from "./battleAnim";
 import {
   CATEGORY_COLORS,
   CATEGORY_VFX_PROFILES,
+  vfxCategoryForAction,
   type VfxBurstProfile,
   type VfxCategory,
   type VfxCircleProfile,
@@ -12,34 +13,8 @@ import {
   type VfxStreamProfile,
 } from "./battleVfxProfiles";
 
-const FIRE_IDS = /fire|ignis|inferno|katon|firaga|enfire|actinic/i;
-const ICE_IDS = /ice|gelu|blizzard|hyoton|enblizzard|frost/i;
-const THUNDER_IDS = /thunder|fulmen|bolt|raiton|enthunder|meteor/i;
-const WIND_IDS = /aero|gust|embrava/i;
-const EARTH_IDS = /stone|geo|earth|quake/i;
-const WATER_IDS = /water|aqua|flood/i;
-const HOLY_IDS = /holy|lux|lumen|sacred|banish|cure|curaga|light|requiescat|phalanx|valiance/i;
-const DARK_IDS = /drain|absorb|dark|nox|shadow|doom|last_resort/i;
-const POISON_IDS = /poison|dia|wilt|venom/i;
-const HEAL_IDS = /cure|curaga|heal|sanare|mending|repair|waltz|regen|adloquium/i;
-const BUFF_IDS = /buff|guard|ward|protect|haste|boost|sentinel|cover|attunement|carmen|hymn|song|stance|focus|meditatio|utsusemi|samba|minne|minuet|madrigal|etude|maneuver|deploy|activate|gauge|reward|charm|camouflage|fold|roulette|wild_card|quick_draw|accession|celerity|phalanx|valiance|indi/i;
-
-export function vfxCategoryForAction(actionId: string, heal?: number): VfxCategory {
-  if (heal && heal > 0) return "heal";
-  if (actionId === "attack") return "physical";
-  if (HEAL_IDS.test(actionId)) return "heal";
-  if (BUFF_IDS.test(actionId)) return "buff";
-  if (POISON_IDS.test(actionId)) return "poison";
-  if (FIRE_IDS.test(actionId)) return "fire";
-  if (ICE_IDS.test(actionId)) return "ice";
-  if (THUNDER_IDS.test(actionId)) return "thunder";
-  if (WIND_IDS.test(actionId)) return "wind";
-  if (EARTH_IDS.test(actionId)) return "earth";
-  if (WATER_IDS.test(actionId)) return "water";
-  if (HOLY_IDS.test(actionId)) return "holy";
-  if (DARK_IDS.test(actionId)) return "dark";
-  return "physical";
-}
+// Re-exported so existing callers keep importing from this module.
+export { vfxCategoryForAction };
 
 function vfxColorForAction(actionId: string, heal?: number): number {
   return CATEGORY_COLORS[vfxCategoryForAction(actionId, heal)];

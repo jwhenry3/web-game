@@ -52,12 +52,14 @@ type Runtime struct {
 	Config  cluster.Config
 	BaseURL string // e.g. http://127.0.0.1:8080
 
-	mu       sync.Mutex
-	nodes    []*mapnode.Node
-	http     *http.Server
-	ln       net.Listener
-	profiles *store.Store
-	closed   bool
+	opts       Options
+	mu         sync.Mutex
+	nodes      []*mapnode.Node
+	http       *http.Server
+	ln         net.Listener
+	profiles   *store.Store
+	closed     bool
+	restarting bool
 }
 
 // Start loads cluster config, starts enabled map nodes, and begins serving.
@@ -128,7 +130,8 @@ func Start(opts Options) (*Runtime, error) {
 		log.Printf("cluster: %s", opts.ClusterFile)
 	}
 
-	rt := &Runtime{Proxy: px, Config: cfg, profiles: profiles}
+	rt := &Runtime{Proxy: px, Config: cfg, profiles: profiles, opts: opts}
+	px.SetRestartFunc(rt.Restart)
 	if cfg.HasWorld() {
 		w, _ := cfg.WorldSpec()
 		n, err := mapnode.StartWorld(w, profiles, accounts)
@@ -218,6 +221,46 @@ func (rt *Runtime) Close() error {
 		rt.profiles.Close()
 	}
 	return first
+}
+
+// Restart shuts the runtime down and boots it again with the same options,
+// rebuilding listeners, map nodes, and stores from on-disk config. The
+// internals are swapped in place so holders of this *Runtime — cmd/server's
+// deferred Close, the Wails app, the admin restart hook — stay valid.
+func (rt *Runtime) Restart() error {
+	rt.mu.Lock()
+	if rt.restarting {
+		rt.mu.Unlock()
+		return fmt.Errorf("restart already in progress")
+	}
+	rt.restarting = true
+	opts := rt.opts
+	rt.mu.Unlock()
+	defer func() {
+		rt.mu.Lock()
+		rt.restarting = false
+		rt.mu.Unlock()
+	}()
+
+	_ = rt.Close()
+	fresh, err := Start(opts)
+	if err != nil {
+		return err
+	}
+	rt.mu.Lock()
+	rt.Proxy = fresh.Proxy
+	rt.Config = fresh.Config
+	rt.BaseURL = fresh.BaseURL
+	rt.nodes = fresh.nodes
+	rt.http = fresh.http
+	rt.ln = fresh.ln
+	rt.profiles = fresh.profiles
+	rt.closed = false
+	rt.mu.Unlock()
+	// fresh's proxy was wired to fresh.Restart inside Start — re-point it at
+	// this runtime so repeat restarts act on the live object.
+	rt.Proxy.SetRestartFunc(rt.Restart)
+	return nil
 }
 
 func normalizeLoopback(addr string) string {

@@ -239,6 +239,13 @@ func (h *Hub) clampMove(fromX, fromY, toX, toY float64) (float64, float64) {
 // clampMoveStep bounds one move report to maxStep pixels; the dodge dash gets
 // a larger step right after a dodge so the dash isn't read as a teleport.
 func (h *Hub) clampMoveStep(fromX, fromY, toX, toY, maxStep float64) (float64, float64) {
+	toX,toY=h.clampMoveIntent3D(fromX,fromY,toX,toY,maxStep)
+	b:=game.NewCharacterBody3D(fromX,fromY,h.physicsWorld3D().HeightAt(fromX,fromY));b.Grounded=true
+	b=h.physicsWorld3D().Move(b,game.Vec2{X:toX,Y:toY},0)
+	return b.Position.X,b.Position.Y
+}
+
+func (h *Hub) clampMoveIntent3D(fromX, fromY, toX, toY, maxStep float64) (float64, float64) {
 	worldW, worldH := h.worldSize()
 	toX = clamp(toX, game.PlayerCollisionRadius, worldW-game.PlayerCollisionRadius)
 	toY = clamp(toY, game.PlayerCollisionRadius, worldH-game.PlayerCollisionRadius)
@@ -248,8 +255,5 @@ func (h *Hub) clampMoveStep(fromX, fromY, toX, toY, maxStep float64) (float64, f
 		toX = fromX + dx/d*maxStep
 		toY = fromY + dy/d*maxStep
 	}
-	if h.overworld != nil {
-		return h.overworld.SlideMovePlayer(fromX, fromY, toX, toY)
-	}
-	return game.SlideMovePlayer(fromX, fromY, toX, toY)
+	return toX,toY
 }

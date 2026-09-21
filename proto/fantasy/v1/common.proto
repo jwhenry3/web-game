@@ -184,6 +184,7 @@ message MapSnapshot {
   double origin_x = 11;
   double origin_y = 12;
   repeated MapNeighbor neighbors = 13;
+  google.protobuf.Struct scene3d = 14;
 }
 
 // WorldEntity is the unified snapshot for every world inhabitant: players,
@@ -229,6 +230,8 @@ message WorldEntity {
   // kind so remote clients can draw the creature under the rider.
   bool mounted = 35;
   string mount_sprite = 36;
+  double z = 37;
+  bool grounded = 38;
 }
 
 message WorldCamp {
@@ -255,6 +258,8 @@ message HousePlayer {
   double facing = 5; // Y-axis yaw radians
   bool owner = 6;
   repeated HousePet pets = 7;
+  double z = 8;
+  bool grounded = 9;
 }
 
 message HousePet {
@@ -264,6 +269,8 @@ message HousePet {
   double x = 4;
   double y = 5;
   double facing = 6;
+  double z = 7;
+  bool grounded = 8;
 }
 
 message HousePOI {

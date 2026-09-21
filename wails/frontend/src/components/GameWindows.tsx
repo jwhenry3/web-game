@@ -1,5 +1,6 @@
 import { useMemo, useState, type DragEvent } from "react";
 import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
+import { CharacterPreview3D } from "../characters/CharacterPreview3D";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
@@ -539,6 +540,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   const [focus, setFocus] = useState<Item | null>(null);
   const [armouryTab, setArmouryTab] = useState<ArmouryTabId>("weapon");
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
+  const [preview3D, setPreview3D] = useState(true);
 
   const slots = equipSlotsForProfile(profile.sub_job);
   const previewWeapon = previewWeaponForEquipment(profile, focus);
@@ -631,7 +633,18 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
     <div className="cm-equip">
       <div className="cm-doll">
         <div className="cm-equip-preview">
-          <CharacterPreviewAnimated appearance={previewAppearance} scale={1.25} />
+          {preview3D ? (
+            <CharacterPreview3D appearance={previewAppearance} width={150} height={170} walking={false} />
+          ) : (
+            <CharacterPreviewAnimated appearance={previewAppearance} scale={1.25} />
+          )}
+          <button
+            type="button"
+            className="cm-btn cm-equip-preview-toggle"
+            onClick={() => setPreview3D((v) => !v)}
+          >
+            {preview3D ? "2D" : "3D"}
+          </button>
           {previewingWeapon && <span className="cm-equip-preview-label">Preview</span>}
         </div>
         {dollSlot("weapon", "Main")}

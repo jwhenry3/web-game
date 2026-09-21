@@ -208,6 +208,8 @@ export function WorldHUD() {
                     kind: "player",
                     x: 0,
                     y: 0,
+                    z: 0,
+                    grounded: true,
                     hp: 0,
                     max_hp: 0,
                     alive: true,

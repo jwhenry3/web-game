@@ -1,0 +1,7 @@
+.three-host { position: absolute; inset: 0; }
+.three-host canvas { display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
+.three-controls { position: absolute; bottom: 180px; right: 16px; display: flex; flex-direction: column; gap: 5px; padding: 12px 15px; border: 1px solid #d9e8e21a; border-radius: 8px; color: #e6ede0; background: #233331bd; font: 11px/1.5 system-ui; pointer-events: none; z-index: 6; }
+.three-error { position: absolute; z-index: 100; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 460px; padding: 24px; color: #f4ebd9; background: #253437; border: 1px solid #9b956a; border-radius: 12px; }
+.three-error button + button { margin-left: 8px; }
+.world-renderer-toggle { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 20; }
+@media (max-width: 800px) { .three-controls { display: none; } }

@@ -55,6 +55,9 @@ type Proxy struct {
 	auth        *server.AuthHandler
 	adminSecret string
 	startedAt   time.Time
+	// restartFn reboots the owning host.Runtime in place — set by host.Start
+	// via SetRestartFunc; the admin API uses it for full cluster restarts.
+	restartFn func() error
 
 	mu    sync.Mutex
 	maps  map[string]*mapnode.Node
@@ -88,6 +91,20 @@ func New(cfg cluster.Config, cfgPath string, tokens *auth.TokenIssuer, accounts 
 	}
 	p.auth = server.NewAuthHandler(accounts, profiles, tokens, p)
 	return p
+}
+
+// SetRestartFunc wires the host runtime's in-place restart into the admin API.
+func (p *Proxy) SetRestartFunc(fn func() error) {
+	p.mu.Lock()
+	p.restartFn = fn
+	p.mu.Unlock()
+}
+
+// RestartFunc returns the configured cluster restart hook, if any.
+func (p *Proxy) RestartFunc() func() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.restartFn
 }
 
 func (p *Proxy) RegisterMap(n *mapnode.Node) {

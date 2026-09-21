@@ -13,12 +13,14 @@ import (
 
 // Registered payload types take the encoding/json fast path unless a field
 // needs protojson-only decoding (enum, oneof, well-known type). MapSnapshot
-// embeds google.protobuf.Struct (MapTileOverrides.layers), so welcome and
-// map_config must stay on protojson; everything else should be direct.
+// embeds google.protobuf.Struct (MapTileOverrides.layers, scene3d), so
+// welcome, map_config, and house_state — which carries a MapSnapshot for the
+// interior — must stay on protojson; everything else should be direct.
 func TestAllPayloadTypesJSONDirect(t *testing.T) {
 	wantFallback := map[MessageType]bool{
-		TypeWelcome:   true,
-		TypeMapConfig: true,
+		TypeWelcome:    true,
+		TypeMapConfig:  true,
+		TypeHouseState: true,
 	}
 	for mt := range payloadRegistry {
 		name := AssertPayloadType(mt)

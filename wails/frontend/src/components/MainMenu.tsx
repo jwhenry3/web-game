@@ -15,6 +15,7 @@ import {
   type KeybindMap,
 } from "../input/keybinds";
 import { comboDisplayName } from "../types";
+import { reloadBackendAndFrontend } from "../reload";
 import {
   HUD_SCALE_GROUPS,
   GLOBAL_SCALE_KEY,
@@ -301,6 +302,55 @@ function OptionsPanel() {
                 />
                 <span>Show collision bounds [F3]</span>
               </label>
+              <h3 className="cm-section-label">3D Camera</h3>
+              <label className="main-menu-option">
+                <span className="main-menu-option-label">Camera Distance</span>
+                <input
+                  type="range"
+                  min={8}
+                  max={45}
+                  step={1}
+                  value={options.cameraDistance}
+                  onChange={(e) => patch({ cameraDistance: Number(e.target.value) })}
+                />
+                <span className="main-menu-option-value">{options.cameraDistance}</span>
+              </label>
+              <label className="main-menu-option">
+                <span className="main-menu-option-label">Camera Angle</span>
+                <input
+                  type="range"
+                  min={20}
+                  max={80}
+                  step={1}
+                  value={options.cameraPitch}
+                  onChange={(e) => patch({ cameraPitch: Number(e.target.value) })}
+                />
+                <span className="main-menu-option-value">{options.cameraPitch}°</span>
+              </label>
+              <label className="main-menu-option">
+                <span className="main-menu-option-label">Horizontal Offset</span>
+                <input
+                  type="range"
+                  min={-10}
+                  max={10}
+                  step={0.5}
+                  value={options.cameraOffsetX}
+                  onChange={(e) => patch({ cameraOffsetX: Number(e.target.value) })}
+                />
+                <span className="main-menu-option-value">{options.cameraOffsetX}</span>
+              </label>
+              <label className="main-menu-option">
+                <span className="main-menu-option-label">Vertical Offset</span>
+                <input
+                  type="range"
+                  min={-10}
+                  max={10}
+                  step={0.5}
+                  value={options.cameraOffsetY}
+                  onChange={(e) => patch({ cameraOffsetY: Number(e.target.value) })}
+                />
+                <span className="main-menu-option-value">{options.cameraOffsetY}</span>
+              </label>
             </div>
           )}
           {tab === "interface" && <InterfaceContent />}
@@ -357,6 +407,17 @@ function MenuPanel() {
   const username = useGame((s) => s.username);
   const profile = useGame((s) => s.profile);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingReload, setConfirmingReload] = useState(false);
+  const [reloading, setReloading] = useState(false);
+
+  const doReload = () => {
+    setReloading(true);
+    void reloadBackendAndFrontend().catch((err) => {
+      setReloading(false);
+      setConfirmingReload(false);
+      useGame.setState({ loginError: err instanceof Error ? err.message : String(err) });
+    });
+  };
 
   const doLogout = () => {
     closeMainMenu();
@@ -385,6 +446,27 @@ function MenuPanel() {
       <div className="main-menu-list">
         <MenuButton label="Resume Game" hint="Return to the world" onClick={closeMainMenu} variant="gold" />
         <MenuButton label="Options" hint="Video, audio & controls" onClick={() => setMainMenuView("options")} />
+        {!confirmingReload ? (
+          <MenuButton
+            label="Reload All"
+            hint="Restart server & reload UI [Ctrl+Shift+R]"
+            onClick={() => setConfirmingReload(true)}
+          />
+        ) : (
+          <>
+            <p className="main-menu-confirm">
+              Restart the backend and reload the app? Everyone online is disconnected.
+            </p>
+            <div className="main-menu-confirm-btns">
+              <button type="button" className="cm-btn danger" disabled={reloading} onClick={doReload}>
+                {reloading ? "Restarting…" : "Yes, Reload"}
+              </button>
+              <button type="button" className="cm-btn" onClick={() => setConfirmingReload(false)}>
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
         {!confirming ? (
           <MenuButton label="Logout" hint="Return to title screen" onClick={onLogout} variant="danger" />
         ) : (
@@ -401,7 +483,7 @@ function MenuPanel() {
           </>
         )}
       </div>
-      <p className="hint main-menu-hint">Esc close · Space confirm · Enter chat</p>
+      <p className="hint main-menu-hint">Esc close · {bindingToDisplay(mergeKeybinds(profile?.keybinds).interact)} confirm · Enter chat</p>
     </>
   );
 }

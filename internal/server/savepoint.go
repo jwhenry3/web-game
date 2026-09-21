@@ -318,11 +318,13 @@ func (h *Hub) warpToSavePoint(c *Client, e *entity, destID, notice string) bool 
 		return true
 	}
 	e.X, e.Y = x, y
+	e.physicsReady = false
+	h.ensureBody3D(e)
 	h.persistWorldLocation(c, e, true)
 	h.refreshRegionOwnership(c, e)
 	h.grantBattleImmunity(e)
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: e.X, Y: e.Y, Facing: e.Facing,
+		ID: c.ID, X: e.X, Y: e.Y, Z: e.Z, Grounded: e.grounded, Facing: e.Facing,
 	}))
 	h.sendPlayerSync(e)
 	return true

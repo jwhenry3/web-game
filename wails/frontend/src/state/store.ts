@@ -23,6 +23,7 @@ import type {
   WorldCamp,
   HouseStatePayload,
 } from "../types";
+import type { Scene3DDoc } from "../three/scene3d";
 import type { NpcDialogueTarget } from "../world/npcDialogue";
 
 export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "house" | "map_editor";
@@ -84,6 +85,8 @@ interface GameState {
     originY: number;
     /** Border-adjacent maps' world-space origins, for scene overlay. */
     neighbors: MapNeighbor[];
+    /** Authored 3D layer (terrain heights/cells, prefab objects, environment). */
+    scene3d?: Scene3DDoc;
   } | null;
   chat: ChatLine[];
   chatTab: ChatChannel;

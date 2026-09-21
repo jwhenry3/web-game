@@ -56,6 +56,7 @@ func (h *Hub) mapSnapshot() *protocol.MapSnapshot {
 		})
 	}
 	return &protocol.MapSnapshot{
+		Scene3D:       h.overworld.Scene3D,
 		ID:            h.mapID,
 		Name:          h.mapName,
 		Overworld:     protocol.OverworldMap{Tile: tile, Cols: cols, Rows: rows, Cells: cells},

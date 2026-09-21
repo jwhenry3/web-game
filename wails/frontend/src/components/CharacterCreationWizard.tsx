@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
+import { CharacterPreview3D } from "../characters/CharacterPreview3D";
 import { saveDraftAppearance } from "../characters/appearanceStorage";
 import {
   APPEARANCE_OPTIONS,
@@ -44,6 +45,7 @@ export function CharacterCreationWizard() {
   const hasExisting = useGame((s) => s.characters.length > 0);
   const logout = useGame((s) => s.logout);
   const [step, setStep] = useState<Step>("appearance");
+  const [preview3D, setPreview3D] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const loginError = useGame((s) => s.loginError);
@@ -112,8 +114,19 @@ export function CharacterCreationWizard() {
           {step === "appearance" && (
             <div className="appearance-editor">
               <div className="appearance-preview-panel">
-                <CharacterPreviewAnimated appearance={draft.appearance} hideWeapon />
-                <p className="hint">Heroes 99 — AU_pixel</p>
+                {preview3D ? (
+                  <CharacterPreview3D appearance={draft.appearance} hideWeapon />
+                ) : (
+                  <CharacterPreviewAnimated appearance={draft.appearance} hideWeapon />
+                )}
+                <button
+                  type="button"
+                  className="cm-btn"
+                  onClick={() => setPreview3D((v) => !v)}
+                >
+                  {preview3D ? "2D view" : "3D view"}
+                </button>
+                <p className="hint">{preview3D ? "3D world rig" : "Heroes 99 — AU_pixel"}</p>
               </div>
               <div className="appearance-options">
                 {APPEARANCE_ROWS.map(({ key, label, options }) => {
@@ -160,7 +173,7 @@ export function CharacterCreationWizard() {
           {step === "name" && (
             <>
               <div className="appearance-editor appearance-editor--compact">
-                <CharacterPreviewAnimated appearance={draft.appearance} hideWeapon />
+                <CharacterPreview3D appearance={draft.appearance} width={120} height={140} hideWeapon />
                 <div className="cm-creation-summary">
                   <span>{ALL_JOBS.find((j) => j.id === draft.mainJob)?.name ?? draft.mainJob}</span>
                 </div>

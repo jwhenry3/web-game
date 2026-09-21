@@ -1,0 +1,25 @@
+.world-preview { font-family: system-ui, sans-serif; background: #b9cacc; color: #f3f1e7; }
+.world-preview .three-controls { display: none; }
+.world-preview .cm-interact-prompt { display: none; }
+.preview-heading { position: absolute; top: 35px; left: 38px; pointer-events: none; text-shadow: 0 2px 12px #20393a55; }
+.preview-eyebrow { font-size: 11px; letter-spacing: 2.5px; font-weight: 650; }
+.preview-heading .preview-eyebrow span { margin-left: 18px; padding-left: 18px; border-left: 1px solid #f0ead770; opacity: .8; font-weight: 400; }
+.preview-heading h1 { font-family: Georgia, serif; font-size: clamp(28px, 4vw, 48px); font-weight: 400; margin: 18px 0 10px; letter-spacing: -.5px; }
+.preview-heading p { font-size: 13px; letter-spacing: .5px; }
+.preview-heading p span { margin: 0 10px; opacity: .5; }
+.preview-panel { position: absolute; top: 35px; right: 30px; width: 230px; padding: 23px; border: 1px solid #eee7d02a; border-radius: 12px; background: #253a3ae8; box-shadow: 0 16px 50px #162a2b25; backdrop-filter: blur(12px); }
+.preview-panel .preview-eyebrow { color: #d6c99e; font-size: 10px; }
+.preview-panel p { font-size: 12px; line-height: 1.8; opacity: .7; margin: 15px 0 20px; }
+.preview-panel label { display: block; color: #c5cdc6; font-size: 11px; }
+.preview-panel select { margin: 8px 0 18px; display: block; width: 100%; border: 1px solid #b2c1b62b; padding: 9px; background: #1d3030; color: #f0efdf; border-radius: 5px; }
+.preview-panel nav { display: grid; gap: 3px; }
+.preview-panel button { display: flex; justify-content: space-between; padding: 11px 10px; text-align: left; color: #d6dfd6; background: transparent; border: 1px solid transparent; border-radius: 5px; font: 12px system-ui; cursor: pointer; }
+.preview-panel button:hover { background: #cfdbc914; }
+.preview-panel button.active { background: #d8cfaa1a; border-color: #d9c99b42; color: #f0deb0; }
+.preview-panel button span { opacity: .45; }
+.preview-panel .preview-effect { margin-top: 19px; border: 1px solid #8fbcac66; color: #badcc9; width: 100%; justify-content: center; }
+.preview-panel small { display: block; opacity: .5; font-size: 10px; line-height: 1.7; margin-top: 16px; }
+.preview-footer { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); display: flex; gap: 25px; white-space: nowrap; padding: 17px 24px; border: 1px solid #f3ecd12b; border-radius: 9px; background: #243936dd; font-size: 11px; }
+.preview-footer b { color: #d3c496; font-size: 9px; margin-right: 7px; letter-spacing: 1px; }
+.preview-loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #34494b; font-size: 15px; }
+@media (max-width: 750px) { .preview-panel { width: 170px; top: 170px; right: 15px; padding: 15px; } .preview-heading { left: 20px; top: 20px; } .preview-footer { gap: 10px; font-size: 9px; padding: 12px; } .preview-panel p { display: none; } }

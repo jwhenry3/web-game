@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"clara-mundi/internal/game"
 	"clara-mundi/internal/protocol"
 )
 
@@ -49,12 +50,12 @@ func (h *PublicMapsHandler) handleMapByID(w http.ResponseWriter, r *http.Request
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, "/maps/")
-	id = strings.Trim(id, "/")
-	if id == "" || strings.Contains(id, "/") {
+	parts := strings.Split(strings.Trim(strings.TrimPrefix(r.URL.Path, "/maps/"), "/"), "/")
+	if parts[0] == "" || len(parts) > 2 {
 		http.NotFound(w, r)
 		return
 	}
+	id := parts[0]
 	h.Proxy.mu.Lock()
 	n := h.Proxy.maps[id]
 	if n == nil && h.Proxy.world != nil && h.Proxy.world.Spec.ID == id {
@@ -63,6 +64,20 @@ func (h *PublicMapsHandler) handleMapByID(w http.ResponseWriter, r *http.Request
 	h.Proxy.mu.Unlock()
 	if n == nil {
 		http.NotFound(w, r)
+		return
+	}
+	if len(parts) == 2 {
+		if parts[1] != "scene3d" {
+			http.NotFound(w, r)
+			return
+		}
+		// The editor loads the authored 3D layer through the public route; an
+		// unauthored map answers an empty document rather than 404.
+		scene := game.EmptyScene3D(id)
+		if n.OW != nil && n.OW.Scene3D != nil {
+			scene = n.OW.Scene3D
+		}
+		writePublicJSON(w, scene)
 		return
 	}
 	snap := n.Hub.MapSnapshot()

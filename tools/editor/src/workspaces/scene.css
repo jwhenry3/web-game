@@ -1,0 +1,97 @@
+/* Scene workspace — Unity-style 3D editor chrome layered on the shared ed-* docks. */
+.sc-toolbar { gap: 4px; }
+.sc-toolbar select { max-width: 180px; }
+.sc-sep { width: 1px; align-self: stretch; margin: 2px 4px; background: #2a2a2a; box-shadow: 1px 0 #4a4a4a; }
+.sc-tools { display: inline-flex; gap: 1px; }
+.sc-tools button { min-width: 34px; display: inline-flex; align-items: center; gap: 3px; border-radius: 0; }
+.sc-tools button:first-child { border-radius: 2px 0 0 2px; }
+.sc-tools button:last-child { border-radius: 0 2px 2px 0; }
+.sc-tools button small { font-size: 9px; color: #bdbdbd; }
+.sc-tools button.active, .sc-tools button[aria-checked="true"] { background: #39678c; color: #fff; }
+.sc-check { display: inline-flex; align-items: center; gap: 4px; color: #d4d4d4; }
+.sc-snap { display: inline-flex; align-items: center; gap: 3px; color: #b5b5b5; font-size: 11px; }
+.sc-snap input { width: 52px; }
+
+.sc-left { width: 240px; }
+.sc-side { width: 340px; }
+.sc-viewport { flex: 1; min-height: 120px; position: relative; background: #292929; }
+.sc-viewport canvas { outline: none; }
+.sc-viewport canvas:focus-visible { box-shadow: inset 0 0 0 1px #72a9d6; }
+.sc-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: #ccc; background: #292929cc; text-align: center; padding: 20px; }
+.sc-overlay.sc-error strong { color: #ff9a8b; }
+.sc-overlay p { margin: 0; max-width: 420px; color: #bbb; }
+
+/* Hierarchy rows: caret, icon, name, eye. Drop zones follow Unity's insert line / highlight. */
+.sc-tree { user-select: none; }
+.sc-tree-item { position: relative; padding-right: 6px; cursor: default; }
+.sc-tree-item.hidden .sc-tree-name { color: #8a8a8a; font-style: italic; }
+.sc-tree-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sc-tree-caret, .sc-tree-eye { min-height: 16px; min-width: 16px; padding: 0; border: 0; background: transparent; box-shadow: none; color: #bdbdbd; font-size: 10px; line-height: 16px; }
+.sc-tree-caret:hover, .sc-tree-eye:hover { background: #ffffff18; }
+.sc-tree-eye { opacity: 0; }
+.sc-tree-item:hover .sc-tree-eye, .sc-tree-item.hidden .sc-tree-eye, .sc-tree-item.selected .sc-tree-eye { opacity: 1; }
+.sc-tree-item.drop-into { background: #3a5f7d; box-shadow: inset 0 0 0 1px #72a9d6; }
+.sc-tree-item.drop-before::before, .sc-tree-item.drop-after::after { content: ""; position: absolute; left: 6px; right: 6px; height: 2px; background: #72a9d6; }
+.sc-tree-item.drop-before::before { top: -1px; }
+.sc-tree-item.drop-after::after { bottom: -1px; }
+
+/* Project dock under the scene: folder column + prefab card grid. */
+.sc-project { height: 200px; max-height: none; border-top: 1px solid var(--border); }
+.sc-project-body { flex: 1; display: flex; min-height: 0; }
+.sc-project-folders { width: 130px; flex: none; overflow: auto; padding: 4px 0; background: #333; border-right: 1px solid var(--border); }
+.sc-project-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sc-project-main .ed-project-path { display: flex; align-items: center; gap: 8px; }
+.sc-project-main .ed-project-path span { flex: 1; }
+.sc-project-main .ed-project-path input { width: 140px; min-height: 20px; border-radius: 10px; }
+.sc-prefab-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 78px); grid-auto-rows: 76px; gap: 6px; padding: 8px; align-content: start; background: #2a2a2a; }
+.sc-prefab-card { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px; width: 78px; height: 76px; padding: 6px 4px; background: #323232; border: 1px solid #262626; border-radius: 3px; box-shadow: none; cursor: grab; }
+.sc-prefab-card:hover { background: #3d3d3d; }
+.sc-prefab-card:active { cursor: grabbing; }
+.sc-prefab-icon { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; font-size: 24px; color: #d5bd87; background: linear-gradient(#4a4a4a, #3a3a3a); border-radius: 3px; }
+.sc-prefab-label { flex: none; line-height: 14px; font-size: 10px; color: #ddd; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Prefab editor overlay: node list + orbit preview + inspector in a dialog. */
+.sc-prefab-backdrop { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: #00000066; }
+.sc-prefab-editor { display: flex; flex-direction: column; width: min(1100px, 92vw); height: min(720px, 88vh); background: #2e2e2e; border: 1px solid var(--border); box-shadow: 0 12px 40px #000000aa; }
+.sc-prefab-head { gap: 8px; }
+.sc-prefab-head .sc-prefab-icon { width: 24px; height: 24px; font-size: 14px; flex: none; }
+.sc-prefab-name { width: 200px; font-weight: 600; }
+.sc-prefab-body { flex: 1; display: flex; min-height: 0; }
+.sc-prefab-nodes { width: 190px; flex: none; display: flex; flex-direction: column; background: #333; border-right: 1px solid var(--border); min-height: 0; }
+.sc-prefab-nodes .ed-tree { flex: 1; overflow: auto; }
+.sc-prefab-addrow { display: flex; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.sc-prefab-addrow select { flex: 1; min-width: 0; }
+.sc-prefab-viewport { flex: 1; min-width: 0; position: relative; background: #292929; }
+.sc-prefab-viewport canvas { display: block; outline: none; }
+.sc-prefab-inspector { width: 300px; flex: none; border-left: 1px solid var(--border); overflow: auto; }
+
+/* Inspector: Unity-like header row, XYZ vector fields with coloured axis tags. */
+.sc-inspector .sc-head { gap: 6px; }
+.sc-inspector .sc-name { flex: 1; font-weight: 600; }
+.sc-section { display: flex; align-items: center; gap: 6px; }
+.sc-section button { min-height: 18px; padding: 0 6px; font-size: 10px; }
+.sc-vec3 { flex-wrap: nowrap; }
+.sc-vec3 label { min-width: 62px; }
+.sc-axis { display: inline-flex; align-items: center; flex: 1; min-width: 0; }
+.sc-axis b { font-size: 10px; padding: 0 4px; min-width: 16px; text-align: center; border: 1px solid #232323; border-right: 0; border-radius: 2px 0 0 2px; background: #2a2a2a; line-height: 20px; }
+.sc-axis input { width: 100%; min-width: 0; padding-right: 3px; border-radius: 0 2px 2px 0; -moz-appearance: textfield; appearance: textfield; }
+.sc-axis input::-webkit-outer-spin-button, .sc-axis input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sc-axis-X { color: #ff7b72; } .sc-axis-Y { color: #9be07a; } .sc-axis-Z { color: #7fb9ff; }
+.sc-inspector input[type="range"] { flex: 1; min-width: 60px; }
+.sc-inspector code { font-size: 10px; color: #aaa; }
+
+/* Characters / Effects modes: rig library, preview controls, bone list. */
+.sc-lib-actions { display: flex; gap: 6px; padding: 6px 8px; border-top: 1px solid var(--border); }
+.sc-lib-actions button { flex: 1; }
+.sc-preview-controls { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.sc-bones { max-height: 180px; overflow: auto; }
+.sc-bones .item { text-align: left; }
+.sc-vec { flex-wrap: nowrap; gap: 2px; }
+.sc-vec-label { flex: none; width: 52px; font-size: 10px; color: #999; text-transform: uppercase; align-self: center; }
+.sc-vec input { width: 100%; min-width: 0; -moz-appearance: textfield; appearance: textfield; }
+.sc-vec input::-webkit-outer-spin-button, .sc-vec input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.sc-inspector-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.sc-inspector-head h3 { flex: 1; margin: 0; font-size: 13px; }
+.sc-rig-panel { flex: 1; overflow: auto; padding: 8px 10px; }
+.sc-rig-status { border-top: 1px solid var(--border); }
+.sc-side .ed-panel h4 { margin: 12px 0 4px; }

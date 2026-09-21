@@ -23,7 +23,7 @@ func (pr *projector) project(e *entity, now time.Time) protocol.WorldEntity {
 	we := protocol.WorldEntity{
 		ID: e.ID, Name: e.Name, Kind: string(e.Kind), Sprite: e.Sprite,
 		OwnerID: e.OwnerID, Level: e.Level,
-		X: e.X, Y: e.Y, Facing: e.Facing,
+		X: e.X, Y: e.Y, Z:e.Z, Grounded:e.grounded, Facing: e.Facing,
 		HP: e.hp, MaxHP: e.maxHP, MP: e.mp, MaxMP: e.maxMP,
 		Alive: e.alive, TargetID: e.targetID,
 		Statuses: game.Snapshots(e.statuses),

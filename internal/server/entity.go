@@ -37,7 +37,9 @@ type entity struct {
 	Kind    entityKind
 	Sprite  string // template key: enemy kind ("goblin") for npc/pet, race for players
 	Level   int
-	X, Y    float64
+	X, Y, Z float64
+	velocityZ float64
+	grounded, physicsReady bool
 	Facing  float64
 	Faction faction
 	OwnerID string // pets only
@@ -257,7 +259,7 @@ func (h *Hub) nearestAttackable(from *entity, maxD float64) *entity {
 		}
 		return from.Faction != factionHostile || t.Kind != kindPlayer || !h.inSanctuary(t)
 	}, func(t *entity) {
-		if d := dist(from.X, from.Y, t.X, t.Y); d <= bestD && (best == nil || d < bestD) {
+		if d := entityDistance3D(from,t); d <= bestD && (best == nil || d < bestD) {
 			bestD, best = d, t
 		}
 	})
@@ -575,6 +577,9 @@ func (h *Hub) tickEntitiesWorld(now time.Time, dt float64) {
 
 // tickEntity runs one entity's full pipeline for a single simulation step.
 func (h *Hub) tickEntity(e *entity, now time.Time, dt float64) {
+	h.ensureBody3D(e)
+	from := game.Vec3{X:e.X,Y:e.Y,Z:e.Z}
+	defer func(){h.resolveEntityPhysics3D(e,from,dt)}()
 	for _, system := range e.pipeline {
 		system.Tick(h, e, now, dt)
 	}

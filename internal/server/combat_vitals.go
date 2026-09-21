@@ -139,6 +139,26 @@ func (h *Hub) sendPlayerSync(e *entity) {
 	}
 }
 
+// sendPlayerSyncNear pushes a player's full wire snapshot to every joined
+// client whose entity is inside near range — used when presence details
+// (equipped weapon, appearance) change so nearby observers rebuild their
+// view. Owner and party already get it via sendPlayerSync; extras here are
+// harmless duplicates.
+func (h *Hub) sendPlayerSyncNear(e *entity) {
+	if e == nil {
+		return
+	}
+	near := h.spatialPlayerIDs(e.X, e.Y, nearSyncDist)
+	msg := protocol.Encode(protocol.TypePlayerSync, h.entitySync(e))
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for id := range near {
+		if c := h.clients[id]; c != nil && c.Joined {
+			h.sendRawLocked(c, msg)
+		}
+	}
+}
+
 // outOfCombatRegen slowly restores hp/mp/stamina for players not fighting.
 // Runs on the 250ms tick so idle players don't need the combat tick.
 func (h *Hub) outOfCombatRegen() {

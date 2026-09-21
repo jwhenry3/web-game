@@ -111,7 +111,7 @@ func (h *Hub) npcUnstick(e, t *entity, step float64) {
 	}
 	slide := step * 0.45
 	nx, ny := e.X+tx/tm*slide, e.Y+ty/tm*slide
-	if h.walkableAt(nx, ny) {
+	if h.steppable3D(e, nx, ny) {
 		e.X, e.Y = nx, ny
 	}
 }
@@ -156,14 +156,14 @@ func (h *Hub) chaseAlongPath(e *entity, ch *chaseTarget, gx, gy, step float64) b
 		dx, dy := w.X-e.X, w.Y-e.Y
 		d := math.Hypot(dx, dy)
 		if d <= step {
-			if h.walkableAt(w.X, w.Y) {
+			if h.steppable3D(e, w.X, w.Y) {
 				e.X, e.Y = w.X, w.Y
 			}
 			ch.pathI++
 			continue
 		}
 		nx, ny := e.X+dx/d*step, e.Y+dy/d*step
-		if !h.walkableAt(nx, ny) {
+		if !h.steppable3D(e, nx, ny) {
 			ch.path = nil // waypoint became blocked; repath next tick
 			return true
 		}
@@ -190,18 +190,18 @@ func (h *Hub) stepWalkable(e *entity, ch *chaseTarget, gx, gy, step float64) boo
 		return true
 	}
 	nx, ny := e.X+dx/d*move, e.Y+dy/d*move
-	if h.walkableAt(nx, ny) {
+	if h.steppable3D(e, nx, ny) {
 		e.X, e.Y = nx, ny
 		return true
 	}
 	if h.chaseAlongPath(e, ch, gx, gy, move) {
 		return true // terrain-blocked: A* around it
 	}
-	if h.walkableAt(nx, e.Y) {
+	if h.steppable3D(e, nx, e.Y) {
 		e.X = nx
 		return true
 	}
-	if h.walkableAt(e.X, ny) {
+	if h.steppable3D(e, e.X, ny) {
 		e.Y = ny
 		return true
 	}

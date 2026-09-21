@@ -78,6 +78,7 @@ type Overworld struct {
 	Collision         []int             // composed collision layer after overrides
 	TileOverrides     *MapTileOverrides // sparse tile patches applied on top of the base config
 	Objects           []OverrideObject  // composed object layer (base config + override)
+	Scene3D           *Scene3D          // authored terrain, prefabs and volumetric collision
 
 	sanctuaryOnce sync.Once
 	sanctuaryMask []bool // cols*rows; built lazily — SanctuaryAt runs in NPC workers

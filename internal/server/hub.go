@@ -639,6 +639,18 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	if cc == nil {
 		return
 	}
+	h.ensureBody3D(e)
+	if math.IsNaN(p.X) || math.IsInf(p.X, 0) || math.IsNaN(p.Y) || math.IsInf(p.Y, 0) {
+		return
+	}
+	if p.Z != nil && (math.IsNaN(*p.Z) || math.IsInf(*p.Z, 0) || math.Abs(*p.Z-e.Z) > 64) {
+		h.broadcastPlayerMoved(c.ID, e)
+		return
+	}
+	if p.Jump && e.grounded && e.alive {
+		e.velocityZ = game.JumpVelocity3D
+		e.grounded = false
+	}
 	prevX, prevY := e.X, e.Y
 	maxStep := maxMoveStep
 	if cc.mounted {
@@ -647,7 +659,8 @@ func (h *Hub) handleMove(c *Client, raw json.RawMessage) {
 	if time.Since(cc.dodgedAt) < dodgeLandingWindow {
 		maxStep += dodgeDashDist
 	}
-	e.X, e.Y = h.clampMoveStep(e.X, e.Y, p.X, p.Y, maxStep)
+	tx, ty := h.clampMoveIntent3D(e.X, e.Y, p.X, p.Y, maxStep)
+	h.moveEntity3D(e, tx, ty, 0)
 	h.spatialInvalidate()
 	e.Facing = game.ResolveFacingYaw(e.X-prevX, e.Y-prevY, derefFacing(p.Facing), p.Facing != nil, e.Facing)
 	h.interruptWorldCastOnMove(c, e)
@@ -723,6 +736,7 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
+	h.sendPlayerSyncNear(e)
 }
 
 func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
@@ -745,6 +759,7 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
+	h.sendPlayerSyncNear(e)
 }
 
 func (h *Hub) handleSetJobs(c *Client, raw json.RawMessage) {

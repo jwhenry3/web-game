@@ -75,6 +75,30 @@ type mapPoint struct {
 
 // LoadOverworldData reads a map file (.map.json config, .tmj Tiled, or legacy .json paint).
 func LoadOverworldData(path string) (*Overworld, error) {
+	ow, err := loadOverworldData(path)
+	if err != nil {
+		return nil, err
+	}
+	scene, err := LoadScene3D(Scene3DPath(path), ow.Cols, ow.Rows)
+	if err != nil {
+		return nil, fmt.Errorf("load scene: %w", err)
+	}
+	ow.ApplyScene3D(scene)
+	return ow, nil
+}
+
+// OverworldDims returns the configured map dimensions without loading the
+// companion scene3d file, so a malformed scene cannot block the admin save
+// that would repair it.
+func OverworldDims(path string) (cols, rows int, err error) {
+	ow, err := loadOverworldData(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	return ow.Cols, ow.Rows, nil
+}
+
+func loadOverworldData(path string) (*Overworld, error) {
 	if IsMapConfigPath(path) {
 		return LoadOverworldFromMapConfig(path)
 	}

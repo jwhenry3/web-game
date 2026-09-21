@@ -360,6 +360,11 @@ h3 {
   image-rendering: crisp-edges;
 }
 
+.character-preview--3d,
+.character-preview--3d canvas {
+  image-rendering: auto;
+}
+
 .appearance-options {
   display: flex;
   flex-direction: column;
@@ -2247,6 +2252,12 @@ h3 {
   text-transform: uppercase;
   letter-spacing: 0.8px;
   color: var(--cm-accent);
+}
+
+.cm-equip-preview-toggle {
+  font-size: 10px;
+  padding: 1px 10px;
+  line-height: 1.4;
 }
 
 .cm-doll {

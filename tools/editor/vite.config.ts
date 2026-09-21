@@ -3,6 +3,7 @@ import { effectsApi } from "./vite/effectsApi.ts";
 import { hairApi } from "./vite/hairApi.ts";
 import { mapsApi } from "./vite/mapsApi.ts";
 import { partsApi } from "./vite/partsApi.ts";
+import { rigsApi } from "./vite/rigsApi.ts";
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -284,9 +285,19 @@ function editorApi(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), editorApi(), hairApi(), mapsApi(), effectsApi(), partsApi()],
+  plugins: [react(), editorApi(), hairApi(), mapsApi(), effectsApi(), partsApi(), rigsApi()],
   // Serve the game's public assets so /assets/spine/* and /assets/heroes99/*
   // resolve to the same files the game loads.
   publicDir: path.join(repoRoot, "wails/frontend/public"),
-  server: { port: 35215, strictPort: true },
+  // The Scene workspace imports the game's Three.js terrain/prefab modules
+  // from wails/frontend/src/three so the editor renders exactly what the
+  // client does. dedupe keeps a single `three` instance across both trees.
+  resolve: { dedupe: ["three"] },
+  server: {
+    port: 35215,
+    strictPort: true,
+    fs: { allow: [repoRoot] },
+    // Map snapshots (terrain cells) come from the running game server, like world3d.html.
+    proxy: { "/api": "http://127.0.0.1:8080" },
+  },
 });

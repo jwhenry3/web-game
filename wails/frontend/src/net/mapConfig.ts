@@ -1,5 +1,6 @@
 import type { MapSnapshot } from "../types";
 import { useGame } from "../state/store";
+import { normalizeScene } from "../three/scene3d";
 import { apiUrl, platformFetch } from "./platform";
 
 export function applyMapSnapshotToGame(map: MapSnapshot) {
@@ -13,6 +14,7 @@ export function applyMapSnapshotToGame(map: MapSnapshot) {
       originX: map.origin_x ?? 0,
       originY: map.origin_y ?? 0,
       neighbors: map.neighbors ?? [],
+      scene3d: map.scene3d ? normalizeScene(map.scene3d, map.id) : undefined,
     },
     overworld: map.overworld,
   });
@@ -70,6 +72,7 @@ export async function ensureMapConfigLoaded(mapId?: string): Promise<MapSnapshot
       origin_x: cur.mapInfo.originX,
       origin_y: cur.mapInfo.originY,
       neighbors: cur.mapInfo.neighbors,
+      scene3d: cur.mapInfo.scene3d as MapSnapshot["scene3d"],
     };
   }
   return prefetchMapConfig(id);

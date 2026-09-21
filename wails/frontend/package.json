@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test:3d": "tsx src/three/world.spec.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview"
   },
@@ -13,12 +14,15 @@
     "phaser": "^4.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "three": "^0.186.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"
   }

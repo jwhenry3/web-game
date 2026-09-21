@@ -18,7 +18,7 @@ import (
 // once-a-second far-sync digest instead.
 func (h *Hub) broadcastPlayerMoved(moverID string, e *entity) {
 	msg := protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: moverID, X: e.X, Y: e.Y, Facing: e.Facing,
+		ID: moverID, X: e.X, Y: e.Y, Z:e.Z, Grounded:e.grounded, Facing: e.Facing,
 	})
 	// One radius query finds every player entity in near range; the client
 	// loop then only does a set lookup per joined client.

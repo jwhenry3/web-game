@@ -247,8 +247,13 @@ export const net = {
     net.enterWorld({ player_name: character.name });
   },
 
-  move(x: number, y: number, facing?: number) {
-    send("move", facing !== undefined ? { x, y, facing } : { x, y });
+  move(x: number, y: number, facing?: number, jump?: boolean, z?: number) {
+    send("move", {
+      x, y,
+      ...(facing !== undefined ? { facing } : {}),
+      ...(jump ? { jump: true } : {}),
+      ...(z !== undefined ? { z } : {}),
+    });
   },
   chat(message: string) {
     send("chat", { message });
@@ -775,7 +780,7 @@ export function handleMessage(env: Envelope) {
       break;
     }
     case "player_moved": {
-      const p = env.payload as { id: string; x: number; y: number; facing?: number | string };
+      const p = env.payload as { id: string; x: number; y: number; z?: number; grounded?: boolean; facing?: number | string };
       g.setState((s) => {
         const e = s.entities[p.id];
         if (!e) return s;
@@ -786,6 +791,8 @@ export function handleMessage(env: Envelope) {
               ...e,
               x: p.x,
               y: p.y,
+              ...(p.z !== undefined ? { z: p.z } : {}),
+              ...(p.grounded !== undefined ? { grounded: p.grounded } : {}),
               ...(p.facing !== undefined ? { facing: p.facing } : {}),
             },
           },

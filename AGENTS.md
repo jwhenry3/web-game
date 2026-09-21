@@ -29,3 +29,9 @@ Follow these steps for each interaction:
   write sparse overrides to `data/maps/overrides/<id>.json`. See
   `docs/GAME_DESIGNER.md` for editor controls, object types, and the
   `/api/admin/maps` lifecycle.
+- 3D scene layer is authored in `tools/editor` ("Scene (3D)" tab,
+  `npm run editor:dev` + game server running for `/api` map snapshots).
+  Schema/prefabs are shared in `wails/frontend/src/three/{scene3d,prefabs}.ts`;
+  scenes are exported as `<map>.scene3d.json`. See `docs/WORLD_3D.md`.
+  Typecheck: `npm run typecheck --prefix tools/editor`; 3D checks:
+  `npm run test:3d --prefix wails/frontend`.

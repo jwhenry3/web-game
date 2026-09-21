@@ -249,6 +249,12 @@ export class WorldScene extends Phaser.Scene {
       clearWorldLocalPos();
       clearWorldViewRect();
     });
+    // game.destroy() emits DESTROY without SHUTDOWN — release the store
+    // subscription so a dead scene can never run inside setState.
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => {
+      this.terrainUnsub?.();
+      this.terrainUnsub = undefined;
+    });
     this.events.on(Phaser.Scenes.Events.SLEEP, () => {
       clearEntityOverlays();
       clearWorldViewRect();
@@ -395,11 +401,21 @@ export class WorldScene extends Phaser.Scene {
   private bindTerrainSync() {
     this.terrainUnsub?.();
     this.terrainUnsub = useGame.subscribe(() => {
-      this.syncTerrainFromStore();
+      // A throwing listener aborts every subscriber registered after it for
+      // that setState — terrain failures must not starve the rest of the app.
+      try {
+        this.syncTerrainFromStore();
+      } catch (err) {
+        console.error("[WorldScene] terrain sync failed", err);
+      }
     });
   }
 
   private syncTerrainFromStore() {
+    // game.destroy() drops the camera manager without emitting SHUTDOWN, so a
+    // leaked subscription or a late async callback can outlive the scene —
+    // never run camera-dependent work on a torn-down scene.
+    if (!this.cameras?.main) return;
     const state = useGame.getState();
     this.syncTerrain(state.overworld, state.mapInfo?.portals, state.mapInfo?.terrainLayers);
   }
@@ -464,9 +480,6 @@ export class WorldScene extends Phaser.Scene {
 
     if (sameTerrain && samePortals) return;
 
-    this.terrainInputs = nextInputs;
-    this.terrainPortalKey = nextPortalKey;
-    this.terrainMapId = mapId;
     this.applyWorldBounds(map);
 
     const layerData = terrainLayersFromSnapshot(map, terrainLayers);
@@ -481,24 +494,28 @@ export class WorldScene extends Phaser.Scene {
       };
       this.collisionGizmo.setGrid(this.collisionGrid);
       this.renderConfigTerrain(layerData, portals);
-      return;
+    } else {
+      this.clearTerrain();
+      this.drawAsciiTerrain(map, portals);
+      const blocked = new Uint8Array(map.cols * map.rows);
+      for (let i = 0; i < blocked.length; i++) {
+        blocked[i] = WALKABLE.has(map.cells[i] ?? "") ? 0 : 1;
+      }
+      this.collisionGrid = {
+        blocked,
+        cols: map.cols,
+        rows: map.rows,
+        tileSize: map.tile || 32,
+        originX: 0,
+        originY: 0,
+      };
+      this.collisionGizmo.setGrid(this.collisionGrid);
     }
-
-    this.clearTerrain();
-    this.drawAsciiTerrain(map, portals);
-    const blocked = new Uint8Array(map.cols * map.rows);
-    for (let i = 0; i < blocked.length; i++) {
-      blocked[i] = WALKABLE.has(map.cells[i] ?? "") ? 0 : 1;
-    }
-    this.collisionGrid = {
-      blocked,
-      cols: map.cols,
-      rows: map.rows,
-      tileSize: map.tile || 32,
-      originX: 0,
-      originY: 0,
-    };
-    this.collisionGizmo.setGrid(this.collisionGrid);
+    // Commit the sync markers only after the rebuild succeeded — a failed
+    // sync must leave the scene dirty so the next store update retries.
+    this.terrainInputs = nextInputs;
+    this.terrainPortalKey = nextPortalKey;
+    this.terrainMapId = mapId;
   }
 
   private clearTerrain() {

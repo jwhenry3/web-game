@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,6 +22,14 @@ import (
 // newTestNode creates a running mapnode backed by a blank map. It is used in
 // proxy tests as a stand-in for either a legacy map node or a world node.
 func newTestNode(t *testing.T) (*mapnode.Node, *store.Store, *store.AccountStore) {
+	t.Helper()
+	n, profiles, accounts, _ := newTestNodeAt(t)
+	return n, profiles, accounts
+}
+
+// newTestNodeAt is newTestNode plus the node's server.json path, for tests
+// that must address the node through cluster specs (scene admin routes).
+func newTestNodeAt(t *testing.T) (*mapnode.Node, *store.Store, *store.AccountStore, string) {
 	t.Helper()
 	dir := t.TempDir()
 	profilesPath := filepath.Join(dir, "profiles.json")
@@ -58,7 +67,7 @@ func newTestNode(t *testing.T) (*mapnode.Node, *store.Store, *store.AccountStore
 		n.Stop()
 		profiles.Close()
 	})
-	return n, profiles, accounts
+	return n, profiles, accounts, serverPath
 }
 
 func TestRegisterWorldAttachesAllSessions(t *testing.T) {
@@ -351,6 +360,100 @@ func TestWorldModeMapLifecycleIsRegistryOnly(t *testing.T) {
 	p.mu.Unlock()
 	if wilds.IsEnabled() {
 		t.Fatal("disable did not persist the registry flag")
+	}
+}
+
+// The editor's scene3d save/load cycle runs through the admin route; the
+// runtime and editor fetch the same document through the public read-only
+// route. Exercises the singular-world resolution (no legacy map nodes run).
+func TestScene3DEndpoints(t *testing.T) {
+	n, profiles, accounts, serverPath := newTestNodeAt(t)
+	p := New(cluster.Config{
+		World: &cluster.WorldSpec{ID: n.Spec.ID, Name: n.Spec.Name, Config: serverPath},
+	}, "", nil, accounts, profiles, "secret")
+	p.RegisterWorld(n)
+
+	serve := func(req *httptest.ResponseRecorder, method, path, key string, body any) *httptest.ResponseRecorder {
+		var rdr io.Reader
+		if body != nil {
+			raw, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rdr = strings.NewReader(string(raw))
+		}
+		r := httptest.NewRequest(method, path, rdr)
+		if key != "" {
+			r.Header.Set("X-Admin-Key", key)
+		}
+		p.Handler().ServeHTTP(req, r)
+		return req
+	}
+
+	// Public scene read: an unauthored map answers an empty doc, not a 404.
+	rec := serve(httptest.NewRecorder(), http.MethodGet, "/api/maps/testworld/scene3d", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public scene3d status %d: %s", rec.Code, rec.Body.String())
+	}
+	var doc game.Scene3D
+	if err := json.NewDecoder(rec.Body).Decode(&doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Map != "testworld" || doc.Terrain.Heights == nil {
+		t.Fatalf("public scene3d doc = %+v", doc)
+	}
+
+	// Writes need the admin key.
+	rec = serve(httptest.NewRecorder(), http.MethodPut, "/api/admin/maps/testworld/scene3d", "", doc)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated PUT status %d", rec.Code)
+	}
+
+	doc.Terrain.Heights = map[string]float64{"0,0": 5}
+	doc.Terrain.Cells = map[string]string{"2,3": "H"}
+	doc.Objects = []game.SceneObject{{
+		ID: "rock1", Name: "Rock", Prefab: "rock", Visible: true,
+		Transform: game.SceneTransform{Position: [3]float64{4, 0, 4}, Scale: [3]float64{1, 1, 1}},
+		Components: game.SceneComponents{Collider: &game.SceneCollider{
+			Enabled: true, Shape: "box", Size: [3]float64{1, 1, 1}, Offset: [3]float64{0, 0.5, 0},
+		}},
+	}}
+	rec = serve(httptest.NewRecorder(), http.MethodPut, "/api/admin/maps/testworld/scene3d", "secret", doc)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PUT scene3d status %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// The save is persisted beside the overworld file and hot-reloaded into
+	// the running world node — authored terrain cells hit live collision.
+	scenePath := filepath.Join(filepath.Dir(serverPath), "test.scene3d.json")
+	if _, err := os.Stat(scenePath); err != nil {
+		t.Fatalf("scene file missing: %v", err)
+	}
+	if n.OW.Scene3D == nil || len(n.OW.Scene3D.Objects) != 1 {
+		t.Fatalf("reloaded scene = %+v", n.OW.Scene3D)
+	}
+	if got := n.OW.Cells[3][2]; got != 'H' {
+		t.Fatalf("terrain cell (2,3) = %q, want H", got)
+	}
+
+	// The same document round-trips through the public route.
+	rec = serve(httptest.NewRecorder(), http.MethodGet, "/api/maps/testworld/scene3d", "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("public scene3d after save status %d", rec.Code)
+	}
+	var got game.Scene3D
+	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Objects) != 1 || got.Objects[0].ID != "rock1" || got.Terrain.Heights["0,0"] != 5 {
+		t.Fatalf("round-trip doc = %+v", got)
+	}
+
+	// Out-of-bounds terrain keys are rejected, not saved.
+	doc.Terrain.Cells = map[string]string{"99,99": "H"}
+	rec = serve(httptest.NewRecorder(), http.MethodPut, "/api/admin/maps/testworld/scene3d", "secret", doc)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("invalid terrain PUT status %d", rec.Code)
 	}
 }
 

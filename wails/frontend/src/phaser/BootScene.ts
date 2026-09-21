@@ -3,7 +3,7 @@ import { WorldScene } from "./WorldScene";
 import { HouseScene } from "./HouseScene";
 
 export class BootScene extends Phaser.Scene {
-  constructor() {
+  constructor(private initialScene: "world" | "house" = "world") {
     super("boot");
   }
 
@@ -12,10 +12,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   async create() {
-    this.scene.start("world");
+    this.scene.start(this.initialScene);
   }
 }
 
-export function buildGameScenes(): (typeof Phaser.Scene)[] {
-  return [BootScene, WorldScene, HouseScene];
+export function buildGameScenes(initialScene: "world" | "house" = "world") {
+  return [new BootScene(initialScene), WorldScene, HouseScene];
 }

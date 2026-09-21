@@ -1,0 +1,163 @@
+# Three.js world
+
+The Wails client opens the overworld in 3D by default. The existing HUD,
+hotbar, targeting, save points, job masters and multiplayer transport remain
+connected. The world toolbar can switch back to 2D. House interiors continue
+to use their existing renderer and editing controls.
+
+## Controls
+
+- WASD (or configured movement bindings): camera-relative movement.
+- Left-click terrain: pathfind and walk. Keyboard movement cancels the path.
+- Left-click an actor: target it or use the currently selected action.
+- Right-drag: orbit. Mouse wheel: zoom. Right-click without dragging: clear target.
+- Release Shift while moving: dodge, subject to stamina and cooldown.
+- Options ▸ Video adjusts the 3D camera: follow distance, elevation angle, and
+  screen-space look-at offsets that shift the character away from centre.
+- Existing interaction, hotbar, mount and menu keys remain available.
+
+## Heightmap and world data
+
+`wails/frontend/src/three/heightmap.ts` derives a deterministic vertex heightmap
+from the authoritative `OverworldMap.cells` and terrain GIDs. Water is below
+sea level; grass and woodland undulate; sand forms low dunes; snow rises into
+highlands; blocked rock forms ridges. Road and settlement vertices are level.
+Tree-trunk GIDs distinguish blocked woodland from rock. This is procedural
+elevation derived from existing geography, not a new authored elevation layer.
+
+The 2D map's pixels map to Three.js X/Z at 1/16 scale (`WORLD_SCALE`; terrain
+relief, vegetation, buildings and PoI markers scale by `WORLD_ZOOM` so the
+world keeps its proportions while actors stay the same size). Tree canopies
+dither out in a small screen-space disc around the player instead of a
+world-space cylinder. Elevation is visual:
+walkability and speed retain the server's existing rules. Actors sample the
+same triangles used by the mesh, avoiding floating feet. Movement uses swept
+circle collision, normalizes diagonals, clamps long frames, sends positions
+at 10Hz plus a final stop, and accepts large server position corrections.
+
+Terrain streams in 16×16 tile chunks, retaining at most 25 nearby chunks.
+Vegetation uses instancing; discarded chunks, actors and particles release
+their geometry and materials. Authored building stamp positions become
+volumetric houses/towers. Actors currently use procedural low-poly humanoid
+and creature models; the original 2D character equipment art is not converted
+to 3D assets. Buildings retain existing map collision semantics.
+
+Effects include shadows, distance fog, water ripples, floating save crystals,
+casting particles, combat/healing bursts, target rings and dodge trails.
+
+## 3D physics and prediction
+
+The server simulates a swept upright-cylinder controller
+(`internal/game/physics3d.go`): map-pixel X/Y horizontal, Z up, gravity 960,
+step height 10, max slope 1.2. `Overworld.Physics3D()` supplies the terrain
+heightfield (identical math to `WorldHeightmap`), one AABB per unwalkable tile
+(water tops at h+8 for wading, other blocked cells at h+48), map bounds, and
+authored `collider` components from the scene document. Movement packets are
+validated planar intent (`dt=0`, no client-owned elevation — `z` reports only
+resync if they diverge by more than 64px); the per-tick entity pipeline owns
+gravity and landing. Jump impulses (264px/s — apex ~36px, one body height, ~0.55s) apply only while grounded.
+Teleports flag `physicsReady=false` so entities re-seat on the destination
+surface instead of keeping stale height.
+
+The client predicts with a TypeScript port of the same solver
+(`wails/frontend/src/three/physics3d.ts`). `WorldRenderer` holds a `Body3D`
+(x, y, z, velZ, grounded) for the local player, steps it through
+`PhysicsWorld3D.move` every frame — including while airborne with input
+blocked — and renders the self actor at the predicted height. `net.move`
+reports x, y, facing, the predicted z, and a `jump` flag (Space; interact
+moved to F). `reconcileBody3D` merges authoritative updates:
+>80px planar or >64px vertical divergence snaps outright, small grounded
+height drift absorbs, and a descending body lands when the server reports it
+grounded. Remote entities keep interpolating authoritative z.
+
+## Local browser preview
+
+Start `go run ./cmd/server` at the repository root, then run
+`npm run dev --prefix wails/frontend` and open
+`http://127.0.0.1:34115/world3d.html`.
+
+This separate development entry reads real public map snapshots and authored
+building stamps. It supplies a local explorer and biome travel controls without
+logging in or writing multiplayer progress. The healing button exercises the
+same combat-event effects used by the game. The production Wails entry is
+`index.html`; `world3d.html` is a development inspection page.
+
+## Scene editor (tools/editor → "Scene (3D)")
+
+A Unity-modelled editor for an authored 3D layer that sits on top of the
+procedural terrain. Run `npm run editor:dev` with the game server up (the
+editor proxies `/api` to `:8080` for map snapshots) and open
+`http://localhost:35215/?ws=scene`.
+
+Layout: Hierarchy (left, drag rows to reparent/reorder — world placement is
+preserved), Project prefab browser (below the Scene view; drag cards into the
+viewport or double-click to add at the camera focus), Scene view (centre) and
+Inspector (right: name/active, parent, transform, prefab props; with nothing
+selected it edits environment — sun, sky/fog).
+
+Scene view controls mirror Unity: **RMB** look + **WASD/QE** fly (Shift =
+fast), **MMB** pan, **Alt+LMB** orbit, wheel zoom, **F** frame selection,
+click to select, Shift+click to multi-select. Tools: **Q** view, **W** move,
+**E** rotate, **R** scale; **X** toggles global/local handles; snapping and
+step sizes are in the toolbar. **Ctrl+Z/Y** undo/redo, **Ctrl+D** duplicate,
+**Delete** removes the selection (with descendants). One gizmo drag or one
+inspector field edit is one undo step.
+
+Data model: `wails/frontend/src/three/scene3d.ts` (`Scene3DDoc`: objects with
+id/name/parent/prefab/transform/visible/props plus `environment`), and the
+prefab registry `wails/frontend/src/three/prefabs.ts` (buildings, nature,
+landmarks, primitives, lights, empty). Coordinates are Three.js world units
+(map px × `WORLD_SCALE`, Y up), rotations are Euler XYZ degrees, child
+transforms are parent-relative. Persistence is currently **Export/Import
+JSON** (`<map>.scene3d.json`) plus a localStorage autosave per map; the
+runtime loads the document — `MapSnapshot.scene3d` flows into `mapInfo`,
+`WorldRenderer` instantiates objects with `instantiatePrefab`, applies the
+environment (sun/sky/fog), and feeds `terrain` into `WorldHeightmap`.
+
+Editor code: `tools/editor/src/scene3d/` (store with undo history,
+`SceneView` Three.js viewport, transforms, api) and
+`tools/editor/src/ui/Scene{Hierarchy,Project,Inspector}.tsx`. The viewport
+reuses the game's `WorldHeightmap`/`TerrainWorld`/`WorldBuildings` so the
+terrain and baked 2D stamps look identical to the client.
+
+### Terrain, Characters and Effects modes
+
+The toolbar's mode tabs (`?mode=terrain` / `?mode=characters` /
+`?mode=effects`) reuse the same viewport for 3D authoring instead of scene
+objects:
+
+- **Terrain** sculpts the doc's `terrain` layer: LMB-drag paints the active
+  brush (raise / lower / flatten / smooth / paint-biome) into
+  `doc.terrain.heights` / `doc.terrain.cells`, streamed live into the
+  viewport heightmap (`SceneView.setTerrainBrush`, `applyTerrainBrush`);
+  each stroke is one undo step. The left panel lists brushes and the
+  authored-vertex/cell counts with clear buttons; the right inspector holds
+  radius/strength/elevation/biome settings (`ui/SceneTerrain.tsx`).
+
+- **Characters** edits `Rig3DDoc` rigs (`three/rig3d.ts`): bone tree, per-bone
+  transforms driven by the gizmo (`SceneView.setGizmoOverride`), primitive
+  parts with palette-role or fixed colors, `when` appearance conditions,
+  procedural limbs (phase/amplitude), glTF model + clip mapping, mount seat.
+  The left panel lists saved rigs merged with the compiled-in defaults
+  (`rig3dDefaults.ts`) plus preview controls (idle/run, appearance fields).
+  Saving writes `public/assets/rigs3d/<id>.rig3d.json` and an `index.json`
+  the runtime loads via `loadRigLibrary()`; `POST /editor-api/rigs3d/save`
+  keeps the index in sync. `GET /editor-api/rigs3d/models` lists glTF assets
+  under `public/assets/models/`.
+- **Effects** edits the same `VfxProfile` document as the 2D workspace
+  (`assets/vfx/profiles.json`), previewed by the Three.js `WorldVfx` player
+  (`three/vfx3d.ts`) against two rig stand-ins. The inspector is the shared
+  `EffectProfileForm` component (`ui/EffectProfileForm.tsx`) — identical
+  controls to the Phaser workspace.
+
+Both modes stage previews at the camera pivot via `view.stage` and
+`view.onFrame`; `onMapLoaded` re-anchors them when terrain loads. Dev-server
+rig routes live in `tools/editor/vite/rigsApi.ts`.
+
+## Validation
+
+Run `npm run test:3d --prefix wails/frontend` for terrain/movement regression
+checks, chunk eviction and particle lifetime checks. Run
+`npm run build --prefix wails/frontend` for TypeScript and production bundling.
+Use the browser preview to inspect terrain, click-to-walk, zoom, biome changes
+and effects; use the Wails client for multiplayer, hotbar and house transitions.

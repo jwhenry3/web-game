@@ -399,6 +399,11 @@ func (h *Hub) sendHouseStateTo(extra *Client) {
 	}
 	payloadFor := func(cl *Client) protocol.HouseStatePayload {
 		payload := base
+		// The scene snapshot is multi-MB; embed it only for the joining
+		// client — occupants keep the copy from their own join broadcast.
+		if extra != nil && cl.ID == extra.ID {
+			payload.Map = h.mapSnapshot()
+		}
 		payload.IsOwner = strings.EqualFold(cl.Name, ctx.Owner)
 		if payload.IsOwner {
 			if prof, ok := h.store.Get(ctx.Owner); ok {
