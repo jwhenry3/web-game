@@ -23,6 +23,12 @@ var validContentKinds = map[string]bool{
 	"skills":     true,
 	"drops":      true,
 	"characters": true,
+	"dialogues":  true,
+	"vendors":    true,
+	"recipes":    true,
+	"spawn_sets": true,
+	"statuses":   true,
+	"gameplay":   true, // unified schema-driven CMS document
 }
 
 // ValidContentKind reports whether kind is a supported content catalog name.

@@ -77,6 +77,64 @@ func (w PhysicsWorld3D) support(b Body3D, x, y, limit float64) float64 {
 	return h
 }
 
+// depenetrate pushes a body out of any collider it overlaps — without it a
+// body seated inside a solid box (e.g. furniture placed over the camp entry)
+// can never move: every swept candidate stays blocked. The disk exits through
+// the nearest face; bounded passes resolve corner pockets without looping.
+func (w PhysicsWorld3D) depenetrate(b *Body3D) {
+	if w.Bounds.Max.X > w.Bounds.Min.X {
+		b.Position.X = math.Max(w.Bounds.Min.X+b.Radius, math.Min(w.Bounds.Max.X-b.Radius, b.Position.X))
+	}
+	if w.Bounds.Max.Y > w.Bounds.Min.Y {
+		b.Position.Y = math.Max(w.Bounds.Min.Y+b.Radius, math.Min(w.Bounds.Max.Y-b.Radius, b.Position.Y))
+	}
+	for pass := 0; pass < 3; pass++ {
+		moved := false
+		for _, a := range w.nearby(b.Position.X, b.Position.Y, b.Radius) {
+			if !(b.Position.Z < a.Max.Z-1e-6 && b.Position.Z+b.Height > a.Min.Z+1e-6) {
+				continue
+			}
+			cx := math.Max(a.Min.X, math.Min(b.Position.X, a.Max.X))
+			cy := math.Max(a.Min.Y, math.Min(b.Position.Y, a.Max.Y))
+			dx, dy := b.Position.X-cx, b.Position.Y-cy
+			d2 := dx*dx + dy*dy
+			if d2 >= b.Radius*b.Radius-1e-8 {
+				continue
+			}
+			if d2 > 1e-10 {
+				// Center outside the box — push radially to the surface.
+				d := math.Sqrt(d2)
+				push := (b.Radius-d)/d + 1e-6
+				b.Position.X += dx * push
+				b.Position.Y += dy * push
+			} else {
+				// Center inside the box — exit through the nearest face.
+				best := math.Inf(1)
+				bx, by := 0.0, 0.0
+				for _, e := range [][3]float64{
+					{b.Position.X - (a.Min.X - b.Radius), -1, 0},
+					{(a.Max.X + b.Radius) - b.Position.X, 1, 0},
+					{b.Position.Y - (a.Min.Y - b.Radius), 0, -1},
+					{(a.Max.Y + b.Radius) - b.Position.Y, 0, 1},
+				} {
+					if e[0] > 0 && e[0] < best {
+						best, bx, by = e[0], e[1], e[2]
+					}
+				}
+				if math.IsInf(best, 1) {
+					continue
+				}
+				b.Position.X += bx * best
+				b.Position.Y += by * best
+			}
+			moved = true
+		}
+		if !moved {
+			break
+		}
+	}
+}
+
 // Move sweeps horizontal motion in increments smaller than the body radius,
 // then integrates vertical motion in bounded timesteps. Neither endpoint-only
 // collision nor client-provided elevation is used. dt=0 resolves planar intent
@@ -91,6 +149,7 @@ func (w PhysicsWorld3D) Move(b Body3D, target Vec2, dt float64) Body3D {
 	if b.Height <= 0 {
 		b.Height = 36
 	}
+	w.depenetrate(&b)
 	dt = math.Max(0, math.Min(.25, dt))
 	gravity := w.Gravity
 	if gravity <= 0 {

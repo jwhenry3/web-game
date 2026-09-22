@@ -355,6 +355,12 @@ func (h *Hub) sendHouseStateTo(extra *Client) {
 	if ctx == nil {
 		return
 	}
+	// Furniture is authored into the instance scene before producing either
+	// the map snapshot or its physics world, so guests see and collide with
+	// the exact same objects.
+	furniture := h.store.HouseFurnitureSnapshot(ctx.Owner)
+	h.overworld.SetHouseFurniture3D(furniture)
+	h.overworld.Scene3D.Map = h.mapID
 	col0, row0 := game.HouseWalkOrigin()
 	dc, dr := game.HouseDoorTile()
 	sc, sr := game.HouseStorageTile()
@@ -365,7 +371,7 @@ func (h *Hub) sendHouseStateTo(extra *Client) {
 		}
 		petsByOwner[p.OwnerID] = append(petsByOwner[p.OwnerID], protocol.HousePet{
 			ID: p.ID, Name: p.Name, Sprite: p.Sprite,
-			X: p.X, Y: p.Y, Facing: p.Facing,
+			X: p.X, Y: p.Y, Z: p.Z, Grounded: p.grounded, Facing: p.Facing,
 		})
 	})
 	players := make([]protocol.HousePlayer, 0, len(h.clients))
@@ -374,7 +380,7 @@ func (h *Hub) sendHouseStateTo(extra *Client) {
 			return
 		}
 		players = append(players, protocol.HousePlayer{
-			ID: pe.ID, Name: pe.Name, X: pe.X, Y: pe.Y, Facing: pe.Facing,
+			ID: pe.ID, Name: pe.Name, X: pe.X, Y: pe.Y, Z: pe.Z, Grounded: pe.grounded, Facing: pe.Facing,
 			Owner: strings.EqualFold(pe.Name, ctx.Owner),
 			Pets:  petsByOwner[pe.ID],
 		})
@@ -384,6 +390,7 @@ func (h *Hub) sendHouseStateTo(extra *Client) {
 		{ID: "storage", Kind: "storage", Name: "Storage", X: (float64(sc) + 0.5) * game.HouseTileSize, Y: (float64(sr) + 0.5) * game.HouseTileSize},
 	}
 	base := protocol.HouseStatePayload{
+		Map:           h.mapSnapshot(),
 		OwnerName:     ctx.Owner,
 		Skin:          ctx.Skin,
 		MapCols:       game.HouseMapCols,
@@ -394,7 +401,7 @@ func (h *Hub) sendHouseStateTo(extra *Client) {
 		WalkOriginRow: row0,
 		TileSize:      game.HouseTileSize,
 		Players:       players,
-		Furniture:     h.store.HouseFurnitureSnapshot(ctx.Owner),
+		Furniture:     furniture,
 		POIs:          pois,
 	}
 	payloadFor := func(cl *Client) protocol.HouseStatePayload {

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { normalizeComponents, isAncestor, type PrefabKind, type SceneComponents, type SceneEnvironment, type SceneObject, type SceneTransform, type Vec3 } from "../../../../wails/frontend/src/three/scene3d";
+import { normalizeComponents, isAncestor, SCENE_COMPONENT_DEFINITIONS, type PrefabKind, type SceneComponents, type SceneEnvironment, type SceneObject, type SceneTransform, type Vec3 } from "../../../../wails/frontend/src/three/scene3d";
 import { PREFAB_BY_ID, type PrefabProp } from "../../../../wails/frontend/src/three/prefabs";
 import { useSceneStore, type SceneStore } from "../scene3d/store";
 
@@ -69,15 +69,15 @@ export function ComponentsEditor({ components, apply, onBegin, onEnd }: {
     apply(normalizeComponents({ ...components, [key]: { ...components?.[key], [field]: value } }), transient);
   return (
     <>
-      {(['npc','poi','item','collider'] as const).map(key=> {
-        const component=components?.[key];
-        if(!component) return <button key={key} onClick={()=>apply(normalizeComponents({...components,[key]:{}}))}>Add {key.toUpperCase()}</button>;
-        return <Section key={key} title={key.toUpperCase()} right={<button onClick={()=>{const next={...components};delete next[key];apply(next);}}>Remove</button>}>
-          {Object.entries(component).map(([field,value])=> {
-            const label=field.replace(/[A-Z]/g,c=>` ${c.toLowerCase()}`);
-            if(Array.isArray(value))return <Vec3Row key={field} label={label} value={value as Vec3} onBegin={onBegin} onEnd={onEnd} onChange={v=>setComponent(key,field,v,true)}/>;
-            const options=field==='shape'?['box','capsule','sphere']:key==='poi'&&field==='type'?['save_point','job_changer','portal','camp','storage']:undefined;
-            return <div className="ed-row" key={field}><label>{label}</label>{typeof value==='boolean'?<input aria-label={`${key} ${label}`} type="checkbox" checked={value} onChange={e=>setComponent(key,field,e.target.checked)}/>:options?<select aria-label={`${key} ${label}`} value={String(value)} onChange={e=>setComponent(key,field,e.target.value)}>{options.map(o=><option key={o}>{o}</option>)}</select>:<input aria-label={`${key} ${label}`} type={typeof value==='number'?'number':'text'} min={0} step={field==='level'||field==='quantity'?1:.1} value={String(value)} onChange={e=>{if(typeof value==='number'){const n=e.target.valueAsNumber;if(Number.isFinite(n))setComponent(key,field,n);}else setComponent(key,field,e.target.value);}}/>}</div>;
+      {SCENE_COMPONENT_DEFINITIONS.map(def=> {
+        const key=def.key, component=components?.[key] as Record<string, unknown> | undefined;
+        if(!component) return <button key={key} title={def.description} onClick={()=>apply(normalizeComponents({...components,[key]:{}}))}>Add {def.label}</button>;
+        return <Section key={key} title={def.label} right={<button onClick={()=>{const next={...components};delete next[key];apply(next);}}>Remove</button>}>
+          <p className="ed-hint">{def.description}</p>
+          {def.fields.map(field=> {
+            const value=component[field.key];
+            if(field.type==='vec3')return <Vec3Row key={field.key} label={field.label} value={value as Vec3} onBegin={onBegin} onEnd={onEnd} onChange={v=>setComponent(key,field.key,v,true)}/>;
+            return <div className="ed-row" key={field.key}><label>{field.label}</label>{field.type==='boolean'?<input aria-label={`${def.label} ${field.label}`} type="checkbox" checked={value===true} onChange={e=>setComponent(key,field.key,e.target.checked)}/>:field.type==='select'?<select aria-label={`${def.label} ${field.label}`} value={String(value??'')} onChange={e=>setComponent(key,field.key,e.target.value)}>{field.options?.map(o=><option key={o}>{o}</option>)}</select>:<input aria-label={`${def.label} ${field.label}`} type={field.type==='number'?'number':'text'} min={field.min} step={field.step} value={String(value??'')} onChange={e=>{if(field.type==='number'){const n=e.target.valueAsNumber;if(Number.isFinite(n))setComponent(key,field.key,n);}else setComponent(key,field.key,e.target.value);}}/>}</div>;
           })}
         </Section>;
       })}

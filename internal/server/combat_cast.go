@@ -121,13 +121,10 @@ func skillContext(caster, target *entity, comboStep int) game.SkillContext {
 // applySkillTo resolves an instant or finished-cast skill from caster onto
 // target by dispatching the skill's effect components through the registry —
 // heals/buffs for ally skills, damage for enemy skills, statuses for both.
-// The caster must be a player (skills are player abilities).
+// Any entity can cast: player bookkeeping (GCD, proficiency growth, weapon
+// synergy) is clientControl-gated and simply skips NPC casters.
 func (h *Hub) applySkillTo(caster, target *entity, skill game.Skill, res protocol.CombatEventPayload) {
 	now := time.Now()
-	cc := clientControlOf(caster)
-	if cc == nil {
-		return
-	}
 	ally := game.SkillTargetsAlly(skill)
 	if caster.casting == nil && game.SkillCastTime(skill) == 0 {
 		caster.mp -= skill.MPCost

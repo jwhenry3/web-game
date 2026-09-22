@@ -22,7 +22,7 @@ export class MovementKeys {
 }
 
 /** Swept, feet-circle collision in authoritative map pixels. */
-export function moveOnMap(map: OverworldMap, x: number, y: number, dx: number, dy: number, dt: number, speed = 180) {
+export function moveOnMap(map: OverworldMap, x: number, y: number, dx: number, dy: number, dt: number, speed = 90) {
   const length = Math.hypot(dx, dy);
   if (!length || dt <= 0) return { x, y };
   const distance = speed * Math.min(dt, .05);

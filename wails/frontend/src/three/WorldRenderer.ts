@@ -2,10 +2,10 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { uiOwnsKeyboard, useGame } from "../state/store";
 import { net } from "../net/socket";
-import { mergeKeybinds } from "../input/keybinds";
+import { bindingMatchesEvent, mergeKeybinds } from "../input/keybinds";
 import { clearWorldLocalPos, setWorldLocalPos } from "../world/worldLocalPos";
 import { clearWorldViewRect, setWorldViewRect } from "../world/viewRect";
-import { clearEntityOverlays, setWorldOverlays, type EntityOverlayMark, type PoiLabelMark, type InteractPromptMark } from "../world/entityOverlayBridge";
+import { EntityMark, TextMark, setInteractPrompt, setPoiLabel, unitPerPixel, type PoiMarkVariant } from "./marks";
 import { canShowWorldInteractPrompts, interactKeyLabel } from "../world/interact";
 import { findPath, type PathPoint } from "../world/pathfind";
 import { WorldHeightmap, WORLD_SCALE, WORLD_ZOOM } from "./heightmap";
@@ -13,14 +13,19 @@ import { TerrainWorld, disposeObject } from "./terrain";
 import { childrenByParent, type Scene3DDoc, type SceneObject } from "./scene3d";
 import { instantiatePrefab } from "./prefabs";
 import { actorSignature, animateActor, createActor, WorldEffects, type Actor3D } from "./actors";
-import { loadRigLibrary } from "./rigBuilder";
-import { vfxCategoryForAction } from "../phaser/battleVfxProfiles";
+import { buildRig, getRig, loadRigLibrary, type RigInstance } from "./rigBuilder";
+import { npcAppearance } from "../characters/npcs";
+import { vfxCategoryForAction } from "../vfx/battleVfxProfiles";
 import { WorldBuildings } from "./props";
 import { movementYaw, MovementKeys } from "./motion";
 import { JUMP_VELOCITY, newBody3D, overworldPhysics3D, reconcileBody3D, type Body3D, type PhysicsWorld3D } from "./physics3d";
 
 type State = ReturnType<typeof useGame.getState>;
-type Poi = { root: THREE.Group; label: string; variant: PoiLabelMark["variant"]; x: number; y: number; spin?: THREE.Mesh };
+type Poi = { root: THREE.Group; label: string; variant: PoiMarkVariant; x: number; y: number; spin?: THREE.Mesh; rig?: RigInstance };
+type PoiMark = { anchor: THREE.Group; label: TextMark; prompt: TextMark };
+
+const LOCK_ORBIT_LIMIT = Math.PI / 6;
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class WorldRenderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -34,6 +39,9 @@ export class WorldRenderer {
   private effects = new WorldEffects();
   private actors = new Map<string, Actor3D>();
   private pois = new Map<string, Poi>();
+  private markLayer = new THREE.Group();
+  private entityMarks = new Map<string, EntityMark>();
+  private poiMarks = new Map<string, PoiMark>();
   private keys = new MovementKeys();
   private path: PathPoint[] = [];
   private position: PathPoint | null = null;
@@ -46,7 +54,6 @@ export class WorldRenderer {
   private layers?: State["mapInfo"];
   private lastTime = 0;
   private lastSent = 0;
-  private lastOverlay = 0;
   private lastEvent = 0;
   private lastAuthority = "";
   private frame = 0;
@@ -60,9 +67,22 @@ export class WorldRenderer {
   private dashReady = 0;
   private direction = { x: 0, y: 0 };
   private shiftChord = false;
+  private lockOn = false;
+  private lockInit = false;
+  private lockOffset = 0;
+  private lockAxis = 0;
+  private lockTheta = 0;
+  private lastMoveYaw = 0;
   private resetCamera = true;
   private camOptSig = "";
   private castFx = new Map<string, () => void>();
+  private castTethers = new Map<string, { targetId: string; stop: () => void }>();
+  private prevEngaged = new Map<string, boolean>();
+  /** Last `alive` value seen per entity — the server omits hidden pets/NPCs
+   * outright, so a despawn is only a death if a projection/combat event
+   * showed the entity dead before it vanished. */
+  private aliveSeen = new Map<string, boolean>();
+  private dying = new Map<string, { actor: Actor3D; mats: THREE.Material[]; until: number }>();
 
   constructor(private host: HTMLDivElement, private onError: (message: string) => void) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
@@ -76,7 +96,7 @@ export class WorldRenderer {
     host.appendChild(this.renderer.domElement);
     this.scene.background = new THREE.Color(0xbccdd0);
     this.scene.fog = new THREE.Fog(0xbccdd0, 28, 65);
-    this.scene.add(new THREE.HemisphereLight(0xc9e4ee, 0x716646, 2), this.sun, this.sun.target, this.effects.group);
+    this.scene.add(new THREE.HemisphereLight(0xc9e4ee, 0x716646, 2), this.sun, this.sun.target, this.effects.group, this.markLayer);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     Object.assign(this.sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 85 });
@@ -112,10 +132,72 @@ export class WorldRenderer {
   private onVisibility = () => { if (document.hidden) this.onBlur(); this.lastTime = 0; };
   private onKeyDown = (event: KeyboardEvent) => {
     if (uiOwnsKeyboard() || event.metaKey || event.ctrlKey || event.altKey) return;
+    const state = useGame.getState();
+    if (bindingMatchesEvent(mergeKeybinds(state.profile?.keybinds).target_lock ?? "h", event)) {
+      event.preventDefault();
+      this.toggleTargetLock(state);
+      return;
+    }
     if (event.shiftKey && event.key !== "Shift") this.shiftChord = true;
     if (event.key === " ") this.jumpQueued = true;
     this.keys.down(event.key);
   };
+
+  /** FFXI-style target lock: the camera keeps the focus target framed until
+   * it is released, lost, or the key is pressed again. */
+  private toggleTargetLock(state: State) {
+    if (this.lockOn) { this.lockOn = false; return; }
+    const targetId = state.selfId ? state.entities[state.selfId]?.target_id : undefined;
+    const target = targetId ? state.entities[targetId] : undefined;
+    if (!target?.alive || target.in_house) return;
+    this.lockOn = true;
+    this.lockInit = false;
+  }
+
+  /** While locked, the camera anchor slides toward the target and the orbit
+   * azimuth tracks the player→target axis. Orbit input becomes a persistent
+   * offset around that axis (clamped to ±LOCK_ORBIT_LIMIT) instead of writing
+   * the azimuth directly, so the user's bias sticks while moving — and the
+   * player can't be rotated out of the viewport. */
+  private updateLockCamera(state: State, dt: number) {
+    if (!this.lockOn) return;
+    const targetId = state.selfId ? state.entities[state.selfId]?.target_id : undefined;
+    const actor = targetId ? this.actors.get(targetId) : undefined;
+    const entity = targetId ? state.entities[targetId] : undefined;
+    if (!this.position || !actor || !entity?.alive || entity.in_house) { this.lockOn = false; return; }
+    const player = this.worldPoint(this.position.x, this.position.y, .6);
+    const enemy = actor.root.position;
+    const anchor = player.clone().lerp(enemy, .45);
+    const sph = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
+    const dx = player.x - enemy.x, dz = player.z - enemy.z;
+    const hasAxis = dx * dx + dz * dz > .01;
+    if (!this.lockInit) {
+      // Seed from the live camera so engaging lock never snaps the view.
+      this.lockOffset = THREE.MathUtils.clamp(wrapAngle(sph.theta - (hasAxis ? Math.atan2(dx, dz) : sph.theta)), -LOCK_ORBIT_LIMIT, LOCK_ORBIT_LIMIT);
+      this.lockAxis = sph.theta - this.lockOffset;
+      this.lockTheta = sph.theta;
+      this.lockInit = true;
+    }
+    const orbitDelta = wrapAngle(sph.theta - this.lockTheta);
+    this.lockTheta = sph.theta;
+    this.lockOffset = THREE.MathUtils.clamp(this.lockOffset + orbitDelta, -LOCK_ORBIT_LIMIT, LOCK_ORBIT_LIMIT);
+    if (hasAxis) this.lockAxis += wrapAngle(Math.atan2(dx, dz) - this.lockAxis) * (1 - Math.exp(-dt * 6));
+    this.lockTheta += wrapAngle(this.lockAxis + this.lockOffset - this.lockTheta) * (1 - Math.exp(-dt * 8));
+    this.lockTheta = this.lockAxis + THREE.MathUtils.clamp(wrapAngle(this.lockTheta - this.lockAxis), -LOCK_ORBIT_LIMIT, LOCK_ORBIT_LIMIT);
+    sph.theta = this.lockTheta;
+    this.controls.target.copy(anchor);
+    this.camera.position.copy(anchor).add(new THREE.Vector3().setFromSpherical(sph));
+  }
+
+  /** Focus facing: while target-locked or casting, the player faces the
+   * focus/cast target and strafes rather than turning with movement. */
+  private faceTargetId(state: State): string | undefined {
+    const self = state.selfId ? state.entities[state.selfId] : undefined;
+    if (!self) return undefined;
+    const id = self.casting_skill_id ? self.cast_target_id ?? self.target_id : this.lockOn ? self.target_id : undefined;
+    const target = id ? state.entities[id] : undefined;
+    return target?.alive && !target.in_house ? id : undefined;
+  }
   private onKeyUp = (event: KeyboardEvent) => {
     this.keys.up(event.key);
     if (event.key !== "Shift") return;
@@ -151,6 +233,23 @@ export class WorldRenderer {
 
   private worldPoint(x: number, y: number, height = 0) {
     return new THREE.Vector3(x * WORLD_SCALE, (this.terrain?.field.height(x, y) ?? 0) + height, y * WORLD_SCALE);
+  }
+
+  private camViewSig = "";
+  /** Persist the current orbit (distance/elevation/azimuth relative to the
+   * follow target) into game state so map transitions restore the player's
+   * view instead of snapping to the spawn default. Runs each tick after
+   * controls.update() — OrbitControls' "end" event fires *before* wheel
+   * dollies/damping land, so an event-time capture stores the pre-zoom
+   * distance. Deduped on a rounded signature so it only writes while the
+   * view is actually changing. */
+  private syncCameraView() {
+    const sph = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(this.controls.target));
+    if (!Number.isFinite(sph.radius) || sph.radius <= 0) return;
+    const sig = `${sph.radius.toFixed(2)}|${sph.phi.toFixed(3)}|${sph.theta.toFixed(3)}`;
+    if (sig === this.camViewSig) return;
+    this.camViewSig = sig;
+    useGame.getState().setCameraView({ distance: sph.radius, pitch: sph.phi, azimuth: sph.theta });
   }
 
   private cameraOffset(options: State["options"], azimuth = this.controls.getAzimuthalAngle()) {
@@ -194,12 +293,18 @@ export class WorldRenderer {
     const id = state.mapInfo?.id ?? "world";
     const doc = state.mapInfo?.scene3d;
     if (this.terrain && this.mapId === id && this.cells === map.cells && this.layers?.terrainLayers === state.mapInfo?.terrainLayers && this.layers?.scene3d === doc && this.terrain.field.map.cols === map.cols && this.terrain.field.map.rows === map.rows && this.terrain.field.map.tile === map.tile) return;
+    // Preserve the orbit the player left the previous map with — the camera
+    // still holds it until `resetCamera` consumes it below.
+    if (this.position) this.syncCameraView();
     this.terrain?.dispose(); this.buildings?.dispose();
     if (this.sceneObjects) { this.scene.remove(this.sceneObjects); disposeObject(this.sceneObjects); this.sceneObjects = undefined; }
     for (const actor of this.actors.values()) disposeObject(actor.root); this.actors.clear();
+    for (const d of this.dying.values()) { this.scene.remove(d.actor.root); disposeObject(d.actor.root); } this.dying.clear();
     for (const poi of this.pois.values()) disposeObject(poi.root); this.pois.clear();
     this.effects.dispose(); this.effects = new WorldEffects(); this.scene.add(this.effects.group);
     for (const stop of this.castFx.values()) stop(); this.castFx.clear();
+    this.aliveSeen.clear();
+    this.clearMarks();
     this.mapId = id; this.cells = map.cells; this.layers = state.mapInfo;
     const field = new WorldHeightmap(map, state.mapInfo?.terrainLayers, doc?.terrain);
     this.terrain = new TerrainWorld(field); this.scene.add(this.terrain.group);
@@ -212,6 +317,10 @@ export class WorldRenderer {
       this.scene.background = sky;
       this.scene.fog = new THREE.Fog(sky, env.fogNear, env.fogFar);
       this.sceneObjects = this.buildSceneObjects(doc); this.scene.add(this.sceneObjects);
+    } else {
+      this.sun.color.set(0xffe5b7); this.sun.intensity = 2.6;
+      this.scene.background = new THREE.Color(0xbccdd0);
+      this.scene.fog = new THREE.Fog(0xbccdd0, 28, 65);
     }
     this.position = null; this.body = null; this.path = []; this.lastAuthority = ""; this.resetCamera = true; this.jumpQueued = false;
     this.lastEvent = state.combatEvents.at(-1)?.seq ?? 0;
@@ -238,7 +347,7 @@ export class WorldRenderer {
     }
     const old = { x: body.pos.x, y: body.pos.y, z: body.pos.z };
     let dx = 0, dy = 0, jump = false;
-    const allowed = state.screen === "world" && state.connected && !state.transition && self.alive && !self.in_house && !uiOwnsKeyboard();
+    const allowed = state.screen === "world" && state.connected && !state.transition && self.alive && !uiOwnsKeyboard();
     if (allowed) {
       const binds = mergeKeybinds(state.profile?.keybinds);
       const { x: horizontal, y: vertical } = this.keys.read(binds);
@@ -258,7 +367,7 @@ export class WorldRenderer {
       }
       if (dx || dy) {
         const len = Math.hypot(dx, dy); this.direction = { x: dx / len, y: dy / len };
-        const speed = dashing ? 64 / .18 : 180 * (self.mounted ? 1.25 : 1);
+        const speed = dashing ? 64 / .18 : 90 * (self.mounted ? 1.25 : 1);
         this.physics?.move(body, body.pos.x + this.direction.x * speed * dt, body.pos.y + this.direction.y * speed * dt, dt);
         if (this.path.length && body.pos.x === old.x && body.pos.y === old.y) this.path = [];
       } else {
@@ -272,9 +381,13 @@ export class WorldRenderer {
     }
     this.position = { x: body.pos.x, y: body.pos.y };
     const moved = Math.hypot(body.pos.x - old.x, body.pos.y - old.y) > .01;
-    if (state.connected && (jump || (moved && now - this.lastSent >= 100) || (!moved && this.moving))) {
-      net.move(Math.round(body.pos.x), Math.round(body.pos.y), movementYaw(this.direction.x, this.direction.y), jump, body.pos.z);
+    const focusEnt = state.entities[this.faceTargetId(state) ?? ""];
+    const yaw = focusEnt ? movementYaw(focusEnt.x - body.pos.x, focusEnt.y - body.pos.y) : movementYaw(this.direction.x, this.direction.y);
+    const facingShift = Math.abs(wrapAngle(yaw - this.lastMoveYaw)) > .05;
+    if (state.connected && (jump || (moved && now - this.lastSent >= 100) || (!moved && this.moving) || (facingShift && now - this.lastSent >= 100))) {
+      net.move(Math.round(body.pos.x), Math.round(body.pos.y), yaw, jump, body.pos.z);
       this.lastSent = now;
+      this.lastMoveYaw = yaw;
     }
     this.moving = moved;
     setWorldLocalPos(this.position.x, this.position.y);
@@ -285,8 +398,12 @@ export class WorldRenderer {
     if (!this.position) return;
     const active = new Set<string>();
     for (const entity of Object.values(state.entities)) {
+      this.aliveSeen.set(entity.id, entity.alive);
       const self = entity.id === state.selfId;
       if (entity.in_house || (!self && Math.hypot(entity.x - this.position.x, entity.y - this.position.y) > 1800)) continue;
+      // Dead NPCs/pets drop out of `active` so the removal path fades the
+      // corpse; dead players stay synced lying on their side until respawn.
+      if (!entity.alive && entity.kind !== "player") continue;
       active.add(entity.id);
       let actor = this.actors.get(entity.id);
       if (actor && actor.signature !== actorSignature(entity)) { disposeObject(actor.root); this.actors.delete(entity.id); actor = undefined; }
@@ -303,7 +420,13 @@ export class WorldRenderer {
       const feetZ = self && this.body ? this.body.pos.z : entity.z;
       actor.root.position.y = Number.isFinite(feetZ) ? Math.max(groundY, feetZ * WORLD_SCALE) : groundY;
       const delta = actor.root.position.clone().sub(old).divideScalar(WORLD_SCALE);
-      if (delta.lengthSq() > .01) actor.root.rotation.y = Math.atan2(delta.x, delta.z);
+      const focusId = self ? this.faceTargetId(state) : undefined;
+      const focusEnt = focusId ? state.entities[focusId] : undefined;
+      if (focusEnt) {
+        const faceYaw = Math.atan2(focusEnt.x - point.x, focusEnt.y - point.y);
+        actor.root.rotation.y += wrapAngle(faceYaw - actor.root.rotation.y) * (1 - Math.exp(-dt * 14));
+      } else if (delta.lengthSq() > .01) actor.root.rotation.y = Math.atan2(delta.x, delta.z);
+      if (self) setWorldLocalPos(this.position.x, this.position.y, actor.root.rotation.y);
       animateActor(actor, self ? this.moving : delta.lengthSq() > .02, time, entity.alive, dt);
       const focus = state.selfId ? state.entities[state.selfId]?.target_id : undefined;
       actor.ring.visible = self || entity.id === focus;
@@ -313,18 +436,88 @@ export class WorldRenderer {
       } else if (!casting && this.castFx.has(entity.id)) {
         this.castFx.get(entity.id)!(); this.castFx.delete(entity.id);
       }
+      // Intent ribbon actor → cast target for the duration of the cast.
+      const castTargetId = casting ? (entity.cast_target_id ?? entity.target_id) : undefined;
+      const castTarget = castTargetId && castTargetId !== entity.id
+        ? (this.actors.get(castTargetId) ?? this.dying.get(castTargetId)?.actor) : undefined;
+      const tether = this.castTethers.get(entity.id);
+      if (castTarget && tether?.targetId !== castTargetId) {
+        tether?.stop();
+        this.castTethers.set(entity.id, {
+          targetId: castTargetId!,
+          stop: this.effects.startTether(actor.root, castTarget.root, this.effects.categoryColor(vfxCategoryForAction(entity.casting_skill_id!))),
+        });
+      } else if (tether && !castTarget) {
+        tether.stop(); this.castTethers.delete(entity.id);
+      }
+      // Engaging a target flashes a brief intent ribbon — "starting to attack".
+      const engaged = entity.alive && !!entity.engaged;
+      if (engaged && !this.prevEngaged.get(entity.id) && entity.target_id && entity.target_id !== entity.id) {
+        const tgt = this.actors.get(entity.target_id) ?? this.dying.get(entity.target_id)?.actor;
+        if (tgt && tgt !== actor) this.effects.flashTether(actor.root, tgt.root, this.effects.categoryColor(vfxCategoryForAction("attack")));
+      }
+      this.prevEngaged.set(entity.id, engaged);
     }
-    for (const [id, actor] of this.actors) if (!active.has(id)) { this.castFx.get(id)?.(); this.castFx.delete(id); disposeObject(actor.root); this.actors.delete(id); }
+    for (const [id, actor] of this.actors) if (!active.has(id)) {
+      this.castFx.get(id)?.(); this.castFx.delete(id);
+      this.castTethers.get(id)?.stop(); this.castTethers.delete(id); this.prevEngaged.delete(id);
+      this.actors.delete(id);
+      // A removal only earns the corpse fade if the entity was actually seen
+      // dead — dismiss/mount/teleport vanish pets while they're still alive.
+      const died = this.aliveSeen.get(id) === false && actor.root.userData.kind !== "player";
+      this.aliveSeen.delete(id);
+      if (died) this.startDying(actor, time);
+      else {
+        this.effects.burst(actor.root.position.clone(), 0xbfd4dc);
+        this.scene.remove(actor.root); disposeObject(actor.root);
+      }
+    }
+    this.fadeDying(time);
   }
 
-  private syncPois(state: State, time: number) {
+  /** Collapse the actor into its death pose and fade it out over 2s so the
+   * killing blow's effect reads before the corpse leaves the scene. */
+  private startDying(actor: Actor3D, time: number) {
+    animateActor(actor, false, time, false, 1 / 60);
+    actor.ring.visible = false;
+    const mats: THREE.Material[] = [];
+    actor.root.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || o === actor.ring) return;
+      const src = o.material;
+      const cloned = (Array.isArray(src) ? src.map((m) => m.clone()) : src.clone()) as THREE.Material | THREE.Material[];
+      for (const m of Array.isArray(cloned) ? cloned : [cloned]) { m.transparent = true; m.depthWrite = false; mats.push(m); }
+      o.material = cloned;
+    });
+    this.dying.set(actor.root.userData.entityId, { actor, mats, until: time + 2 });
+  }
+
+  private fadeDying(time: number) {
+    for (const [id, d] of this.dying) {
+      const opacity = THREE.MathUtils.clamp(d.until - time, 0, 2) / 2;
+      for (const m of d.mats) m.opacity = opacity;
+      if (opacity <= 0) { this.scene.remove(d.actor.root); disposeObject(d.actor.root); this.dying.delete(id); }
+    }
+  }
+
+  private syncPois(state: State, dt: number, time: number) {
     if (!this.position) return;
     const active = new Set<string>();
-    const entries = [
+    const entries: Array<{ id?: string; key: string; name: string; variant: PoiMarkVariant; x: number; y: number; authored?: boolean }> = [
       ...Object.values(state.savePoints).map(p => ({ ...p, key: `save:${p.id}`, variant: "save" as const })),
       ...Object.values(state.jobChangers).map(p => ({ ...p, key: `job:${p.id}`, variant: "job" as const })),
       ...Object.values(state.camps).map(p => ({ ...p, name: `${p.owner_name}'s camp`, key: `camp:${p.owner_name}`, variant: "camp" as const })),
     ];
+    const authoredPositions = new Map<string, THREE.Vector3>();
+    this.sceneObjects?.updateMatrixWorld(true);
+    this.sceneObjects?.traverse(node => {
+      if (typeof node.userData.sceneId === "string") authoredPositions.set(node.userData.sceneId, node.getWorldPosition(new THREE.Vector3()));
+    });
+    for (const object of state.mapInfo?.scene3d?.objects ?? []) {
+      const component = object.components?.poi;
+      const point = authoredPositions.get(object.id);
+      if (!component?.enabled || !object.visible || !point) continue;
+      entries.push({ key: `scene:${object.id}`, name: component.label || object.name, variant: component.type === "save_point" ? "save" : component.type === "job_changer" ? "job" : component.type === "camp" ? "camp" : "house-poi", x: point.x / WORLD_SCALE, y: point.z / WORLD_SCALE, authored: true });
+    }
     for (const p of entries) {
       if (Math.hypot(p.x - this.position.x, p.y - this.position.y) > 1600) continue;
       active.add(p.key);
@@ -333,37 +526,121 @@ export class WorldRenderer {
         const root = new THREE.Group();
         root.scale.setScalar(WORLD_ZOOM);
         const save = p.variant === "save";
-        const base = new THREE.Mesh(new THREE.CylinderGeometry(.45, .62, .26, 8), new THREE.MeshStandardMaterial({ color: 0x9c9c90 }));
-        base.position.y = .13; base.castShadow = base.receiveShadow = true; root.add(base);
-        const spin = new THREE.Mesh(save ? new THREE.OctahedronGeometry(.42) : new THREE.ConeGeometry(.65, 1.4, 4), new THREE.MeshStandardMaterial({ color: save ? 0x83e5e0 : 0xd5ad6c, emissive: save ? 0x2caaab : 0x382510, emissiveIntensity: save ? 1.1 : .2, roughness: .4, metalness: .15 }));
-        spin.position.y = 1.2; spin.scale.y = save ? 1.7 : 1; spin.castShadow = true; root.add(spin);
-        if (save) { const light = new THREE.PointLight(0x6bded4, 4, 4 * WORLD_ZOOM); light.position.y = 1.3; root.add(light); }
-        poi = { root, label: p.name, variant: p.variant, x: p.x, y: p.y, spin: save ? spin : undefined };
+        if (!p.authored) {
+          const base = new THREE.Mesh(new THREE.CylinderGeometry(.45, .62, .26, 8), new THREE.MeshStandardMaterial({ color: 0x9c9c90 }));
+          base.position.y = .13; base.castShadow = base.receiveShadow = true; root.add(base);
+        }
+        let spin: THREE.Mesh | undefined;
+        let rig: RigInstance | undefined;
+        if (!p.authored && p.variant === "job") {
+          // Job masters are townsfolk, not markers — the shared humanoid rig
+          // at human scale (the poi root carries the WORLD_ZOOM marker scale).
+          rig = buildRig(getRig("humanoid"), { appearance: npcAppearance("job_master"), scale: .5 });
+          rig.root.position.y = .26;
+          root.add(rig.root);
+        } else if (!p.authored) {
+          spin = new THREE.Mesh(save ? new THREE.OctahedronGeometry(.42) : new THREE.ConeGeometry(.65, 1.4, 4), new THREE.MeshStandardMaterial({ color: save ? 0x83e5e0 : 0xd5ad6c, emissive: save ? 0x2caaab : 0x382510, emissiveIntensity: save ? 1.1 : .2, roughness: .4, metalness: .15 }));
+          spin.position.y = 1.2; spin.scale.y = save ? 1.7 : 1; spin.castShadow = true; root.add(spin);
+        }
+        if (save && !p.authored) { const light = new THREE.PointLight(0x6bded4, 4, 4 * WORLD_ZOOM); light.position.y = 1.3; root.add(light); }
+        poi = { root, label: p.name, variant: p.variant, x: p.x, y: p.y, spin: save ? spin : undefined, rig };
         this.pois.set(p.key, poi); this.scene.add(root);
       }
       poi.x = p.x; poi.y = p.y; poi.label = p.name; poi.root.position.copy(this.worldPoint(p.x, p.y));
       if (poi.spin) { poi.spin.rotation.y = time * .5; poi.spin.position.y = 1.2 + Math.sin(time * 2) * .12; }
+      poi.rig?.update(dt, time, false, true);
     }
-    for (const [id, poi] of this.pois) if (!active.has(id)) { disposeObject(poi.root); this.pois.delete(id); }
+    for (const [id, poi] of this.pois) if (!active.has(id)) { poi.rig?.dispose(); disposeObject(poi.root); this.pois.delete(id); }
   }
 
-  private overlays(state: State) {
-    const w = this.host.clientWidth, h = this.host.clientHeight;
-    const project = (position: THREE.Vector3) => { const p = position.clone().project(this.camera); return { x: (p.x + 1) * w / 2, y: (1 - p.y) * h / 2, visible: p.z > -1 && p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1 }; };
-    const entities: EntityOverlayMark[] = [], pois: PoiLabelMark[] = [], interacts: InteractPromptMark[] = [];
+  /** Floating marks live in the scene — every tick they re-anchor to their
+   * actor/POI and rescale for a fixed screen size. */
+  private markScratch = new THREE.Vector3();
+
+  private clearMarks() {
+    for (const mark of this.entityMarks.values()) mark.dispose();
+    this.entityMarks.clear();
+    for (const pm of this.poiMarks.values()) { pm.label.dispose(); pm.prompt.dispose(); }
+    this.poiMarks.clear();
+    this.markLayer.clear();
+  }
+
+  private syncMarks(state: State) {
+    const h = this.host.clientHeight;
+    const seenE = new Set<string>(), seenP = new Set<string>();
+    const selfTarget = state.selfId ? state.entities[state.selfId]?.target_id : undefined;
     for (const [id, actor] of this.actors) {
-      const entity = state.entities[id]; if (!entity) continue;
-      const feet = project(actor.root.position), head = project(actor.root.position.clone().add(new THREE.Vector3(0, 1.85, 0)));
-      if (!head.visible) continue;
+      const entity = state.entities[id];
+      if (!entity || entity.in_house) continue;
+      seenE.add(id);
+      let mark = this.entityMarks.get(id);
+      if (!mark) {
+        mark = new EntityMark();
+        this.entityMarks.set(id, mark);
+        this.markLayer.add(mark.group, mark.castGroup);
+      }
+      const head = this.markScratch.copy(actor.root.position);
+      head.y += 1.85;
+      mark.group.position.copy(head);
+      mark.castGroup.position.copy(actor.root.position);
+      mark.castGroup.position.y += 0.45;
+      const u = unitPerPixel(this.camera, this.camera.position.distanceTo(head), h);
       const self = id === state.selfId;
-      entities.push({ id, label: entity.name, variant: self ? "self" : entity.kind === "npc" && !entity.is_ally ? "enemy" : "player", screenX: feet.x, screenY: feet.y, nameX: head.x, nameY: head.y, castX: feet.x, castY: feet.y + 12, castPct: entity.casting_skill_id ? entity.cast_progress ?? 0 : undefined, hp: entity.hp < entity.max_hp || entity.engaged ? { value: entity.hp, max: entity.max_hp } : undefined, statuses: entity.statuses, targeted: !!state.selfId && state.entities[state.selfId]?.target_id === id });
+      const hp = entity.hp < entity.max_hp || entity.engaged ? { value: entity.hp, max: entity.max_hp } : undefined;
+      const mp =
+        entity.max_mp && (hp || (entity.mp ?? 0) < entity.max_mp)
+          ? { value: entity.mp ?? 0, max: entity.max_mp }
+          : undefined;
+      mark.update({
+        label: entity.name,
+        variant: self ? "self" : entity.kind === "npc" && !entity.is_ally ? "enemy" : "player",
+        hp,
+        mp,
+        castPct: entity.casting_skill_id ? entity.cast_progress ?? 0 : undefined,
+        statuses: entity.statuses,
+        targeted: selfTarget === id,
+        locked: this.lockOn && selfTarget === id,
+        jobId: self ? state.profile?.main_job : undefined,
+      }, u);
+    }
+    for (const [id, mark] of this.entityMarks) {
+      if (seenE.has(id)) continue;
+      this.markLayer.remove(mark.group, mark.castGroup);
+      mark.dispose();
+      this.entityMarks.delete(id);
     }
     for (const [id, poi] of this.pois) {
-      const p = project(poi.root.position.clone().add(new THREE.Vector3(0, 2.25 * WORLD_ZOOM, 0))); if (!p.visible) continue;
-      pois.push({ id, label: poi.label, variant: poi.variant, x: p.x, y: p.y });
-      if (this.position && canShowWorldInteractPrompts(state) && Math.hypot(poi.x - this.position.x, poi.y - this.position.y) <= 80) interacts.push({ id, keyLabel: interactKeyLabel(state.profile?.keybinds), x: p.x, y: p.y - 24 });
+      seenP.add(id);
+      let pm = this.poiMarks.get(id);
+      if (!pm) {
+        pm = { anchor: new THREE.Group(), label: new TextMark(), prompt: new TextMark() };
+        pm.anchor.add(pm.label.sprite, pm.prompt.sprite);
+        this.markLayer.add(pm.anchor);
+        this.poiMarks.set(id, pm);
+      }
+      const pos = this.markScratch.copy(poi.root.position);
+      pos.y += 2.25 * WORLD_ZOOM;
+      pm.anchor.position.copy(pos);
+      const u = unitPerPixel(this.camera, this.camera.position.distanceTo(pos), h);
+      setPoiLabel(pm.label, poi.label, poi.variant);
+      pm.label.layout(u);
+      const near =
+        this.position &&
+        canShowWorldInteractPrompts(state) &&
+        Math.hypot(poi.x - this.position.x, poi.y - this.position.y) <= 80;
+      pm.prompt.sprite.visible = !!near;
+      if (near) {
+        setInteractPrompt(pm.prompt, interactKeyLabel(state.profile?.keybinds));
+        pm.prompt.layout(u, 0, -18);
+      }
     }
-    setWorldOverlays({ entities, pois, interacts });
+    for (const [id, pm] of this.poiMarks) {
+      if (seenP.has(id)) continue;
+      this.markLayer.remove(pm.anchor);
+      pm.label.dispose();
+      pm.prompt.dispose();
+      this.poiMarks.delete(id);
+    }
     // Conservative ground frustum bounds for keyboard target cycling.
     const points: THREE.Vector3[] = [];
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(this.controls.target.y - .6));
@@ -378,31 +655,43 @@ export class WorldRenderer {
       const state = useGame.getState(); this.syncMap(state); this.move(state, dt, now);
       if (this.position && this.terrain) {
         this.terrain.update(this.position.x, this.position.y, now / 1000, this.camera);
-        this.syncActors(state, dt, now / 1000); this.syncPois(state, now / 1000);
+        this.syncActors(state, dt, now / 1000);  this.syncPois(state, dt, now / 1000);
         const o = state.options;
         const target = this.worldPoint(this.position.x, this.position.y, .6);
         const ox = THREE.MathUtils.clamp(o.cameraOffsetX, -10, 10), oy = THREE.MathUtils.clamp(o.cameraOffsetY, -10, 10);
         if (ox || oy) target.add(new THREE.Vector3(ox, oy, 0).applyQuaternion(this.camera.quaternion));
         if (this.resetCamera) {
           this.controls.target.copy(target);
-          this.camera.position.copy(target).add(this.cameraOffset(o, Math.atan2(10, 15)));
+          const view = state.cameraView;
+          this.camera.position.copy(target).add(
+            view
+              ? new THREE.Vector3().setFromSphericalCoords(
+                  THREE.MathUtils.clamp(view.distance, this.controls.minDistance, this.controls.maxDistance),
+                  THREE.MathUtils.clamp(view.pitch, this.controls.minPolarAngle, this.controls.maxPolarAngle),
+                  view.azimuth)
+              : this.cameraOffset(o, Math.atan2(10, 15)));
           this.camOptSig = `${o.cameraDistance}|${o.cameraPitch}`;
           this.resetCamera = false;
         }
         this.applyCameraOptions(o);
         const next = this.controls.target.clone().lerp(target, 1 - Math.exp(-dt * 9));
-        this.camera.position.add(next.clone().sub(this.controls.target)); this.controls.target.copy(next); this.controls.update();
+        this.camera.position.add(next.clone().sub(this.controls.target)); this.controls.target.copy(next);
+        this.updateLockCamera(state, dt);
+        this.controls.update();
         this.sun.position.copy(target).add(new THREE.Vector3(-16, 25, 12)); this.sun.target.position.copy(target);
         for (const event of state.combatEvents) if (event.seq > this.lastEvent) {
           this.lastEvent = event.seq;
-          if (event.cast_cancelled) continue;
-          const target = this.actors.get(event.target_id || event.attacker_id);
+          if (event.cast_cancelled || event.cast_started) continue;
+          const targetId = event.target_id || event.attacker_id;
+          const target = this.actors.get(targetId) ?? this.dying.get(targetId)?.actor;
           if (!target) continue;
-          const from = event.target_id && event.attacker_id !== event.target_id ? this.actors.get(event.attacker_id)?.root.position : undefined;
-          this.effects.playCategory(vfxCategoryForAction(event.action_id ?? "attack", event.heal), target.root.position, from);
+          const attacker = event.attacker_id && event.attacker_id !== targetId ? (this.actors.get(event.attacker_id) ?? this.dying.get(event.attacker_id)?.actor) : undefined;
+          this.effects.playCategory(vfxCategoryForAction(event.action_id ?? "attack", event.heal), target.root.position, attacker?.root.position);
+          // Ribbon flash attacker → target for each resolved action.
+          if (attacker) this.effects.flashTether(attacker.root, target.root, this.effects.categoryColor(vfxCategoryForAction(event.action_id ?? "attack", event.heal)));
         }
-        this.effects.update(dt); this.camera.updateMatrixWorld();
-        if (now - this.lastOverlay > 50) { this.overlays(state); this.lastOverlay = now; }
+        this.effects.update(dt, this.camera); this.camera.updateMatrixWorld();
+        this.syncMarks(state);
       }
       this.renderer.render(this.scene, this.camera);
       this.frame = requestAnimationFrame(this.tick);
@@ -410,14 +699,18 @@ export class WorldRenderer {
   };
 
   dispose() {
-    this.disposed = true; cancelAnimationFrame(this.frame); this.resize.disconnect(); this.controls.dispose();
+    this.disposed = true; cancelAnimationFrame(this.frame); this.resize.disconnect();
+    if (this.position) this.syncCameraView();
+    this.controls.dispose();
     window.removeEventListener("keydown", this.onKeyDown); window.removeEventListener("keyup", this.onKeyUp); window.removeEventListener("blur", this.onBlur);
     document.removeEventListener("visibilitychange", this.onVisibility);
     this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown); this.renderer.domElement.removeEventListener("pointerup", this.onPointerUp); this.renderer.domElement.removeEventListener("webglcontextlost", this.onContextLost);
     this.terrain?.dispose(); this.buildings?.dispose(); this.effects.dispose();
     for (const actor of this.actors.values()) disposeObject(actor.root);
+    for (const d of this.dying.values()) disposeObject(d.actor.root);
     for (const poi of this.pois.values()) disposeObject(poi.root);
+    this.clearMarks();
     this.sun.shadow.dispose(); this.renderer.dispose(); this.renderer.domElement.remove();
-    clearEntityOverlays(); clearWorldLocalPos(); clearWorldViewRect();
+    clearWorldLocalPos(); clearWorldViewRect();
   }
 }

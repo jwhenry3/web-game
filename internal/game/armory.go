@@ -354,6 +354,45 @@ func StarterWeapon(w WeaponType) Item {
 	}
 }
 
+// BaseCloth is what a hero with no equipped armor wears: a simple tunic,
+// pants and boots. Equipped armor overrides it by weight class.
+const (
+	BaseCloth      = "cloth16"
+	BaseClothColor = "c3"
+)
+
+// armorClassCloth maps armor weight class onto the shared wardrobe
+// (cloth part id + color variant). Mirrored client-side in ARMOR_CLASS_CLOTH.
+var armorClassCloth = map[string][2]string{
+	ArmorHeavy:  {"cloth15", "c2"},
+	ArmorMedium: {"cloth4", "c6"},
+	ArmorLight:  {"cloth10", "c1"},
+}
+
+// EquippedClothLook resolves the broadcast outfit from equipped armor: the
+// chest piece wins, otherwise the highest-level armor item; no armor falls
+// back to the plain tunic.
+func EquippedClothLook(items []Item) (cloth string, color string) {
+	class, best := "", -1
+	for _, it := range items {
+		if !ValidArmorClass(it.Type) {
+			continue
+		}
+		if it.Slot == SlotChest {
+			class = it.Type
+			break
+		}
+		if it.Level > best {
+			best = it.Level
+			class = it.Type
+		}
+	}
+	if look, ok := armorClassCloth[class]; ok {
+		return look[0], look[1]
+	}
+	return BaseCloth, BaseClothColor
+}
+
 func StarterConsumables() []Item {
 	return []Item{
 		{ID: "starter-potio", Name: "Potio", Kind: KindConsumable, Consumable: "potio", Rarity: RarityCommon, Level: 1, Qty: 3},

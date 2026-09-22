@@ -194,54 +194,43 @@ export function Minimap() {
         terrain = terrainRef.current;
       }
 
-      // Isometric radar — the same projection the world scene uses:
-      // world (x,y) → iso (x−y, (x+y)/2). The square canvas shows a square
-      // window of iso space centered on the player.
+      // Top-down radar — a square world-space window centered on the player,
+      // same orientation as the baked /api/mapimg PNG (x right, y down).
       const t = Math.max(1, map.tile || 1);
       const colsT = map.cols * t;
       const rowsT = map.rows * t;
-      const isoW = colsT + rowsT; // iso x range: [-rowsT, colsT]
-      const isoH = isoW / 2; //      iso y range: [0, isoH]
-      const baseView = BASE_VIEW_WORLD / zoomLv;
-      const side = Math.max(320, isoH < baseView ? isoW : baseView);
+      const side = Math.max(320, BASE_VIEW_WORLD / zoomLv);
 
-      const pix = selfX - selfY;
-      const piy = (selfX + selfY) / 2;
       const viewX =
-        isoW <= side
-          ? -rowsT - (side - isoW) / 2
-          : Math.max(-rowsT, Math.min(colsT - side, pix - side / 2));
+        colsT <= side
+          ? (colsT - side) / 2
+          : Math.max(0, Math.min(colsT - side, selfX - side / 2));
       const viewY =
-        isoH <= side
-          ? -(side - isoH) / 2
-          : Math.max(0, Math.min(isoH - side, piy - side / 2));
+        rowsT <= side
+          ? (rowsT - side) / 2
+          : Math.max(0, Math.min(rowsT - side, selfY - side / 2));
       const s = sizePx / side;
 
       ctx.imageSmoothingEnabled = true;
       ctx.fillStyle = "#0a0c10";
       ctx.fillRect(0, 0, sizePx, sizePx);
       if (terrain) {
-        // canvas = s·(iso − view): a=s, b=s/2, c=−s, d=s/2
-        ctx.setTransform(s, s / 2, -s, s / 2, -s * viewX, -s * viewY);
+        // canvas = s·(world − view)
+        ctx.setTransform(s, 0, 0, s, -s * viewX, -s * viewY);
         ctx.drawImage(terrain, 0, 0, terrain.width, terrain.height, 0, 0, colsT, rowsT);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
 
       const toMini = (wx: number, wy: number) => ({
-        x: (wx - wy - viewX) * s,
-        y: ((wx + wy) / 2 - viewY) * s,
+        x: (wx - viewX) * s,
+        y: (wy - viewY) * s,
       });
 
-      const inView = (wx: number, wy: number) => {
-        const ix = wx - wy;
-        const iy = (wx + wy) / 2;
-        return (
-          ix >= viewX - 64 &&
-          ix <= viewX + side + 64 &&
-          iy >= viewY - 64 &&
-          iy <= viewY + side + 64
-        );
-      };
+      const inView = (wx: number, wy: number) =>
+        wx >= viewX - 64 &&
+        wx <= viewX + side + 64 &&
+        wy >= viewY - 64 &&
+        wy <= viewY + side + 64;
 
       const scale = sizePx / DEFAULT_SIZE;
       for (const sp of Object.values(state.savePoints)) {
@@ -289,6 +278,19 @@ export function Minimap() {
       const me = toMini(selfX, selfY);
       ctx.save();
       ctx.translate(me.x, me.y);
+      // Point the arrow the way the player faces: the renderer's smoothed yaw
+      // (model convention atan2(dx, dz)) when available, else the wire facing.
+      let arrow = 0;
+      if (local && typeof local.facing === "number" && Number.isFinite(local.facing)) {
+        arrow = Math.PI - local.facing;
+      } else if (typeof self.facing === "number" && Number.isFinite(self.facing)) {
+        arrow = -self.facing;
+      } else if (self.facing === "left") {
+        arrow = -Math.PI / 2;
+      } else if (self.facing === "right") {
+        arrow = Math.PI / 2;
+      }
+      ctx.rotate(arrow);
       ctx.scale(scale, scale);
       ctx.fillStyle = "#f0d878";
       ctx.beginPath();

@@ -37,6 +37,40 @@ func TestSkillIsRanged(t *testing.T) {
 	}
 }
 
+func TestEquippedClothLook(t *testing.T) {
+	armor := func(slot, class string, level int) Item {
+		return Item{ID: slot + "-" + class, Kind: KindEquipment, Slot: slot, Type: class, Level: level}
+	}
+	cases := []struct {
+		name         string
+		items        []Item
+		cloth, color string
+	}{
+		{"no items", nil, BaseCloth, BaseClothColor},
+		{"weapons only", []Item{StarterWeapon(WeaponSword)}, BaseCloth, BaseClothColor},
+		{"light boots", []Item{armor(SlotFeet, ArmorLight, 1)}, "cloth10", "c1"},
+		{"heavy chest", []Item{armor(SlotChest, ArmorHeavy, 1)}, "cloth15", "c2"},
+		{
+			"chest wins over higher-level piece",
+			[]Item{armor(SlotLegs, ArmorLight, 10), armor(SlotChest, ArmorHeavy, 1)},
+			"cloth15", "c2",
+		},
+		{
+			"highest level wins without chest",
+			[]Item{armor(SlotLegs, ArmorLight, 5), armor(SlotFeet, ArmorMedium, 10)},
+			"cloth4", "c6",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cloth, color := EquippedClothLook(tc.items)
+			if cloth != tc.cloth || color != tc.color {
+				t.Fatalf("got %s/%s, want %s/%s", cloth, color, tc.cloth, tc.color)
+			}
+		})
+	}
+}
+
 func TestCatalogCoversAllJobs(t *testing.T) {
 	for _, job := range AllJobs() {
 		skills := SkillsForJob(job.ID)

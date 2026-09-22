@@ -3,6 +3,7 @@ import { moveOnMap, movementYaw, MovementKeys } from "./motion.ts";
 import type { OverworldMap } from "../types";
 import { TerrainWorld } from "./terrain.ts";
 import { WorldEffects } from "./actors.ts";
+import { VFX_CATEGORIES } from "../vfx/battleVfxProfiles.ts";
 import { JUMP_VELOCITY, newBody3D, overworldPhysics3D, reconcileBody3D, sceneColliders3D } from "./physics3d.ts";
 import { emptyScene, IDENTITY_TRANSFORM, type Scene3DDoc } from "./scene3d.ts";
 import * as THREE from "three";
@@ -46,8 +47,8 @@ check(Math.abs(first.height(5.2 * 32, 6.3 * 32) - (a * .5 + b * .2 + d * .3)) < 
 const open = grid(".");
 const straight = moveOnMap(open, 128, 128, 1, 0, .05);
 const diagonal = moveOnMap(open, 128, 128, 1, 1, .05);
-check(Math.abs(straight.x - 137) < .001, "Walking must retain the server's 180px/s speed");
-check(Math.abs(Math.hypot(diagonal.x - 128, diagonal.y - 128) - 9) < .001, "Diagonal movement must not be faster");
+check(Math.abs(straight.x - 132.5) < .001, "Walking must retain the server's 90px/s speed");
+check(Math.abs(Math.hypot(diagonal.x - 128, diagonal.y - 128) - 4.5) < .001, "Diagonal movement must not be faster");
 const wall = { ...open, cells: Array.from({ length: 256 }, (_, i) => i % 16 === 5 ? "#" : ".").join("") };
 const dash = moveOnMap(wall, 128, 128, 1, 0, .05, 2000);
 check(dash.x < 160, "Fast movement must not tunnel through a blocked tile");
@@ -66,8 +67,8 @@ check(forest.height(240, 240) < mountain.height(240, 240) - 1, "Blocked tree tru
 const flatField = new WorldHeightmap(grid("."));
 const phys = overworldPhysics3D(flatField);
 const walker = newBody3D(128, 128, flatField.height(128, 128) / WORLD_SCALE);
-const walked = phys.move(walker, 137, 128, .05);
-check(Math.abs(walked.pos.x - 137) < .001 && walked.grounded, "Grounded prediction must keep the server's 180px/s pace");
+const walked = phys.move(walker, 132.5, 128, .05);
+check(Math.abs(walked.pos.x - 132.5) < .001 && walked.grounded, "Grounded prediction must keep the server's 90px/s pace");
 check(Math.abs(walked.pos.z - flatField.height(walked.pos.x, 128) / WORLD_SCALE) < 1, "Grounded prediction must ride the heightmap");
 const dropper = newBody3D(128, 128, flatField.height(128, 128) / WORLD_SCALE + 60);
 dropper.grounded = false;
@@ -101,6 +102,16 @@ const platPhys = overworldPhysics3D(flatField, doc);
 const climber = newBody3D(96, 128, flatField.height(96, 128) / WORLD_SCALE);
 const atop = platPhys.move(climber, 192, 128, .05);
 check(atop.pos.x < 150, "A tall collider wall must block planar movement");
+// A body seated inside a collider must escape instead of freezing — every
+// swept candidate failing blocked() would otherwise pin it forever (camp
+// furniture placed over the entry hits exactly this).
+const buried = newBody3D(200, 128, flatField.height(200, 128) / WORLD_SCALE);
+const freed = platPhys.move(buried, 96, 128, .05);
+check(freed.pos.x <= 160 - 15.625 + .01 || freed.pos.x >= 224 + 15.625 - .01,
+  "A body embedded in a collider must be pushed out before sweeping");
+const freedY = freed.pos.y;
+const walked2 = platPhys.move(freed, freed.pos.x, 60, .05);
+check(walked2.pos.y < freedY, "A depenetrated body must move freely afterward");
 // Reconciliation: big divergence snaps, small grounded drift absorbs, descents land.
 const pred = newBody3D(100, 100, 10);
 check(reconcileBody3D(pred, { x: 400, y: 100, z: 20, grounded: true }) === "snap" && pred.pos.x === 400 && pred.pos.z === 20, "Large planar divergence must snap to authority");
@@ -131,5 +142,41 @@ effects.burst(new THREE.Vector3(0, 0, 0));
 check(effects.group.children.length > 0, "Combat events must produce visible effect geometry");
 effects.update(1);
 check(effects.group.children.length === 0, "Expired combat effects must release scene objects");
+
+// Elemental signature effects — every category must spawn bounded geometry
+// that fully expires, and anchored effects must follow their anchor.
+const anchor = new THREE.Group();
+anchor.position.set(3, 0, -2);
+for (const cat of VFX_CATEGORIES) {
+  effects.playCategory(cat, new THREE.Vector3(1, 0, 2), new THREE.Vector3(4, 0, 5), anchor);
+}
+for (let i = 0; i < 34; i++) effects.update(.12);
+check(effects.group.children.length === 0, "Elemental impacts must release all scene objects after expiry");
+check(anchor.children.length === 0, "Anchored elemental effects must not linger on the actor");
+effects.playCategory("fire", new THREE.Vector3(0, 0, 0), undefined, anchor);
+effects.update(.3);
+check(anchor.children.length > 0, "Fire ignite must parent its emitter to the anchor");
+for (let i = 0; i < 20; i++) effects.update(.12);
+check(anchor.children.length === 0, "Ignite must detach from the anchor after expiry");
+
+// Intent ribbons — held tethers follow moving endpoints and fade on stop;
+// flashes self-expire; both release their mesh from the scene.
+const ta = new THREE.Group(), tb = new THREE.Group();
+ta.position.set(0, 0, 0); tb.position.set(6, 0, 3);
+const sceneRoot = new THREE.Group(); sceneRoot.add(ta, tb, effects.group);
+const stopTether = effects.startTether(ta, tb, 0xff0000);
+effects.flashTether(ta, new THREE.Vector3(1, 0, 1), 0x00ff00, .5);
+effects.update(.1, new THREE.PerspectiveCamera());
+check(effects.group.children.length === 2, "Held and flash tethers must both be live");
+tb.position.set(9, 0, -4); ta.position.set(1, 0, 1);
+effects.update(.1, new THREE.PerspectiveCamera());
+const ribbonRoot = effects.group.children[0] as THREE.Group;
+const ribbonMesh = ribbonRoot.children.find(c => (c as THREE.Mesh).geometry) as THREE.Mesh;
+const ribbonPos = (ribbonMesh.geometry.getAttribute("position") as THREE.BufferAttribute);
+check(Number.isFinite(ribbonPos.getX(0)) && Number.isFinite(ribbonPos.getX(ribbonPos.count - 1)), "Ribbon bezier must lay finite vertices after endpoints move");
+stopTether();
+for (let i = 0; i < 10; i++) effects.update(.12, new THREE.PerspectiveCamera());
+check(effects.group.children.length === 0, "Tethers must release scene objects after stop/expiry");
 effects.dispose();
+
 console.log("3D world checks passed: geography, seams, triangle grounding, movement speed, swept collision, chunk streaming, disposal and effect lifetime");

@@ -1217,3 +1217,74 @@ func TestPlayerDisengageKeepsEnmity(t *testing.T) {
 		t.Fatal("the mob should stay engaged on the player")
 	}
 }
+
+// Enemy catalog casting: an imp patrol attaches enemySkills, the NPC starts a
+// real cast (MP paid, cast bar projected), plants its feet while casting, and
+// the resolved skill runs the shared applySkillTo damage pipeline.
+func TestEnemyCastsCatalogSkill(t *testing.T) {
+	px, py := wildernessXY()
+	h2, _, pe := testHubWithPlayer(t, px, py)
+	h2.rng = alwaysHitRNG()
+	// Close enough that terrain noise can't break the chest-height LOS ray;
+	// the cast path only needs distance <= SpellSkillRange.
+	home := game.WorldToTile(px+60, py)
+	if h2.overworld != nil {
+		home = h2.overworld.WorldToTile(px+60, py)
+	}
+	n := newNPCEntity(game.Patrol{ID: "imp-1", Name: "Imp", Kind: "imp", Level: 5, Home: home}, game.Region{}, h2.overworld)
+	n.X, n.Y = px+60, py
+	n.Faction = factionHostile
+	if w := wanderOf(n); w != nil {
+		w.idleUntil = time.Now().Add(time.Hour)
+	}
+	h2.entities[n.ID] = n
+
+	at := n.components.attackTarget
+	if len(at.skills) == 0 {
+		t.Fatal("imp patrol should attach catalog skills")
+	}
+	if n.maxMP <= 0 {
+		t.Fatal("caster NPC needs an MP pool")
+	}
+
+	h2.spatialInvalidate()
+	h2.engage(n, pe)
+	hp0, mp0 := pe.hp, n.mp
+
+	at.Tick(h2, n, time.Now(), combatTickInterval.Seconds())
+	if n.casting == nil {
+		t.Fatal("imp should begin casting when its target is in spell range")
+	}
+	if n.casting.SkillID != "hex_gelu_hex" {
+		t.Fatalf("imp should cast Frost Brand, got %q", n.casting.SkillID)
+	}
+	if n.casting.TargetID != pe.ID {
+		t.Fatalf("cast should target the player, got %q", n.casting.TargetID)
+	}
+	if want := mp0 - 10; n.mp != want {
+		t.Fatalf("cast should pay MP up front, got %d want %d", n.mp, want)
+	}
+
+	// While casting the imp must not drift — chase is gated on e.casting.
+	x0, y0 := n.X, n.Y
+	n.components.chaseTarget.Tick(h2, n, time.Now(), combatTickInterval.Seconds())
+	if n.X != x0 || n.Y != y0 {
+		t.Fatal("casting imp should hold position")
+	}
+	// Nor melee mid-cast.
+	at.Tick(h2, n, time.Now().Add(2*enemyAttackCDW), combatTickInterval.Seconds())
+	if n.casting == nil {
+		t.Fatal("melee gate should not cancel the in-flight cast")
+	}
+
+	// 1s cast at 50ms ticks.
+	for i := 0; i < 25; i++ {
+		h2.advanceCast(n, time.Now())
+	}
+	if n.casting != nil {
+		t.Fatal("cast should clear after resolving")
+	}
+	if pe.hp >= hp0 {
+		t.Fatal("resolved Frost Brand should damage the player")
+	}
+}

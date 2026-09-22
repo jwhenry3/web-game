@@ -1,4 +1,6 @@
 import {
+  BASE_CLOTH,
+  BASE_CLOTH_COLOR,
   DEFAULT_APPEARANCE,
   appearanceFromRace,
   mergeAppearance,
@@ -38,18 +40,22 @@ export function saveAppearance(
 }
 
 export function loadDraftAppearance(race: string): CharacterAppearance {
+  let out = appearanceFromRace(race);
   try {
     const raw = localStorage.getItem(`${KEY}:draft`);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<CharacterAppearance>;
       if (isHeroes99Appearance(parsed)) {
-        return mergeAppearance(appearanceFromRace(race), parsed);
+        out = mergeAppearance(out, parsed);
       }
     }
   } catch {
     /* ignore */
   }
-  return appearanceFromRace(race);
+  // Clothes come from equipped items — any saved pick is ignored.
+  out.cloth = BASE_CLOTH;
+  out.clothColor = BASE_CLOTH_COLOR;
+  return out;
 }
 
 export function saveDraftAppearance(appearance: CharacterAppearance): void {

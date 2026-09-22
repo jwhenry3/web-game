@@ -108,7 +108,9 @@ function castEnemySkill(actionId: string, self: WorldEntity | undefined) {
 }
 
 let ws: WebSocket | null = null;
-let intentionalClose = false;
+/** Sockets closed on purpose (logout) — tracked per socket so a superseded
+ * socket's close can't consume a flag meant for a different socket. */
+const intentionalClose = new WeakSet<WebSocket>();
 
 /** Backstop for a transfer request the server never answers — the overlay
  * normally clears when the destination's state message lands. */
@@ -191,35 +193,47 @@ export const net = {
     const wsBase =
       (window as unknown as { CM_WS_URL?: string }).CM_WS_URL ??
       `${proto}://${location.host}/ws`;
-    ws = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
+    // A previous socket may still be closing/connecting — supersede it so it
+    // can't leak events or clobber the new socket reference below.
+    if (ws) {
+      try {
+        ws.close();
+      } catch {
+        /* already closing */
+      }
+    }
+    const sock = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`);
+    ws = sock;
 
-    ws.onopen = () => {
+    sock.onopen = () => {
+      if (ws !== sock) return; // superseded — don't touch shared state
       useGame.setState({ connected: true, loginError: null });
       onReady?.();
     };
-    ws.onmessage = (evt) => {
+    sock.onmessage = (evt) => {
+      if (ws !== sock) return;
       try {
         handleMessage(JSON.parse(evt.data) as Envelope);
       } catch (err) {
         console.error("bad frame", err);
       }
     };
-    ws.onclose = () => {
+    sock.onclose = () => {
+      if (ws !== sock) return; // superseded — leave state/ws alone
+      ws = null;
       const screen = useGame.getState().screen;
       const wasInGame = screen === "world" || screen === "house";
-      const intentional = intentionalClose;
-      intentionalClose = false;
       if (wasInGame) {
         useGame.getState().reset();
-        if (!intentional) {
+        if (!intentionalClose.has(sock)) {
           useGame.setState({ loginError: "Disconnected from server.", screen: "auth" });
         }
       } else {
         useGame.setState({ connected: false });
       }
-      ws = null;
     };
-    ws.onerror = () => {
+    sock.onerror = () => {
+      if (ws !== sock) return;
       useGame.setState({ loginError: "Could not reach the server." });
     };
   },
@@ -609,9 +623,11 @@ export const net = {
       useGame.setState({ connected: false });
       return;
     }
-    intentionalClose = true;
-    ws?.close();
-    ws = null;
+    if (ws) {
+      intentionalClose.add(ws);
+      ws.close();
+      ws = null;
+    }
     useGame.setState({ connected: false });
   },
 };
@@ -717,10 +733,52 @@ export function handleMessage(env: Envelope) {
     }
     case "house_state": {
       const house = env.payload as HouseStatePayload;
+      // A camp is a normal map instance. Feed its snapshot through the same
+      // map pipeline as the overworld, then project the compact house roster
+      // into the shared entity store consumed by both renderers.
+      if (house.map) applyMapSnapshotToGame(house.map);
       endTransition();
       g.setState((s) => ({
         screen: "house" as const,
         house,
+        entities: Object.fromEntries((house.players ?? []).flatMap((player) => {
+          const previous = s.entities[player.id];
+          const base: WorldEntity = {
+            ...(previous ?? {}),
+            id: player.id,
+            name: player.name,
+            kind: "player",
+            x: player.x,
+            y: player.y,
+            z: player.z ?? 0,
+            grounded: player.grounded ?? true,
+            facing: player.facing,
+            hp: previous?.hp ?? 100,
+            max_hp: previous?.max_hp ?? 100,
+            alive: previous?.alive ?? true,
+            in_house: true,
+            house_owner: house.owner_name,
+          };
+          const pets: Array<[string, WorldEntity]> = (player.pets ?? []).map((pet) => [pet.id, {
+            id: pet.id,
+            name: pet.name,
+            kind: "pet",
+            sprite: pet.sprite,
+            owner_id: player.id,
+            x: pet.x,
+            y: pet.y,
+            z: pet.z ?? 0,
+            grounded: pet.grounded ?? true,
+            facing: pet.facing,
+            hp: s.entities[pet.id]?.hp ?? 100,
+            max_hp: s.entities[pet.id]?.max_hp ?? 100,
+            alive: s.entities[pet.id]?.alive ?? true,
+            is_ally: true,
+            in_house: true,
+            house_owner: house.owner_name,
+          }]);
+          return [[player.id, base] as [string, WorldEntity], ...pets];
+        })),
         // Don't clobber open panels on movement sync broadcasts.
         openWindow: s.screen === "house" ? s.openWindow : null,
         bindSlot: s.screen === "house" ? s.bindSlot : null,

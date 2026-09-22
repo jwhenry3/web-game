@@ -396,6 +396,15 @@ export interface SceneTerrain {
   version: number;
   heights: Record<string, number>;
   cells: Record<string, string>;
+  paints?: Record<string, ScenePaint>;
+}
+
+export interface ScenePaint {
+  color: string;
+  noise: number;
+  trees: number;
+  rocks: number;
+  grass: number;
 }
 
 export interface OverworldMap {

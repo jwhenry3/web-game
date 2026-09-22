@@ -1,5 +1,5 @@
 import { WorldHeightmap, WORLD_SCALE } from "./heightmap";
-import { applyTerrainBrush, emptyTerrain, normalizeTerrain, terrainChangeBounds, type TerrainBrush } from "./terrainEditing";
+import { applyTerrainBrush, emptyTerrain, normalizeTerrain, surfaceStyle, terrainChangeBounds, type TerrainBrush } from "./terrainEditing";
 import { TerrainWorld } from "./terrain";
 
 function check(ok: boolean, message: string) { if (!ok) throw new Error(message); }
@@ -52,4 +52,16 @@ for (const mesh of streamed.ground) {
   check((mesh.geometry.getAttribute("normal").array as Float32Array).every(Number.isFinite), "Edited terrain must have finite surface normals");
 }
 streamed.dispose();
+
+// --- surface paints -----------------------------------------------------------
+const styled = { version: 1 as const, heights: {}, cells: {}, paints: { T: { color: "#123456", noise: .3, trees: .5, rocks: 0, grass: 0 } } };
+check(surfaceStyle("T", styled.paints).color === "#123456" && surfaceStyle("T", styled.paints).trees === .5, "Authored paint must override the surface default");
+check(surfaceStyle("T").trees === .72 && surfaceStyle("#").rocks === .34 && surfaceStyle(".").grass === .48, "Default densities must reproduce the original prop thresholds");
+check(eq(applyTerrainBrush(base, styled, 512, 512, brush, 1).paints, styled.paints), "Brush strokes must preserve surface paints");
+check(eq(normalizeTerrain({ paints: { T: { color: "#123456" }, bad: { color: "#fff" }, ".": { color: "nope", trees: 9 } } }).paints,
+  { T: { color: "#123456", noise: .16, trees: .72, rocks: 0, grass: 0 }, ".": { color: "#718956", noise: .16, trees: 1, rocks: 0, grass: .48 } }),
+  "normalizeTerrain must fill paint defaults, drop bad cells/colors and clamp densities");
+const repaint = terrainChangeBounds({ version: 1, heights: {}, cells: {} }, styled);
+check(repaint!.maxC === Infinity, "Paint changes must invalidate every loaded chunk");
+check(terrainChangeBounds({ version: 1, heights: {}, cells: {} }, { version: 1, heights: {}, cells: {} }) === null, "Identical terrain must not invalidate chunks");
 console.log("Terrain authoring checks passed");

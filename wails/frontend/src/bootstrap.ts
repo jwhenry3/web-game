@@ -1,8 +1,6 @@
 import { setPlatformFetch } from "./net/platform";
 import { setGameTransport } from "./net/transport";
-import { setMovementBridge } from "./phaser/movementBridge";
-import { loadVfxProfiles } from "./phaser/battleVfxProfiles";
-import { wailsMovementBridge } from "./wailsMovement";
+import { loadVfxProfiles } from "./vfx/battleVfxProfiles";
 import { wailsPlatformFetch } from "./wailsPlatform";
 import { wailsTransport, wireTransportEvents } from "./wailsTransport";
 
@@ -17,7 +15,6 @@ export async function bootstrapWails(): Promise<void> {
   setPlatformFetch(wailsPlatformFetch);
   wireTransportEvents();
   setGameTransport(wailsTransport);
-  setMovementBridge(wailsMovementBridge);
 
   // Data-driven battle VFX profiles — optional JSON overlay merged over the
   // compiled defaults. Awaits before mount so the first battle can't race it;

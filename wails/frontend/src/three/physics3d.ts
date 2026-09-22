@@ -76,6 +76,48 @@ export class PhysicsWorld3D {
     return h;
   }
 
+  /** Push a body out of any collider it overlaps — without it a body seated
+   * inside a solid box (e.g. furniture placed over the camp entry) can never
+   * move: every swept candidate stays blocked. The disk exits through the
+   * nearest face; bounded passes resolve corner pockets without looping.
+   * Mirrors game.PhysicsWorld3D.depenetrate. */
+  private depenetrate(b: Body3D) {
+    const bounds = this.bounds;
+    if (bounds && bounds.max.x > bounds.min.x) b.pos.x = Math.max(bounds.min.x + b.radius, Math.min(bounds.max.x - b.radius, b.pos.x));
+    if (bounds && bounds.max.y > bounds.min.y) b.pos.y = Math.max(bounds.min.y + b.radius, Math.min(bounds.max.y - b.radius, b.pos.y));
+    for (let pass = 0; pass < 3; pass++) {
+      let moved = false;
+      for (const a of this.nearby(b.pos.x, b.pos.y, b.radius)) {
+        if (!(b.pos.z < a.max.z - 1e-6 && b.pos.z + b.height > a.min.z + 1e-6)) continue;
+        const cx = Math.max(a.min.x, Math.min(b.pos.x, a.max.x));
+        const cy = Math.max(a.min.y, Math.min(b.pos.y, a.max.y));
+        const dx = b.pos.x - cx, dy = b.pos.y - cy;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= b.radius * b.radius - 1e-8) continue;
+        if (d2 > 1e-10) {
+          // Center outside the box — push radially to the surface.
+          const d = Math.sqrt(d2), push = (b.radius - d) / d + 1e-6;
+          b.pos.x += dx * push; b.pos.y += dy * push;
+        } else {
+          // Center inside the box — exit through the nearest face.
+          let best = Infinity, bx = 0, by = 0;
+          for (const e of [
+            [b.pos.x - (a.min.x - b.radius), -1, 0],
+            [(a.max.x + b.radius) - b.pos.x, 1, 0],
+            [b.pos.y - (a.min.y - b.radius), 0, -1],
+            [(a.max.y + b.radius) - b.pos.y, 0, 1],
+          ]) {
+            if (e[0] > 0 && e[0] < best) { best = e[0]; bx = e[1]; by = e[2]; }
+          }
+          if (!Number.isFinite(best)) continue;
+          b.pos.x += bx * best; b.pos.y += by * best;
+        }
+        moved = true;
+      }
+      if (!moved) break;
+    }
+  }
+
   /**
    * Sweeps horizontal motion in increments smaller than the body radius, then
    * integrates vertical motion in bounded timesteps. dt=0 resolves planar
@@ -85,6 +127,7 @@ export class PhysicsWorld3D {
     if (!finite(tx) || !finite(ty) || !finite(dt) || !finite(b.pos.z)) return b;
     if (b.radius <= 0) b.radius = PLAYER_BODY_RADIUS;
     if (b.height <= 0) b.height = BODY_HEIGHT;
+    this.depenetrate(b);
     dt = Math.max(0, Math.min(.25, dt));
     const gravity = this.gravity > 0 ? this.gravity : GRAVITY;
     const maxSlope = this.maxSlope > 0 ? this.maxSlope : 1;

@@ -1,12 +1,8 @@
 import * as THREE from "three";
 import { terrainNoise, WORLD_SCALE, WORLD_ZOOM, WorldHeightmap } from "./heightmap";
-import type { TerrainBounds } from "./terrainEditing";
+import { surfaceStyle, type TerrainBounds } from "./terrainEditing";
 
 const CHUNK = 16;
-const COLORS: Record<string, number> = {
-  ".": 0x718956, ",": 0x9c9a62, T: 0x4e7050, H: 0xc4b797,
-  R: 0xb49b73, "#": 0x888b86, "~": 0x376b76, S: 0xdbe5e4, D: 0xcdb77d, I: 0x9cbfc8,
-};
 
 export function disposeObject(root: THREE.Object3D) {
   const geometries = new Set<THREE.BufferGeometry>();
@@ -126,7 +122,8 @@ export class TerrainWorld {
     const t = tile * WORLD_SCALE;
     for (let r = r0; r < Math.min(rows, r0 + CHUNK); r++) for (let c = c0; c < Math.min(cols, c0 + CHUNK); c++) {
       const cell = this.field.cell(c, r), n = terrainNoise(c * 17, r * 29);
-      const color = new THREE.Color(COLORS[cell] ?? COLORS["."]).multiplyScalar(.91 + n * .16);
+      const style = surfaceStyle(cell, this.field.terrain?.paints);
+      const color = new THREE.Color(style.color).multiplyScalar(.91 + n * style.noise);
       const corners = [[c, r], [c, r + 1], [c + 1, r], [c + 1, r + 1]];
       for (const i of [0, 1, 2, 2, 1, 3]) {
         const [vc, vr] = corners[i];
@@ -136,10 +133,11 @@ export class TerrainWorld {
       }
       const x = (c + .5) * t, z = (r + .5) * t;
       const y = this.field.height((c + .5) * tile, (r + .5) * tile);
-      // Small clusters, with open paths under canopies on walkable forest.
-      if (cell === "T" && n > .28) trees.push({ x, y, z, size: (.75 + n * .6) * WORLD_ZOOM });
-      if (cell === "#" && n > .66) rocks.push({ x, y, z, size: (.3 + n * .45) * WORLD_ZOOM });
-      if ((cell === "." || cell === ",") && n > .52) grass.push({ x, y, z, size: (.15 + n * .2) * WORLD_ZOOM });
+      // Prop density is a surface style — spawn when n > 1 − density so the
+      // defaults (.72/.34/.48) reproduce the original thresholds (.28/.66/.52).
+      if (n > 1 - style.trees) trees.push({ x, y, z, size: (.75 + n * .6) * WORLD_ZOOM });
+      if (n > 1 - style.rocks) rocks.push({ x, y, z, size: (.3 + n * .45) * WORLD_ZOOM });
+      if (n > 1 - style.grass) grass.push({ x, y, z, size: (.15 + n * .2) * WORLD_ZOOM });
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));

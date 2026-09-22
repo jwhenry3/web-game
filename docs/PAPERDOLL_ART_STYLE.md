@@ -35,8 +35,8 @@ copy its characters, costumes, emblems, or sprite pixels.
 ## Pixel language
 
 - Work on the generator's two-pixels-per-cell grid. No antialiasing.
-- Do not bake a contour around individual body or equipment parts. Phaser
-  applies one dark-plum outline filter to the fully assembled character.
+- Do not bake a contour around individual body or equipment parts. The
+  runtime applies one dark-plum outline filter to the fully assembled character.
   This rule covers both the humanoid `paperdoll` and animal `quaddoll`
   rigs; only the legacy `h99doll` keeps its original baked treatment.
   Interior facial marks and material separations may still use the darkest

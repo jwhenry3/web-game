@@ -133,6 +133,7 @@ func (h *Hub) worldEntities(now time.Time) []protocol.WorldEntity {
 		if e.Kind != kindPlayer && e.hidden {
 			continue
 		}
+		h.ensureBody3D(e)
 		out = append(out, h.projector.project(e, now))
 	}
 	return out
@@ -284,6 +285,9 @@ func appearanceProto(p store.Profile) protocol.CharacterAppearance {
 	} else {
 		a = store.NormalizeAppearance(p.Race, a)
 	}
+	// Clothes come from equipped armor, not the saved pick: unarmored heroes
+	// wear the plain tunic and heavier gear shows as its weight class.
+	a.Cloth, a.ClothColor = game.EquippedClothLook(p.EquippedItems())
 	return protocol.CharacterAppearance{
 		Skin: a.Skin, Face: a.Face, Hair: a.Hair, HairColor: a.HairColor,
 		Cloth: a.Cloth, ClothColor: a.ClothColor, Weapon: a.Weapon, WeaponColor: a.WeaponColor,

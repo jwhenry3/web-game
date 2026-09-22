@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import {
   CATEGORY_VFX_PROFILES,
   VFX_TEXTURES,
-} from "../../../../wails/frontend/src/phaser/battleVfxProfiles";
+} from "../../../../wails/frontend/src/vfx/battleVfxProfiles";
 import {
   hexToNum,
   numToHex,

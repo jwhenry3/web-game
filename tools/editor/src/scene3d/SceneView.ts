@@ -29,6 +29,10 @@ interface Instance { object: THREE.Object3D; signature: string }
 const isEditable = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 const DOWN = new THREE.Vector3(0, -1, 0);
 const PROXY_MATERIAL = new THREE.MeshBasicMaterial();
+const TERRAIN_PREVIEW_COLORS: Record<string, number> = {
+  '.':0x74a85b, ',':0x91bd69, T:0x3e7b4f, H:0xb99b78, R:0x9a8065,
+  S:0xe6f3f5, D:0xd8bd78, I:0x83d4df, '#':0xe06565, '~':0x509bd0,
+};
 
 /** Invisible mesh matching a collider component so surface drops can land on
  * mesh-less collider objects. `visible = false` still raycasts; `editorOnly`
@@ -188,6 +192,9 @@ export class SceneView {
     const point = this.brushPoint, brush = this.terrainBrush;
     this.brushRing.visible = !!point && !!brush;
     if (!point || !brush) return;
+    const material=this.brushRing.material as THREE.LineBasicMaterial;
+    material.color.setHex(brush.mode==='paint'?(TERRAIN_PREVIEW_COLORS[brush.cell]??0xffcb72):0xffcb72);
+    material.opacity=brush.mode==='paint'&&(brush.cell==='#'||brush.cell==='~')?1:.88;
     const points: THREE.Vector3[] = [];
     for (let i = 0; i < 96; i++) {
       const a = i / 96 * Math.PI * 2, x = point.x + Math.cos(a) * brush.radius * WORLD_SCALE, z = point.z + Math.sin(a) * brush.radius * WORLD_SCALE;

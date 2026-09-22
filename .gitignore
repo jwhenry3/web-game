@@ -118,3 +118,4 @@ tools/node_modules/
 tools/__pycache__/
 .playwright-mcp/
 .codex-tmp/
+.locks/

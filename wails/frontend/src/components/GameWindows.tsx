@@ -1,12 +1,13 @@
-import { useMemo, useState, type DragEvent } from "react";
-import { CharacterPreviewAnimated } from "../characters/CharacterPreview";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { CharacterPreview3D } from "../characters/CharacterPreview3D";
 import { resolveCharacterAppearance } from "../characters/resolveAppearance";
 import { net } from "../net/socket";
 import { useGame } from "../state/store";
 import {
   equipSlotsForProfile,
+  equippedArmorClassFromProfile,
   equippedSlotForItem,
+  ARMOR_SLOTS,
   ALL_JOBS,
   ARMOURY_TABS,
   ARMOR_CLASSES,
@@ -18,6 +19,7 @@ import {
   mainWeaponTypeFromProfile,
   PROFICIENCY_GROUPS,
   PROF_MAX_LEVEL,
+  JOB_MAX_LEVEL,
   proficiencyLabel,
   type Item,
   type ProfileInfo,
@@ -324,14 +326,13 @@ function BagPane({
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <div className="cm-item-list cm-item-list--grid-3">
+        <div className="cm-prof-list cm-prof-cols">
           {filtered.map((item) => (
             <ItemListRow
               key={item.id}
               item={item}
               profile={profile}
               bag={bag}
-              showLevel={false}
               transferEnabled={transferEnabled}
               actionCtx={ctx}
               equipped={bag === "inventory" ? !!equippedSlotForItem(profile.equipped, item.id) : false}
@@ -341,7 +342,7 @@ function BagPane({
             />
           ))}
           {Array.from({ length: emptySlots }, (_, i) => (
-            <div key={`empty-${i}`} className="cm-item-slot-empty" aria-hidden="true" />
+            <div key={`empty-${i}`} className="cm-item-empty" aria-hidden="true" />
           ))}
         </div>
       </div>
@@ -449,28 +450,40 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
                 <span className="cm-job-role-dot" style={{ background: ROLE_COLORS[role] }} />
                 {roleLabel(role)}
               </div>
-              <div className="job-grid job-grid-compact cm-char-job-grid">
+              <div className="cm-prof-list cm-job-list">
                 {jobs.map((j) => {
                   const isMain = j.id === profile.main_job;
                   const isSub = j.id === profile.sub_job;
                   const unlocked = (profile.unlocked_jobs ?? []).includes(j.id);
+                  const maxed = j.level >= JOB_MAX_LEVEL;
+                  const pct = !unlocked
+                    ? 0
+                    : maxed
+                      ? 100
+                      : Math.min(100, (j.xp / Math.max(j.max_xp, 1)) * 100);
                   return (
                     <div
                       key={j.id}
-                      className={`job-card job-card--inline job-card--readout ${isMain || isSub ? "selected" : ""} ${!unlocked ? "locked" : ""}`}
+                      className={`cm-prof-row cm-job-row${isMain || isSub ? " selected" : ""}${unlocked ? "" : " untrained"}`}
+                      title={
+                        !unlocked
+                          ? `${j.name} — locked`
+                          : maxed
+                            ? `${j.name} — max level`
+                            : `${j.name} ${j.xp} / ${j.max_xp} EXP`
+                      }
                     >
                       <JobIdentityBadges jobId={j.id} iconOnly />
-                      <div className="job-card-body">
-                        <span className="job-name">
-                          {j.name}
-                          {isMain ? " (Main)" : isSub ? " (Sub)" : ""}
-                        </span>
-                      </div>
-                      {unlocked ? (
-                        <span className="job-card-level">Lv {j.level}</span>
-                      ) : (
-                        <span className="job-lock dim">Locked</span>
-                      )}
+                      <span className="cm-prof-name cm-job-name">
+                        {j.name}
+                        {isMain ? " (Main)" : isSub ? " (Sub)" : ""}
+                      </span>
+                      <span className="cm-prof-bar">
+                        <span className="cm-prof-fill" style={{ width: `${pct}%` }} />
+                      </span>
+                      <span className="cm-prof-level">
+                        {!unlocked ? "Locked" : maxed ? "MAX" : `Lv${j.level}`}
+                      </span>
                     </div>
                   );
                 })}
@@ -486,31 +499,34 @@ function CharacterPane({ profile }: { profile: ProfileInfo }) {
             <div key={g.label} className="cm-armoury-group">
               <div className="cm-armoury-group-head">{g.label}</div>
               <div className="cm-prof-list">
-                {g.profs.map((pid) => {
-                  const lvl = profile.prof_levels?.[pid] ?? 0;
-                  const maxed = lvl >= PROF_MAX_LEVEL;
-                  const pct = maxed
-                    ? 100
-                    : Math.min(100, ((profile.prof_exp?.[pid] ?? 0) / ((lvl + 1) * 100)) * 100);
-                  return (
-                    <div
-                      key={pid}
-                      className={`cm-prof-row${lvl === 0 ? " untrained" : ""}`}
-                      title={maxed ? `${proficiencyLabel(pid)} — max level` : `${proficiencyLabel(pid)} ${(profile.prof_exp?.[pid] ?? 0) / 100} / ${lvl + 1} growth`}
-                    >
-                      <span className="cm-prof-name">{proficiencyLabel(pid)}</span>
-                      <span className="cm-prof-bar">
-                        <span className="cm-prof-fill" style={{ width: `${pct}%` }} />
-                      </span>
-                      <span className="cm-prof-level">{maxed ? "MAX" : `Lv${lvl}`}</span>
-                    </div>
-                  );
-                })}
+                {g.profs.map((pid) => <ProfRow key={pid} pid={pid} profile={profile} />)}
               </div>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** One proficiency row — name, growth bar, level. Shared by the character
+ *  window's Proficiencies tab and the Actions window's class summary. */
+function ProfRow({ pid, profile }: { pid: string; profile: ProfileInfo }) {
+  const lvl = profile.prof_levels?.[pid] ?? 0;
+  const maxed = lvl >= PROF_MAX_LEVEL;
+  const pct = maxed
+    ? 100
+    : Math.min(100, ((profile.prof_exp?.[pid] ?? 0) / ((lvl + 1) * 100)) * 100);
+  return (
+    <div
+      className={`cm-prof-row${lvl === 0 ? " untrained" : ""}`}
+      title={maxed ? `${proficiencyLabel(pid)} — max level` : `${proficiencyLabel(pid)} ${(profile.prof_exp?.[pid] ?? 0) / 100} / ${lvl + 1} growth`}
+    >
+      <span className="cm-prof-name">{proficiencyLabel(pid)}</span>
+      <span className="cm-prof-bar">
+        <span className="cm-prof-fill" style={{ width: `${pct}%` }} />
+      </span>
+      <span className="cm-prof-level">{maxed ? "MAX" : `Lv${lvl}`}</span>
     </div>
   );
 }
@@ -522,6 +538,15 @@ function Param({ label, value }: { label: string; value: number }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function previewArmorClassForEquipment(profile: ProfileInfo, focus: Item | null): string {
+  // "" = unarmored (base tunic); mirroring previewWeaponForEquipment.
+  const equipped = equippedArmorClassFromProfile(profile) ?? "";
+  if (!focus || focus.kind !== "equipment") return equipped;
+  const slot = equippedSlotForItem(profile.equipped, focus.id) ?? focus.slot;
+  if (slot && (ARMOR_SLOTS as readonly string[]).includes(slot) && focus.type) return focus.type;
+  return equipped;
 }
 
 function previewWeaponForEquipment(profile: ProfileInfo, focus: Item | null): string {
@@ -540,10 +565,21 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
   const [focus, setFocus] = useState<Item | null>(null);
   const [armouryTab, setArmouryTab] = useState<ArmouryTabId>("weapon");
   const [activeSlot, setActiveSlot] = useState<string | null>(null);
-  const [preview3D, setPreview3D] = useState(true);
+
+  // Unequipping the focused item drops the preview back to the live loadout —
+  // otherwise focus.slot keeps rendering the just-removed gear.
+  const prevEquippedRef = useRef(profile.equipped);
+  useEffect(() => {
+    const prev = prevEquippedRef.current;
+    prevEquippedRef.current = profile.equipped;
+    if (focus && equippedSlotForItem(prev, focus.id) && !equippedSlotForItem(profile.equipped, focus.id)) {
+      setFocus(null);
+    }
+  }, [profile.equipped, focus]);
 
   const slots = equipSlotsForProfile(profile.sub_job);
   const previewWeapon = previewWeaponForEquipment(profile, focus);
+  const previewArmorClass = previewArmorClassForEquipment(profile, focus);
   const previewAppearance = useMemo(
     () =>
       resolveCharacterAppearance({
@@ -553,8 +589,9 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
         race: profile.race,
         wire: profile.appearance,
         weapon: previewWeapon,
+        armorClass: previewArmorClass,
       }),
-    [selfId, profile, previewWeapon],
+    [selfId, profile, previewWeapon, previewArmorClass],
   );
   const previewingWeapon =
     !!focus && previewWeapon !== (mainWeaponTypeFromProfile(profile) ?? "");
@@ -633,18 +670,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
     <div className="cm-equip">
       <div className="cm-doll">
         <div className="cm-equip-preview">
-          {preview3D ? (
-            <CharacterPreview3D appearance={previewAppearance} width={150} height={170} walking={false} />
-          ) : (
-            <CharacterPreviewAnimated appearance={previewAppearance} scale={1.25} />
-          )}
-          <button
-            type="button"
-            className="cm-btn cm-equip-preview-toggle"
-            onClick={() => setPreview3D((v) => !v)}
-          >
-            {preview3D ? "2D" : "3D"}
-          </button>
+          <CharacterPreview3D appearance={previewAppearance} width={150} height={170} walking={false} />
           {previewingWeapon && <span className="cm-equip-preview-label">Preview</span>}
         </div>
         {dollSlot("weapon", "Main")}
@@ -673,7 +699,7 @@ function EquipmentPane({ profile }: { profile: ProfileInfo }) {
             </button>
           ))}
         </div>
-        <div className="cm-item-list">
+        <div className="cm-prof-list cm-prof-scroll">
           {armouryGroups.map((g) => (
             <div key={g.type} className="cm-armoury-group">
               <div className="cm-armoury-group-head">
@@ -732,6 +758,19 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
         { title: "Battle Skills", skills: skills.filter((s) => !s.world_only) },
         { title: "Field Skills", skills: skills.filter((s) => s.world_only) },
       ];
+  const activeJobLevel = activeJob
+    ? (profile.jobs?.find((j) => j.id === activeJob)?.level ?? 1)
+    : undefined;
+  // Proficiencies this class trains — shown as their own summary under the
+  // skill lists so action rows can show unlock levels instead.
+  const classProfs = activeJob
+    ? [...new Set(skills.map((s) => s.proficiency).filter((p): p is string => !!p))].sort(
+        (a, b) =>
+          (PROFICIENCY_GROUPS.flatMap((g) => g.profs).indexOf(a) + 100) -
+            (PROFICIENCY_GROUPS.flatMap((g) => g.profs).indexOf(b) + 100) ||
+          a.localeCompare(b),
+      )
+    : [];
 
   return (
     <div className="cm-actions">
@@ -758,9 +797,9 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
       {sections.map((section) => (
         <section key={section.title}>
           <h3 className="cm-section-label">{section.title}</h3>
-          <div className="cm-item-list cm-item-list--grid-3">
+          <div className="cm-prof-list cm-prof-cols">
             {section.skills.map((sk) => (
-              <SkillRow key={sk.id} sk={sk} byId={byId} engaged={engaged} />
+              <SkillRow key={sk.id} sk={sk} byId={byId} engaged={engaged} jobLevel={activeJobLevel} />
             ))}
             {section.skills.length === 0 && (
               <p className="hint cm-item-list-empty">No {section.title.toLowerCase()} available.</p>
@@ -768,6 +807,16 @@ function SkillsPane({ profile }: { profile: ProfileInfo }) {
           </div>
         </section>
       ))}
+      {activeJob && classProfs.length > 0 && (
+        <section>
+          <h3 className="cm-section-label">Proficiencies</h3>
+          <div className="cm-prof-list cm-prof-cols">
+            {classProfs.map((pid) => (
+              <ProfRow key={pid} pid={pid} profile={profile} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -778,16 +827,28 @@ function SkillRow({
   sk,
   byId,
   engaged,
+  jobLevel,
 }: {
   sk: SkillInfo;
   byId: Map<string, SkillInfo>;
   engaged: boolean;
+  /** Set on class tabs — rows then show the job level the action unlocks at
+   *  instead of the action's own proficiency level. */
+  jobLevel?: number;
 }) {
+  const onClassTab = jobLevel !== undefined;
+  const levelText = onClassTab
+    ? `Lv${sk.unlock_level}`
+    : !sk.unlocked
+      ? `Lv${sk.unlock_level}`
+      : sk.level >= sk.max_level
+        ? "MAX"
+        : `Lv${sk.level}`;
   const row = (
     <div className={`cm-item-row-wrap ${sk.unlocked ? "learned" : "locked"}`}>
       <button
         type="button"
-        className="cm-item-row"
+        className="cm-item-row cm-prof-row"
         aria-disabled={!sk.unlocked}
         draggable={sk.unlocked && !sk.passive}
         onDragStart={(e) => {
@@ -801,10 +862,12 @@ function SkillRow({
         }}
       >
         <span className="cm-item-row-icon">
-          <GameIcon src={skillIconSrc(sk.id, sk.unlocked)} alt="" size={24} />
+          <GameIcon src={skillIconSrc(sk.id, sk.unlocked)} alt="" size={20} />
         </span>
-        <span className="cm-item-row-name">{sk.name}</span>
-        {!sk.unlocked && <span className="cm-skill-level locked">Lv{sk.unlock_level}</span>}
+        <span className="cm-prof-name">{sk.name}</span>
+        <span className={`cm-prof-level${sk.unlocked ? "" : " locked"}`}>
+          {levelText}
+        </span>
       </button>
     </div>
   );

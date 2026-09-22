@@ -245,6 +245,9 @@ export function proficiencyLabel(key?: string): string {
 
 export const PROF_MAX_LEVEL = 20;
 
+/** Job levels share the game.LevelCap server-side. */
+export const JOB_MAX_LEVEL = 20;
+
 /** Disciplines grouped for the character window's Proficiencies tab. */
 export const PROFICIENCY_GROUPS: { label: string; profs: string[] }[] = [
   { label: "Magic", profs: ["elemental", "healing", "support", "weakening"] },
@@ -296,6 +299,23 @@ export function subWeaponTypeFromProfile(profile: ProfileInfo | null | undefined
   const itemId = profile?.equipped?.sub_weapon;
   if (!itemId) return undefined;
   return profile!.inventory.find((i) => i.id === itemId)?.type;
+}
+
+/** Armor weight class (heavy/medium/light) of the equipped armor — the chest
+ * piece wins, otherwise the highest-level armor item. Mirrors
+ * game.EquippedClothLook server-side. */
+export function equippedArmorClassFromProfile(profile: ProfileInfo | null | undefined): string | undefined {
+  if (!profile) return undefined;
+  const chestId = profile.equipped?.["chest"];
+  if (chestId) return profile.inventory.find((i) => i.id === chestId)?.type;
+  let best: Item | undefined;
+  for (const slot of ARMOR_SLOTS) {
+    const id = profile.equipped?.[slot];
+    if (!id) continue;
+    const item = profile.inventory.find((i) => i.id === id);
+    if (item && item.level > (best?.level ?? -1)) best = item;
+  }
+  return best?.type;
 }
 
 /** Weapon type equipped for a skill (main or sub hand depending on job). */

@@ -450,8 +450,8 @@ type chaseTarget struct {
 }
 
 func (ch *chaseTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
-	if !e.presentAndAlive() {
-		return
+	if !e.presentAndAlive() || e.casting != nil {
+		return // casters plant their feet until the cast resolves
 	}
 	t := h.validTarget(e)
 	if t == nil {
@@ -544,19 +544,71 @@ func (h *Hub) inMelee(e, t *entity) bool {
 }
 
 // attackTarget lands a basic melee hit on the target when in range and off
-// cooldown. damage is kind-specific.
+// cooldown. damage is kind-specific. skills lists catalog actions the NPC can
+// also cast — it weaves a cast in every castCD when in range.
 type attackTarget struct {
-	cooldown time.Duration
-	damage   func(h *Hub, e, t *entity) int
-	inRange  float64 // melee reach; 0 = use inMelee()
+	cooldown     time.Duration
+	damage       func(h *Hub, e, t *entity) int
+	inRange      float64 // melee reach; 0 = use inMelee()
+	skills       []string
+	castCD       time.Duration
+	skillReadyAt time.Time
+}
+
+// tryCast starts (or instantly resolves) one of the NPC's catalog skills.
+// Shares the player pipeline: MP paid up front, activeCast drives the cast
+// bar, advanceCast resolves through applySkillTo.
+func (at *attackTarget) tryCast(h *Hub, e, t *entity, now time.Time) bool {
+	if len(at.skills) == 0 || e.casting != nil || !now.After(at.skillReadyAt) {
+		return false
+	}
+	for _, id := range at.skills {
+		skill, ok := game.FindSkill(id)
+		if !ok || e.mp < skill.MPCost {
+			continue
+		}
+		if game.SkillIsRanged(skill) {
+			if entityDistance3D(e, t) > game.SkillMaxRange(skill) || !h.entityLineOfSight3D(e, t) {
+				continue
+			}
+		} else if !h.inMelee(e, t) {
+			continue
+		}
+		e.mp -= skill.MPCost
+		at.skillReadyAt = now.Add(at.castCD)
+		res := protocol.CombatEventPayload{
+			AttackerID: e.ID, ActionID: skill.ID, ActionName: skill.Name,
+			TargetID: t.ID, Success: true,
+		}
+		if game.SkillCastTime(skill) > 0 {
+			e.casting = &activeCast{
+				SkillID:  skill.ID,
+				TargetID: t.ID,
+				EndsAt:   now.UnixMilli() + int64(game.SkillCastTime(skill)),
+			}
+			e.castX, e.castY = e.X, e.Y
+			res.CastStarted = true
+			h.sendCombatEvent(res, e.X, e.Y)
+		} else {
+			h.applySkillTo(e, t, skill, res)
+		}
+		return true
+	}
+	return false
 }
 
 func (at *attackTarget) Tick(h *Hub, e *entity, now time.Time, dt float64) {
-	if !e.presentAndAlive() || !now.After(e.attackCD) {
+	if !e.presentAndAlive() || e.casting != nil {
 		return
 	}
 	t := h.validTarget(e)
 	if t == nil {
+		return
+	}
+	if at.tryCast(h, e, t, now) {
+		return
+	}
+	if !now.After(e.attackCD) {
 		return
 	}
 	if at.inRange > 0 {
@@ -892,6 +944,13 @@ func newNPCEntity(p game.Patrol, reg game.Region, ow *game.Overworld) *entity {
 	// Level-scaled affinities so accuracy/defense apply to NPCs too.
 	e.str, e.dex, e.int = 8+level, 8+level, 4+level
 	e.vit, e.md = 4+level, 4+level
+	e.mp, e.maxMP = game.BaseStats(level).MP, game.BaseStats(level).MP
+	if skills := enemySkills[kind]; len(skills) > 0 {
+		// Caster: chases like any foe but weaves catalog actions in whenever
+		// range/LOS allow — no standoff, so broken sightlines never stall it.
+		e.components.attackTarget.skills = skills
+		e.components.attackTarget.castCD = npcCastInterval
+	}
 	w := e.components.wander
 	w.patrol, w.region, w.ow = p, reg, ow
 	e.components.respawn.dropPoolID = dropPoolID

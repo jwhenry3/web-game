@@ -68,6 +68,19 @@ var enemyTemplates = map[string]int{ // kind -> base hp
 	"imp":       60,
 }
 
+// enemySkills maps a foe kind to the catalog actions it can cast. NPCs run
+// the same skill pipeline as players — cast start event, cast bar projection,
+// effect resolution, combat event — so any catalog action works here.
+var enemySkills = map[string][]string{
+	"imp":       {"hex_gelu_hex"}, // Frost Brand
+	"stone_imp": {"hex_gelu_hex"},
+}
+
+// npcCastInterval is the pacing between an enemy's cast starts — long
+// enough that melee stays its bread and butter, short enough that the
+// spell is a real threat.
+const npcCastInterval = 5 * time.Second
+
 var petTemplates = map[string]struct{ hp, str, dex int }{
 	"goblin": {70, 9, 11}, "dire_wolf": {55, 8, 17}, "stone_imp": {95, 11, 8},
 	"imp": {60, 10, 14},
@@ -229,13 +242,13 @@ func (h *Hub) resolveDodge(c *Client, e *entity) {
 	worldW, worldH := h.worldSize()
 	tx := clamp(e.X+dx*dodgeDashDist, game.PlayerCollisionRadius, worldW-game.PlayerCollisionRadius)
 	ty := clamp(e.Y+dy*dodgeDashDist, game.PlayerCollisionRadius, worldH-game.PlayerCollisionRadius)
-	h.moveEntity3D(e,tx,ty,0)
+	h.moveEntity3D(e, tx, ty, 0)
 	h.spatialInvalidate()
 	e.Facing = game.ResolveFacingYaw(e.X-prevX, e.Y-prevY, 0, false, e.Facing)
 
 	h.send(c, protocol.TypePlayerSync, h.entitySync(e))
 	h.broadcastAll(protocol.Encode(protocol.TypePlayerMoved, protocol.PlayerMovedPayload{
-		ID: c.ID, X: e.X, Y: e.Y, Z:e.Z, Grounded:e.grounded, Facing: e.Facing,
+		ID: c.ID, X: e.X, Y: e.Y, Z: e.Z, Grounded: e.grounded, Facing: e.Facing,
 	}))
 	h.persistWorldLocation(c, e, false)
 	h.refreshRegionOwnership(c, e)
@@ -338,7 +351,7 @@ func (h *Hub) resolveAction(c *Client, e *entity, action protocol.ActionPayload)
 			h.sendCombatEvent(res, e.X, e.Y)
 			return
 		}
-		if entityDistance3D(e,t) > allySkillRangeW {
+		if entityDistance3D(e, t) > allySkillRangeW {
 			res.Message = "Target out of range."
 			h.sendCombatEvent(res, e.X, e.Y)
 			return
@@ -413,8 +426,10 @@ func (h *Hub) startSkillCooldown(e, target *entity, skill game.Skill, now time.T
 }
 
 func (h *Hub) skillHits(e, t *entity, skill game.Skill) bool {
-	if !h.entityLineOfSight3D(e,t) {return false}
-	d := entityDistance3D(e,t)
+	if !h.entityLineOfSight3D(e, t) {
+		return false
+	}
+	d := entityDistance3D(e, t)
 	if mx := game.SkillMaxRange(skill); mx > 0 {
 		return d <= mx
 	}
@@ -442,7 +457,7 @@ func (h *Hub) resolveItemUse(c *Client, e *entity, action protocol.ActionPayload
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
 	}
-	if entityDistance3D(e,t) > allySkillRangeW {
+	if entityDistance3D(e, t) > allySkillRangeW {
 		res.Message = "Target out of range."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return
@@ -499,7 +514,7 @@ func (h *Hub) resolveCapture(c *Client, e *entity, action protocol.ActionPayload
 		return
 	}
 	res.TargetID = n.ID
-	if entityDistance3D(e,n) > allySkillRangeW {
+	if entityDistance3D(e, n) > allySkillRangeW {
 		res.Message = "Target out of range."
 		h.sendCombatEvent(res, e.X, e.Y)
 		return

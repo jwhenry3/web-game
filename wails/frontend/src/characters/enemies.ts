@@ -1,11 +1,10 @@
 /**
- * Overworld / battle enemy kinds. All kinds render through a Spine doll rig
- * (ENEMY_DOLL_PRESETS) — humanoids on the shared paperdoll, quadrupeds on
- * quaddoll. The sheet path remains for any kind without a preset.
+ * Overworld / battle enemy kinds. All kinds render through the 3D rig
+ * library (actors.ts buildEnemyRig); ENEMY_DOLL_PRESETS carries the
+ * appearance customization each kind composes on top of the shared rigs.
  */
 
 import { DEFAULT_APPEARANCE, type CharacterAppearance } from "./heroes99";
-import type { CharacterRig } from "../phaser/CharacterSprite";
 
 export type EnemyKind = "goblin" | "dire_wolf" | "stone_imp" | "imp";
 
@@ -39,9 +38,9 @@ export function enemyKindFromName(name: string, kind?: string): EnemyKind {
 }
 
 /**
- * Doll presets — humanoids compose creature parts on the shared paperdoll
+ * Doll presets — humanoids compose creature parts on the shared humanoid
  * rig (mirrors CREATURE_PRESETS in tools/paperdoll_layers.py); quadrupeds
- * use the quaddoll rig (mirrors BEAST_PRESETS in tools/gen_quadruped.py).
+ * use the quaddoll-style 3D rig (mirrors BEAST_PRESETS in tools/gen_quadruped.py).
  * Keep both generators in sync with this table.
  */
 export const ENEMY_DOLL_PRESETS: Partial<
@@ -49,7 +48,6 @@ export const ENEMY_DOLL_PRESETS: Partial<
     EnemyKind,
     {
       scale: number;
-      rig?: CharacterRig;
       appearance: Partial<CharacterAppearance>;
     }
   >
@@ -108,19 +106,13 @@ export const ENEMY_DOLL_PRESETS: Partial<
       },
     },
   },
-  // Quadruped — the quaddoll rig. Scale 1.0 renders it at the player's
-  // display scale: still shorter than a humanoid, but "dire" in bulk.
+  // Quadruped — scale 1.0 renders it at the player's display scale: still
+  // shorter than a humanoid, but "dire" in bulk.
   dire_wolf: {
     scale: 1.0,
-    rig: "quaddoll",
     appearance: { skin: "c11", face: "c11" },
   },
 };
-
-/** Kinds rendered by a Spine doll rig; the rest use pixel-art sheets. */
-export function isDollEnemy(kind: EnemyKind): boolean {
-  return ENEMY_DOLL_PRESETS[kind] !== undefined;
-}
 
 /** Full appearance for a doll-kind enemy — preset over the human default. */
 export function enemyDollAppearance(kind: EnemyKind): CharacterAppearance {

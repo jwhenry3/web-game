@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ENEMY_KIND_LABELS, ENEMY_SPRITE_SRC, type EnemyKind } from "../characters/enemies";
+import { ENEMY_KIND_LABELS, ENEMY_SPRITE_SRC, enemyKindFromName, type EnemyKind } from "../characters/enemies";
+import { PetPreview3D } from "../characters/PetPreview3D";
 import { net } from "../net/socket";
 import { ICONS } from "../ui/icons";
 import { GameIcon } from "../ui/GameIcon";
@@ -67,11 +68,11 @@ export function PetsPane({ profile }: { profile: ProfileInfo }) {
       {selected && (
         <aside className="cm-pet-side">
           <div className="cm-pet-preview">
-            <GameIcon
-              src={petSpriteSrc(selected.kind)}
-              alt={selected.name}
-              size={72}
-              className="cm-pet-sprite"
+            <PetPreview3D
+              kind={enemyKindFromName(selected.name, selected.kind)}
+              width={150}
+              height={150}
+              walking={false}
             />
             <div className="cm-pet-preview-name">{selected.name}</div>
             <div className="dim">

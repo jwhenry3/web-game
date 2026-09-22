@@ -3,9 +3,7 @@ import { useGame } from "./state/store";
 import { AuthScreen } from "./components/AuthScreen";
 import { CharacterSelectScreen } from "./components/CharacterSelectScreen";
 import { CharacterCreationWizard } from "./components/CharacterCreationWizard";
-import { PhaserGame } from "./phaser/PhaserGame";
 import { ThreeGame } from "./three/ThreeGame";
-import { EntityOverlays } from "./components/EntityOverlays";
 import { WorldHUD } from "./components/WorldHUD";
 import { HouseHUD } from "./components/HouseHUD";
 import { InviteToasts } from "./components/InviteToasts";
@@ -35,7 +33,6 @@ function AppBody() {
   const setAuth = useGame((s) => s.setAuth);
   const uiScale = useGame((s) => s.options.uiScale);
   const [booting, setBooting] = useState(true);
-  const [use3D, setUse3D] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,9 +106,7 @@ function AppBody() {
     <ItemMenuProvider>
       <div className="game-layout">
         <div className="game-stage" style={hudScaleVars(uiScale)}>
-          {screen === "world" && use3D ? <ThreeGame onFallback={() => setUse3D(false)} /> : <PhaserGame />}
-          {screen === "world" && <button type="button" className="cm-btn world-renderer-toggle" onClick={() => setUse3D(value => !value)}>{use3D ? "Switch to 2D" : "Switch to 3D"}</button>}
-          <EntityOverlays />
+          <ThreeGame />
           {screen === "house" ? <HouseHUD /> : <WorldHUD />}
           <SidePanel />
           {screen === "house" ? <HouseToolbar /> : <Hotbar />}

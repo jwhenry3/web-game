@@ -1,4 +1,3 @@
-import Phaser from "phaser";
 import type { WindowId } from "../types";
 
 export type KeybindMap = Record<string, string>;
@@ -42,6 +41,7 @@ export type KeybindAction =
   | "move_right"
   | "interact"
   | "mount"
+  | "target_lock"
   | `hotbar:${HotbarSlotId}`
   | `window:${WindowId}`;
 
@@ -63,6 +63,7 @@ const KNOWN_ACTIONS = new Set<string>([
   "move_right",
   "interact",
   "mount",
+  "target_lock",
   "window:character",
   "window:equipment",
   "window:inventory",
@@ -81,6 +82,7 @@ export function defaultKeybinds(): KeybindMap {
     move_right: "d",
     interact: "f",
     mount: "r",
+    target_lock: "h",
     "window:character": "c",
     "window:equipment": "e",
     "window:inventory": "i",
@@ -169,6 +171,8 @@ export function actionLabel(action: string): string {
       return "Confirm / Interact";
     case "mount":
       return "Toggle Mount";
+    case "target_lock":
+      return "Target Lock Camera";
     case "window:character":
       return "Character Window";
     case "window:equipment":
@@ -205,7 +209,7 @@ export const KEYBIND_SECTIONS: { title: string; actions: string[] }[] = [
   },
   {
     title: "Interact",
-    actions: ["interact", "mount"],
+    actions: ["interact", "mount", "target_lock"],
   },
   {
     title: "Hotbar Row 1",
@@ -227,39 +231,6 @@ export const KEYBIND_SECTIONS: { title: string; actions: string[] }[] = [
 
 export function bindingToDisplay(binding: string): string {
   return binding.replace(/Control/g, "Ctrl").replace(/\+/g, " + ");
-}
-
-/** Map binding string to Phaser Keyboard key code name. */
-export function bindingToPhaserKey(binding: string): string | null {
-  const parts = binding.split("+");
-  const key = parts[parts.length - 1]!;
-  const map: Record<string, string> = {
-    ArrowUp: "UP",
-    ArrowDown: "DOWN",
-    ArrowLeft: "LEFT",
-    ArrowRight: "RIGHT",
-    Space: "SPACE",
-    w: "W",
-    a: "A",
-    s: "S",
-    d: "D",
-    c: "C",
-    e: "E",
-    i: "I",
-    k: "K",
-    o: "O",
-    m: "M",
-  };
-  if (map[key]) return map[key]!;
-  if (/^[1-8]$/.test(key)) return key;
-  return null;
-}
-
-export function bindingToPhaserKeyCode(binding: string): number | null {
-  const name = bindingToPhaserKey(binding);
-  if (!name) return null;
-  const codes = Phaser.Input.Keyboard.KeyCodes as Record<string, number>;
-  return codes[name] ?? null;
 }
 
 let keybindCapture: ((binding: string) => void) | null = null;

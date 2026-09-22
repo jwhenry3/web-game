@@ -1,10 +1,27 @@
 import type { MapTerrainLayers, OverworldMap } from "../types";
 
+/** Authored look for one surface type — the "texture" the terrain paints.
+ * Optional fields resolve against per-cell defaults in terrainEditing. */
+export interface SurfaceStyle {
+  /** Base ground color (#rrggbb). */
+  color?: string;
+  /** Brightness variation amplitude applied over terrainNoise (default .16). */
+  noise?: number;
+  /** Prop density 0..1 — fraction of cells spawning each decoration. */
+  trees?: number;
+  rocks?: number;
+  grass?: number;
+}
+export type TerrainPaints = Record<string, SurfaceStyle>;
+
 /** Sparse authored elevation in map pixels; biome overrides also control walkability. */
 export interface TerrainData {
   version: 1;
   heights: Record<string, number>;
   cells: Record<string, string>;
+  /** Per-surface visual styles keyed by cell char (appearance only — never
+   * affects elevation or walkability). */
+  paints?: TerrainPaints;
 }
 
 export const WORLD_SCALE = 1 / 16;

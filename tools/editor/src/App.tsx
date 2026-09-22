@@ -1,15 +1,11 @@
 import { Component, Suspense, lazy, useCallback, useState } from "react";
 import type { ReactNode } from "react";
-import { CharacterWorkspace } from "./workspaces/CharacterWorkspace";
+import type { SceneMode } from "./workspaces/SceneWorkspace";
 
-// Workspaces load lazily — a broken one (e.g. mid-refactor syntax error)
+// The workspace loads lazily — a broken one (e.g. mid-refactor syntax error)
 // fails inside its own boundary instead of taking down the whole editor.
-const MapWorkspace = lazy(() => import("./workspaces/MapWorkspace"));
-const EffectsWorkspace = lazy(() => import("./workspaces/EffectsWorkspace"));
 const SceneWorkspace = lazy(() => import("./workspaces/SceneWorkspace"));
-const HairWorkspace = lazy(() =>
-  import("./workspaces/HairWorkspace").then((m) => ({ default: m.HairWorkspace })),
-);
+const ContentWorkspace = lazy(() => import("./content/ContentWorkspace"));
 
 class WorkspaceBoundary extends Component<
   { children: ReactNode },
@@ -27,19 +23,24 @@ class WorkspaceBoundary extends Component<
   }
 }
 
-export type Workspace = "characters" | "hair" | "maps" | "effects" | "scene";
+export type Workspace = SceneMode | "content";
 
 const WORKSPACES: { id: Workspace; label: string }[] = [
+  { id: "prefabs", label: "Prefabs" },
+  { id: "terrain", label: "Terrain" },
   { id: "characters", label: "Characters" },
-  { id: "hair", label: "Hair" },
-  { id: "maps", label: "Maps" },
-  { id: "scene", label: "Scene (3D)" },
   { id: "effects", label: "Effects" },
+  { id: "content", label: "Content" },
 ];
 
 function workspaceFromUrl(): Workspace {
-  const q = new URLSearchParams(location.search).get("ws");
-  return q === "hair" || q === "maps" || q === "effects" || q === "scene" ? q : "characters";
+  const p = new URLSearchParams(location.search);
+  const ws = p.get("ws");
+  if (WORKSPACES.some((w) => w.id === ws)) return ws as Workspace;
+  // Legacy deep links: ?ws=scene&mode=<mode>
+  const mode = p.get("mode");
+  if (ws === "scene" && WORKSPACES.some((w) => w.id === mode)) return mode as Workspace;
+  return "prefabs";
 }
 
 export function App() {
@@ -48,8 +49,8 @@ export function App() {
   const switchWs = useCallback((w: Workspace) => {
     setWs(w);
     const q = new URLSearchParams(location.search);
-    if (w === "characters") q.delete("ws");
-    else q.set("ws", w);
+    q.set("ws", w);
+    q.delete("mode");
     history.replaceState(null, "", `?${q}`);
   }, []);
 
@@ -57,7 +58,7 @@ export function App() {
     <div className="ed-root">
       <header className="ed-titlebar">
         <span className="ed-logo" aria-hidden="true">◇</span>
-        <strong>Editor</strong>
+        <strong>Scene Editor</strong>
         <nav className="ed-ws-tabs" role="tablist" aria-label="Workspace">
           {WORKSPACES.map((w) => (
             <button
@@ -74,11 +75,7 @@ export function App() {
       </header>
       <WorkspaceBoundary>
         <Suspense fallback={<div className="ed-err">Loading…</div>}>
-          {ws === "characters" && <CharacterWorkspace />}
-          {ws === "hair" && <HairWorkspace />}
-          {ws === "maps" && <MapWorkspace />}
-          {ws === "effects" && <EffectsWorkspace />}
-          {ws === "scene" && <SceneWorkspace />}
+          {ws === "content" ? <ContentWorkspace /> : <SceneWorkspace mode={ws} />}
         </Suspense>
       </WorkspaceBoundary>
     </div>

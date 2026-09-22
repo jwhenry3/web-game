@@ -9,9 +9,13 @@ export function APIPost(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function APIPut(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function BeginCursorCapture():Promise<void>;
+
 export function Connect(arg1:string):Promise<void>;
 
 export function Disconnect():Promise<void>;
+
+export function EndCursorCapture():Promise<void>;
 
 export function GetPredictedPosition():Promise<Record<string, number>>;
 
@@ -20,6 +24,8 @@ export function GetServerURL():Promise<string>;
 export function IsConnected():Promise<boolean>;
 
 export function IsStandalone():Promise<boolean>;
+
+export function RecenterCursor():Promise<void>;
 
 export function ReloadAll(arg1:string):Promise<void>;
 

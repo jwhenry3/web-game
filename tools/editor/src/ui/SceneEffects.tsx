@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { VFX_CATEGORIES } from "../../../../wails/frontend/src/phaser/battleVfxProfiles";
+import { VFX_CATEGORIES } from "../../../../wails/frontend/src/vfx/battleVfxProfiles";
 import { DEFAULT_RIGS } from "../../../../wails/frontend/src/three/rig3dDefaults";
 import { buildRig, type RigInstance } from "../../../../wails/frontend/src/three/rigBuilder";
 import { WorldVfx } from "../../../../wails/frontend/src/three/vfx3d";

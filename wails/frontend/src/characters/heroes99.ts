@@ -362,6 +362,27 @@ export function applyGameWeapon(
   return appearance;
 }
 
+/** What an unarmored hero wears — a simple tunic, pants and boots. */
+export const BASE_CLOTH = "cloth16";
+export const BASE_CLOTH_COLOR = "c3";
+
+/** Armor weight class → outfit. Mirrors game.EquippedClothLook server-side. */
+export const ARMOR_CLASS_CLOTH: Record<string, { cloth: string; clothColor: string }> = {
+  heavy: { cloth: "cloth15", clothColor: "c2" },
+  medium: { cloth: "cloth4", clothColor: "c6" },
+  light: { cloth: "cloth10", clothColor: "c1" },
+};
+
+/** Clothes follow equipped armor: the weight-class look, or the plain tunic
+ * when no armor is equipped. Mirrors applyGameWeapon. */
+export function applyGameClothes(
+  appearance: CharacterAppearance,
+  armorClass?: string,
+): CharacterAppearance {
+  const look = armorClass ? ARMOR_CLASS_CLOTH[armorClass] : undefined;
+  return { ...appearance, cloth: look?.cloth ?? BASE_CLOTH, clothColor: look?.clothColor ?? BASE_CLOTH_COLOR };
+}
+
 export function appearanceKey(appearance: CharacterAppearance): string {
   return JSON.stringify(appearance);
 }

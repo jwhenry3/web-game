@@ -1,7 +1,7 @@
 # Clara Mundi
 
 A 2D, room-based multiplayer RPG set in Clara Mundi. Go
-authoritative cluster over WebSockets; Wails desktop client (Phaser + React).
+authoritative cluster over WebSockets; Wails desktop client (Three.js + React).
 
 ## Documentation
 
@@ -31,7 +31,7 @@ Browser site ──/ + /api/status + /status/ws──┘            Hub + overwo
 
 Bootstrap cluster: `data/cluster.json`. Shared **EXP rates** (`exp.rate`, `exp.main_percent`, `exp.sub_percent`) apply to every map. Stock maps/content/config ship in the binary and are written under `data/` on first standalone run if missing (accounts/profiles stay external only). Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-The client (`wails/frontend/`) uses **Phaser** for world/battle scenes and **React** + Zustand for menus/HUD. Title screen offers **Play Game** or **Game Designer**.
+The client (`wails/frontend/`) renders the world and camp in **Three.js** and uses **React** + Zustand for menus/HUD. Title screen offers **Play Game** or **Game Designer**.
 **Shared Go libraries:** `internal/game` and `internal/protocol` are used by both the server and the desktop client. `internal/host` boots the cluster (used by `cmd/server` and optional Wails standalone). `internal/clientnet` is the Go WebSocket + prediction client. See [wails/README.md](wails/README.md).
 
 ## Progression & combat
@@ -136,7 +136,7 @@ data/                Portable game + player data (seeded from binary when missin
   content/           Game Designer catalogs
   accounts.json      Player accounts (not embedded)
   profiles.json      Player profiles (not embedded)
-wails/               Desktop client (Go bindings + React/Phaser UI)
+wails/               Desktop client (Go bindings + React/Three.js UI)
 docs/                Architecture, systems, Game Designer
 scripts/             Smoke tests / server helpers
 ```

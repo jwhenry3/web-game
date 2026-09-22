@@ -42,6 +42,47 @@ export interface SceneComponents {
   /** Dimensions are full extents in Three units; offset is the local center. */
   collider?: { enabled: boolean; shape: 'box' | 'capsule' | 'sphere'; size: Vec3; offset: Vec3; isTrigger: boolean };
 }
+
+export type SceneComponentKey = keyof SceneComponents;
+export interface SceneComponentField {
+  key: string;
+  label: string;
+  type: 'boolean' | 'number' | 'string' | 'select' | 'vec3';
+  min?: number;
+  step?: number;
+  options?: readonly string[];
+}
+export interface SceneComponentDefinition {
+  key: SceneComponentKey;
+  label: string;
+  description: string;
+  fields: readonly SceneComponentField[];
+}
+
+/** Editor metadata lives beside the serialized component contract. New
+ * component fields can therefore be exposed by extending this registry;
+ * inspectors do not contain component-specific JSX. */
+export const SCENE_COMPONENT_DEFINITIONS: readonly SceneComponentDefinition[] = [
+  { key:'npc', label:'NPC', description:'Spawns and configures a world character.', fields:[
+    {key:'enabled',label:'Enabled',type:'boolean'}, {key:'archetype',label:'Archetype',type:'string'},
+    {key:'level',label:'Level',type:'number',min:1,step:1}, {key:'hostile',label:'Hostile',type:'boolean'},
+    {key:'respawnSeconds',label:'Respawn seconds',type:'number',min:0,step:1},
+  ] },
+  { key:'poi', label:'Point of Interest', description:'Adds an interaction, destination, or landmark.', fields:[
+    {key:'enabled',label:'Enabled',type:'boolean'},
+    {key:'type',label:'Type',type:'select',options:['save_point','job_changer','portal','camp','storage']},
+    {key:'label',label:'Label',type:'string'}, {key:'interactionRadius',label:'Interaction radius',type:'number',min:.1,step:.1},
+    {key:'destinationMap',label:'Destination map',type:'string'},
+  ] },
+  { key:'item', label:'Item Pickup', description:'Spawns a collectible item in the world.', fields:[
+    {key:'enabled',label:'Enabled',type:'boolean'}, {key:'itemId',label:'Item ID',type:'string'},
+    {key:'quantity',label:'Quantity',type:'number',min:1,step:1}, {key:'respawnSeconds',label:'Respawn seconds',type:'number',min:0,step:1},
+  ] },
+  { key:'collider', label:'Collider', description:'Controls placement, collision, and trigger volume.', fields:[
+    {key:'enabled',label:'Enabled',type:'boolean'}, {key:'shape',label:'Shape',type:'select',options:['box','capsule','sphere']},
+    {key:'size',label:'Size',type:'vec3'}, {key:'offset',label:'Offset',type:'vec3'}, {key:'isTrigger',label:'Is trigger',type:'boolean'},
+  ] },
+] as const;
 export type PrefabKind = 'npc' | 'poi' | 'item' | 'decoration';
 export interface ScenePrefabAsset { id: string; name: string; kind: PrefabKind; revision: number; objects: SceneObject[] }
 

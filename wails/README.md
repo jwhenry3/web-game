@@ -1,6 +1,6 @@
 # Fantasy Wails Desktop Client
 
-Go-native game core + React UI + Phaser renderer. Shares `internal/game`,
+Go-native game core + React UI + Three.js renderer. Shares `internal/game`,
 `internal/protocol`, `internal/clientnet`, and `internal/host` with `cmd/server`.
 
 ## Layout (shared libraries)
@@ -14,7 +14,7 @@ internal/
   proxy/ …     server-only networking
 wails/
   app/         Wails bindings (thin glue over clientnet + optional host)
-  frontend/    Vite + React + Phaser UI (sole client)
+  frontend/    Vite + React + Three.js UI (sole client)
 cmd/server/    dedicated multiplayer server entry
 ```
 
@@ -83,7 +83,9 @@ Env overrides:
 
 Desktop clients negotiate **protobuf** (`?codec=protobuf`). See [docs/PROTOCOL.md](../docs/PROTOCOL.md).
 
-## Thin Phaser movement
+## Client movement
 
-`WorldScene` calls `applyPlayerSlide()` which uses Go `StepMove` when the Wails
-movement bridge is set; otherwise it falls back to `src/world/overworld.ts`.
+`three/WorldRenderer` predicts movement with a TypeScript port of the shared
+3D physics solver (`three/physics3d.ts`, mirroring `internal/game/physics3d.go`)
+and reports position + predicted z through `net.move`; authoritative snapshots
+reconcile the predicted body.

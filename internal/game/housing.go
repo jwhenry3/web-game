@@ -124,7 +124,7 @@ func NewHouseOverworld() *Overworld {
 		}
 		cells[r] = string(row)
 	}
-	return &Overworld{
+	ow := &Overworld{
 		Path:     "house",
 		Cols:     HouseMapCols,
 		Rows:     HouseMapRows,
@@ -133,4 +133,30 @@ func NewHouseOverworld() *Overworld {
 		WorldH:   HouseMapRows * HouseTileSize,
 		Cells:    cells,
 	}
+	ow.ApplyScene3D(NewHouseScene3D(nil))
+	return ow
+}
+
+// NewHouseScene3D makes a camp interior a regular scene document. Its POIs
+// and placed furniture therefore travel through the same snapshot, renderer,
+// heightmap and physics paths as every authored world map.
+func NewHouseScene3D(furniture []HouseFurniture) *Scene3D {
+	s := EmptyScene3D("house")
+	dc, dr := HouseDoorTile()
+	sc, sr := HouseStorageTile()
+	poi := func(id, name, kind string, c, r int) SceneObject {
+		return SceneObject{ID: id, Name: name, Prefab: kind, Visible: true, Props: map[string]any{}, Transform: SceneTransform{Position: [3]float64{(float64(c) + .5) * 2, 0, (float64(r) + .5) * 2}, Scale: [3]float64{1, 1, 1}}, Components: SceneComponents{POI: &ScenePOI{Enabled: true, Type: kind, Label: name, InteractionRadius: 5}}}
+	}
+	s.Objects = append(s.Objects, poi("house-door", "Door", "door", dc, dr), poi("house-storage", "Storage", "storage", sc, sr))
+	for _, f := range furniture {
+		s.Objects = append(s.Objects, SceneObject{ID: "furniture:" + f.ID, Name: f.Item.Name, Prefab: "furniture", Visible: true, Props: map[string]any{"itemId": f.Item.ID}, Transform: SceneTransform{Position: [3]float64{(float64(f.Col) + .5) * 2, 0, (float64(f.Row) + .5) * 2}, Scale: [3]float64{1, 1, 1}}, Components: SceneComponents{Collider: &SceneCollider{Enabled: true, Shape: "box", Size: [3]float64{1.5, 2, 1.5}, Offset: [3]float64{0, 1, 0}}}})
+	}
+	return s
+}
+
+func (o *Overworld) SetHouseFurniture3D(furniture []HouseFurniture) {
+	if o == nil {
+		return
+	}
+	o.ApplyScene3D(NewHouseScene3D(furniture))
 }

@@ -4,7 +4,8 @@
 //
 // Prop/tree cells paint the dominant neighboring *fill* underneath so a tree
 // never leaves a hole; the prop itself renders as a separate upright sprite.
-import { isoDepth } from "./iso";
+/** Sort key — higher screen Y is closer to the viewer (iso projection y). */
+const isoDepth = (x: number, y: number): number => (x + y) / 2;
 import {
   ISO_BLOCKS,
   ISO_ROCK_LEVEL,

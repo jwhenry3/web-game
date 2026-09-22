@@ -1,6 +1,4 @@
-import type Phaser from "phaser";
-
-/** Mirrors internal/game.CampSkins — overworld tent palette + labels. */
+/** Mirrors internal/game.CampSkins — camp palette + labels. */
 
 export interface CampSkinDef {
   id: string;
@@ -95,21 +93,3 @@ export function campSkinById(id: string | undefined | null): CampSkinDef {
   return CAMP_SKINS.find((s) => s.id === key) ?? CAMP_SKINS[0];
 }
 
-/** Draw a tent graphic at local origin (0,0) into a Phaser Graphics object. */
-export function drawCampTent(
-  g: Phaser.GameObjects.Graphics,
-  skinId: string | undefined | null,
-): void {
-  const p = campSkinById(skinId);
-  g.clear();
-  g.fillStyle(p.base, 1);
-  g.fillEllipse(0, 10, 44, 14);
-  g.fillStyle(p.outer, 1);
-  g.fillTriangle(-22, 10, 22, 10, 0, -28);
-  g.fillStyle(p.inner, 1);
-  g.fillTriangle(-10, 10, 10, 10, 0, -28);
-  g.fillStyle(p.door, 1);
-  g.fillRect(-5, 6, 10, 12);
-  g.lineStyle(2, p.stroke, 0.9);
-  g.strokeTriangle(-22, 10, 22, 10, 0, -28);
-}

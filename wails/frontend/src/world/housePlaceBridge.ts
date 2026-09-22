@@ -26,15 +26,8 @@ let state: HousePlaceState = {
 
 const listeners = new Set<Listener>();
 
-/** Latest house floor meta for tile math. */
+/** Latest house floor meta for tile math (published by the renderer). */
 let transform: {
-  scaleX: number;
-  scaleY: number;
-  originX: number;
-  originY: number;
-  zoom: number;
-  viewX: number;
-  viewY: number;
   tileSize: number;
   walkOriginCol: number;
   walkOriginRow: number;
@@ -111,20 +104,10 @@ export function setHouseClientToWorld(
   clientToWorld = fn;
 }
 
-/** Browser client coordinates → house world (preferred for Three.js). */
+/** Browser client coordinates → house world (raycast through the renderer). */
 export function clientPointToWorld(clientX: number, clientY: number): { x: number; y: number } | null {
   if (clientToWorld) return clientToWorld(clientX, clientY);
   return null;
-}
-
-/** Convert game-stage-relative CSS pixels → world coords (Phaser FIT path). */
-export function stagePointToWorld(stageX: number, stageY: number): { x: number; y: number } | null {
-  if (!transform) return null;
-  const gx =
-    (stageX - transform.originX) / Math.max(1e-6, transform.scaleX) / Math.max(1e-6, transform.zoom);
-  const gy =
-    (stageY - transform.originY) / Math.max(1e-6, transform.scaleY) / Math.max(1e-6, transform.zoom);
-  return { x: transform.viewX + gx, y: transform.viewY + gy };
 }
 
 export function worldToHouseTile(x: number, y: number): { col: number; row: number } | null {

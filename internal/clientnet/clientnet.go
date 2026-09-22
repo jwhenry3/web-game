@@ -18,7 +18,7 @@ import (
 
 // Conn is a client WebSocket to the game proxy.
 // Wire format defaults to protobuf; OnEnvelope always receives JSON frames
-// so the React/Phaser layer can keep using the existing handlers.
+// so the React/Three.js layer can keep using the existing handlers.
 type Conn struct {
 	mu               sync.Mutex
 	conn             *websocket.Conn

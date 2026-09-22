@@ -42,7 +42,7 @@ Each Hub runs a **single authoritative simulation** (movement + realtime combat)
 | Cluster config | `internal/cluster` | `MapSpec`, registry load/save, travel checks, transfer request types |
 | Persistence | `internal/store` | Accounts + character profiles (JSON files under `data/`) |
 | Auth | `internal/auth` | HS256 JWT (default 7-day TTL) |
-| Desktop client | `wails/` | Wails shell + `wails/frontend` (Vite + React 19 + Phaser 4 + Zustand) + `internal/clientnet`; optional embedded `internal/host` |
+| Desktop client | `wails/` | Wails shell + `wails/frontend` (Vite + React 19 + Three.js + Zustand) + `internal/clientnet`; optional embedded `internal/host` |
 
 Internal transfer types (`cluster.TransferRequest`, attach payloads) are **never** sent to the client. Clients only see gameplay envelopes (`welcome`, `world_state`, `map_config`, …).
 
@@ -150,10 +150,10 @@ Saving Game Designer overrides:
 |-------|----------|-------|
 | Screens | `wails/frontend/src/App.tsx`, `state/store.ts` | `title` → auth / Game Designer / play |
 | Net | `wails/frontend/src/net/` | auth, transport, public maps, adminMaps |
-| Phaser | `wails/frontend/src/phaser/` | `WorldScene` (overworld + realtime combat) |
+| Renderer | `wails/frontend/src/three/` | `WorldRenderer` (overworld + realtime combat), `HouseRenderer` (camp) |
 | React HUD | `wails/frontend/src/components/` | menus, hotbar, social, windows |
 | Editor | `wails/frontend/src/components/MapEditor*.tsx`, `editor/` | Game Designer UI + logic |
-| Wails glue | `wails/frontend/src/wails*.ts`, `bootstrap.ts` | Go API / transport / movement bridges |
+| Wails glue | `wails/frontend/src/wails*.ts`, `bootstrap.ts` | Go API / transport bridges |
 
 ## Air / hot reload (Go)
 

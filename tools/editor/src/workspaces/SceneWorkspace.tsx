@@ -22,24 +22,16 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: "scale", label: "Scale (R)", key: "R", icon: "⤢" },
 ];
 
-const MODES = [
-  { id: "prefabs", label: "Prefabs" },
-  { id: "terrain", label: "Terrain" },
-  { id: "characters", label: "Characters" },
-  { id: "effects", label: "Effects" },
-] as const;
-type SceneMode = (typeof MODES)[number]["id"];
-function modeFromUrl(): SceneMode {
-  const m = new URLSearchParams(location.search).get("mode");
-  return MODES.some(x => x.id === m) ? (m as SceneMode) : "prefabs";
-}
+/** Top-level editor tabs — the scene's Unity-style edit modes. */
+export type SceneMode = "prefabs" | "terrain" | "characters" | "effects";
 
 function mapFromUrl(): string { return new URLSearchParams(location.search).get("map") ?? ""; }
 
 /** Unity-modelled 3D scene editor: Hierarchy + Project on the left, Scene
  * view centre, Inspector right. Terrain streams from the game server; the
- * authored layer is a Scene3DDoc exported/imported as JSON. */
-export default function SceneWorkspace() {
+ * authored layer is a Scene3DDoc exported/imported as JSON. `mode` is the
+ * top-level tab driven by App. */
+export default function SceneWorkspace({ mode }: { mode: SceneMode }) {
   const [maps, setMaps] = useState<SceneMapInfo[]>([]);
   const [mapId, setMapId] = useState(mapFromUrl);
   const [snapshot, setSnapshot] = useState<MapSnapshot | null>(null);
@@ -51,7 +43,6 @@ export default function SceneWorkspace() {
   const [password,setPassword]=useState('');
   const [authenticated,setAuthenticated]=useState(hasEditorSession);
   const [view,setView]=useState<SceneView|null>(null);
-  const [mode,setMode]=useState<SceneMode>(modeFromUrl);
   const [prefabEditor,setPrefabEditor]=useState<{assetId?:string;defId?:string}|null>(null);
   const store = useMemo(() => new SceneStore(mapId), [mapId]);
   const charMode = useCharacterMode(view, mode === "characters");
@@ -125,10 +116,6 @@ export default function SceneWorkspace() {
         <select aria-label="Map" value={mapId} disabled={!maps.length||busy} onChange={e => setMapId(e.target.value)}>
           {maps.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
-        <span className="sc-sep" />
-        <div className="sc-tools" role="tablist" aria-label="Editor mode">
-          {MODES.map(m => <button key={m.id} role="tab" aria-selected={mode === m.id} className={mode === m.id ? "active" : ""} onClick={() => { setMode(m.id); const q = new URLSearchParams(location.search); q.set("mode", m.id); history.replaceState(null, "", `?${q}`); }}>{m.label}</button>)}
-        </div>
         <span className="sc-sep" />
         <div className="sc-tools" role="radiogroup" aria-label="Transform tool">
           {TOOLS.map(t => <button key={t.id} role="radio" aria-checked={tool === t.id} className={tool === t.id ? "active" : ""} title={t.label} onClick={() => store.setTool(t.id)}>{t.icon}<small>{t.key}</small></button>)}

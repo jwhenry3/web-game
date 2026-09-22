@@ -36,7 +36,7 @@ function entityAppearance(entity: WorldEntity, self: boolean): { appearance: Cha
   return { appearance, palette: wire ? {} : { cloth: self ? "#456879" : "#796584" } };
 }
 
-function buildEnemyRig(kind: EnemyKind): { rig: RigInstance; seat: number } {
+export function buildEnemyRig(kind: EnemyKind): { rig: RigInstance; seat: number } {
   const def = ENEMY_RIG[kind];
   return { rig: buildRig(getRig(def.rig), { appearance: enemyDollAppearance(kind), palette: def.palette, scale: def.scale }), seat: def.seat };
 }
@@ -68,6 +68,7 @@ export function createActor(entity: WorldEntity, self: boolean): Actor3D {
   const ring = new THREE.Mesh(new THREE.RingGeometry(.39, .43, 40), new THREE.MeshBasicMaterial({ color: self ? 0xe3c788 : hostile ? 0xe98265 : 0x83c5bc, transparent: true, opacity: .8, side: THREE.DoubleSide, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = .03; root.add(ring, body);
   root.userData.entityId = entity.id;
+  root.userData.kind = entity.kind;
   return { root, body, rig, rider, ring, signature: actorSignature(entity) };
 }
 

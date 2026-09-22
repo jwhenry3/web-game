@@ -67,6 +67,24 @@ export const PREFABS: PrefabDef[] = [
     create:p=>{const g=new THREE.Group(),c=colorOf(p.color,0x78dbec);part(g,new THREE.CylinderGeometry(.65,.8,.2,8),0x777f88,0,.1);part(g,new THREE.OctahedronGeometry(.35),c,0,1.2,0,{emissive:new THREE.Color(c),emissiveIntensity:.7});return g;} },
   { id:'item', label:'Item Pickup', category:'Gameplay', props:[COLOR('color','Color','#ecc15e')], components:normalizeComponents({item:{},collider:{shape:'sphere',isTrigger:true,size:[1,1,1],offset:[0,.5,0]}}),
     create:p=>{const g=new THREE.Group();part(g,new THREE.DodecahedronGeometry(.3),colorOf(p.color,0xecc15e),0,.45,0,{metalness:.4,roughness:.35});return g;} },
+  { id:'door', label:'Door', category:'Gameplay', props:[COLOR('color','Frame','#4a6038'),COLOR('glow','Glow','#6a9ad4')],
+    create:p=>{const g=new THREE.Group(),frame=colorOf(p.color,0x4a6038),glow=colorOf(p.glow,0x6a9ad4);
+      const post=new THREE.CylinderGeometry(.09,.11,2.8,6);
+      for(const s of [-1,1])part(g,post,frame,s*1.1,1.4);
+      part(g,new THREE.BoxGeometry(2.8,.2,.24),frame,0,2.84);
+      const pane=part(g,new THREE.PlaneGeometry(2.2,2.5),glow,0,1.3,0,{transparent:true,opacity:.3,side:THREE.DoubleSide,emissive:new THREE.Color(glow),emissiveIntensity:.4});pane.castShadow=pane.receiveShadow=false;
+      return g;} },
+  { id:'storage', label:'Storage Chest', category:'Gameplay', props:[COLOR('color','Body','#8a6030'),COLOR('trim','Trim','#f0d090')],
+    create:p=>{const g=new THREE.Group(),body=colorOf(p.color,0x8a6030),trim=colorOf(p.trim,0xf0d090);
+      part(g,new THREE.BoxGeometry(1.6,1.1,1.2),body,0,.55);
+      part(g,new THREE.BoxGeometry(1.72,.28,1.32),trim,0,1.16);
+      const ring=part(g,new THREE.RingGeometry(.9,1.2,24),0xd4a05a,0,.02,0,{transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false});ring.rotation.x=-Math.PI/2;ring.castShadow=ring.receiveShadow=false;
+      return g;} },
+  { id:'furniture', label:'Furniture', category:'Gameplay', props:[COLOR('color','Body','#7a5a3a'),COLOR('trim','Trim','#d4b890')],
+    create:p=>{const g=new THREE.Group(),body=colorOf(p.color,0x7a5a3a),trim=colorOf(p.trim,0xd4b890);
+      part(g,new THREE.BoxGeometry(1.44,1.16,1.2),body,0,.58);
+      part(g,new THREE.BoxGeometry(1.56,.16,1.32),trim,0,1.2);
+      return g;} },
   { id: "empty", label: "Empty", category: "Utility", props: [], create: () => new THREE.Group() },
   {
     id: "house", label: "House", category: "Buildings",

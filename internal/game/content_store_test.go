@@ -59,6 +59,11 @@ func TestValidContentKind(t *testing.T) {
 	if !ValidContentKind("characters") {
 		t.Fatal("characters should be valid")
 	}
+	for _, kind := range []string{"dialogues", "vendors", "recipes", "spawn_sets", "statuses", "gameplay"} {
+		if !ValidContentKind(kind) {
+			t.Fatalf("%s should be valid", kind)
+		}
+	}
 	if ValidContentKind("races") {
 		t.Fatal("races not implemented yet")
 	}

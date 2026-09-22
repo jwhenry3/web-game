@@ -18,12 +18,20 @@ export function APIPut(arg1, arg2, arg3) {
   return window['go']['app']['App']['APIPut'](arg1, arg2, arg3);
 }
 
+export function BeginCursorCapture() {
+  return window['go']['app']['App']['BeginCursorCapture']();
+}
+
 export function Connect(arg1) {
   return window['go']['app']['App']['Connect'](arg1);
 }
 
 export function Disconnect() {
   return window['go']['app']['App']['Disconnect']();
+}
+
+export function EndCursorCapture() {
+  return window['go']['app']['App']['EndCursorCapture']();
 }
 
 export function GetPredictedPosition() {
@@ -40,6 +48,10 @@ export function IsConnected() {
 
 export function IsStandalone() {
   return window['go']['app']['App']['IsStandalone']();
+}
+
+export function RecenterCursor() {
+  return window['go']['app']['App']['RecenterCursor']();
 }
 
 export function ReloadAll(arg1) {

@@ -558,15 +558,46 @@ func (h *Hub) handleJoinWorld(c *Client, raw json.RawMessage) {
 	}
 
 	name = profile.Name
-	dup := false
+	var dupIDs []string
 	h.eachEntity(kindPlayer, func(o *entity) {
 		if strings.EqualFold(o.Name, name) {
-			dup = true
+			dupIDs = append(dupIDs, o.ID)
 		}
 	})
+	dup := false
+	var stale *Client
+	for _, id := range dupIDs {
+		h.mu.RLock()
+		owner := h.clients[id]
+		h.mu.RUnlock()
+		switch {
+		case owner == nil:
+			// Orphaned entity with no owning client — drop it.
+			delete(h.entities, id)
+		case h.accounts == nil || owner.AccountID == c.AccountID:
+			// The same account rejoining on a fresh socket supersedes the
+			// stale session — a half-open conn can otherwise lock the hero
+			// out until the old read deadline trips.
+			stale = owner
+		default:
+			dup = true
+		}
+	}
 	if dup {
 		h.sendError(c, "That hero is already online.")
 		return
+	}
+	if stale != nil {
+		log.Printf("%s: superseding stale session %s", name, stale.ID)
+		// Close the stale transport so a still-live client is kicked rather
+		// than left frozen on a detached session; the queued unregister that
+		// follows is a no-op once handleDisconnect removes membership.
+		if stale.Conn != nil {
+			stale.Conn.Close()
+		} else if stale.CloseFn != nil {
+			stale.CloseFn()
+		}
+		h.handleDisconnect(stale)
 	}
 
 	c.Name = name
@@ -733,6 +764,7 @@ func (h *Hub) handleEquip(c *Client, raw json.RawMessage) {
 	if cc := clientControlOf(e); cc != nil {
 		cc.weaponName = string(profile.EquippedWeaponType())
 		cc.subWeaponName = string(profile.EquippedSubWeaponType())
+		cc.appearance = appearanceProto(profile)
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)
@@ -756,6 +788,7 @@ func (h *Hub) handleUnequip(c *Client, raw json.RawMessage) {
 	if cc := clientControlOf(e); cc != nil {
 		cc.weaponName = string(profile.EquippedWeaponType())
 		cc.subWeaponName = string(profile.EquippedSubWeaponType())
+		cc.appearance = appearanceProto(profile)
 	}
 	h.sendProfileRefresh(c, profile)
 	h.sendPlayerSync(e)

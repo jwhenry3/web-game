@@ -47,7 +47,6 @@ export function ItemListRow({
   equipped,
   equippedSlot,
   locked,
-  showLevel = true,
   bag = "inventory",
   transferEnabled = false,
   actionCtx,
@@ -59,7 +58,6 @@ export function ItemListRow({
   equipped?: boolean;
   equippedSlot?: string;
   locked?: boolean;
-  showLevel?: boolean;
   bag?: ItemBagId;
   /** Allow dragging this row for bag↔bag transfer (and hotbar if consumable). */
   transferEnabled?: boolean;
@@ -115,20 +113,19 @@ export function ItemListRow({
         }}
       >
         <span className="cm-item-row-icon">
-          <GameIcon src={itemIconSrc(item)} alt="" size={24} />
+          <GameIcon src={itemIconSrc(item)} alt="" size={20} />
           {equipped && (
             <span className="cm-item-row-equipped" title="Equipped">
               E
             </span>
           )}
         </span>
-        <span className="cm-item-row-name" style={{ color: RARITY_COLORS[item.rarity] }}>
+        <span className="cm-prof-name cm-item-name" style={{ color: RARITY_COLORS[item.rarity] }}>
           {item.name}
         </span>
-        {consumable && qty > 1 && <span className="cm-item-row-meta">×{qty}</span>}
-        {showLevel && !consumable && item.level > 0 && (
-          <span className="cm-item-row-meta">i{item.level}</span>
-        )}
+        <span className="cm-prof-level">
+          {consumable && qty > 1 ? `×${qty}` : !consumable && item.level > 0 ? `i${item.level}` : ""}
+        </span>
       </button>
     </div>
   );

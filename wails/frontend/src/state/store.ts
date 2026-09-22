@@ -29,7 +29,7 @@ import type { NpcDialogueTarget } from "../world/npcDialogue";
 export type Screen = "title" | "auth" | "admin_auth" | "select" | "create" | "world" | "house" | "map_editor";
 
 import type { CharacterAppearance } from "../characters/types";
-import { appearanceFromRace } from "../characters/types";
+import { appearanceFromRace, applyGameClothes } from "../characters/types";
 import { loadOptions, type GameOptions } from "./optionsStorage";
 
 export type MainMenuView = "menu" | "options";
@@ -116,6 +116,10 @@ interface GameState {
   /** In-flight camp↔world transfer; the loading overlay stays up and input is
    * gated until the destination's state lands (house_state / world_state). */
   transition: "house" | "world" | null;
+  /** Last 3D world-camera orbit (distance/elevation/azimuth as a THREE
+   * Spherical) — survives map transitions and renderer recreation within the
+   * session so the view doesn't snap back to the spawn default. */
+  cameraView: { distance: number; pitch: number; azimuth: number } | null;
 
   setScreen: (s: Screen) => void;
   setSelectedAction: (a: SelectedAction | null) => void;
@@ -151,6 +155,7 @@ interface GameState {
   closeJobChangeDialog: () => void;
   openTeleportConfirm: (target: { id: string; name: string }) => void;
   closeTeleportConfirm: () => void;
+  setCameraView: (v: GameState["cameraView"]) => void;
   setAtlas: (maps: AtlasMap[]) => void;
   logout: () => void;
   reset: () => void;
@@ -172,7 +177,7 @@ const initial = {
     mainJob: "",
     subJob: "",
     name: "",
-    appearance: appearanceFromRace("humanus"),
+    appearance: applyGameClothes(appearanceFromRace("humanus")),
   } as CreationDraft,
   selfId: null,
   profile: null,
@@ -207,6 +212,7 @@ const initial = {
   teleportConfirm: null as { id: string; name: string } | null,
   atlas: [] as AtlasMap[],
   transition: null as "house" | "world" | null,
+  cameraView: null as GameState["cameraView"],
 };
 
 /** True while a menu, dialog, or game window is open and owns keyboard input. */
@@ -350,6 +356,7 @@ export const useGame = create<GameState>((set) => ({
   closeJobChangeDialog: () => set({ jobChangeDialog: null }),
   openTeleportConfirm: (target) => set({ teleportConfirm: target, mainMenuOpen: false }),
   closeTeleportConfirm: () => set({ teleportConfirm: null }),
+  setCameraView: (v) => set({ cameraView: v }),
   setAtlas: (maps) => set({ atlas: maps }),
   logout: () => {
     setStoredToken(null);

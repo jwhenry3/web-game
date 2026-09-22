@@ -73,7 +73,6 @@ h3 {
 .cm-window,
 .cm-chat,
 .cm-slot,
-.cm-item-row,
 .cm-hotbar-slot,
 .hotbar-slot {
   background: rgba(var(--cm-panel-rgb), 0.82);
@@ -656,15 +655,6 @@ h3 {
   --hud-bottom: calc(16px + 14px * var(--ui-expbar, 1));
 }
 
-.phaser-host {
-  position: absolute;
-  inset: 0;
-}
-
-.phaser-host canvas {
-  display: block;
-}
-
 /* ---- Entity nameplates / cast bars ---- */
 .cm-billboard {
   display: flex;
@@ -754,6 +744,23 @@ h3 {
   50% {
     margin-top: -18px;
   }
+}
+
+/* Camera target-lock: the chevron turns cyan inside a bracket frame. */
+.cm-target-arrow--locked {
+  border-top-color: #8fd8ff;
+  animation: none;
+  margin-top: -22px;
+}
+.cm-target-arrow--locked::before {
+  content: "";
+  position: absolute;
+  left: -9px;
+  top: -6px;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid #8fd8ff;
+  border-radius: 3px;
 }
 
 .cm-entity-cast {
@@ -2093,10 +2100,6 @@ h3 {
   border: 1px solid rgba(var(--cm-accent-rgb), 0.28);
 }
 
-.cm-char-job-grid {
-  margin-top: 4px;
-}
-
 /* Character window: classes grouped under role headers. */
 .cm-char-job-groups {
   display: flex;
@@ -2105,39 +2108,11 @@ h3 {
   margin-top: 4px;
 }
 
-.cm-char-job-groups .cm-char-job-grid {
-  margin-top: 2px;
-}
-
 .cm-job-role-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   border: 1px solid var(--cm-shadow-solid);
-}
-
-.job-card--readout {
-  cursor: default;
-}
-
-.job-card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.job-level-meta {
-  font-size: 11px;
-}
-
-/* Right-aligned level on a class row in the character window. */
-.job-card-level {
-  margin-left: auto;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--cm-text-dim);
-  white-space: nowrap;
 }
 
 /* Proficiencies tab: discipline rows with a thin growth bar. */
@@ -2197,6 +2172,53 @@ h3 {
   color: var(--cm-text-dim);
   text-align: right;
   white-space: nowrap;
+}
+
+/* Job Levels tab: class rows share the proficiency bar treatment, laid out
+   in two columns inside each role group. Must come after .cm-prof-list —
+   rows carry both classes and the later rule's display wins. */
+.cm-job-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+
+.cm-job-row.selected {
+  background: rgba(var(--cm-warm-rgb), 0.9);
+  border-radius: 3px;
+}
+
+.cm-job-name {
+  width: 120px;
+}
+
+.cm-job-row .cm-prof-level {
+  width: 42px;
+}
+
+/* Inventory/armoury/action lists: same row anatomy as job + proficiency
+   rows, in two columns (armoury chest scrolls single-column). */
+.cm-prof-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 12px;
+}
+
+.cm-prof-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.cm-item-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+
+/* Empty bag slots are invisible spacers — just reserve the row height so
+   the grid keeps its capacity footprint. */
+.cm-item-empty {
+  height: 25px;
 }
 
 .cm-xp {
@@ -2384,12 +2406,6 @@ h3 {
   white-space: nowrap;
 }
 
-.cm-item-slot-empty {
-  min-height: 30px;
-  border: 1px solid rgba(var(--cm-accent-rgb), 0.22);
-  background: rgba(var(--cm-surface-rgb), 0.18);
-}
-
 .cm-item-list--grid-3 .cm-item-list-empty {
   grid-column: 1 / -1;
 }
@@ -2412,19 +2428,24 @@ h3 {
   box-shadow: inset 0 0 0 1px var(--cm-accent-hi);
 }
 
+/* Item/skill rows share the proficiency-row anatomy: icon, name,
+   right-aligned meta (skills keep a thin fill track). Rows are flat —
+   no panel chrome — until selected/equipped. */
 .cm-item-row {
-  display: grid;
-  grid-template-columns: 28px 1fr auto;
+  display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 2px 4px;
   text-align: left;
   cursor: pointer;
   color: var(--cm-text);
   font-family: inherit;
-  font-size: 12px;
-  border-radius: var(--cm-radius);
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  box-shadow: none;
 }
 
 .cm-item-row[draggable="true"] {
@@ -2432,8 +2453,7 @@ h3 {
 }
 
 .cm-item-row:hover {
-  border-color: var(--cm-accent-hi);
-  background: rgba(var(--cm-warm-rgb), 0.85);
+  background: rgba(var(--cm-warm-rgb), 0.3);
 }
 
 .cm-item-context-menu {
@@ -2531,8 +2551,13 @@ h3 {
   color: var(--cm-text);
 }
 
-.cm-slot.empty {
-  background: rgba(var(--cm-surface-rgb), 0.55);
+/* Empty doll slots are flat — the dim slot label alone marks the spot.
+   `button.` beats the theme chrome groups (.theme-* .cm-slot). */
+button.cm-slot.empty {
+  background: transparent;
+  background-image: none;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .cm-slot.selected,
@@ -2660,7 +2685,7 @@ h3 {
   opacity: 0.7;
 }
 
-.cm-item-row-wrap.learned .cm-item-row-name {
+.cm-item-row-wrap.learned .cm-prof-name {
   color: var(--cm-heading);
 }
 
@@ -5222,7 +5247,6 @@ h3 {
 .theme-parchment .cm-window,
 .theme-parchment .cm-chat,
 .theme-parchment .cm-slot,
-.theme-parchment .cm-item-row,
 .theme-parchment .cm-hotbar-slot,
 .theme-parchment .hotbar-slot,
 .theme-parchment .ff-party-row,
@@ -5275,7 +5299,6 @@ h3 {
 .theme-material .cm-window,
 .theme-material .cm-chat,
 .theme-material .cm-slot,
-.theme-material .cm-item-row,
 .theme-material .cm-hotbar-slot,
 .theme-material .hotbar-slot,
 .theme-material .ff-party-row,
@@ -5345,7 +5368,6 @@ h3 {
 .theme-rune .cm-window,
 .theme-rune .cm-chat,
 .theme-rune .cm-slot,
-.theme-rune .cm-item-row,
 .theme-rune .cm-hotbar-slot,
 .theme-rune .hotbar-slot,
 .theme-rune .ff-party-row,

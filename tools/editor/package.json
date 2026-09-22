@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "phaser": "^4.2.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "three": "0.186.0"

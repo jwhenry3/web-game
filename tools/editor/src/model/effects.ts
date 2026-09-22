@@ -12,7 +12,7 @@ import {
   type VfxProfile,
   type VfxProjectileProfile,
   type VfxStreamProfile,
-} from "../../../../wails/frontend/src/phaser/battleVfxProfiles";
+} from "../../../../wails/frontend/src/vfx/battleVfxProfiles";
 
 export type {
   VfxBurstProfile,

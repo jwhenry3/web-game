@@ -48,6 +48,7 @@
 .sc-prefab-card:hover { background: #3d3d3d; }
 .sc-prefab-card:active { cursor: grabbing; }
 .sc-prefab-icon { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; font-size: 24px; color: #d5bd87; background: linear-gradient(#4a4a4a, #3a3a3a); border-radius: 3px; }
+.sc-prefab-thumbnail { flex: none; display: block; width: 58px; height: 44px; object-fit: cover; border-radius: 3px; background: #3b3d40; }
 .sc-prefab-label { flex: none; line-height: 14px; font-size: 10px; color: #ddd; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Prefab editor overlay: node list + orbit preview + inspector in a dialog. */
@@ -95,3 +96,22 @@
 .sc-rig-panel { flex: 1; overflow: auto; padding: 8px 10px; }
 .sc-rig-status { border-top: 1px solid var(--border); }
 .sc-side .ed-panel h4 { margin: 12px 0 4px; }
+
+/* Terrain paint swatches + per-surface texture editor. */
+.sc-swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.sc-swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 2px; border-radius: 4px; }
+.sc-swatch canvas { width: 100%; height: auto; aspect-ratio: 1; border-radius: 3px; border: 1px solid #1c1c1c; image-rendering: pixelated; }
+.sc-swatch span { font-size: 10px; color: #bbb; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.sc-swatch.sel { background: #3c4c5c; outline: 1px solid #6b90b5; }
+.sc-tex-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: .04em; }
+.sc-tex { border: 1px solid var(--border); border-radius: 4px; background: #2c2c2c; }
+.sc-tex-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.sc-tex-head h4 { margin: 0; font-size: 12px; }
+.sc-tex-body { display: flex; gap: 8px; padding: 8px; }
+.sc-tex-body canvas { flex: none; width: 88px; height: 88px; border-radius: 3px; border: 1px solid #1c1c1c; image-rendering: pixelated; }
+.sc-tex-controls { flex: 1; min-width: 0; display: grid; gap: 4px; align-content: start; }
+.sc-tex-field { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #bbb; }
+.sc-tex-field span { flex: none; width: 52px; }
+.sc-tex-field input[type="range"] { flex: 1; min-width: 0; }
+.sc-tex-field em { flex: none; width: 28px; font-style: normal; text-align: right; color: #999; }
+.sc-tex-field input[type="color"] { width: 40px; height: 22px; padding: 0; border: 1px solid #1c1c1c; background: none; }
