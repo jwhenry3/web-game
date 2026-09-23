@@ -1868,6 +1868,12 @@ h3 {
   max-height: calc(82% / var(--win-scale, 1));
 }
 
+/* The bag's fixed row budget stretches the window — cap the inventory tab
+   at 75% of the shared max (82% × .75 = 61.5% of the layer). */
+.cm-window-layer .cm-window--inventory {
+  max-height: calc(61.5% / var(--win-scale, 1));
+}
+
 .cm-window--map {
   width: min(860px, 96%);
 }

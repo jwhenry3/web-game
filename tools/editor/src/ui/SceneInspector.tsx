@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { normalizeComponents, isAncestor, SCENE_COMPONENT_DEFINITIONS, type PrefabKind, type SceneComponents, type SceneEnvironment, type SceneObject, type SceneTransform, type Vec3 } from "../../../../wails/frontend/src/three/scene3d";
+import { normalizeComponents, isAncestor, SCENE_COMPONENT_DEFINITIONS, type PrefabKind, type SceneComponentKey, type SceneComponents, type SceneEnvironment, type SceneObject, type SceneTransform, type Vec3 } from "../../../../wails/frontend/src/three/scene3d";
 import { PREFAB_BY_ID, type PrefabProp } from "../../../../wails/frontend/src/three/prefabs";
 import { useSceneStore, type SceneStore } from "../scene3d/store";
 
@@ -67,11 +67,12 @@ export function ComponentsEditor({ components, apply, onBegin, onEnd }: {
 }) {
   const setComponent = (key: keyof SceneComponents, field: string, value: unknown, transient = false) =>
     apply(normalizeComponents({ ...components, [key]: { ...components?.[key], [field]: value } }), transient);
+  const missing = SCENE_COMPONENT_DEFINITIONS.filter(def => !components?.[def.key]);
   return (
     <>
       {SCENE_COMPONENT_DEFINITIONS.map(def=> {
         const key=def.key, component=components?.[key] as Record<string, unknown> | undefined;
-        if(!component) return <button key={key} title={def.description} onClick={()=>apply(normalizeComponents({...components,[key]:{}}))}>Add {def.label}</button>;
+        if(!component) return null;
         return <Section key={key} title={def.label} right={<button onClick={()=>{const next={...components};delete next[key];apply(next);}}>Remove</button>}>
           <p className="ed-hint">{def.description}</p>
           {def.fields.map(field=> {
@@ -81,6 +82,18 @@ export function ComponentsEditor({ components, apply, onBegin, onEnd }: {
           })}
         </Section>;
       })}
+      {missing.length > 0 && (
+        <div className="ed-row"><label>Add component</label>
+          <select
+            aria-label="Add gameplay component"
+            value=""
+            onChange={e => { const key = e.target.value as SceneComponentKey | ""; if (key) apply(normalizeComponents({ ...components, [key]: {} })); }}
+          >
+            <option value="" disabled>Choose…</option>
+            {missing.map(def => <option key={def.key} value={def.key}>{def.label}</option>)}
+          </select>
+        </div>
+      )}
     </>
   );
 }
@@ -94,7 +107,7 @@ function ObjectInspector({ store, object, groundHeight }: { store: SceneStore; o
   const setProp = (key: string, v: unknown) => store.updateTransient(doc => { const o = doc.objects.find(x => x.id === object.id); if (o) o.props[key] = v; });
   const candidates = doc.objects.filter(o => o.id !== object.id && !isAncestor(doc,object.id,o.id));
   const [assetName,setAssetName]=useState(object.name);
-  const [assetKind,setAssetKind]=useState<PrefabKind>(object.components?.npc?'npc':object.components?.poi?'poi':object.components?.item?'item':'decoration');
+  const [assetKind,setAssetKind]=useState<PrefabKind>(object.components?.npc?'npc':object.components?.poi||object.components?.storage?'poi':object.components?.item?'item':'decoration');
   const asset=doc.prefabs.find(p=>p.id===object.prefabInstance?.assetId);
   return (
     <>

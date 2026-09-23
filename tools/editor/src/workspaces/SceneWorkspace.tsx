@@ -8,10 +8,8 @@ import { SceneHierarchy } from "../ui/SceneHierarchy";
 import { SceneInspector } from "../ui/SceneInspector";
 import { SceneProject } from "../ui/SceneProject";
 import { PrefabEditor } from "../ui/PrefabEditor";
-import { CHAR_TABS, CharactersInspector, CharactersLibrary, useCharacterMode } from "../ui/SceneCharacters";
-import { AnimTimeline } from "../ui/SceneTimeline";
-import { EffectsInspectorPanel, EffectsLibrary, useEffectsMode } from "../ui/SceneEffects";
-import { TerrainInspector, TerrainLibrary, useTerrainMode } from "../ui/SceneTerrain";
+import { TerrainInspector, useTerrainMode } from "../ui/SceneTerrain";
+import { PaneHandle } from "../ui/PaneHandle";
 import "./effects.css";
 import "./scene.css";
 
@@ -22,16 +20,14 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string }[] = [
   { id: "scale", label: "Scale (R)", key: "R", icon: "⤢" },
 ];
 
-/** Top-level editor tabs — the scene's Unity-style edit modes. */
-export type SceneMode = "prefabs" | "terrain" | "characters" | "effects";
-
 function mapFromUrl(): string { return new URLSearchParams(location.search).get("map") ?? ""; }
 
-/** Unity-modelled 3D scene editor: Hierarchy + Project on the left, Scene
- * view centre, Inspector right. Terrain streams from the game server; the
- * authored layer is a Scene3DDoc exported/imported as JSON. `mode` is the
- * top-level tab driven by App. */
-export default function SceneWorkspace({ mode }: { mode: SceneMode }) {
+/** Unity-modelled world scene editor: Hierarchy on the left, Scene view
+ * centre, asset explorer (prefabs + content) docked below, Inspector right.
+ * Terrain streams from the game server; the authored layer is a Scene3DDoc
+ * saved as <map>.scene3d.json. Selecting the terrain (viewport click or the
+ * Hierarchy row) swaps the Inspector to the terrain brush tools. */
+export default function SceneWorkspace() {
   const [maps, setMaps] = useState<SceneMapInfo[]>([]);
   const [mapId, setMapId] = useState(mapFromUrl);
   const [snapshot, setSnapshot] = useState<MapSnapshot | null>(null);
@@ -45,9 +41,8 @@ export default function SceneWorkspace({ mode }: { mode: SceneMode }) {
   const [view,setView]=useState<SceneView|null>(null);
   const [prefabEditor,setPrefabEditor]=useState<{assetId?:string;defId?:string}|null>(null);
   const store = useMemo(() => new SceneStore(mapId), [mapId]);
-  const charMode = useCharacterMode(view, mode === "characters");
-  const fxMode = useEffectsMode(view, mode === "effects");
-  const terrainMode = useTerrainMode(view, store, mode === "terrain");
+  const terrainSelected = useSceneStore(store, s => s.terrainSelected);
+  const terrainMode = useTerrainMode(view, store, terrainSelected);
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<SceneView | null>(null);
 
@@ -144,23 +139,19 @@ export default function SceneWorkspace({ mode }: { mode: SceneMode }) {
       {signIn&&<form className="ed-toolbar" onSubmit={async e=>{e.preventDefault();setBusy(true);try{await loginSceneEditor(username,password);setPassword('');setSignIn(false);setAuthenticated(true);flash('Administrator signed in');}catch(e){setStatus(`Sign in failed: ${e instanceof Error?e.message:e}`);}finally{setBusy(false);}}}><label>Administrator <input aria-label="Administrator username" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)}/></label><input aria-label="Administrator password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/><button disabled={busy} type="submit">Sign in</button></form>}
       <div className="ed-main">
         <aside className="ed-hierarchy sc-left">
-          {mode === "prefabs" ? <SceneHierarchy store={store} />
-            : mode === "terrain" ? <TerrainLibrary st={terrainMode} store={store} />
-            : mode === "characters" ? <CharactersLibrary st={charMode} />
-            : <EffectsLibrary st={fxMode} />}
+          <SceneHierarchy store={store} />
         </aside>
+        <PaneHandle axis="x" target="prev" id="ed:hierarchy"/>
         <section className="ed-scene">
           <div className="ed-dock-title">
             <div className="ed-view-tabs">
-              {mode === "characters"
-                ? CHAR_TABS.map(t => <button key={t.id} className={charMode.tab === t.id ? "active" : ""} onClick={() => charMode.setTab(t.id)}>{t.label}</button>)
-                : <button className="active">Scene</button>}
+              <button className="active">Scene</button>
             </div>
             <span>{snapshot?.name ?? (error ? "offline" : "loading…")}</span>
           </div>
           <div className="ed-scene-toolbar">
             {(["terrain", "stamps", "grid", "fog"] as const).map(k => <button key={k} aria-pressed={layers[k]} onClick={() => store.setLayer(k, !layers[k])}>{k === "terrain" ? "Terrain" : k === "stamps" ? "2D stamps" : k === "grid" ? "Grid" : "Fog"}</button>)}
-            {mode === "prefabs" && <button aria-pressed={dropToSurface} title="Newly placed prefabs drop onto the terrain or closest collider below the cursor" onClick={() => store.setDropToSurface(!dropToSurface)}>Surface drop</button>}
+            <button aria-pressed={dropToSurface} title="Newly placed prefabs drop onto the terrain or closest collider below the cursor" onClick={() => store.setDropToSurface(!dropToSurface)}>Surface drop</button>
             <span className="spacer" />
             <span>{TOOLS.find(t => t.id === tool)?.label} · {space}</span>
           </div>
@@ -168,8 +159,7 @@ export default function SceneWorkspace({ mode }: { mode: SceneMode }) {
             {!snapshot && !error && <div className="sc-overlay">Loading terrain…</div>}
             {error && <div className="sc-overlay sc-error" role="alert"><strong>Scene view unavailable</strong><p>{error}</p></div>}
           </div>
-          {mode === "prefabs" && <SceneProject onEdit={setPrefabEditor} store={store} />}
-          {mode === "characters" && charMode.tab === "animation" && charMode.doc && <AnimTimeline st={charMode} />}
+          <PaneHandle axis="y" target="next" id="ed:project"/><SceneProject onEdit={setPrefabEditor} store={store} />
           {prefabEditor && (
             <PrefabEditor
               key={prefabEditor.assetId ?? prefabEditor.defId}
@@ -181,13 +171,11 @@ export default function SceneWorkspace({ mode }: { mode: SceneMode }) {
               onOpenAsset={id => setPrefabEditor({ assetId: id })}
             />
           )}
-          <div className="ed-scene-footer"><span><b>RMB</b> look · <b>WASD/QE</b> fly · <b>MMB</b> pan · <b>Alt+LMB</b> orbit · <b>Wheel</b> zoom · <b>F</b> frame{mode === "terrain" ? <> · <b>LMB</b> paint brush</> : <> · <b>Shift+click</b> multi-select</>}</span><span>{selection.length ? `${selection.length} selected` : "Nothing selected"}</span></div>
+          <div className="ed-scene-footer"><span><b>RMB</b> look · <b>WASD/QE</b> fly · <b>MMB</b> pan · <b>Alt+LMB</b> orbit · <b>Wheel</b> zoom · <b>F</b> frame{terrainSelected ? <> · <b>LMB</b> paint brush</> : <> · <b>Shift+click</b> multi-select</>}</span><span>{terrainSelected ? "Terrain selected" : selection.length ? `${selection.length} selected` : "Nothing selected"}</span></div>
         </section>
+        <PaneHandle axis="x" target="next" id="ed:inspector"/>
         <div className="ed-side sc-side">
-          {mode === "prefabs" ? <SceneInspector store={store} groundHeight={groundHeight} />
-            : mode === "terrain" ? <TerrainInspector st={terrainMode} />
-            : mode === "characters" ? <CharactersInspector st={charMode} />
-            : <EffectsInspectorPanel st={fxMode} />}
+          {terrainSelected ? <TerrainInspector st={terrainMode} store={store} /> : <SceneInspector store={store} groundHeight={groundHeight} />}
         </div>
       </div>
       <footer className="ed-statusbar"><span className={dirty ? "dirty" : "ed-ready"}>●</span><span role="status">{status || (dirty ? "Unsaved server changes (browser recovery draft saved)" : "Ready")}</span><span className="spacer" /><span>{objectCount} objects</span><span>{mapId}{dirty ? " *" : ""}</span></footer>

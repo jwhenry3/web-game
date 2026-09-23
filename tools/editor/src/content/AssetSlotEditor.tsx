@@ -3,6 +3,8 @@ import { getContentTypeSchema, getContentTypeSchemas } from '../../../../wails/f
 import type { ContentDefinition } from '../../../../wails/frontend/src/content/contentSchema.ts';
 import { assetReference, embeddedAsset, isAssetReference, isEmbeddedAsset } from '../../../../wails/frontend/src/content/recursiveAssets.ts';
 import { useContentNav, type ContentEditorContext } from './contentEditorRegistry.tsx';
+import AssetThumb, { type ThumbSubject } from './contentPreview.tsx';
+import { ASSET_TYPE_LABELS } from './graphLabels.ts';
 
 const labelOf = (def: ContentDefinition) => def.name || def.id;
 
@@ -37,7 +39,7 @@ export default function AssetSlotEditor({ field, value, path, updateValue }: Con
     </div>
     {shown ? <div className={`ct-slot-card ${missing ? 'ct-slot-missing' : ''}`} onClick={() => embedded ? nav.openEmbedded(path, embedded, labelOf(embedded)) : nav.open(shown.id)} role="button" tabIndex={0} onKeyDown={event => event.key === 'Enter' && (embedded ? nav.openEmbedded(path, embedded, labelOf(embedded)) : nav.open(shown.id))}>
       <SlotThumb item={shown}/>
-      <div className="ct-slot-meta"><strong>{labelOf(shown)}</strong><small>{getContentTypeSchema(shown.type).label.slice(0, -1) || shown.type} · {shown.id}{missing && ' — missing'}</small></div>
+      <div className="ct-slot-meta"><strong>{labelOf(shown)}</strong><small>{ASSET_TYPE_LABELS[shown.type]} · {shown.id}{missing && ' — missing'}</small></div>
       <span className="ct-slot-open">Open →</span>
     </div> : <div className="ct-slot-empty">Nothing linked — pick, create, or embed an asset.</div>}
     <div className="ct-slot-actions">
@@ -56,7 +58,7 @@ export default function AssetSlotEditor({ field, value, path, updateValue }: Con
   </div>;
 }
 
-export function SlotThumb({ item }: { item: ContentDefinition }) {
+export function SlotThumb({ item }: { item: ThumbSubject }) {
   const schema = getContentTypeSchema(item.type);
-  return <span className="ct-slot-thumb" style={{ borderColor: schema.color }}>{item.thumbnail ? <img src={item.thumbnail} alt=""/> : <i style={{ color: schema.color }}>{schema.icon}</i>}</span>;
+  return <span className="ct-slot-thumb" style={{ borderColor: schema.color }}><AssetThumb item={item}/></span>;
 }

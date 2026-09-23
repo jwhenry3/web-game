@@ -55,8 +55,9 @@ export function createBuilding(tower: boolean, wall = 0xd1bf98, roofColor = 0x68
 const COLOR = (key: string, label: string, def: string): PrefabProp => ({ key, label, type: "color", default: def });
 const NUMBER = (key: string, label: string, def: number, min: number, max: number, step = .1): PrefabProp => ({ key, label, type: "number", default: def, min, max, step });
 
-const primitive = (id: string, label: string, geometry: () => THREE.BufferGeometry, def: string, lift: number): PrefabDef => ({
+const primitive = (id: string, label: string, geometry: () => THREE.BufferGeometry, def: string, lift: number, collider: { shape: 'box' | 'capsule' | 'sphere'; size: [number, number, number]; offset: [number, number, number] }): PrefabDef => ({
   id, label, category: "Primitives", props: [COLOR("color", "Color", def)],
+  components: normalizeComponents({ collider }),
   create: p => { const g = new THREE.Group(); part(g, geometry(), colorOf(p.color, parseInt(def.slice(1), 16)), 0, lift); return g; },
 });
 
@@ -68,6 +69,7 @@ export const PREFABS: PrefabDef[] = [
   { id:'item', label:'Item Pickup', category:'Gameplay', props:[COLOR('color','Color','#ecc15e')], components:normalizeComponents({item:{},collider:{shape:'sphere',isTrigger:true,size:[1,1,1],offset:[0,.5,0]}}),
     create:p=>{const g=new THREE.Group();part(g,new THREE.DodecahedronGeometry(.3),colorOf(p.color,0xecc15e),0,.45,0,{metalness:.4,roughness:.35});return g;} },
   { id:'door', label:'Door', category:'Gameplay', props:[COLOR('color','Frame','#4a6038'),COLOR('glow','Glow','#6a9ad4')],
+    components:normalizeComponents({collider:{isTrigger:true,size:[2.2,2.5,.8],offset:[0,1.25,0]}}),
     create:p=>{const g=new THREE.Group(),frame=colorOf(p.color,0x4a6038),glow=colorOf(p.glow,0x6a9ad4);
       const post=new THREE.CylinderGeometry(.09,.11,2.8,6);
       for(const s of [-1,1])part(g,post,frame,s*1.1,1.4);
@@ -75,12 +77,14 @@ export const PREFABS: PrefabDef[] = [
       const pane=part(g,new THREE.PlaneGeometry(2.2,2.5),glow,0,1.3,0,{transparent:true,opacity:.3,side:THREE.DoubleSide,emissive:new THREE.Color(glow),emissiveIntensity:.4});pane.castShadow=pane.receiveShadow=false;
       return g;} },
   { id:'storage', label:'Storage Chest', category:'Gameplay', props:[COLOR('color','Body','#8a6030'),COLOR('trim','Trim','#f0d090')],
+    components:normalizeComponents({collider:{shape:'box',size:[1.72,1.45,1.32],offset:[0,.72,0]}}),
     create:p=>{const g=new THREE.Group(),body=colorOf(p.color,0x8a6030),trim=colorOf(p.trim,0xf0d090);
       part(g,new THREE.BoxGeometry(1.6,1.1,1.2),body,0,.55);
       part(g,new THREE.BoxGeometry(1.72,.28,1.32),trim,0,1.16);
       const ring=part(g,new THREE.RingGeometry(.9,1.2,24),0xd4a05a,0,.02,0,{transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false});ring.rotation.x=-Math.PI/2;ring.castShadow=ring.receiveShadow=false;
       return g;} },
   { id:'furniture', label:'Furniture', category:'Gameplay', props:[COLOR('color','Body','#7a5a3a'),COLOR('trim','Trim','#d4b890')],
+    components:normalizeComponents({collider:{shape:'box',size:[1.56,1.36,1.32],offset:[0,.68,0]}}),
     create:p=>{const g=new THREE.Group(),body=colorOf(p.color,0x7a5a3a),trim=colorOf(p.trim,0xd4b890);
       part(g,new THREE.BoxGeometry(1.44,1.16,1.2),body,0,.58);
       part(g,new THREE.BoxGeometry(1.56,.16,1.32),trim,0,1.2);
@@ -89,16 +93,21 @@ export const PREFABS: PrefabDef[] = [
   {
     id: "house", label: "House", category: "Buildings",
     props: [COLOR("wall", "Wall", "#d1bf98"), COLOR("roof", "Roof", "#686e72")],
+    components: normalizeComponents({ collider: { shape: 'box', size: [2.7, 2, 2.2], offset: [0, 1, 0] } }),
     create: p => createBuilding(false, colorOf(p.wall, 0xd1bf98), colorOf(p.roof, 0x686e72)),
   },
   {
     id: "tower", label: "Tower", category: "Buildings",
     props: [COLOR("wall", "Wall", "#d1bf98"), COLOR("roof", "Roof", "#686e72")],
+    components: normalizeComponents({ collider: { shape: 'box', size: [1.8, 3.9, 2.2], offset: [0, 1.95, 0] } }),
     create: p => createBuilding(true, colorOf(p.wall, 0xd1bf98), colorOf(p.roof, 0x686e72)),
   },
   {
     id: "tree", label: "Tree", category: "Nature",
     props: [COLOR("leaves", "Leaves", "#325c46"), NUMBER("size", "Size", 1, .3, 3)],
+    // Trunk only — canopy stays walkable-under; the size prop scales the mesh,
+    // so scaled trees need the collider tuned per-instance.
+    components: normalizeComponents({ collider: { shape: 'capsule', size: [.35, 1.4, .35], offset: [0, .7, 0] } }),
     create: p => {
       const g = new THREE.Group(), s = numOf(p.size, 1), leaves = colorOf(p.leaves, 0x325c46);
       part(g, new THREE.CylinderGeometry(.09, .14, 1.3, 5), 0x6c5540, 0, .65);
@@ -111,16 +120,19 @@ export const PREFABS: PrefabDef[] = [
   {
     id: "rock", label: "Rock", category: "Nature",
     props: [COLOR("color", "Color", "#93958d"), NUMBER("size", "Size", .6, .1, 4)],
+    components: normalizeComponents({ collider: { shape: 'sphere', size: [1.2, .9, 1.2], offset: [0, .2, 0] } }),
     create: p => { const g = new THREE.Group(), s = numOf(p.size, .6); const m = part(g, new THREE.DodecahedronGeometry(1, 0), colorOf(p.color, 0x93958d), 0, .25 * s); m.scale.set(s, s * .7, s); return g; },
   },
   {
     id: "bush", label: "Bush", category: "Nature",
     props: [COLOR("color", "Color", "#4d7953")],
+    components: normalizeComponents({ collider: { shape: 'sphere', size: [1, .7, 1], offset: [0, .35, 0] } }),
     create: p => { const g = new THREE.Group(); const m = part(g, new THREE.IcosahedronGeometry(.5, 1), colorOf(p.color, 0x4d7953), 0, .35); m.scale.y = .7; return g; },
   },
   {
     id: "crystal", label: "Save Crystal", category: "Landmarks",
     props: [COLOR("color", "Color", "#83e5e0"), NUMBER("glow", "Glow", 4, 0, 12, .5)],
+    components: normalizeComponents({ collider: { shape: 'box', size: [1.2, 1.8, 1.2], offset: [0, .9, 0] } }),
     create: p => {
       const g = new THREE.Group(), color = colorOf(p.color, 0x83e5e0);
       part(g, new THREE.CylinderGeometry(.45, .62, .26, 8), 0x9c9c90, 0, .13);
@@ -133,6 +145,7 @@ export const PREFABS: PrefabDef[] = [
   {
     id: "lantern", label: "Lantern Post", category: "Landmarks",
     props: [COLOR("color", "Color", "#f2c476"), NUMBER("intensity", "Intensity", 3, 0, 12, .5)],
+    components: normalizeComponents({ collider: { shape: 'capsule', size: [.3, 2.4, .3], offset: [0, 1.2, 0] } }),
     create: p => {
       const g = new THREE.Group(), color = colorOf(p.color, 0xf2c476);
       part(g, new THREE.CylinderGeometry(.05, .07, 2.2, 6), 0x4a3b2e, 0, 1.1);
@@ -144,6 +157,9 @@ export const PREFABS: PrefabDef[] = [
   {
     id: "fence", label: "Fence Segment", category: "Buildings",
     props: [COLOR("color", "Color", "#7a6247"), NUMBER("length", "Length", 2, .5, 8, .5)],
+    // Sized for the default 2-unit span — the length prop scales the mesh, so
+    // stretched fences need the collider retuned per-instance.
+    components: normalizeComponents({ collider: { shape: 'box', size: [2, .9, .14], offset: [0, .45, 0] } }),
     create: p => {
       const g = new THREE.Group(), color = colorOf(p.color, 0x7a6247), len = numOf(p.length, 2);
       for (const x of [-len / 2, len / 2]) part(g, new THREE.BoxGeometry(.1, .9, .1), color, x, .45);
@@ -151,10 +167,10 @@ export const PREFABS: PrefabDef[] = [
       return g;
     },
   },
-  primitive("cube", "Cube", () => new THREE.BoxGeometry(1, 1, 1), "#9aa4b0", .5),
-  primitive("sphere", "Sphere", () => new THREE.SphereGeometry(.5, 12, 8), "#9aa4b0", .5),
-  primitive("cylinder", "Cylinder", () => new THREE.CylinderGeometry(.5, .5, 1, 12), "#9aa4b0", .5),
-  primitive("plane", "Plane", () => { const g = new THREE.BoxGeometry(2, .05, 2); return g; }, "#9aa4b0", .025),
+  primitive("cube", "Cube", () => new THREE.BoxGeometry(1, 1, 1), "#9aa4b0", .5, { shape: 'box', size: [1, 1, 1], offset: [0, .5, 0] }),
+  primitive("sphere", "Sphere", () => new THREE.SphereGeometry(.5, 12, 8), "#9aa4b0", .5, { shape: 'sphere', size: [1, 1, 1], offset: [0, .5, 0] }),
+  primitive("cylinder", "Cylinder", () => new THREE.CylinderGeometry(.5, .5, 1, 12), "#9aa4b0", .5, { shape: 'capsule', size: [1, 1, 1], offset: [0, .5, 0] }),
+  primitive("plane", "Plane", () => { const g = new THREE.BoxGeometry(2, .05, 2); return g; }, "#9aa4b0", .025, { shape: 'box', size: [2, .05, 2], offset: [0, .025, 0] }),
   {
     id: "point_light", label: "Point Light", category: "Lights",
     props: [COLOR("color", "Color", "#ffe3b0"), NUMBER("intensity", "Intensity", 6, 0, 40, .5), NUMBER("distance", "Distance", 8, 0, 40, .5)],

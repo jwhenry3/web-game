@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { VFX_CATEGORIES } from "../../../../wails/frontend/src/vfx/battleVfxProfiles";
+import { VFX_CATEGORIES, VFX_PARTS, VFX_PART_LABELS, vfxProfilePart, type VfxPart } from "../../../../wails/frontend/src/vfx/battleVfxProfiles";
 import { DEFAULT_RIGS } from "../../../../wails/frontend/src/three/rig3dDefaults";
 import { buildRig, type RigInstance } from "../../../../wails/frontend/src/three/rigBuilder";
 import { WorldVfx } from "../../../../wails/frontend/src/three/vfx3d";
@@ -19,6 +19,7 @@ const REPLAY_MS = 1200;
 export function useEffectsMode(view: SceneView | null, active: boolean) {
   const [doc, setDoc] = useState<EffectsDoc | null>(null);
   const [cat, setCat] = useState<VfxCategory>("fire");
+  const [part, setPart] = useState<VfxPart>("impact");
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState("");
   const [playing, setPlaying] = useState(false);
@@ -32,10 +33,12 @@ export function useEffectsMode(view: SceneView | null, active: boolean) {
   const castTimer = useRef(0);
   const docRef = useRef<EffectsDoc | null>(null);
   const catRef = useRef<VfxCategory>(cat);
+  const partRef = useRef<VfxPart>(part);
   const speedRef = useRef(speed);
   const castMsRef = useRef(castMs);
   docRef.current = doc;
   catRef.current = cat;
+  partRef.current = part;
   speedRef.current = speed;
   castMsRef.current = castMs;
 
@@ -124,7 +127,10 @@ export function useEffectsMode(view: SceneView | null, active: boolean) {
     };
   }, [view, active]);
 
-  /** Fire the full sequence: cast channel for castMs → projectile → impact. */
+  /** Fire the selected part only — a cast part channels on the caster for
+   * `castMs`; projectile flies actor→target; impact/area resolve at the
+   * target. Single-part playback is the whole point: an effect asset is one
+   * stage of the sequence, not the category's combined profile. */
   const replay = useCallback(() => {
     const vfx = vfxRef.current;
     const d = docRef.current;
@@ -133,20 +139,26 @@ export function useEffectsMode(view: SceneView | null, active: boolean) {
     if (!vfx || !d || !caster) return;
     const profile = d.profiles[c];
     if (!profile) return;
+    const part = partRef.current;
     const target = new THREE.Vector3(TARGET_X, 0, 0);
     const from = new THREE.Vector3(ACTOR_X, 0.9, 0);
-    const fire = () => vfx.playProfile(profile, target, from);
     castStop.current?.();
     castStop.current = null;
     window.clearTimeout(castTimer.current);
-    const ms = castMsRef.current / speedRef.current;
-    if (ms <= 0 || !profile.cast) { fire(); return; }
-    const stop = vfx.startCast(profile.cast, caster);
-    castStop.current = stop;
-    castTimer.current = window.setTimeout(() => {
-      if (castStop.current === stop) { stop(); castStop.current = null; }
-      fire();
-    }, ms);
+    if (part === "cast") {
+      if (!profile.cast) return;
+      const stop = vfx.startCast(profile.cast, caster);
+      castStop.current = stop;
+      castTimer.current = window.setTimeout(() => {
+        if (castStop.current === stop) { stop(); castStop.current = null; }
+      }, castMsRef.current / speedRef.current);
+      return;
+    }
+    const slice = vfxProfilePart(profile, part);
+    const fire = () => vfx.playProfile(slice, target, part === "projectile" ? from : undefined);
+    // Impact/area on a projectile category still fire instantly — the flight
+    // is its own part now.
+    fire();
   }, []);
 
   useEffect(() => {
@@ -156,7 +168,8 @@ export function useEffectsMode(view: SceneView | null, active: boolean) {
     const run = () => {
       if (!live) return;
       replay();
-      timer = window.setTimeout(run, castMsRef.current / speedRef.current + REPLAY_MS);
+      const span = partRef.current === "cast" ? castMsRef.current / speedRef.current : 0;
+      timer = window.setTimeout(run, span + REPLAY_MS);
     };
     run();
     return () => { live = false; window.clearTimeout(timer); };
@@ -200,8 +213,8 @@ export function useEffectsMode(view: SceneView | null, active: boolean) {
   }, [doc]);
 
   return {
-    doc, cat, dirty, status, playing, speed, castMs,
-    setCat, setPlaying, setSpeed, setCastMs,
+    doc, cat, part, dirty, status, playing, speed, castMs,
+    setCat, setPart, setPlaying, setSpeed, setCastMs,
     replay, stop, previewCast, onDocChange, save, load,
   };
 }
@@ -219,6 +232,14 @@ export function EffectsLibrary({ st }: { st: EffectsMode }) {
           <button key={c} className={`item ${c === st.cat ? "sel" : ""}`} onClick={() => st.setCat(c)}>
             <span className="efx-dot" style={{ background: numToHex(st.doc?.colors[c] ?? 0) }} />
             {c}
+          </button>
+        ))}
+      </div>
+      <div className="ed-dock-title">Part</div>
+      <div className="ed-list efx-parts">
+        {VFX_PARTS.map(p => (
+          <button key={p} className={`item ${p === st.part ? "sel" : ""}`} onClick={() => st.setPart(p)}>
+            {VFX_PART_LABELS[p]}
           </button>
         ))}
       </div>

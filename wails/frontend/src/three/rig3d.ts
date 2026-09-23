@@ -69,7 +69,25 @@ export interface RigModel {
   bone?: string;
 }
 
-export type RigAnimName = "idle" | "run" | "attack";
+/** Locomotion/base states plus the combat clip names. `idle`/`run` are driven
+ * by `RigInstance.update`; `cast` is a held overlay while channeling; the rest
+ * are one-shots triggered by combat events (`attack` is the generic swing,
+ * `attack_*` variants give weapon skills distinct silhouettes, `hit` plays on
+ * the struck target). */
+export type RigAnimName =
+  | "idle" | "run" | "attack" | "cast" | "hit"
+  | "attack_slash" | "attack_thrust" | "attack_smash" | "attack_spin" | "attack_punch" | "attack_leap";
+
+/** Every clip name normalizeRig accepts — unknown keys are dropped so typo'd
+ * rig files can't smuggle dead data. */
+export const RIG_ANIM_NAMES: readonly RigAnimName[] = [
+  "idle", "run", "attack", "cast", "hit",
+  "attack_slash", "attack_thrust", "attack_smash", "attack_spin", "attack_punch", "attack_leap",
+];
+
+/** Clips that loop while their state is active (mixer LoopRepeat); everything
+ * else is a one-shot overlay. */
+export const RIG_LOOPING_CLIPS: readonly RigAnimName[] = ["idle", "run", "cast"];
 
 // --- authored keyframe clips ---------------------------------------------------
 
@@ -274,9 +292,9 @@ export function normalizeRig(raw: unknown, fallbackId = "rig"): Rig3DDoc {
   let anims: Rig3DDoc["anims"];
   if (r.anims && typeof r.anims === "object") {
     for (const [name, raw] of Object.entries(r.anims as Record<string, unknown>)) {
-      if (name !== "idle" && name !== "run" && name !== "attack") continue;
+      if (!(RIG_ANIM_NAMES as readonly string[]).includes(name)) continue;
       const c = normalizeClip(raw, names);
-      if (c) (anims ??= {})[name] = c;
+      if (c) (anims ??= {})[name as RigAnimName] = c;
     }
   }
   return {

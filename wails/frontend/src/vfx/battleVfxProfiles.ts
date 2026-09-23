@@ -129,6 +129,64 @@ export interface VfxProfile {
   cast?: VfxCastProfile;
 }
 
+/**
+ * The authored unit of an effect — a profile is a per-category compilation of
+ * four disjoint parts; each `effect` content asset is exactly one of these.
+ * - `cast`: sustained channel on the caster (`cast`, runs until stopped)
+ * - `projectile`: source→target flight (`projectile`)
+ * - `impact`: the one-shot hit moment (`bursts` + `ring` + `flash`)
+ * - `area`: the ground effect at the target (`circle` + `stream`)
+ */
+export type VfxPart = "cast" | "projectile" | "impact" | "area";
+
+export const VFX_PARTS: readonly VfxPart[] = ["cast", "projectile", "impact", "area"];
+export const VFX_PART_LABELS: Record<VfxPart, string> = {
+  cast: "Cast",
+  projectile: "Projectile",
+  impact: "Impact",
+  area: "Area",
+};
+
+/** Which parts a category profile actually defines — drives seeding (one
+ * effect asset per defined part) and pickers. Every profile has bursts, so
+ * `impact` is always present. */
+export function vfxProfileParts(profile: VfxProfile): VfxPart[] {
+  const parts: VfxPart[] = [];
+  if (profile.cast) parts.push("cast");
+  if (profile.projectile) parts.push("projectile");
+  parts.push("impact");
+  if (profile.circle || profile.stream) parts.push("area");
+  return parts;
+}
+
+/** Slice a category profile down to a single part so playing it never fires
+ * sibling segments (a bound "Fire Cast" must not also fire Fire's impact). */
+export function vfxProfilePart(profile: VfxProfile, part: VfxPart): VfxProfile {
+  const out: VfxProfile = { palette: [...profile.palette], bursts: [] };
+  switch (part) {
+    case "cast":
+      if (profile.cast)
+        out.cast = {
+          circle: profile.cast.circle ? { ...profile.cast.circle } : undefined,
+          stream: profile.cast.stream ? { ...profile.cast.stream } : undefined,
+        };
+      break;
+    case "projectile":
+      if (profile.projectile) out.projectile = { ...profile.projectile };
+      break;
+    case "impact":
+      out.bursts = profile.bursts.map((b) => ({ ...b }));
+      if (profile.ring) out.ring = { ...profile.ring };
+      if (profile.flash) out.flash = { ...profile.flash };
+      break;
+    case "area":
+      if (profile.circle) out.circle = { ...profile.circle };
+      if (profile.stream) out.stream = { ...profile.stream };
+      break;
+  }
+  return out;
+}
+
 const FIRE_IDS = /fire|ignis|inferno|katon|firaga|enfire|actinic/i;
 const ICE_IDS = /ice|gelu|blizzard|hyoton|enblizzard|frost/i;
 const THUNDER_IDS = /thunder|fulmen|bolt|raiton|enthunder|meteor/i;

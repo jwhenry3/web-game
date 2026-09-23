@@ -14,7 +14,17 @@ import {
   type VfxProfile,
   type VfxStreamProfile,
 } from "../model/effects";
+import type { VfxPart } from "../../../../wails/frontend/src/vfx/battleVfxProfiles";
 import { TEMPLATE_SECTIONS, type TemplateSection } from "../model/vfxTemplates";
+
+/** Form sections owned by each effect part — a part-scoped form renders and
+ * edits only these, so an effect asset is a single stage of the sequence. */
+const PART_SECTIONS: Record<VfxPart, TemplateSection[]> = {
+  cast: ["cast"],
+  projectile: ["projectile"],
+  impact: ["burst", "ring", "flash"],
+  area: ["circle", "stream"],
+};
 
 function newBurst(): VfxBurstProfile {
   return { texture: "spark", count: 12, color: 0xffffff, spread: 30, size: 4, alpha: 0.9, duration: 500 };
@@ -136,14 +146,23 @@ function circleRows(c: VfxCircleProfile, set: (patch: Partial<VfxCircleProfile>)
 export function EffectProfileForm({
   doc,
   cat,
+  part,
   onChange,
 }: {
   doc: EffectsDoc;
   cat: VfxCategory;
+  /** Scope the form to one effect part — the asset edits only its own
+   * segment of the category profile. Omit to edit all sections. */
+  part?: VfxPart;
   onChange: (d: EffectsDoc) => void;
 }) {
   const [templateKey, setTemplateKey] = useState("");
   const profile: VfxProfile | undefined = doc.profiles[cat];
+  const sections = part ? PART_SECTIONS[part] : null;
+  const show = (s: TemplateSection | "palette") => !sections || (s === "palette" ? part === "impact" : sections.includes(s));
+  const templates = sections
+    ? Object.fromEntries(Object.entries(TEMPLATE_SECTIONS).filter(([sec]) => sections.includes(sec as TemplateSection)))
+    : TEMPLATE_SECTIONS;
 
   const setProfile = useCallback(
     (fn: (p: VfxProfile) => VfxProfile) => {
@@ -202,7 +221,7 @@ export function EffectProfileForm({
       <div className="ed-row">
         <select value={templateKey} onChange={e => setTemplateKey(e.target.value)}>
           <option value="">— pick a preset —</option>
-          {Object.entries(TEMPLATE_SECTIONS).map(([sec, list]) => (
+          {Object.entries(templates).map(([sec, list]) => (
             <optgroup key={sec} label={sec}>
               {list.map((t, i) => (
                 <option key={t.name} value={`${sec}:${i}`}>{t.name}</option>
@@ -216,8 +235,8 @@ export function EffectProfileForm({
 
       {colorRow("Category color", doc.colors[cat] ?? 0xffffff, n => onChange({ ...doc, colors: { ...doc.colors, [cat]: n } }))}
 
-      <h4>Palette</h4>
-      <div className="efx-palette">
+      {show("palette") && <h4>Palette</h4>}
+      {show("palette") && <div className="efx-palette">
         {profile.palette.map((c, i) => (
           <span key={i} className="efx-swatch">
             <input
@@ -229,10 +248,10 @@ export function EffectProfileForm({
           </span>
         ))}
         <button onClick={() => setProfile(p => ({ ...p, palette: [...p.palette, 0xffffff] }))}>+ color</button>
-      </div>
+      </div>}
 
-      <h4>Bursts <span className="dim">({profile.bursts.length})</span></h4>
-      {profile.bursts.map((b, i) => (
+      {show("burst") && <h4>Bursts <span className="dim">({profile.bursts.length})</span></h4>}
+      {show("burst") && profile.bursts.map((b, i) => (
         <div key={i} className="efx-burst">
           <div className="ed-row">
             <select value={b.texture} onChange={e => setBurst(i, { texture: e.target.value as VfxBurstProfile["texture"] })}>
@@ -257,10 +276,10 @@ export function EffectProfileForm({
           </div>
         </div>
       ))}
-      <button onClick={() => setProfile(p => ({ ...p, bursts: [...p.bursts, newBurst()] }))}>+ Add burst</button>
+      {show("burst") && <button onClick={() => setProfile(p => ({ ...p, bursts: [...p.bursts, newBurst()] }))}>+ Add burst</button>}
 
-      <h4>Ring</h4>
-      <label className="efx-check">
+      {show("ring") && <h4>Ring</h4>}
+      {show("ring") && <label className="efx-check">
         <input
           type="checkbox"
           checked={!!profile.ring}
@@ -274,8 +293,8 @@ export function EffectProfileForm({
           }
         />
         enabled
-      </label>
-      {profile.ring && (
+      </label>}
+      {show("ring") && profile.ring && (
         <div className="ed-row">
           {colorRow("color", profile.ring.color, n => setProfile(p => ({ ...p, ring: { ...p.ring!, color: n } })))}
           {numRow("alpha", profile.ring.alpha, n => setProfile(p => ({ ...p, ring: { ...p.ring!, alpha: n ?? 0.4 } })), 0.05)}
@@ -284,8 +303,8 @@ export function EffectProfileForm({
         </div>
       )}
 
-      <h4>Flash</h4>
-      <label className="efx-check">
+      {show("flash") && <h4>Flash</h4>}
+      {show("flash") && <label className="efx-check">
         <input
           type="checkbox"
           checked={!!profile.flash}
@@ -299,8 +318,8 @@ export function EffectProfileForm({
           }
         />
         enabled
-      </label>
-      {profile.flash && (
+      </label>}
+      {show("flash") && profile.flash && (
         <div className="ed-row">
           {colorRow("color", profile.flash.color, n => setProfile(p => ({ ...p, flash: { ...p.flash!, color: n } })))}
           {numRow("alpha", profile.flash.alpha, n => setProfile(p => ({ ...p, flash: { ...p.flash!, alpha: n ?? 0.2 } })), 0.05)}
@@ -308,8 +327,8 @@ export function EffectProfileForm({
         </div>
       )}
 
-      <h4>Spell circle</h4>
-      <label className="efx-check">
+      {show("circle") && <h4>Spell circle</h4>}
+      {show("circle") && <label className="efx-check">
         <input
           type="checkbox"
           checked={!!profile.circle}
@@ -324,11 +343,11 @@ export function EffectProfileForm({
           }
         />
         enabled
-      </label>
-      {profile.circle && circleRows(profile.circle, patch => setProfile(p => ({ ...p, circle: { ...p.circle!, ...patch } })))}
+      </label>}
+      {show("circle") && profile.circle && circleRows(profile.circle, patch => setProfile(p => ({ ...p, circle: { ...p.circle!, ...patch } })))}
 
-      <h4>Stream</h4>
-      <label className="efx-check">
+      {show("stream") && <h4>Stream</h4>}
+      {show("stream") && <label className="efx-check">
         <input
           type="checkbox"
           checked={!!profile.stream}
@@ -343,11 +362,11 @@ export function EffectProfileForm({
           }
         />
         enabled
-      </label>
-      {profile.stream && streamRows(profile.stream, patch => setProfile(p => ({ ...p, stream: { ...p.stream!, ...patch } })))}
+      </label>}
+      {show("stream") && profile.stream && streamRows(profile.stream, patch => setProfile(p => ({ ...p, stream: { ...p.stream!, ...patch } })))}
 
-      <h4>Projectile</h4>
-      <label className="efx-check">
+      {show("projectile") && <h4>Projectile</h4>}
+      {show("projectile") && <label className="efx-check">
         <input
           type="checkbox"
           checked={!!profile.projectile}
@@ -361,8 +380,8 @@ export function EffectProfileForm({
           }
         />
         enabled — delays impact to arrival
-      </label>
-      {profile.projectile && (
+      </label>}
+      {show("projectile") && profile.projectile && (
         <>
           <div className="ed-row">
             {texSelect(profile.projectile.texture, t => setProfile(p => ({ ...p, projectile: { ...p.projectile!, texture: t } })))}

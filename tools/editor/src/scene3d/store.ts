@@ -37,6 +37,9 @@ export interface Layers {
 export interface EditorState {
   doc: Scene3DDoc;
   selection: string[];
+  /** The terrain is selected (via viewport click or the Hierarchy row) —
+   *  mutually exclusive with `selection`; enables the brush and terrain inspector. */
+  terrainSelected: boolean;
   tool: Tool;
   space: Space;
   snap: boolean;
@@ -68,6 +71,7 @@ export class SceneStore {
     this.state = {
       doc: SceneStore.restore(map),
       selection: [],
+      terrainSelected: false,
       tool: "move",
       space: "world",
       snap: false,
@@ -152,7 +156,7 @@ export class SceneStore {
 
   replaceDoc(doc: Scene3DDoc, dirty = false) {
     this.past = []; this.future = [];
-    this.set({ doc, selection: [], dirty });
+    this.set({ doc, selection: [], terrainSelected: false, dirty });
     this.autosave();
   }
 
@@ -201,7 +205,7 @@ export class SceneStore {
       doc.prefabs.push({
         id: assetId,
         name: name.trim() || root.name,
-        kind: root.components?.npc ? 'npc' : root.components?.poi ? 'poi' : root.components?.item ? 'item' : 'decoration',
+        kind: root.components?.npc ? 'npc' : root.components?.poi || root.components?.storage ? 'poi' : root.components?.item ? 'item' : 'decoration',
         revision: 1,
         objects,
       });
@@ -214,7 +218,7 @@ export class SceneStore {
 
   // --- objects ------------------------------------------------------------
 
-  addObject(prefab: string, position: Vec3, parent: string | null = null, overrides?: { name?: string; props?: Record<string, unknown>; components?: SceneComponents }): string {
+  addObject(prefab: string, position: Vec3, parent: string | null = null, overrides?: { name?: string; props?: Record<string, unknown>; components?: SceneComponents; content?: string }): string {
     if(this.state.doc.prefabs.some(p=>p.id===prefab)) {
       let id='';this.update(doc=>{id=instantiatePrefabAsset(doc,prefab,position,parent);});this.select([id]);return id;
     }
@@ -231,6 +235,7 @@ export class SceneStore {
         visible: true,
         props: { ...(def ? prefabDefaults(def) : {}), ...overrides?.props },
         components: structuredClone(overrides?.components ?? def?.components ?? {}),
+        ...(overrides?.content ? { content: overrides.content } : {}),
       });
     });
     this.select([id]);
@@ -317,11 +322,13 @@ export class SceneStore {
 
   // --- editor-only state -----------------------------------------------------
 
-  select(ids: string[]) { this.set({ selection: ids }); }
+  select(ids: string[]) { this.set({ selection: ids, terrainSelected: false }); }
   toggleSelect(id: string) {
     const has = this.state.selection.includes(id);
-    this.set({ selection: has ? this.state.selection.filter(x => x !== id) : [...this.state.selection, id] });
+    this.set({ selection: has ? this.state.selection.filter(x => x !== id) : [...this.state.selection, id], terrainSelected: false });
   }
+  /** Select the terrain itself — objects deselect, the brush activates. */
+  selectTerrain() { this.set({ selection: [], terrainSelected: true }); }
   setTool(tool: Tool) { this.set({ tool }); }
   setSpace(space: Space) { this.set({ space }); }
   setSnap(patch: Partial<Pick<EditorState, "snap" | "snapMove" | "snapRotate" | "snapScale">>) { this.set(patch); }

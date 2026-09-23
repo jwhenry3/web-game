@@ -107,16 +107,20 @@ without a multiplayer house session. The production Wails entry is
 ## Scene editor (tools/editor)
 
 A Unity-modelled editor for an authored 3D layer that sits on top of the
-procedural terrain. The editor is 3D-only: the top-level tabs are the scene
-edit modes — **Prefabs**, **Terrain**, **Characters**, **Effects**. Run
-`npm run editor:dev` with the game server up (the editor proxies `/api` to
-`:8080` for map snapshots) and open `http://localhost:35215/`.
+procedural terrain. The editor is 3D-only: the top-level tabs are **World**
+(the scene editor) and **Content** (the schema-driven asset library).
+Character rig, VFX profile and prefab-asset editing live inside Content;
+legacy `?ws=prefabs|terrain|characters|effects` links redirect accordingly.
+Run `npm run editor:dev` with the game server up (the editor proxies `/api`
+to `:8080` for map snapshots) and open `http://localhost:35215/`.
 
 Layout: Hierarchy (left, drag rows to reparent/reorder — world placement is
-preserved), Project prefab browser (below the Scene view; drag cards into the
-viewport or double-click to add at the camera focus), Scene view (centre) and
-Inspector (right: name/active, parent, transform, prefab props; with nothing
-selected it edits environment — sun, sky/fog).
+preserved; the top "Terrain" node selects the terrain itself), Project asset
+explorer (below the Scene view — tabbed **Prefabs** / **Content**; drag cards
+into the viewport or double-click to add at the camera focus; placeable
+content definitions drop in with their gameplay components), Scene view
+(centre) and Inspector (right: name/active, parent, transform, prefab props;
+with nothing selected it edits environment — sun, sky/fog).
 
 Scene view controls mirror Unity: **RMB** look + **WASD/QE** fly (Shift =
 fast), **MMB** pan, **Alt+LMB** orbit, wheel zoom, **F** frame selection,
@@ -144,39 +148,49 @@ Editor code: `tools/editor/src/scene3d/` (store with undo history,
 reuses the game's `WorldHeightmap`/`TerrainWorld`/`WorldBuildings` so the
 terrain and baked 2D stamps look identical to the client.
 
-### Terrain, Characters and Effects modes
+Gameplay components (`npc`, `poi`, `item`, `storage`, `collider`) are
+schema-driven by `SCENE_COMPONENT_DEFINITIONS` in `scene3d.ts` — the
+inspector's "Add component" dropdown lists every registered type and each
+block is removable. `storage` is the expandable container component:
+`storageId` names a backing store so objects sharing an id open the same
+contents (empty = default personal storage), `capacity` 0 uses the server
+default. The Storage Chest prefab ships with it; any other prefab can take
+the component for new storage kinds. Runtime interaction for `storage` is a
+follow-up — today it round-trips through the server scene document and is
+authored/inspected only.
 
-The toolbar's mode tabs (`?mode=terrain` / `?mode=characters` /
-`?mode=effects`) reuse the same viewport for 3D authoring instead of scene
-objects:
+### Terrain selection
 
-- **Terrain** sculpts the doc's `terrain` layer: LMB-drag paints the active
-  brush (raise / lower / flatten / smooth / paint-biome) into
-  `doc.terrain.heights` / `doc.terrain.cells`, streamed live into the
-  viewport heightmap (`SceneView.setTerrainBrush`, `applyTerrainBrush`);
-  each stroke is one undo step. The left panel lists brushes and the
-  authored-vertex/cell counts with clear buttons; the right inspector holds
-  radius/strength/elevation/biome settings (`ui/SceneTerrain.tsx`).
+The terrain is a selectable scene object — clicking it in the viewport (or
+its Hierarchy row) sets `terrainSelected` on the store, which pushes the
+active brush into the viewport (`SceneView.setTerrainBrush`) and swaps the
+Inspector to the terrain tools (`ui/SceneTerrain.tsx`). While selected,
+LMB-drag paints the active brush (raise / lower / flatten / smooth /
+paint-biome) into `doc.terrain.heights` / `doc.terrain.cells`, streamed live
+into the viewport heightmap (`applyTerrainBrush`); each stroke is one undo
+step. The Inspector holds the brush picker, radius/strength/elevation/biome
+settings, per-surface texture editor, and the authored-layer counts with
+clear buttons. Selecting an object or pressing **Esc** deselects the terrain.
 
-- **Characters** edits `Rig3DDoc` rigs (`three/rig3d.ts`): bone tree, per-bone
-  transforms driven by the gizmo (`SceneView.setGizmoOverride`), primitive
-  parts with palette-role or fixed colors, `when` appearance conditions,
-  procedural limbs (phase/amplitude), glTF model + clip mapping, mount seat.
-  The left panel lists saved rigs merged with the compiled-in defaults
-  (`rig3dDefaults.ts`) plus preview controls (idle/run, appearance fields).
-  Saving writes `public/assets/rigs3d/<id>.rig3d.json` and an `index.json`
-  the runtime loads via `loadRigLibrary()`; `POST /editor-api/rigs3d/save`
-  keeps the index in sync. `GET /editor-api/rigs3d/models` lists glTF assets
-  under `public/assets/models/`.
-- **Effects** edits the shared `VfxProfile` document
+### Character and Effects authoring
+
+Rig and VFX editing moved into the **Content** workspace's specialist
+adapters (`tools/editor/src/content/`). The shared pieces remain:
+
+- **Characters** — `Rig3DDoc` rigs (`three/rig3d.ts`); saving writes
+  `public/assets/rigs3d/<id>.rig3d.json` and an `index.json` the runtime
+  loads via `loadRigLibrary()`; `POST /editor-api/rigs3d/save` keeps the
+  index in sync. `GET /editor-api/rigs3d/models` lists glTF assets under
+  `public/assets/models/`.
+- **Effects** — the shared `VfxProfile` document
   (`assets/vfx/profiles.json`), previewed by the Three.js `WorldVfx` player
-  (`three/vfx3d.ts`) against two rig stand-ins. The inspector is the
-  `EffectProfileForm` component (`ui/EffectProfileForm.tsx`) — the same
-  profile fields the runtime's Three.js player consumes.
+  (`three/vfx3d.ts`) via `useEffectsMode`/`EffectsLibrary`
+  (`ui/SceneEffects.tsx`, reused by `content/EffectPanel.tsx`). The inspector
+  is the `EffectProfileForm` component (`ui/EffectProfileForm.tsx`).
 
-Both modes stage previews at the camera pivot via `view.stage` and
-`view.onFrame`; `onMapLoaded` re-anchors them when terrain loads. Dev-server
-rig routes live in `tools/editor/vite/rigsApi.ts`.
+Preview modes stage at the camera pivot via `view.stage` and `view.onFrame`;
+`onMapLoaded` re-anchors them when terrain loads. Dev-server rig routes live
+in `tools/editor/vite/rigsApi.ts`.
 
 ### MMORPG content workspace
 

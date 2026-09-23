@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { instantiatePrefab, PREFABS, PREFAB_BY_ID, prefabDefaults } from "../../../../wails/frontend/src/three/prefabs";
 import { disposeObject } from "../../../../wails/frontend/src/three/terrain";
 import { newObjectId, type PrefabKind, type SceneComponents, type SceneObject, type SceneTransform } from "../../../../wails/frontend/src/three/scene3d";
 import { useSceneStore, type SceneStore } from "../scene3d/store";
+import { PaneHandle } from "./PaneHandle";
+import "../workspaces/scene.css";
 import { ComponentsEditor, PropField, Section, Vec3Row } from "./SceneInspector";
 
 const DEG = Math.PI / 180;
@@ -214,14 +216,20 @@ function draftRoot(defId: string): SceneObject {
 /** Prefab editor overlay: click a prefab card in Project to open. Authored
  * assets edit a draft of the asset's node hierarchy (Save bumps the revision
  * and propagates to placed instances); built-in defs edit a single root node
- * that can be placed as-is or saved as a new authored asset. */
-export function PrefabEditor({ store, assetId, defId, onClose, onPlace, onOpenAsset }: {
+ * that can be placed as-is or saved as a new authored asset. `embedded`
+ * renders it as a docked panel (no backdrop, no scene placement) — used by
+ * the Content workspace's scene panel. */
+export function PrefabEditor({ store, assetId, defId, onClose, onPlace, onOpenAsset, embedded, inspector }: {
   store: SceneStore;
   assetId?: string;
   defId?: string;
   onClose: () => void;
   onPlace: (prefab: string, overrides?: { name?: string; props?: Record<string, unknown>; components?: SceneComponents }) => void;
   onOpenAsset: (id: string) => void;
+  embedded?: boolean;
+  /** Extra content rendered at the bottom of the side panel — the Content
+   * workspace passes the selected asset's inspector here. */
+  inspector?: ReactNode;
 }) {
   const asset = useSceneStore(store, s => (assetId ? s.doc.prefabs.find(p => p.id === assetId) : undefined));
   const def = defId ? PREFAB_BY_ID.get(defId) : undefined;
@@ -295,6 +303,7 @@ export function PrefabEditor({ store, assetId, defId, onClose, onPlace, onOpenAs
   const saveAsAsset = () => {
     if (!nodes.length) return;
     onOpenAsset(store.createPrefabAsset(name, nodes));
+    setDirty(false);
   };
 
   const place = () => {
@@ -311,15 +320,15 @@ export function PrefabEditor({ store, assetId, defId, onClose, onPlace, onOpenAs
   const title = asset ? `Prefab — ${asset.name}` : `Prefab — ${def?.label ?? defId} (built-in)`;
 
   return (
-    <div className="sc-prefab-backdrop" onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape" && !isEditable(e.target)) requestClose(); }}>
-      <div className="sc-prefab-editor" role="dialog" aria-label={title}>
+    <div className={embedded ? "sc-prefab-panel" : "sc-prefab-backdrop"} onKeyDown={e => { e.stopPropagation(); if (e.key === "Escape" && !isEditable(e.target)) requestClose(); }}>
+      <div className={embedded ? "sc-prefab-editor sc-prefab-embedded" : "sc-prefab-editor"} role="dialog" aria-label={title}>
         <div className="ed-dock-title sc-prefab-head">
           <span className="sc-prefab-icon" aria-hidden="true">◆</span>
           <input className="sc-prefab-name" aria-label="Prefab name" value={name} onChange={e => { setName(e.target.value); setDirty(true); }} />
           {asset && <select aria-label="Prefab kind" value={kind} onChange={e => { setKind(e.target.value as PrefabKind); setDirty(true); }}>{(["npc", "poi", "item", "decoration"] as const).map(k => <option key={k} value={k}>{k}</option>)}</select>}
           <span className="ed-hint">{asset ? `revision ${asset.revision}${dirty ? " — unsaved changes" : ""}` : "built-in prefab"}</span>
           <span className="spacer" />
-          <button onClick={place} title={asset && dirty ? "Places the last saved revision" : undefined}>Place in scene</button>
+          {!embedded && <button onClick={place} title={asset && dirty ? "Places the last saved revision" : undefined}>Place in scene</button>}
           {asset
             ? <>
                 <button className="primary" disabled={!dirty} onClick={save}>Save</button>
@@ -331,6 +340,7 @@ export function PrefabEditor({ store, assetId, defId, onClose, onPlace, onOpenAs
         </div>
         <div className="sc-prefab-body">
           <aside className="sc-prefab-nodes">
+
             <div className="ed-dock-title">Nodes <span>{nodes.length}</span></div>
             {asset && <div className="sc-prefab-addrow">
               <select aria-label="Node prefab" value={addPrefabId} onChange={e => setAddPrefabId(e.target.value)}>
@@ -355,8 +365,11 @@ export function PrefabEditor({ store, assetId, defId, onClose, onPlace, onOpenAs
               {!visible.length && <p className="ed-empty">No nodes</p>}
             </div>
           </aside>
+          <PaneHandle axis="x" target="prev" id="prefab:nodes"/>
           <div className="sc-prefab-viewport" ref={hostRef} />
+          <PaneHandle axis="x" target="next" id="prefab:inspector"/>
           <aside className="sc-prefab-inspector ed-panel sc-inspector">
+            {inspector && <div className="sc-prefab-asset"><div className="ed-dock-title">Asset</div>{inspector}</div>}
             {node ? (
               <>
                 <div className="ed-row sc-head">

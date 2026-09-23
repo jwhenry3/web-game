@@ -1,12 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createContentDefinition, getBehaviorExtensions, getContentTypeSchema, getContentTypeSchemas, type InspectorField } from '../../../../wails/frontend/src/content/contentRegistry.ts';
-import { type ContentDefinition, type ContentDocument, type ContentType, type ContentValue, type ContentValidationIssue } from '../../../../wails/frontend/src/content/contentSchema.ts';
+import { normalizeContentDocument, type ContentDefinition, type ContentDocument, type ContentType, type ContentValue, type ContentValidationIssue } from '../../../../wails/frontend/src/content/contentSchema.ts';
 import { backlinks, buildAssetGraph, isEmbeddedAsset, renameAssetId, unlinkAssetReferences, validateContentGraph, type AssetGraphEdge } from '../../../../wails/frontend/src/content/recursiveAssets.ts';
 import { downloadContent, loadContent, loadServerContent, parseContentJson, saveContent, saveServerContent } from './storage.ts';
-import { ContentNavContext, getContentFieldEditor, useContentNav, type ContentEditorContext, type ContentNav } from './contentEditorRegistry.tsx';
+import { ContentNavContext, getContentFieldEditor, useContentNav, type ContentEditorContext, type ContentNav, type PrefabPanelTarget } from './contentEditorRegistry.tsx';
 import AssetSlotEditor from './AssetSlotEditor.tsx';
 import { getAtDataPath, setAtDataPath } from './embeddedPaths.ts';
 import { closeAssetTo, currentAsset, openAsset, parentAsset, type AssetNavigationEntry, type AssetNavigationStack } from './recursiveNavigation.ts';
+import { PREFAB_BY_ID } from '../../../../wails/frontend/src/three/prefabs.ts';
+import { hydrateSceneStore, listSceneMaps, sceneStoreFor, useScenePrefabs, type SceneMapInfo } from './sceneStore.ts';
+import { loadMapSnapshot } from '../scene3d/api.ts';
+import { SceneView } from '../scene3d/SceneView.ts';
+import { mountAssetPreview } from './assetPreview.ts';
+import AssetThumb from './contentPreview.tsx';
+import { PrefabEditor } from '../ui/PrefabEditor.tsx';
+import { EffectPanel } from './EffectPanel.tsx';
+import { effectReferenceFromValue } from './EffectAssetEditor.tsx';
+import { effectAssetSpec } from './references.ts';
+import { useEffectsMode } from '../ui/SceneEffects.tsx';
+import type { VfxCategory } from '../model/effects.ts';
+import { PaneHandle } from '../ui/PaneHandle.tsx';
 import './registerAdapters.ts';
 import './content.css';
 
@@ -26,16 +39,72 @@ interface CreateRequest {
 }
 
 export default function ContentWorkspace() {
-  const [doc, setDoc] = useState<ContentDocument>(loadContent);
+  // Normalize on load — fresh seeds and stored docs both pass through the
+  // migrations (per-part effect split, animation backfill) before use.
+  const [doc, setDoc] = useState<ContentDocument>(() => normalizeContentDocument(loadContent()));
   const [type, setType] = useState<ContentType>('npc');
   const [stack, setStack] = useState<AssetNavigationStack>([]);
   const [query, setQuery] = useState('');
+  const [kindFilter, setKindFilter] = useState('');
   const [status, setStatus] = useState('Saved locally');
   const [showIssues, setShowIssues] = useState(false);
   const [createReq, setCreateReq] = useState<CreateRequest | null>(null);
+  const [createMenu, setCreateMenu] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; edges: AssetGraphEdge[] } | null>(null);
+  const [sceneMaps, setSceneMaps] = useState<SceneMapInfo[]>([]);
+  const [sceneMapId, setSceneMapId] = useState(() => new URLSearchParams(location.search).get('map') ?? '');
+  const [sceneStatus, setSceneStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [scenePanel, setScenePanel] = useState<(PrefabPanelTarget & { rootKey?: string }) | null>(null);
+  const [dismissedKey, setDismissedKey] = useState('');
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { saveContent(doc); setStatus('Saved locally'); }, [doc]);
+
+  /** The scene store is keyed by map id and cached — local drafts survive
+   * switching maps or closing the scene panel. The empty id is a scratch
+   * scene so the view still mounts when no map is selected. */
+  const sceneStore = useMemo(() => sceneStoreFor(sceneMapId), [sceneMapId]);
+  const scenePrefabs = useScenePrefabs(sceneStore);
+  const sceneHostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    listSceneMaps().then(list => {
+      setSceneMaps(list);
+      // Mirror SceneWorkspace: keep a valid selection, preferring clara_mundi.
+      setSceneMapId(prev => (prev && list.some(m => m.id === prev) ? prev : (list.find(m => m.id === 'clara_mundi')?.id ?? list[0]?.id ?? '')));
+    }).catch(() => setSceneMaps([]));
+  }, []);
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    if (sceneMapId) q.set('map', sceneMapId); else q.delete('map');
+    history.replaceState(null, '', `?${q}`);
+  }, [sceneMapId]);
+  useEffect(() => {
+    if (!sceneMapId) { setSceneStatus('idle'); return; }
+    let cancelled = false;
+    if (localStorage.getItem(`scene3d:${sceneMapId}`)) { setSceneStatus('ready'); return; }
+    setSceneStatus('loading');
+    hydrateSceneStore(sceneStore, sceneMapId)
+      .then(() => { if (!cancelled) setSceneStatus('ready'); })
+      .catch(() => { if (!cancelled) setSceneStatus('error'); });
+    return () => { cancelled = true; };
+  }, [sceneMapId, sceneStore]);
+
+  /** The scene panel is a real SceneView of the selected map — terrain,
+   * placed objects and authored prefabs — docked above the asset grid. With
+   * no map selected it still mounts an empty scene (grid + sky) so every
+   * asset previews in 3D without waiting on a terrain load. */
+  const [sceneView, setSceneView] = useState<SceneView | null>(null);
+  useEffect(() => {
+    const host = sceneHostRef.current;
+    if (!host) { setSceneView(null); return; }
+    const view = new SceneView(host, sceneStore);
+    setSceneView(view);
+    let cancelled = false;
+    if (sceneMapId) loadMapSnapshot(sceneMapId)
+      .then(snapshot => { if (!cancelled) view.loadMap(snapshot); })
+      .catch(() => { if (!cancelled) setSceneStatus('error'); });
+    return () => { cancelled = true; setSceneView(null); view.dispose(); };
+  }, [sceneStore, sceneMapId]);
 
   const schemas = useMemo(() => getContentTypeSchemas(), []);
   const issues = useMemo(() => validateContentGraph(doc, schemas), [doc, schemas]);
@@ -58,6 +127,29 @@ export default function ContentWorkspace() {
     }).filter((entry): entry is AssetNavigationEntry => !!entry);
   }, [doc, stack]);
   const current = currentAsset(resolvedStack);
+
+  /** `effect`-type assets embed the Effects mode (staged rigs + live profile
+   * playback + the full profile form) over the scene view — the same
+   * specialist-panel pattern as prefabs. ✕ dismisses it back to the plain
+   * inspector until the asset is re-selected or reopened from the field. */
+  const effectKey = current?.definition.type === 'effect' ? current.key : '';
+  const fxOpen = !!sceneView && !!effectKey && dismissedKey !== effectKey;
+  const fx = useEffectsMode(sceneView, fxOpen);
+  const boundEffect = (effectKey ? effectReferenceFromValue(current?.definition.data.effect) : '') as VfxCategory | '';
+  useEffect(() => { if (fxOpen && boundEffect) fx.setCat(boundEffect); }, [fxOpen, boundEffect]);
+
+  /** Selecting an asset stages its 3D representation on the scene view —
+   * rigs animate, effect profiles loop, prefabs/POIs/items spawn their
+   * authored or compiled prefab. Types with no 3D form clear the stage. The
+   * embedded effect panel owns the stage while it is open. */
+  useEffect(() => {
+    if (!sceneView || fxOpen) return;
+    return mountAssetPreview(sceneView, current?.definition ?? null, doc, sceneStore);
+  }, [sceneView, current?.definition, doc, sceneStore, fxOpen]);
+
+  /** Field-launched scene panels belong to the asset that opened them —
+   * navigating elsewhere dismisses them. */
+  useEffect(() => { setScenePanel(null); setDismissedKey(''); }, [current?.key]);
 
   /** Executes a create-and-link request — shared by the modal pick and the
    * single-type fast path. */
@@ -104,9 +196,49 @@ export default function ContentWorkspace() {
       setDoc(old => ({ ...old, definitions: [...old.definitions, { ...definition, id }] }));
       return id;
     },
-  }), [doc, graph, resolvedStack]);
+    sceneStore,
+    sceneMapId,
+    openPrefabEditor: target => {
+      setDismissedKey('');
+      setScenePanel({ ...target, rootKey: resolvedStack[0]?.key });
+    },
+    openEffectEditor: () => setDismissedKey(''),
+  }), [doc, graph, resolvedStack, sceneStore, sceneMapId]);
 
-  const items = useMemo(() => doc.definitions.filter(item => item.type === type && `${item.name} ${item.id} ${item.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())), [doc, query, type]);
+  /** A `prefab`-type asset whose `data.prefab` resolves (authored scene
+   * asset or compiled def) auto-opens the scene panel — the panel is the
+   * primary editor for that content type. Dismissal is remembered per asset
+   * so ✕ returns to the grid. */
+  const derivedPanel = useMemo<(PrefabPanelTarget & { rootKey?: string }) | null>(() => {
+    if (scenePanel || !current || current.definition.type !== 'prefab' || dismissedKey === current.key) return null;
+    const value = current.definition.data.prefab;
+    const id = typeof value === 'string' ? value : '';
+    if (!id) return null;
+    const assignPath = current.dataPath ? `${current.dataPath}.definition.data.prefab` : 'prefab';
+    const rootKey = resolvedStack[0]?.key;
+    if (scenePrefabs.some(asset => asset.id === id)) return { assetId: id, assignPath, rootKey };
+    if (PREFAB_BY_ID.has(id)) return { defId: id, assignPath, rootKey };
+    return null;
+  }, [scenePanel, sceneStore, scenePrefabs, current, dismissedKey, resolvedStack]);
+
+  const activePanel = scenePanel ?? derivedPanel;
+  const panelOpen = !!activePanel || fxOpen;
+  const closePanel = () => { setScenePanel(null); if (current?.definition.type === 'prefab') setDismissedKey(current.key); };
+  /** "Save as prefab asset" inside the panel creates a scene asset; write its
+   * id back into the field that launched the editor (data-relative path), so
+   * content still stores only a prefab reference. */
+  const panelSavedAs = (id: string) => {
+    if (activePanel?.assignPath && activePanel.rootKey) {
+      const { rootKey, assignPath } = activePanel;
+      setDoc(old => ({ ...old, definitions: old.definitions.map(item => (item.id === rootKey ? setAtDataPath(item, assignPath, id) : item)) }));
+    }
+    setScenePanel({ assetId: id, assignPath: activePanel?.assignPath, rootKey: activePanel?.rootKey });
+  };
+
+  /** Kind facet — the type's `legacyKind` select field, when it has one
+   * (items: consumable/equipment). Drives the side panel beside the grid. */
+  const kindFacet = useMemo(() => getContentTypeSchema(type).groups.flatMap(group => group.fields).find(field => field.key === 'legacyKind' && field.type === 'select' && field.options?.length), [type]);
+  const items = useMemo(() => doc.definitions.filter(item => item.type === type && (!kindFilter || String(item.data.legacyKind ?? '') === kindFilter) && `${item.name} ${item.id} ${item.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())), [doc, query, type, kindFilter]);
 
   /** Root + embedded updates funnel through here. */
   const updateCurrent = (next: ContentDefinition) => {
@@ -127,12 +259,13 @@ export default function ContentWorkspace() {
     }));
   };
 
-  const add = () => {
-    let id = slug(`new_${type}`), n = 2;
-    while (doc.definitions.some(item => item.id === id)) id = `new_${type}_${n++}`;
-    const item = createContentDefinition(type, id);
+  const add = (picked: ContentType = type) => {
+    let id = slug(`new_${picked}`), n = 2;
+    while (doc.definitions.some(item => item.id === id)) id = `new_${picked}_${n++}`;
+    const item = createContentDefinition(picked, id);
     setDoc(old => ({ ...old, definitions: [...old.definitions, item] }));
     setStack([{ key: id, label: labelOf(item), definition: item }]);
+    if (picked !== type) { setType(picked); setKindFilter(''); }
   };
   const remove = () => {
     if (!current || current.dataPath) return;
@@ -164,14 +297,35 @@ export default function ContentWorkspace() {
 
   const finishCreate = (picked: ContentType) => { if (createReq) runCreate(createReq, picked); };
 
-  const openNode = (key: string) => {
+  /** Shared id-rename used by the top-level inspector and the prefab panel's
+   * embedded asset inspector. */
+  const renameCurrent = (id: string): boolean => {
+    if (!current) return false;
+    const result = renameAssetId(doc, current.key, id, schemas);
+    if ('error' in result) { setStatus(`Rename failed: ${result.error}`); return false; }
+    setDoc(result.doc);
+    setStack(old => old.map(entry => entry.key === current.key ? { ...entry, key: id } : entry.key.startsWith(`${current.key}::`) ? { ...entry, key: `${id}::${entry.key.slice(current.key.length + 2)}` } : entry));
+    return true;
+  };
+
+  /** Top-level selection — replaces the stack instead of pushing, so picking
+   * an asset in the browser doesn't look like drilling into a relation. */
+  const selectRoot = (id: string) => {
+    const definition = doc.definitions.find(item => item.id === id);
+    if (!definition) { setStatus(`Missing asset “${id}”`); return; }
+    setStack([{ key: id, label: labelOf(definition), definition }]);
+  };
+  const openNode = (key: string, incoming = false) => {
     // Embedded graph keys are `root::path` — open the owning root.
-    nav.open(key.split('::')[0]);
+    const rootKey = key.split('::')[0];
+    const externalKey = rootKey.includes(':') ? rootKey.replace(':', '_') : rootKey;
+    const id = doc.definitions.some(item => item.id === externalKey) ? externalKey : rootKey;
+    if (incoming) selectRoot(id); else nav.open(id);
   };
   const openIssue = (issue: ContentValidationIssue) => {
     const match = /definitions\[(\d+)\]/.exec(issue.path);
     const definition = match ? doc.definitions[Number(match[1])] : doc.definitions.find(item => issue.path.startsWith(item.id));
-    if (definition) nav.open(definition.id);
+    if (definition) selectRoot(definition.id);
     else setStatus('Issue does not resolve to an asset');
   };
 
@@ -180,26 +334,65 @@ export default function ContentWorkspace() {
   const saveServer = async () => { try { await saveServerContent(doc); setStatus('Saved to server and local recovery'); } catch (error) { setStatus(`Server save failed; local recovery saved: ${error instanceof Error ? error.message : error}`); } };
 
   return <ContentNavContext.Provider value={nav}><div className="ct-workspace">
-    <div className="ed-toolbar"><button className="primary" onClick={add}>＋ Create</button><button disabled={!current || !!current.dataPath} onClick={duplicate}>Duplicate</button><button disabled={!current || !!current.dataPath} onClick={remove}>Delete</button><span className="spacer"/><button onClick={() => void loadServer()}>Load server</button><button className="primary" disabled={hasErrors} title={hasErrors ? 'Fix validation errors before saving to the server.' : ''} onClick={() => void saveServer()}>Save server</button><button onClick={() => input.current?.click()}>Import JSON…</button><input ref={input} hidden type="file" accept="application/json,.json" onChange={event => void importFile(event.target.files?.[0])}/><button onClick={() => downloadContent(doc)}>Export JSON</button></div>
-    <div className="ct-body">
-      <aside className="ct-types"><div className="ed-dock-title">Content</div>{TYPES.map(schema => <button key={schema.type} className={type === schema.type ? 'selected' : ''} onClick={() => setType(schema.type)}><span style={{ color: schema.color }}>{schema.icon}</span>{schema.label}<small>{doc.definitions.filter(item => item.type === schema.type).length}</small></button>)}</aside>
-      <section className="ct-browser"><div className="ed-dock-title"><span>Assets / {getContentTypeSchema(type).label}</span><b>{items.length}</b></div><div className="ed-search"><input aria-label="Search content" placeholder="Search assets…" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="ct-grid">{items.map(item => <button key={item.id} className={`ct-card ${current?.key === item.id ? 'selected' : ''}`} onClick={() => nav.open(item.id)}><Thumbnail item={item}/><strong>{item.name}</strong><small>{item.id}</small></button>)}{!items.length && <div className="ed-empty">No {getContentTypeSchema(type).label.toLowerCase()} yet. Create one to begin.</div>}</div></section>
-      <aside className="ct-inspector">
+    <div className="ed-toolbar"><span className="spacer"/><label className="ct-scene-map">Scene<select value={sceneMapId} onChange={event => setSceneMapId(event.target.value)} aria-label="Scene map for prefab editing"><option value="">none</option>{sceneMaps.map(map => <option key={map.id} value={map.id}>{map.name}</option>)}</select></label>{sceneStatus === 'loading' && <span className="ct-scene-status">loading scene…</span>}{sceneStatus === 'error' && <span className="ct-scene-status ct-scene-error">scene unavailable</span>}<button onClick={() => void loadServer()}>Load server</button><button className="primary" disabled={hasErrors} title={hasErrors ? 'Fix validation errors before saving to the server.' : ''} onClick={() => void saveServer()}>Save server</button><button onClick={() => input.current?.click()}>Import JSON…</button><input ref={input} hidden type="file" accept="application/json,.json" onChange={event => void importFile(event.target.files?.[0])}/><button onClick={() => downloadContent(doc)}>Export JSON</button></div>
+    <div className="ct-body ct-body--scene">
+      <aside className="ct-types"><div className="ed-dock-title">Content</div>{TYPES.map(schema => <button key={schema.type} className={type === schema.type ? 'selected' : ''} onClick={() => { setType(schema.type); setKindFilter(''); }}><span style={{ color: schema.color }}>{schema.icon}</span>{schema.label}<small>{doc.definitions.filter(item => item.type === schema.type).length}</small></button>)}</aside>
+      <PaneHandle axis="x" target="prev" id="ct:types"/>
+      <section className="ct-browser ct-scene-host">
+        <div className="ct-scene-view" ref={sceneHostRef} aria-label="3D scene view">
+          {activePanel && (
+            <PrefabEditor
+              key={`${activePanel.assetId ?? ''}:${activePanel.defId ?? ''}`}
+              embedded
+              store={sceneStore}
+              assetId={activePanel.assetId}
+              defId={activePanel.defId}
+              onClose={closePanel}
+              onPlace={() => {}}
+              onOpenAsset={panelSavedAs}
+              inspector={current ? <Inspector entry={current} rootKey={resolvedStack[0]?.key ?? ''} graph={graph} onChange={updateCurrent} onRename={renameCurrent} onOpenNode={openNode} hideEditors={['prefab']}/> : undefined}
+            />
+          )}
+          {fxOpen && current && (
+            <EffectPanel
+              st={fx}
+              title={labelOf(current.definition)}
+              bound={boundEffect}
+              part={effectAssetSpec(current.definition).part}
+              onBind={cat => updateCurrent({ ...current.definition, data: { ...current.definition.data, effect: cat } })}
+              onClose={() => setDismissedKey(effectKey)}
+              inspector={<Inspector entry={current} rootKey={resolvedStack[0]?.key ?? ''} graph={graph} onChange={updateCurrent} onRename={renameCurrent} onOpenNode={openNode} hideEditors={['effect']}/>}
+            />
+          )}
+        </div>
+        <PaneHandle axis="y" target="prev" id="ct:scene"/>
+        <div className="ed-dock-title"><span>Assets / {getContentTypeSchema(type).label}</span><b>{items.length}</b></div>
+        <div className="ed-search ct-search"><input aria-label="Search content" placeholder="Search assets…" value={query} onChange={event => setQuery(event.target.value)}/>
+          <span className="ct-create-wrap">
+            <button className="primary" onClick={() => setCreateMenu(open => !open)}>＋ Create</button>
+            {createMenu && <>
+              <div className="ct-menu-overlay" onClick={() => setCreateMenu(false)}/>
+              <div className="ct-create-menu" role="menu">
+                {TYPES.map(schema => <button key={schema.type} role="menuitem" onClick={() => { setCreateMenu(false); add(schema.type); }}><i style={{ color: schema.color }}>{schema.icon}</i>{schema.label}</button>)}
+              </div>
+            </>}
+          </span>
+          <button disabled={!current || !!current.dataPath} onClick={duplicate}>Duplicate</button>
+          <button className="ed-danger" disabled={!current || !!current.dataPath} onClick={remove}>Delete</button>
+        </div>
+        <div className="ct-browse-row">{kindFacet && <aside className="ct-kinds"><button className={!kindFilter ? 'selected' : ''} onClick={() => setKindFilter('')}>All kinds<small>{items.length}</small></button>{kindFacet.options!.map(option => { const count = doc.definitions.filter(item => item.type === type && String(item.data.legacyKind ?? '') === option.value).length; return <button key={option.value} className={kindFilter === option.value ? 'selected' : ''} onClick={() => setKindFilter(kindFilter === option.value ? '' : option.value)}>{option.label}<small>{count}</small></button>; })}</aside>}<div className="ct-grid">{items.map(item => <button key={item.id} className={`ct-card ${current?.key === item.id ? 'selected' : ''}`} onClick={() => selectRoot(item.id)}><Thumbnail item={item}/><strong>{item.name}</strong><small>{item.id}</small></button>)}{!items.length && <div className="ed-empty">No {getContentTypeSchema(type).label.toLowerCase()} yet. Create one to begin.</div>}</div></div>
+      </section>
+      {!panelOpen && <PaneHandle axis="x" target="next" id="ct:inspector"/>}
+      {!panelOpen && <aside className="ct-inspector">
         <div className="ed-dock-title"><span>Inspector</span>{current && <b>{getContentTypeSchema(current.definition.type).icon}</b>}</div>
         {resolvedStack.length > 1 && <nav className="ct-crumbs">{resolvedStack.map((entry, index) => {
           const schema = getContentTypeSchema(entry.definition.type);
           return <span key={entry.key} className="ct-crumb-wrap">{index > 0 && <i className="ct-crumb-sep">›</i>}<button className={`ct-crumb ${index === resolvedStack.length - 1 ? 'current' : ''}`} onClick={() => setStack(old => closeAssetTo(old, entry.key))}><i style={{ color: schema.color }}>{schema.icon}</i>{entry.label}</button></span>;
         })}<button className="ct-crumb-back" title="Back" onClick={() => setStack(old => parentAsset(old))}>←</button></nav>}
-        {current ? <Inspector entry={current} rootKey={resolvedStack[0]?.key ?? ''} graph={graph} onChange={updateCurrent} onRename={id => {
-          const result = renameAssetId(doc, current.key, id, schemas);
-          if ('error' in result) { setStatus(`Rename failed: ${result.error}`); return false; }
-          setDoc(result.doc);
-          setStack(old => old.map(entry => entry.key === current.key ? { ...entry, key: id } : entry.key.startsWith(`${current.key}::`) ? { ...entry, key: `${id}::${entry.key.slice(current.key.length + 2)}` } : entry));
-          return true;
-        }} onOpenNode={openNode}/> : <div className="ed-empty">Select an asset to edit it.</div>}
-      </aside>
+        {current ? <Inspector entry={current} rootKey={resolvedStack[0]?.key ?? ''} graph={graph} onChange={updateCurrent} onRename={renameCurrent} onOpenNode={openNode}/> : <div className="ed-empty">Select an asset to edit it.</div>}
+      </aside>}
     </div>
-    {showIssues && issues.length > 0 && <div className="ct-issues">{issues.map((issue, index) => <button key={index} className={`ct-issue ${issue.severity}`} onClick={() => openIssue(issue)}><b>{issue.severity}</b><code>{issue.path}</code><span>{issue.message}</span></button>)}</div>}
+    {showIssues && issues.length > 0 && <><PaneHandle axis="y" target="next" id="ct:issues"/><div className="ct-issues">{issues.map((issue, index) => <button key={index} className={`ct-issue ${issue.severity}`} onClick={() => openIssue(issue)}><b>{issue.severity}</b><code>{issue.path}</code><span>{issue.message}</span></button>)}</div></>}
     <footer className="ed-statusbar"><span className={hasErrors ? 'ed-err' : 'ed-ready'}>●</span><span role="status">{status}</span><span className="spacer"/><button className="ct-status-btn" onClick={() => setShowIssues(show => !show)}>{issues.length ? `${issues.length} validation issue${issues.length === 1 ? '' : 's'}` : 'Content valid'}</button><span>{doc.definitions.length} definitions</span></footer>
     {createReq && <div className="ct-modal"><div className="ct-modal-box"><h3>{createReq.mode === 'embedded' ? 'Embed new asset' : 'Create linked asset'}</h3><p>Pick the asset type to create.</p>{createReq.types.map(picked => { const schema = getContentTypeSchema(picked); return <button key={picked} className="ct-modal-type" onClick={() => finishCreate(picked)}><i style={{ color: schema.color }}>{schema.icon}</i>{schema.label}</button>; })}<button onClick={() => setCreateReq(null)}>Cancel</button></div></div>}
     {pendingDelete && <div className="ct-modal"><div className="ct-modal-box"><h3>Delete “{pendingDelete.id}”?</h3><p>This asset is referenced by {pendingDelete.edges.length} other {pendingDelete.edges.length === 1 ? 'asset' : 'assets'}:</p><ul className="ct-modal-list">{pendingDelete.edges.map((edge, index) => <li key={index}><code>{edge.from}</code> <small>{edge.path}</small></li>)}</ul><button className="ed-danger" onClick={unlinkAndDelete}>Unlink references and delete</button><button onClick={() => setPendingDelete(null)}>Cancel</button></div></div>}
@@ -208,16 +401,19 @@ export default function ContentWorkspace() {
 
 function Thumbnail({ item }: { item: ContentDefinition }) {
   const schema = getContentTypeSchema(item.type);
-  return <div className="ct-thumb" style={{ borderColor: schema.color }}>{item.thumbnail ? <img src={item.thumbnail} alt=""/> : <span style={{ color: schema.color }}>{schema.icon}</span>}</div>;
+  return <div className="ct-thumb" style={{ borderColor: schema.color }}><AssetThumb item={item}/></div>;
 }
 
-function Inspector({ entry, rootKey, graph, onChange, onRename, onOpenNode }: {
+function Inspector({ entry, rootKey, graph, onChange, onRename, onOpenNode, hideEditors }: {
   entry: AssetNavigationEntry;
   rootKey: string;
   graph: ReturnType<typeof buildAssetGraph>;
   onChange(value: ContentDefinition): void;
   onRename(id: string): boolean;
-  onOpenNode(key: string): void;
+  onOpenNode(key: string, incoming?: boolean): void;
+  /** Specialist field editorIds to drop — embedded panels (prefab scene
+   * editor, effect profile editor) already cover those fields. */
+  hideEditors?: string[];
 }) {
   const value = entry.definition;
   const schema = getContentTypeSchema(value.type);
@@ -242,10 +438,10 @@ function Inspector({ entry, rootKey, graph, onChange, onRename, onOpenNode }: {
   return <div className="ct-inspector-scroll">
     <label className="ct-id">ID<input value={idDraft} onChange={event => setIdDraft(event.target.value)} onBlur={commitId} onKeyDown={event => event.key === 'Enter' && commitId()}/></label>
     {embedded && <div className="ct-owned-banner">Embedded — owned by <code>{rootKey}</code></div>}
-    {schema.groups.map(group => <details key={group.id} open><summary>{group.label}</summary><div className="ct-fields">{group.fields.map(field => <Field key={field.key} field={field} value={field.key === '$name' ? value.name : field.key === '$description' ? value.description : field.key === '$thumbnail' ? value.thumbnail ?? '' : field.key === '$tags' ? value.tags.join(', ') : value.data[field.key]} def={value} path={field.key.startsWith('$') ? '' : joinPath(basePath, field.key)} onChange={next => set(field.key, next)}/>)}</div></details>)}
+    {schema.groups.filter(group => !(group.hideWhen && value.data[group.hideWhen]) && !(group.showWhen && value.data[group.showWhen.key] !== group.showWhen.equals)).map(group => hideEditors?.length ? { ...group, fields: group.fields.filter(field => !(field.type === 'customEditor' && !!field.editorId && hideEditors.includes(field.editorId))) } : group).filter(group => group.fields.length > 0).map(group => <details key={group.id} open><summary>{group.label}</summary><div className="ct-fields">{group.fields.map(field => <Field key={field.key} field={field} value={field.key === '$name' ? value.name : field.key === '$description' ? value.description : field.key === '$thumbnail' ? value.thumbnail ?? '' : field.key === '$tags' ? value.tags.join(', ') : field.type === 'tags' ? (Array.isArray(value.data[field.key]) ? (value.data[field.key] as ContentValue[]).join(', ') : String(value.data[field.key] ?? '')) : value.data[field.key]} def={value} path={field.key.startsWith('$') ? '' : joinPath(basePath, field.key)} onChange={next => field.type === 'tags' ? set(field.key, String(next).split(',').map(t => t.trim()).filter(Boolean)) : set(field.key, next)}/>)}</div></details>)}
     <details className="ct-relations"><summary>Relationships</summary>
       {outgoing.length > 0 && <div className="ct-rel-block"><h4>Links to</h4>{outgoing.map((edge, index) => <button key={index} className="ct-rel" onClick={() => onOpenNode(edge.to)}><span>{edge.to}</span><small>{edge.path}{edge.embedded ? ' · embedded' : ''}</small></button>)}</div>}
-      {incoming.length > 0 && <div className="ct-rel-block"><h4>Referenced by</h4>{incoming.map((edge, index) => <button key={index} className="ct-rel" onClick={() => onOpenNode(edge.from)}><span>{edge.from}</span><small>{edge.path}</small></button>)}</div>}
+      {incoming.length > 0 && <div className="ct-rel-block"><h4>Referenced by</h4>{incoming.map((edge, index) => <button key={index} className="ct-rel" onClick={() => onOpenNode(edge.from, true)}><span>{edge.from}</span><small>{edge.path}</small></button>)}</div>}
       {!outgoing.length && !incoming.length && <div className="ed-empty">No linked assets.</div>}
     </details>
   </div>;
@@ -264,6 +460,10 @@ function Field({ field, value, def, path, onChange }: { field: InspectorField; v
     createAndLink: (type, link) => nav.createAndLink([type], link),
   };
   if (field.type === 'behaviorList') return <BehaviorEditor label={field.label} basePath={path} value={Array.isArray(value) ? value : []} def={def} onChange={onChange}/>;
+  if (field.type === 'record') {
+    const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, ContentValue> : {};
+    return <div className="ct-field"><span>{field.label}</span><div className="ct-record">{(field.recordFields ?? []).map(child => <Field key={child.key} field={child} value={record[child.key]} def={def} path={`${path}.${child.key}`} onChange={next => onChange({ ...record, [child.key]: next })}/>)}</div>{field.help && <small>{field.help}</small>}</div>;
+  }
   if (field.type === 'list') return <ListEditor field={field} basePath={path} value={Array.isArray(value) ? value : []} def={def} onChange={onChange}/>;
   if (field.type === 'assetSlot' || field.type === 'embeddedAsset' || field.type === 'reference') {
     const slotField = field.type === 'reference' ? { ...field, slotMode: 'reference' as const } : field;

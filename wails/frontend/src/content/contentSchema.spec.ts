@@ -3,7 +3,7 @@ import { createContentDefinition, CONTENT_TYPE_SCHEMAS, getBehaviorExtensions, g
 
 function check(ok: unknown, message: string): asserts ok { if (!ok) throw new Error(message); }
 
-const expected = ['npc', 'poi', 'item', 'dialogue', 'quest', 'vendor', 'lootTable', 'ability', 'statusEffect', 'recipe', 'spawnSet'];
+const expected = ['npc', 'poi', 'item', 'dialogue', 'quest', 'vendor', 'lootTable', 'ability', 'statusEffect', 'recipe', 'spawnSet', 'character', 'effect', 'prefab'];
 check(expected.every(type => type in CONTENT_TYPE_SCHEMAS), 'Every initial MMORPG content type must have an editor schema');
 
 const npc = createContentDefinition('npc', 'village_guard');

@@ -9,6 +9,8 @@ import {
   type Rig3DDoc,
 } from '../../../../wails/frontend/src/three/rig3d';
 import { DEFAULT_RIGS } from '../../../../wails/frontend/src/three/rig3dDefaults';
+import { listRigs } from '../../../../wails/frontend/src/three/rigBuilder';
+import { APPEARANCE_OPTIONS } from '../../../../wails/frontend/src/characters/heroes99';
 import { listRigFiles, loadRigFile, saveRigFile, type RigInfo } from '../scene3d/rigsApi';
 import {
   CHARACTER_ANIMATION_SLOTS,
@@ -36,6 +38,41 @@ const APPEARANCE_FIELDS = [
   ['weaponColor', 'Weapon', WEAPON_HEX],
 ] as const;
 const ATTACHMENT_FIELDS = ['hair', 'face', 'cloth', 'weapon', 'subWeapon', 'ears', 'horns', 'wings', 'tail'] as const;
+
+/** Fixed catalogs for doll parts (hair/face/cloth/weapon ids). */
+const ATTACHMENT_OPTIONS: Partial<Record<(typeof ATTACHMENT_FIELDS)[number], readonly string[]>> = {
+  hair: APPEARANCE_OPTIONS.hair,
+  face: APPEARANCE_OPTIONS.face,
+  cloth: APPEARANCE_OPTIONS.cloth,
+  weapon: APPEARANCE_OPTIONS.weapon,
+  subWeapon: APPEARANCE_OPTIONS.weapon,
+};
+
+/** `when: {key:"*"}` attachments render for any value — a presence toggle.
+ * The doll presets use these conventional names, so offer them. */
+const WILDCARD_VALUES: Record<string, readonly string[]> = {
+  horns: ['imp'],
+  tail: ['spade'],
+};
+
+/** Creature-part values a rig's parts gate on — `when: {ears:"point"}`
+ * declares the rig renders that attachment. With no rig selected, the union
+ * across the whole library keeps creature parts selectable for overrides
+ * that will apply to whatever rig the NPC ultimately uses. */
+function rigAttachmentValues(doc: Rig3DDoc | null): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  const wild = new Set<string>();
+  for (const rig of doc ? [doc] : listRigs()) {
+    for (const part of rig.parts) {
+      for (const [key, value] of Object.entries(part.when ?? {})) {
+        if (value === '*') wild.add(key);
+        else if (!(out[key] ??= []).includes(value)) out[key].push(value);
+      }
+    }
+  }
+  for (const key of wild) out[key] = [...new Set([...(out[key] ?? []), ...(WILDCARD_VALUES[key] ?? [])])];
+  return out;
+}
 
 function optionsWithDefaults(files: RigInfo[]): RigOption[] {
   const options: RigOption[] = files.map(item => ({ ...item, builtin: false }));
@@ -88,6 +125,13 @@ export default function CharacterAssetEditor({ value, onChange, onOpenRig, label
   };
 
   const appearance = asset.appearance;
+  const rigWhen = useMemo(() => rigAttachmentValues(rigDoc), [rigDoc]);
+  const attachmentOptions = (key: string): string[] => {
+    const options = [...new Set([...(ATTACHMENT_OPTIONS[key as keyof typeof ATTACHMENT_OPTIONS] ?? []), ...(rigWhen[key] ?? [])])];
+    const current = String(appearance[key] ?? '');
+    if (current && !options.includes(current)) options.push(current);
+    return options;
+  };
   const skin = SKIN_HEX[String(appearance.skin ?? '')] ?? SKIN_HEX.c1;
   const hair = HAIR_HEX[String(appearance.hairColor ?? '')] ?? HAIR_HEX.c1;
   const cloth = CLOTH_HEX[String(appearance.clothColor ?? '')] ?? CLOTH_HEX.c1;
@@ -119,7 +163,12 @@ export default function CharacterAssetEditor({ value, onChange, onOpenRig, label
 
     <details open><summary>Appearance <small>{Object.keys(appearance).filter(key => appearance[key] !== '').length} overrides</small></summary><div className="ca-fields">
       {APPEARANCE_FIELDS.map(([key, fieldLabel, palette]) => <label key={key}><span>{fieldLabel}</span><div className="ca-palette"><select value={String(appearance[key] ?? '')} onChange={event => set(['appearance', key], event.target.value)}><option value="">Rig default</option>{Object.entries(palette).map(([id, hex]) => <option key={id} value={id}>{id} · {hex}</option>)}</select><i style={{ background: palette[String(appearance[key] ?? '')] ?? '#555' }}/></div></label>)}
-      {ATTACHMENT_FIELDS.map(key => <label key={key}><span>{key}</span><input value={String(appearance[key] ?? '')} placeholder="Rig default" onChange={event => set(['appearance', key], event.target.value)}/></label>)}
+      {ATTACHMENT_FIELDS.map(key => {
+        const options = attachmentOptions(key);
+        return <label key={key}><span>{key}</span>{options.length
+          ? <select value={String(appearance[key] ?? '')} onChange={event => set(['appearance', key], event.target.value)}><option value="">Rig default</option>{options.map(option => <option key={option} value={option}>{option}</option>)}</select>
+          : <input value={String(appearance[key] ?? '')} placeholder="Rig default" onChange={event => set(['appearance', key], event.target.value)}/>}</label>;
+      })}
     </div></details>
 
     <details open><summary>Animation references <small>State → clip</small></summary><div className="ca-fields">

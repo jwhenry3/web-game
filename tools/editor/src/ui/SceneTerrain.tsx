@@ -57,41 +57,7 @@ export function useTerrainMode(view: SceneView | null, store: SceneStore, active
 
 export type TerrainMode = ReturnType<typeof useTerrainMode>;
 
-// --- left column ---------------------------------------------------------------
-
-export function TerrainLibrary({ st, store }: { st: TerrainMode; store: SceneStore }) {
-  const terrain = useSceneStore(store, s => s.doc.terrain);
-  const heights = Object.keys(terrain?.heights ?? {}).length;
-  const cells = Object.keys(terrain?.cells ?? {}).length;
-  const painted = Object.keys(terrain?.paints ?? {}).length;
-  return (
-    <>
-      <div className="ed-dock-title">Brushes <span>{BRUSHES.length}</span></div>
-      <div className="ed-list">
-        {BRUSHES.map(b => (
-          <button key={b.id} className={`item ${st.brush.mode === b.id ? "sel" : ""}`} title={b.hint} onClick={() => st.patch({ mode: b.id })}>
-            {b.label}
-          </button>
-        ))}
-      </div>
-      <div className="ed-dock-title">Authored layer</div>
-      <div className="sc-preview-controls">
-        <div className="efx-field"><span>height vertices</span><span>{heights}</span></div>
-        <div className="efx-field"><span>painted cells</span><span>{cells}</span></div>
-        <div className="efx-field"><span>custom textures</span><span>{painted}</span></div>
-      </div>
-      <div className="sc-lib-actions">
-        <button disabled={!heights} title="Remove all sculpted elevation (undoable)" onClick={() => { if (confirm(`Clear ${heights} sculpted height vertices?`)) st.clearHeights(); }}>Clear heights</button>
-        <button disabled={!cells} title="Remove all painted surface cells (undoable)" onClick={() => { if (confirm(`Clear ${cells} painted cells?`)) st.clearCells(); }}>Clear cells</button>
-      </div>
-      <div className="sc-lib-actions">
-        <button disabled={!heights && !cells && !painted} title="Reset the whole authored terrain layer (undoable)" onClick={() => { if (confirm("Clear all terrain edits (heights + painted cells + textures)?")) st.clearAll(); }}>Reset terrain</button>
-      </div>
-    </>
-  );
-}
-
-// --- right column ---------------------------------------------------------------
+// --- inspector ------------------------------------------------------------------
 
 /** Texture preview swatch — renders the surface's actual 3D appearance
  * (base color + noise variation + prop marks) via paintSurfaceSwatch. */
@@ -155,15 +121,25 @@ function TextureEditor({ st }: { st: TerrainMode }) {
   );
 }
 
-export function TerrainInspector({ st }: { st: TerrainMode }) {
+export function TerrainInspector({ st, store }: { st: TerrainMode; store: SceneStore }) {
   const { brush, patch } = st;
+  const terrain = useSceneStore(store, s => s.doc.terrain);
+  const heights = Object.keys(terrain?.heights ?? {}).length;
+  const cells = Object.keys(terrain?.cells ?? {}).length;
+  const painted = Object.keys(terrain?.paints ?? {}).length;
   const active = BRUSHES.find(b => b.id === brush.mode)!;
   return (
     <>
-      <div className="sc-inspector-head">
-        <h3>Terrain <span className="dim">({active.label})</span></h3>
-      </div>
+      <div className="ed-dock-title">Inspector <span>Terrain</span></div>
       <div className="ed-panel sc-rig-panel" style={{ display: "grid", gap: 8, alignContent: "start" }}>
+        <div className="sc-tex-label">Brushes</div>
+        <div className="sc-brushes">
+          {BRUSHES.map(b => (
+            <button key={b.id} aria-pressed={brush.mode === b.id} title={b.hint} onClick={() => patch({ mode: b.id })}>
+              {b.label}
+            </button>
+          ))}
+        </div>
         <label style={{ display: "grid", gap: 4 }}>Radius · {brush.radius} map pixels
           <input aria-label="Terrain brush radius" type="range" min={16} max={512} step={8} value={brush.radius} onChange={e => patch({ radius: Number(e.target.value) })} />
         </label>
@@ -182,12 +158,23 @@ export function TerrainInspector({ st }: { st: TerrainMode }) {
             <TextureEditor st={st} />
           </>
         )}
+        <div className="sc-tex-label">Authored layer</div>
+        <div className="efx-field"><span>height vertices</span><span>{heights}</span></div>
+        <div className="efx-field"><span>painted cells</span><span>{cells}</span></div>
+        <div className="efx-field"><span>custom textures</span><span>{painted}</span></div>
+        <div className="ed-row">
+          <button disabled={!heights} title="Remove all sculpted elevation (undoable)" onClick={() => { if (confirm(`Clear ${heights} sculpted height vertices?`)) st.clearHeights(); }}>Clear heights</button>
+          <button disabled={!cells} title="Remove all painted surface cells (undoable)" onClick={() => { if (confirm(`Clear ${cells} painted cells?`)) st.clearCells(); }}>Clear cells</button>
+        </div>
+        <div className="ed-row">
+          <button disabled={!heights && !cells && !painted} title="Reset the whole authored terrain layer (undoable)" onClick={() => { if (confirm("Clear all terrain edits (heights + painted cells + textures)?")) st.clearAll(); }}>Reset terrain</button>
+        </div>
         <p style={{ margin: 0, color: "#bbb", fontSize: 11, lineHeight: 1.5 }}>
           {active.hint}. Drag on the terrain to apply — each stroke is one undo
           step. Elevation, surfaces and textures are saved with this map’s scene.
         </p>
       </div>
-      <div className="ed-statusbar sc-rig-status"><span>Switch to the Prefabs tab to select objects</span></div>
+      <div className="ed-statusbar sc-rig-status"><span>Select an object in the Scene or Hierarchy to edit it</span></div>
     </>
   );
 }

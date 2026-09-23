@@ -31,16 +31,21 @@ animation slot without embedding a full character.
 ## Effects
 
 Reuse `EffectsDoc`, `VfxProfile`, `fetchEffects`, `saveEffects`,
-`EffectProfileForm`, and the existing preview player. Store only the stable
-profile/category identifier in gameplay content.
+`EffectProfileForm`, and the existing preview player. Each `effect` asset is
+one part of the sequence — cast / projectile / impact / area (`data.part`)
+drawn from a palette category (`data.effect`); there are no combined-type
+assets. Slots store the effect-asset id (legacy category ids still resolve to
+the slot's part of that category).
 
-The inline adapter shows effect cards, selection, duplication/creation where
-supported, inline profile fields, preview, specialist Save, and Open full
-editor. There must be no second VFX schema.
+The inline adapter shows per-part effect cards filtered to the slot's part,
+selection, creation, the part-scoped profile fields, preview, and the
+specialist Save. There must be no second VFX schema.
 
 Use effect slots for NPC spawn/ambient/interact/combat/hit/death, POI prompt or
 activation, item use/equip/pickup, ability cast/projectile/impact/area, and
-status aura/expiration.
+status aura/expiration. Sustained slots (ambient, prompt, aura) bind `cast`
+parts; one-shots bind `impact`; flights bind `projectile`; ground effects bind
+`area`.
 
 ## Prefabs
 

@@ -97,7 +97,7 @@ export function GameWindows() {
         <DraggableWindowShell
           resetKey="character"
           scale={uiScaleFactor(uiScale, windowScaleKey("character"))}
-          className="cm-window cm-window--charwin"
+          className={`cm-window cm-window--charwin${open === "inventory" ? " cm-window--inventory" : ""}`}
           title="Character"
           onClose={close}
           bodyClassName="cm-body cm-body--charwin"

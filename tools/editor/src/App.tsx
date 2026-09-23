@@ -1,6 +1,5 @@
 import { Component, Suspense, lazy, useCallback, useState } from "react";
 import type { ReactNode } from "react";
-import type { SceneMode } from "./workspaces/SceneWorkspace";
 
 // The workspace loads lazily — a broken one (e.g. mid-refactor syntax error)
 // fails inside its own boundary instead of taking down the whole editor.
@@ -23,24 +22,30 @@ class WorkspaceBoundary extends Component<
   }
 }
 
-export type Workspace = SceneMode | "content";
+export type Workspace = "world" | "content";
 
 const WORKSPACES: { id: Workspace; label: string }[] = [
-  { id: "prefabs", label: "Prefabs" },
-  { id: "terrain", label: "Terrain" },
-  { id: "characters", label: "Characters" },
-  { id: "effects", label: "Effects" },
+  { id: "world", label: "World" },
   { id: "content", label: "Content" },
 ];
 
+// Retired scene modes map to the workspace that absorbed them.
+const LEGACY_WS: Record<string, Workspace> = {
+  scene: "world",
+  world: "world",
+  prefabs: "world",
+  terrain: "world",
+  content: "content",
+  characters: "content",
+  effects: "content",
+};
+
 function workspaceFromUrl(): Workspace {
   const p = new URLSearchParams(location.search);
-  const ws = p.get("ws");
-  if (WORKSPACES.some((w) => w.id === ws)) return ws as Workspace;
+  const ws = p.get("ws") ?? "";
   // Legacy deep links: ?ws=scene&mode=<mode>
-  const mode = p.get("mode");
-  if (ws === "scene" && WORKSPACES.some((w) => w.id === mode)) return mode as Workspace;
-  return "prefabs";
+  if (ws === "scene") return LEGACY_WS[p.get("mode") ?? ""] ?? "world";
+  return LEGACY_WS[ws] ?? "world";
 }
 
 export function App() {
@@ -75,7 +80,7 @@ export function App() {
       </header>
       <WorkspaceBoundary>
         <Suspense fallback={<div className="ed-err">Loading…</div>}>
-          {ws === "content" ? <ContentWorkspace /> : <SceneWorkspace mode={ws} />}
+          {ws === "content" ? <ContentWorkspace /> : <SceneWorkspace />}
         </Suspense>
       </WorkspaceBoundary>
     </div>

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/addons/utils/SkeletonUtils.js";
 import type { CharacterAppearance } from "../characters/heroes99";
-import { normalizeRig, paletteFromAppearance, partVisible, sampleClip, type Rig3DDoc, type RigAnimClip, type RigAnimName, type RigColor, type RigGeometry, type RigPalette, type Vec3 } from "./rig3d";
+import { normalizeRig, paletteFromAppearance, partVisible, RIG_LOOPING_CLIPS, sampleClip, type Rig3DDoc, type RigAnimClip, type RigAnimName, type RigColor, type RigGeometry, type RigPalette, type Vec3 } from "./rig3d";
 import { DEFAULT_RIGS } from "./rig3dDefaults";
 import { disposeObject } from "./terrain";
 
@@ -91,6 +91,13 @@ export interface RigInstance {
   /** Pose bones from an authored clip at time t (editor timeline scrub) —
    * tracked bones take clip values, the rest hold rest pose + pose offsets. */
   previewClip(clip: RigAnimClip, t: number): void;
+  /** One-shot clip overlay — combat moves (`attack`, `attack_slash`, …) and
+   * the `hit` reaction. Mixer action when the model has one, authored clip
+   * next; only tracked bones are posed so locomotion survives underneath. */
+  playClip(name: RigAnimName): void;
+  /** Held overlay — `cast` keeps the channel pose for as long as it's held
+   * while legs keep their locomotion swing. Pass null to release. */
+  holdClip(name: RigAnimName | null): void;
   /** One-shot attack overlay (mixer clip when present, authored clip next). */
   attack(): void;
   /** Apply a per-bone rotation pose (degrees) — e.g. the doc's ridePose. */
@@ -174,8 +181,11 @@ export function buildRig(doc: Rig3DDoc, opts: BuildRigOptions = {}): RigInstance
           const clip = THREE.AnimationClip.findByName(gltf.animations, clipName);
           if (clip) actions.set(state, mixer.clipAction(clip));
         }
-        const attack = actions.get("attack");
-        if (attack) { attack.setLoop(THREE.LoopOnce, 1); attack.clampWhenFinished = false; }
+        for (const [name, action] of actions) {
+          if ((RIG_LOOPING_CLIPS as readonly string[]).includes(name)) continue;
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = false;
+        }
       }
     } catch (err) {
       console.warn(`rig ${doc.id}: could not load model ${model.url}`, err);
@@ -193,9 +203,12 @@ export function buildRig(doc: Rig3DDoc, opts: BuildRigOptions = {}): RigInstance
   };
 
   // Authored keyframe clips: a per-state clock (absolute `time` would keep a
-  // stopped rig mid-cycle) plus a one-shot attack overlay. A glTF action for
-  // the state wins; authored clip beats the procedural limb swing.
-  let animClock = 0, animState: RigAnimName | null = null, attackClock = -1;
+  // stopped rig mid-cycle) plus a held overlay (cast channel) and a one-shot
+  // overlay (attack/hit). A glTF action for the state wins; authored clips
+  // beat the procedural limb swing.
+  let animClock = 0, animState: RigAnimName | null = null;
+  let overlay: { name: RigAnimName; t: number } | null = null;
+  let held: { name: RigAnimName; t: number } | null = null;
   const clipPose = (clip: RigAnimClip, t: number, onlyTracked: boolean) => {
     const pose = sampleClip(clip, t);
     for (const [name, b] of bones) {
@@ -214,7 +227,11 @@ export function buildRig(doc: Rig3DDoc, opts: BuildRigOptions = {}): RigInstance
     doc, root, bones, limbs, parts, ready,
     hasClip: name => actions.has(name) || !!doc.anims?.[name],
     update(dt, time, moving, alive) {
-      const state: RigAnimName = moving ? "run" : "idle";
+      // A held clip with a mixer action takes over the state machine (cast
+      // loops whole-body); an authored held clip overlays locomotion instead
+      // so the legs keep stepping while the arms channel.
+      const heldAction = held && actions.has(held.name) ? held.name : null;
+      const state: RigAnimName = heldAction ?? (moving ? "run" : "idle");
       if (state !== animState) { animState = state; animClock = 0; } else animClock += dt;
       if (actions.has(state)) play(state);
       mixer?.update(dt);
@@ -236,20 +253,31 @@ export function buildRig(doc: Rig3DDoc, opts: BuildRigOptions = {}): RigInstance
           root.position.y = root.userData.restY + (moving ? Math.abs(Math.sin(time * 11)) * .045 : Math.sin(time * 2) * .012);
         }
       }
-      // Authored attack one-shot (used when the model has no attack action).
-      if (attackClock >= 0) {
-        attackClock += dt;
-        const ac = doc.anims?.attack;
-        if (!ac || attackClock > ac.duration) attackClock = -1;
-        else clipPose(ac, attackClock, true);
+      // Held authored overlay (e.g. cast channel) — loops for the hold.
+      if (held && !heldAction) {
+        held.t += dt;
+        const clip = doc.anims?.[held.name];
+        if (clip) clipPose(clip, held.t, true);
+      }
+      // One-shot authored overlay (used when the model has no such action).
+      if (overlay) {
+        overlay.t += dt;
+        const clip = doc.anims?.[overlay.name];
+        if (!clip || overlay.t > clip.duration) overlay = null;
+        else clipPose(clip, overlay.t, true);
       }
     },
     previewClip(clip, t) { clipPose(clip, t, false); },
-    attack() {
-      const a = actions.get("attack");
-      if (a) { a.reset().play(); }
-      else if (doc.anims?.attack) attackClock = 0;
+    playClip(name) {
+      const a = actions.get(name);
+      if (a) { a.reset().play(); return; }
+      if (doc.anims?.[name]) overlay = { name, t: 0 };
     },
+    holdClip(name) {
+      if ((held?.name ?? null) === name) return;
+      held = name ? { name, t: 0 } : null;
+    },
+    attack() { this.playClip("attack"); },
     applyPose(pose) {
       for (const [name, b] of bones) {
         const r = rest.get(name)!.r;

@@ -36,9 +36,9 @@ function entityAppearance(entity: WorldEntity, self: boolean): { appearance: Cha
   return { appearance, palette: wire ? {} : { cloth: self ? "#456879" : "#796584" } };
 }
 
-export function buildEnemyRig(kind: EnemyKind): { rig: RigInstance; seat: number } {
+export function buildEnemyRig(kind: EnemyKind, overrides?: Partial<CharacterAppearance>): { rig: RigInstance; seat: number } {
   const def = ENEMY_RIG[kind];
-  return { rig: buildRig(getRig(def.rig), { appearance: enemyDollAppearance(kind), palette: def.palette, scale: def.scale }), seat: def.seat };
+  return { rig: buildRig(getRig(def.rig), { appearance: { ...enemyDollAppearance(kind), ...overrides }, palette: def.palette, scale: def.scale }), seat: def.seat };
 }
 
 export function createActor(entity: WorldEntity, self: boolean): Actor3D {

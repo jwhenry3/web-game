@@ -1,4 +1,5 @@
 import { emptyClip, normalizeClip, normalizeRig, sampleClip, upsertKeyframe, type RigAnimClip, type RigTrack } from "./rig3d";
+import { DEFAULT_RIGS } from "./rig3dDefaults";
 
 function check(ok: boolean, message: string) { if (!ok) throw new Error(message); }
 function near(a: number, b: number, message: string) { check(Math.abs(a - b) < 1e-6, `${message} (got ${a}, want ${b})`); }
@@ -26,9 +27,10 @@ check(clip!.tracks[1].keys.length === 0, "non-array keys normalize to empty");
 const rig = normalizeRig({
   id: "test",
   bones: [{ name: "arm_l", parent: null, position: [0, 0, 0], rotation: [0, 0, 0] }],
-  anims: { run: clip, custom: clip, broken: "x" },
+  anims: { run: clip, cast: clip, hit: clip, attack_slash: clip, custom: clip, broken: "x" },
 });
 check(!!rig.anims?.run, "idle/run/attack clips must survive normalizeRig");
+check(!!rig.anims?.cast && !!rig.anims?.hit && !!rig.anims?.attack_slash, "cast/hit/attack variant clips must survive normalizeRig");
 const anims = rig.anims as Record<string, unknown> | undefined;
 check(!anims!.custom && !anims!.broken, "non-anim clip names must be dropped");
 check(normalizeRig({ id: "x" }).anims === undefined, "docs without anims stay backward compatible");
@@ -62,5 +64,18 @@ tr = upsertKeyframe(tr, .502, [7, 0, 0]);
 check(tr.keys.length === 3 && tr.keys[1].value[0] === 7, "upsert merges keys within eps");
 tr = upsertKeyframe(tr, .5, [8, 0, 0]);
 check(tr.keys[1].value[0] === 8, "upsert overwrites an exact-time key");
+
+// --- humanoid elbow/knee joints ------------------------------------------------
+const humanoid = DEFAULT_RIGS.humanoid;
+const joints = ["armLoL", "armLoR", "legLoL", "legLoR"];
+check(joints.every(b => humanoid.bones.some(x => x.name === b)), "humanoid has elbow and knee bones");
+for (const b of joints)
+  check(humanoid.limbs.some(l => l.bone === b && (l.flex ?? 0) > 0), `${b} flexes during the procedural run`);
+const humanoidAnims = humanoid.anims!;
+for (const name of ["idle", "attack", "cast", "hit", "attack_slash", "attack_thrust", "attack_smash", "attack_spin", "attack_punch", "attack_leap"] as const) {
+  const anim = humanoidAnims[name];
+  check(!!anim, `humanoid has a ${name} clip`);
+  check(anim!.tracks.some(t => joints.includes(t.bone)), `${name} bends at least one elbow or knee`);
+}
 
 console.log("rig3d animation checks passed");

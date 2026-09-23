@@ -1,6 +1,7 @@
 import type { ContentValue } from '../../../../wails/frontend/src/content/contentSchema';
+import { RIG_ANIM_NAMES } from '../../../../wails/frontend/src/three/rig3d';
 
-export const CHARACTER_ANIMATION_SLOTS = ['idle', 'run', 'attack'] as const;
+export const CHARACTER_ANIMATION_SLOTS = RIG_ANIM_NAMES;
 export type CharacterAnimationSlot = (typeof CHARACTER_ANIMATION_SLOTS)[number];
 
 export interface CharacterAssetValue extends Record<string, ContentValue> {

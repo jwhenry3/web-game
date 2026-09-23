@@ -3,7 +3,7 @@
 // public/assets/rigs3d/ can override them. Keep ids stable: actors.ts maps
 // entity kinds onto them.
 
-import type { Rig3DDoc, RigBone, RigColor, RigColorRole, RigGeometry, RigPart, Vec3 } from "./rig3d";
+import type { Rig3DDoc, RigAnimClip, RigBone, RigColor, RigColorRole, RigGeometry, RigPart, RigTrack, Vec3 } from "./rig3d";
 
 const fixed = (hex: string): RigColor => ({ fixed: hex });
 const role = (r: RigColorRole, shade?: number): RigColor => ({ role: r, ...(shade !== undefined ? { shade } : {}) });
@@ -74,6 +74,130 @@ function shieldParts(bone: string): RigPart[] {
   ];
 }
 
+// --- authored combat clips ------------------------------------------------------
+// Keyframe tracks are absolute local transforms (Euler degrees). Limbs rest
+// hanging straight down: rotation.x negative swings a limb forward, positive
+// swings it back; on the right arm, rotation.z negative carries it out to the
+// side, positive sweeps it across the body. Root-bone rotation.y twists the
+// whole body without touching the actor's facing (that lives on the parent).
+const krot = (boneName: string, keys: [number, number, number, number][]): RigTrack =>
+  ({ bone: boneName, channel: "rotation", keys: keys.map(([t, x, y, z]) => ({ t, value: [x, y, z] as Vec3 })) });
+const kpos = (boneName: string, keys: [number, number, number, number][]): RigTrack =>
+  ({ bone: boneName, channel: "position", keys: keys.map(([t, x, y, z]) => ({ t, value: [x, y, z] as Vec3 })) });
+const mkClip = (duration: number, tracks: RigTrack[], loop = false): RigAnimClip => ({ duration, loop, tracks });
+
+/** Combat clips shared by humanoid and biped — identical bone names and rest
+ * pose, so one table serves both. One-shots end by returning to the base pose;
+ * `cast` loops so it can hold for a whole channel. */
+function combatClips(): NonNullable<Rig3DDoc["anims"]> {
+  return {
+    // Idle — gentle breathing bob; elbows carry a slight rest bend so arms
+    // don't hang ramrod-straight. Replaces the procedural idle bob.
+    idle: mkClip(2.6, [
+      kpos("root", [[0, 0, 0, 0], [1.3, 0, .008, 0], [2.6, 0, 0, 0]]),
+      krot("head", [[0, 0, 0, 0], [1.3, 2.5, 0, 0], [2.6, 0, 0, 0]]),
+      krot("armL", [[0, 0, 0, 4], [1.3, 0, 0, 5], [2.6, 0, 0, 4]]),
+      krot("armR", [[0, 0, 0, -4], [1.3, 0, 0, -5], [2.6, 0, 0, -4]]),
+      krot("armLoL", [[0, -12, 0, 0], [1.3, -15, 0, 0], [2.6, -12, 0, 0]]),
+      krot("armLoR", [[0, -12, 0, 0], [1.3, -15, 0, 0], [2.6, -12, 0, 0]]),
+    ], true),
+    // Generic swing — wind the right arm back-up, chop forward.
+    attack: mkClip(.55, [
+      krot("armR", [[0, 0, 0, 0], [.14, 40, 0, -35], [.3, -105, 0, 12], [.42, -92, 0, 8], [.55, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.14, -32, 0, 0], [.3, -6, 0, 0], [.55, 0, 0, 0]]),
+      krot("armL", [[0, 0, 0, 0], [.3, -25, 0, -10], [.55, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.14, 0, 12, 0], [.3, 0, -16, 0], [.55, 0, 0, 0]]),
+    ]),
+    // Channel — both hands pushed out front, elbows slightly bent, head bowed.
+    cast: mkClip(1.1, [
+      krot("armR", [[0, -78, 0, -10], [.55, -90, 0, -14], [1.1, -78, 0, -10]]),
+      krot("armL", [[0, -78, 0, 10], [.55, -90, 0, 14], [1.1, -78, 0, 10]]),
+      krot("armLoR", [[0, -18, 0, 0], [.55, -28, 0, 0], [1.1, -18, 0, 0]]),
+      krot("armLoL", [[0, -18, 0, 0], [.55, -28, 0, 0], [1.1, -18, 0, 0]]),
+      krot("legLoL", [[0, 7, 0, 0], [.55, 10, 0, 0], [1.1, 7, 0, 0]]),
+      krot("legLoR", [[0, 7, 0, 0], [.55, 10, 0, 0], [1.1, 7, 0, 0]]),
+      krot("head", [[0, 9, 0, 0], [.55, 13, 0, 0], [1.1, 9, 0, 0]]),
+    ], true),
+    // Struck — knocked back off the root, then a slight forward fold as the
+    // impact settles. Position track is the push; head whips with it.
+    hit: mkClip(.45, [
+      kpos("root", [[0, 0, 0, 0], [.09, 0, -.03, -.15], [.24, 0, -.01, -.07], [.45, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.09, -12, 0, 0], [.22, 16, 0, 0], [.45, 0, 0, 0]]),
+      krot("head", [[0, 0, 0, 0], [.12, -14, 0, 0], [.24, 20, 0, 0], [.45, 0, 0, 0]]),
+      krot("armL", [[0, 0, 0, 0], [.1, 28, 0, 22], [.45, 0, 0, 0]]),
+      krot("armR", [[0, 0, 0, 0], [.1, 28, 0, -22], [.45, 0, 0, 0]]),
+      krot("armLoL", [[0, 0, 0, 0], [.1, -38, 0, 0], [.45, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.1, -38, 0, 0], [.45, 0, 0, 0]]),
+      krot("legLoL", [[0, 0, 0, 0], [.12, 20, 0, 0], [.45, 0, 0, 0]]),
+      krot("legLoR", [[0, 0, 0, 0], [.12, 20, 0, 0], [.45, 0, 0, 0]]),
+    ]),
+    // Horizontal cut — torso twist sweeps the arm across the body.
+    attack_slash: mkClip(.6, [
+      krot("armR", [[0, 0, 0, 0], [.16, -42, 0, -78], [.32, -55, 0, 58], [.46, -40, 0, 28], [.6, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.16, 0, 30, 0], [.32, 0, -36, 0], [.6, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.16, -34, 0, 0], [.32, -4, 0, 0], [.46, -10, 0, 0], [.6, 0, 0, 0]]),
+    ]),
+    // Stab — straight-arm jab with a small forward lunge.
+    attack_thrust: mkClip(.5, [
+      krot("armR", [[0, 0, 0, 0], [.12, -32, 0, -8], [.24, -100, 0, 0], [.36, -94, 0, 0], [.5, 0, 0, 0]]),
+      kpos("root", [[0, 0, 0, 0], [.24, 0, 0, .14], [.5, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.24, 0, -16, 0], [.5, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.12, -34, 0, 0], [.24, -4, 0, 0], [.36, -4, 0, 0], [.5, 0, 0, 0]]),
+    ]),
+    // Overhead slam — both arms rise, then crash down with a torso crunch.
+    attack_smash: mkClip(.72, [
+      krot("armR", [[0, 0, 0, 0], [.22, -165, 0, -12], [.4, -18, 0, 6], [.52, -34, 0, 0], [.72, 0, 0, 0]]),
+      krot("armL", [[0, 0, 0, 0], [.22, -150, 0, 16], [.4, -22, 0, 0], [.72, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.22, -48, 0, 0], [.4, -4, 0, 0], [.52, -10, 0, 0], [.72, 0, 0, 0]]),
+      krot("armLoL", [[0, 0, 0, 0], [.22, -44, 0, 0], [.4, -6, 0, 0], [.72, 0, 0, 0]]),
+      krot("legLoL", [[0, 0, 0, 0], [.4, 22, 0, 0], [.52, 10, 0, 0], [.72, 0, 0, 0]]),
+      krot("legLoR", [[0, 0, 0, 0], [.4, 22, 0, 0], [.52, 10, 0, 0], [.72, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.22, -11, 0, 0], [.4, 15, 0, 0], [.72, 0, 0, 0]]),
+      kpos("root", [[0, 0, 0, 0], [.22, 0, .03, 0], [.4, 0, -.05, 0], [.72, 0, 0, 0]]),
+    ]),
+    // Full pirouette — the root bone spins a whole turn while arms carry wide.
+    attack_spin: mkClip(.66, [
+      krot("root", [[0, 0, 0, 0], [.5, 0, 360, 0], [.66, 0, 360, 0]]),
+      krot("armR", [[0, 0, 0, 0], [.14, -15, 0, -80], [.5, -15, 0, -80], [.66, 0, 0, 0]]),
+      krot("armL", [[0, 0, 0, 0], [.14, -15, 0, 80], [.5, -15, 0, 80], [.66, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.14, -24, 0, 0], [.5, -24, 0, 0], [.66, 0, 0, 0]]),
+      krot("armLoL", [[0, 0, 0, 0], [.14, -24, 0, 0], [.5, -24, 0, 0], [.66, 0, 0, 0]]),
+    ]),
+    // Fast jab — short piston punch for knuckles/unarmed.
+    attack_punch: mkClip(.38, [
+      krot("armR", [[0, 0, 0, 0], [.1, -96, 0, 0], [.18, -90, 0, 0], [.38, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.06, -48, 0, 0], [.1, -6, 0, 0], [.18, -4, 0, 0], [.38, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.1, 0, -18, 0], [.38, 0, 0, 0]]),
+    ]),
+    // Jump attack — hop forward and strike from the apex (spear "saltus").
+    attack_leap: mkClip(.75, [
+      kpos("root", [[0, 0, 0, 0], [.2, 0, .5, .05], [.42, 0, .32, .3], [.58, 0, 0, .16], [.75, 0, 0, 0]]),
+      krot("armR", [[0, 0, 0, 0], [.2, -32, 0, 0], [.42, -108, 0, 0], [.58, -78, 0, 0], [.75, 0, 0, 0]]),
+      krot("armLoR", [[0, 0, 0, 0], [.2, -26, 0, 0], [.42, -10, 0, 0], [.75, 0, 0, 0]]),
+      krot("legL", [[0, 0, 0, 0], [.3, -45, 0, 0], [.75, 0, 0, 0]]),
+      krot("legR", [[0, 0, 0, 0], [.3, -45, 0, 0], [.75, 0, 0, 0]]),
+      krot("legLoL", [[0, 0, 0, 0], [.3, 55, 0, 0], [.75, 0, 0, 0]]),
+      krot("legLoR", [[0, 0, 0, 0], [.3, 55, 0, 0], [.75, 0, 0, 0]]),
+    ]),
+  };
+}
+
+/** Quadruped set — lunge-bite attack and a stumble-back hit. */
+function quadrupedClips(): NonNullable<Rig3DDoc["anims"]> {
+  return {
+    attack: mkClip(.5, [
+      kpos("root", [[0, 0, 0, 0], [.18, 0, .06, .24], [.34, 0, .02, .12], [.5, 0, 0, 0]]),
+      krot("head", [[0, 0, 0, 0], [.2, 32, 0, 0], [.5, 0, 0, 0]]),
+      kpos("head", [[0, 0, .72, .46], [.2, 0, .64, .58], [.5, 0, .72, .46]]),
+    ]),
+    hit: mkClip(.4, [
+      kpos("root", [[0, 0, 0, 0], [.1, 0, -.02, -.13], [.4, 0, 0, 0]]),
+      krot("root", [[0, 0, 0, 0], [.1, -10, 0, 0], [.26, 12, 0, 0], [.4, 0, 0, 0]]),
+      krot("head", [[0, 0, 0, 0], [.12, -16, 0, 0], [.4, 0, 0, 0]]),
+    ]),
+  };
+}
+
 /** Player doll — limbs [legL, armL, legR, armR] with knee/elbow joints
  * (legLoL/armLoL/legLoR/armLoR) that flex during the walk; creature
  * features render by appearance. */
@@ -137,6 +261,7 @@ function humanoid(): Rig3DDoc {
       { bone: "armLoR", phase: 0, amplitude: 0, flex: 30, flexSign: -1 },
     ],
     ridePose: { legL: [-60, 0, 0], legR: [-60, 0, 0], armL: [-20, 0, 0], armR: [-20, 0, 0], legLoL: [55, 0, 0], legLoR: [55, 0, 0], armLoL: [-25, 0, 0], armLoR: [-25, 0, 0] },
+    anims: combatClips(),
   };
 }
 
@@ -198,6 +323,7 @@ function biped(): Rig3DDoc {
       { bone: "armLoL", phase: 1, amplitude: 0, flex: 26, flexSign: -1 },
       { bone: "armLoR", phase: 0, amplitude: 0, flex: 26, flexSign: -1 },
     ],
+    anims: combatClips(),
   };
 }
 
@@ -219,6 +345,7 @@ function quadruped(): Rig3DDoc {
   return {
     version: 1, id: "quadruped", label: "Quadruped", scale: 1, seat: .3, height: 1.25, bones, parts,
     limbs: [{ bone: "legFL", phase: 0 }, { bone: "legFR", phase: 1 }, { bone: "legBL", phase: 1 }, { bone: "legBR", phase: 0 }],
+    anims: quadrupedClips(),
   };
 }
 

@@ -16,6 +16,7 @@ import { actorSignature, animateActor, createActor, WorldEffects, type Actor3D }
 import { buildRig, getRig, loadRigLibrary, type RigInstance } from "./rigBuilder";
 import { npcAppearance } from "../characters/npcs";
 import { vfxCategoryForAction } from "../vfx/battleVfxProfiles";
+import { rigClipForAction } from "../editor/skillAnimations";
 import { WorldBuildings } from "./props";
 import { movementYaw, MovementKeys } from "./motion";
 import { JUMP_VELOCITY, newBody3D, overworldPhysics3D, reconcileBody3D, type Body3D, type PhysicsWorld3D } from "./physics3d";
@@ -431,6 +432,9 @@ export class WorldRenderer {
       const focus = state.selfId ? state.entities[state.selfId]?.target_id : undefined;
       actor.ring.visible = self || entity.id === focus;
       const casting = entity.alive && !!entity.casting_skill_id;
+      // Channel pose for the whole cast (mount carries the clip for riders).
+      actor.rig.holdClip(casting ? "cast" : null);
+      actor.rider?.holdClip(casting ? "cast" : null);
       if (casting && !this.castFx.has(entity.id)) {
         this.castFx.set(entity.id, this.effects.startCastCategory(vfxCategoryForAction(entity.casting_skill_id!), actor.root));
       } else if (!casting && this.castFx.has(entity.id)) {
@@ -681,14 +685,24 @@ export class WorldRenderer {
         this.sun.position.copy(target).add(new THREE.Vector3(-16, 25, 12)); this.sun.target.position.copy(target);
         for (const event of state.combatEvents) if (event.seq > this.lastEvent) {
           this.lastEvent = event.seq;
-          if (event.cast_cancelled || event.cast_started) continue;
+          if (event.cast_cancelled || event.cast_started || !event.success) continue;
           const targetId = event.target_id || event.attacker_id;
           const target = this.actors.get(targetId) ?? this.dying.get(targetId)?.actor;
           if (!target) continue;
-          const attacker = event.attacker_id && event.attacker_id !== targetId ? (this.actors.get(event.attacker_id) ?? this.dying.get(event.attacker_id)?.actor) : undefined;
-          this.effects.playCategory(vfxCategoryForAction(event.action_id ?? "attack", event.heal), target.root.position, attacker?.root.position);
+          const acting = event.attacker_id ? (this.actors.get(event.attacker_id) ?? this.dying.get(event.attacker_id)?.actor) : undefined;
+          const attacker = event.attacker_id !== targetId ? acting : undefined;
+          const category = vfxCategoryForAction(event.action_id ?? "attack", event.heal);
+          // The attacker plays the skill's clip; a landed hit flinches the
+          // target. Misses keep the ribbon but no impact or reaction.
+          const clip = rigClipForAction(event.action_id ?? "attack", event.heal);
+          acting?.rig.playClip(clip);
+          acting?.rider?.playClip(clip);
+          if (event.hit !== false) {
+            this.effects.playCategory(category, target.root.position, attacker?.root.position);
+            if (target !== acting) { target.rig.playClip("hit"); target.rider?.playClip("hit"); }
+          }
           // Ribbon flash attacker → target for each resolved action.
-          if (attacker) this.effects.flashTether(attacker.root, target.root, this.effects.categoryColor(vfxCategoryForAction(event.action_id ?? "attack", event.heal)));
+          if (attacker) this.effects.flashTether(attacker.root, target.root, this.effects.categoryColor(category));
         }
         this.effects.update(dt, this.camera); this.camera.updateMatrixWorld();
         this.syncMarks(state);

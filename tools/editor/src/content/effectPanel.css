@@ -1,0 +1,16 @@
+/* Embedded effect panel (EffectPanel.tsx): a transparent overlay inside the
+ * Content workspace's scene view with docked side panels, so the staged
+ * rig/VFX preview stays visible between them (unlike the prefab panel's
+ * opaque takeover). Kept in its own file — content.css is shared turf. */
+.ct-scene-view .ct-fx-overlay{position:absolute;inset:0;z-index:6;display:flex;justify-content:space-between;pointer-events:none}
+.ct-fx-dock{pointer-events:auto;display:flex;flex-direction:column;min-height:0;min-width:0;background:#2e2e2ef2}
+.ct-fx-left{width:170px;flex:none;border-right:1px solid #202020}
+.ct-fx-left .ed-list{flex:1;min-height:0;overflow:auto}
+.ct-fx-left .sc-preview-controls{flex:none}
+.ct-fx-right{width:340px;flex:none;border-left:1px solid #202020}
+.ct-fx-right .sc-rig-panel{flex:1;min-height:0}
+.ct-fx-right .ed-statusbar{flex:none}
+.ct-fx-offline{padding:10px}
+.ct-fx-asset{flex:none;max-height:45%;overflow:auto;border-top:1px solid #202020}
+.ct-fx-asset>summary{cursor:pointer;padding:6px 10px;background:#414141;font-weight:600}
+@media(max-width:1000px){.ct-fx-left{width:135px}.ct-fx-right{width:270px}}

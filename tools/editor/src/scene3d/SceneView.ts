@@ -16,15 +16,22 @@ import { TerrainWorld, disposeObject } from "../../../../wails/frontend/src/thre
 import { applyTerrainBrush, emptyTerrain, terrainChangeBounds, type TerrainBrush } from "../../../../wails/frontend/src/three/terrainEditing";
 import { WorldBuildings } from "../../../../wails/frontend/src/three/props";
 import { instantiatePrefab } from "../../../../wails/frontend/src/three/prefabs";
+import { buildAssetPreview, type AssetPreview } from "../content/assetPreview";
+import { loadContent } from "../content/storage";
+import type { ContentDocument } from "../../../../wails/frontend/src/content/contentSchema";
 import type { MapSnapshot } from "../../../../wails/frontend/src/net/wire.gen";
 import { isAncestor, subtreeIds, type SceneComponents, type SceneObject, type SceneTransform, type Vec3 } from "../../../../wails/frontend/src/three/scene3d";
 import type { EditorState, SceneStore } from "./store";
 
 export const PREFAB_MIME = "application/x-scene3d-prefab";
+/** Drag payload for content cards: the prefab to place plus the display name
+ * and gameplay components the dropped object should carry. */
+export const PLACEMENT_MIME = "application/x-scene3d-placement";
+export interface PlacementPayload { prefab: string; name?: string; components?: SceneComponents; content?: string }
 const DEG = Math.PI / 180;
 const GRID_SIZE = 80;
 
-interface Instance { object: THREE.Object3D; signature: string }
+interface Instance { object: THREE.Object3D; signature: string; preview?: AssetPreview; previewToken?: object }
 
 const isEditable = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable);
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -312,9 +319,9 @@ export class SceneView {
     const alive = new Set<string>();
     for (const o of s.doc.objects) {
       alive.add(o.id);
-      const signature = `${o.prefab}|${JSON.stringify(o.props)}|${JSON.stringify(o.components?.collider ?? null)}`;
+      const signature = `${o.prefab}|${JSON.stringify(o.props)}|${JSON.stringify(o.components?.collider ?? null)}|${o.content ?? ''}`;
       let inst = this.instances.get(o.id);
-      if (inst && inst.signature !== signature) { this.detach(inst.object); inst = undefined; }
+      if (inst && inst.signature !== signature) { this.detach(inst); inst = undefined; }
       if (!inst) {
         const object = instantiatePrefab(o.prefab, o.props);
         object.userData.sceneId = o.id;
@@ -323,11 +330,12 @@ export class SceneView {
         if (col?.enabled) object.add(colliderProxy(col));
         inst = { object, signature };
         this.instances.set(o.id, inst);
+        if (o.content) this.mountContentPreview(inst, o.content);
       }
       this.applyTransform(inst.object, o);
       inst.object.visible = o.visible;
     }
-    for (const [id, inst] of this.instances) if (!alive.has(id)) { this.detach(inst.object); this.instances.delete(id); }
+    for (const [id, inst] of this.instances) if (!alive.has(id)) { this.detach(inst); this.instances.delete(id); }
     // Attach after every instance exists so children can find their parents.
     for (const o of s.doc.objects) {
       const inst = this.instances.get(o.id)!;
@@ -336,11 +344,40 @@ export class SceneView {
     }
   }
 
-  private detach(object: THREE.Object3D) {
+  private detach(inst: Instance) {
+    const object = inst.object;
     if (this.gizmo.object === object) this.gizmo.detach();
     // Keep children alive — they're re-attached by syncObjects if still in the doc.
     for (const child of [...object.children]) if (child.userData.sceneId) this.objects.add(child);
+    inst.previewToken = undefined;
+    inst.preview?.dispose();
     disposeObject(object);
+  }
+
+  /** Read once per view — placed previews mirror the record's look at mount
+   * time rather than live-tracking content edits. */
+  private contentDoc: ContentDocument | null = null;
+
+  /** Swaps a placed object's generic prefab mesh for the content record's
+   * presentation (rig, VFX, authored prefab) — the same builder the Content
+   * workspace stages. Editor-only children (collider proxy, axes marker) and
+   * child scene objects are kept; the compiled prefab's meshes drop out once
+   * the async build resolves. */
+  private mountContentPreview(inst: Instance, contentId: string) {
+    this.contentDoc ??= loadContent();
+    const definition = this.contentDoc.definitions.find(d => d.id === contentId);
+    if (!definition) return;
+    const token = (inst.previewToken = {});
+    void buildAssetPreview(definition, this.contentDoc, this.store).then(preview => {
+      if (!preview || this.disposed || inst.previewToken !== token) { preview?.dispose(); return; }
+      inst.preview = preview;
+      for (const child of [...inst.object.children]) {
+        if (child.userData.editorOnly || child.userData.sceneId) continue;
+        inst.object.remove(child);
+        disposeObject(child);
+      }
+      inst.object.add(preview.root);
+    });
   }
 
   private applyTransform(object: THREE.Object3D, o: SceneObject) {
@@ -519,8 +556,11 @@ export class SceneView {
     let node: THREE.Object3D | null = hit?.object ?? null;
     while (node && !node.userData.sceneId) node = node.parent;
     const id = node?.userData.sceneId as string | undefined;
-    if (!id) { if (!e.shiftKey) this.store.select([]); return; }
-    if (e.shiftKey) this.store.toggleSelect(id); else this.store.select([id]);
+    if (id) { if (e.shiftKey) this.store.toggleSelect(id); else this.store.select([id]); return; }
+    // The terrain itself is selectable (like Unity's Terrain object) — a hit
+    // selects it, empty space clears the selection.
+    if (this.terrain && this.store.getState().layers.terrain && this.raycaster.intersectObjects(this.terrain.ground).length) { this.store.selectTerrain(); return; }
+    if (!e.shiftKey) this.store.select([]);
   }
 
   /** World point under a client position: with `surfaces`, any drop target
@@ -537,20 +577,28 @@ export class SceneView {
   }
 
   private onDragOver = (e: DragEvent) => {
-    if (e.dataTransfer?.types.includes(PREFAB_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }
+    if (e.dataTransfer?.types.includes(PREFAB_MIME) || e.dataTransfer?.types.includes(PLACEMENT_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; }
   };
 
   private onDrop = (e: DragEvent) => {
+    const placementRaw = e.dataTransfer?.getData(PLACEMENT_MIME);
     const prefab = e.dataTransfer?.getData(PREFAB_MIME);
-    if (!prefab) return;
+    if (!placementRaw && !prefab) return;
     e.preventDefault();
     const s = this.store.getState();
     const p = this.dropPoint(e, s.dropToSurface);
     if (!p) return;
     const snap = (v: number) => (s.snap ? Math.round(v / s.snapMove) * s.snapMove : Math.round(v * 100) / 100);
     const x = snap(p.x), z = snap(p.z);
-    const y = s.dropToSurface ? this.dropY(x, z, p.y + .01) : this.groundHeight(x, z);
-    this.store.addObject(prefab, [x, Math.round(y * 1000) / 1000, z]);
+    const y = Math.round((s.dropToSurface ? this.dropY(x, z, p.y + .01) : this.groundHeight(x, z)) * 1000) / 1000;
+    if (placementRaw) {
+      try {
+        const payload = JSON.parse(placementRaw) as PlacementPayload;
+        this.store.addObject(payload.prefab, [x, y, z], null, { name: payload.name, components: payload.components, content: payload.content });
+        return;
+      } catch { /* malformed payload — fall through to the plain prefab drop */ }
+    }
+    if (prefab) this.store.addObject(prefab, [x, y, z]);
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -590,6 +638,7 @@ export class SceneView {
     }
     if (this.terrain) this.terrain.update(this.pivot.x / WORLD_SCALE, this.pivot.z / WORLD_SCALE, now / 1000);
     this.onFrame(dt, now / 1000);
+    for (const inst of this.instances.values()) inst.preview?.update?.(dt, now / 1000);
     this.grid.position.set(Math.round(this.pivot.x), this.groundHeight(this.pivot.x, this.pivot.z) + .01, Math.round(this.pivot.z));
     this.sun.position.copy(this.pivot).add(new THREE.Vector3(-16, 25, 12)); this.sun.target.position.copy(this.pivot);
     // Selection outlines follow their objects every frame (cheap for a handful).

@@ -6,10 +6,10 @@
 // timeline) so both editors share the ed-animdock/ed-tl styling and UX.
 
 import { useEffect, useRef, useState } from "react";
-import type { RigAnimClip, RigAnimName, RigKeyframe, RigTrackChannel } from "../../../../wails/frontend/src/three/rig3d";
+import { RIG_ANIM_NAMES, type RigAnimClip, type RigAnimName, type RigKeyframe, type RigTrackChannel } from "../../../../wails/frontend/src/three/rig3d";
 import type { CharacterMode } from "./SceneCharacters";
 
-const CLIPS: RigAnimName[] = ["idle", "run", "attack"];
+const CLIPS: RigAnimName[] = [...RIG_ANIM_NAMES];
 const CHANNELS: RigTrackChannel[] = ["rotation", "position", "scale"];
 const CHANNEL_TAG: Record<RigTrackChannel, string> = { rotation: "rot", position: "pos", scale: "scl" };
 

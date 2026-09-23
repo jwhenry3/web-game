@@ -30,7 +30,8 @@ Follow these steps for each interaction:
   `docs/GAME_DESIGNER.md` for editor controls, object types, and the
   `/api/admin/maps` lifecycle.
 - 3D scene layer is authored in `tools/editor` (3D-only: top-level
-  Prefabs/Terrain/Characters/Effects/Content tabs, `npm run editor:dev` + game
+  World/Content tabs — World is the scene editor with the terrain selectable
+  via its Hierarchy row, `npm run editor:dev` + game
   server running for `/api` map snapshots).
   Schema/prefabs are shared in `wails/frontend/src/three/{scene3d,prefabs}.ts`;
   scenes save as `<map>.scene3d.json`. The schema-driven MMORPG CMS lives in

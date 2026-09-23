@@ -27,6 +27,7 @@ import {
 import { DEFAULT_RIGS } from "../../../../wails/frontend/src/three/rig3dDefaults";
 import { buildRig, setRig, type RigInstance } from "../../../../wails/frontend/src/three/rigBuilder";
 import { disposeObject } from "../../../../wails/frontend/src/three/terrain";
+import { renderObjectThumbnail } from "./SceneProject";
 import type { SceneView } from "../scene3d/SceneView";
 import type { SceneTransform } from "../../../../wails/frontend/src/three/scene3d";
 import {
@@ -56,6 +57,35 @@ export function rigEntries(files: RigInfo[]): RigEntry[] {
   for (const [id, doc] of Object.entries(DEFAULT_RIGS))
     if (!files.some(f => f.id === id)) out.push({ id, label: `${doc.label} (builtin)`, builtin: true });
   return out;
+}
+
+/** Rig docs for list thumbnails — cached so the library doesn't refetch on
+ * every render; save/delete update or drop the entry. */
+const rigDocCache = new Map<string, Promise<Rig3DDoc | null>>();
+const rigDocFor = (entry: RigEntry): Promise<Rig3DDoc | null> => {
+  let p = rigDocCache.get(entry.id);
+  if (!p) { p = entry.builtin ? Promise.resolve(DEFAULT_RIGS[entry.id] ?? null) : loadRigFile(entry.id).catch(() => null); rigDocCache.set(entry.id, p); }
+  return p;
+};
+
+/** Offscreen render of the rig's procedural form — glTF models skipped so the
+ * list stays cheap. */
+function RigThumb({ entry }: { entry: RigEntry }) {
+  const [image, setImage] = useState<string | null>(null);
+  useEffect(() => {
+    let on = true;
+    void rigDocFor(entry).then(doc => {
+      if (!doc || !on) return;
+      const inst = buildRig(doc, { noModel: true });
+      const value = renderObjectThumbnail(inst.root);
+      inst.dispose();
+      if (on) setImage(value);
+    });
+    return () => { on = false; };
+  }, [entry]);
+  return image
+    ? <img className="sc-rig-thumb" alt="" src={image} />
+    : <span className="sc-rig-thumb sc-rig-glyph" aria-hidden="true">◌</span>;
 }
 
 /** Shared state for the Scene workspace's Characters mode. `active` gates the
@@ -302,6 +332,7 @@ export function useCharacterMode(view: SceneView | null, active: boolean) {
     if (!doc) return;
     try {
       await saveRigFile(doc);
+      rigDocCache.set(doc.id, Promise.resolve(doc));
       setRig(doc); // live library — runtime picks it up on next load
       setDirty(false);
       setStatus(`Saved rigs3d/${doc.id}.rig3d.json`);
@@ -315,6 +346,7 @@ export function useCharacterMode(view: SceneView | null, active: boolean) {
     if (!rigId || !window.confirm(`Delete saved file rigs3d/${rigId}.rig3d.json? The compiled-in default (if any) remains.`)) return;
     try {
       await deleteRigFile(rigId);
+      rigDocCache.delete(rigId);
       setDoc(null);
       setStatus(`Deleted ${rigId}.rig3d.json`);
       void refresh();
@@ -345,9 +377,10 @@ export function CharactersLibrary({ st }: { st: CharacterMode }) {
   return (
     <>
       <div className="ed-dock-title">Characters <span>{st.entries.length}</span></div>
-      <div className="ed-list">
+      <div className="ed-list sc-rig-list">
         {st.entries.map(r => (
           <button key={r.id} className={`item ${r.id === st.rigId ? "sel" : ""}`} onClick={() => void st.openRig(r.id)}>
+            <RigThumb entry={r} />
             {r.label}
           </button>
         ))}

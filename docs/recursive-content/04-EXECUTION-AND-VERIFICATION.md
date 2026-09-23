@@ -11,6 +11,34 @@
 6. Add relationships, backlink-aware rename/delete, and clickable validation.
 7. Verify server round-trip and the live editor workflow.
 
+## Implementation progress
+
+The asset-graph portion of phase 1 is implemented in
+`wails/frontend/src/content/recursiveAssets.ts`. It now indexes root and
+embedded definitions, records typed edges and backlinks, detects missing
+targets, cycles, invalid target types, excessive nesting, duplicate embedded
+root IDs, and owner-path identity collisions. Atomic root-ID rename rewrites
+marker references and schema-declared legacy string references. Root deletion
+is backlink-safe by default and requires an explicit unlink option when the
+asset is still in use.
+
+Specialist adapter selections also appear in the graph as external asset
+nodes. Character fields produce `character:<rigId>` nodes, effect fields
+produce `effect:<profileId>` nodes, and prefab fields produce
+`prefab:<prefabId>` nodes. These nodes expose outgoing/backlink relationships
+without copying rig, VFX, or scene-prefab schemas into the gameplay content
+document.
+
+The Content workspace now bootstraps an empty gameplay CMS document from the
+existing project catalogs and compiled specialist registries. Items, quests,
+abilities, NPC/POI/entity templates, character rigs, effect profiles, and
+prefabs are visible in the Content tab even before a saved gameplay document
+exists. Empty local drafts are treated as uninitialized so an accidental blank
+localStorage save no longer hides all content.
+
+The focused graph and schema checks pass. Recursive navigation and editor
+integration remain the next phase-1 work items.
+
 ## Parallel ownership
 
 - Graph/schema: `wails/frontend/src/content/*`
@@ -60,4 +88,3 @@ Completion requires fresh passing output for every applicable command, a live
 browser inspection at `http://localhost:35215/?ws=content`, no console errors,
 and confirmation that the implementation matches the documented workflow.
 Partial adapter code, typecheck alone, or a static screenshot is insufficient.
-

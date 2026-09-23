@@ -32,6 +32,10 @@ export interface SceneObject {
   /** Prefab-specific parameters (colour, light intensity, ...). */
   props: Record<string, unknown>;
   components?: SceneComponents;
+  /** Content definition id this object was placed from — the editor renders
+   * the record's presentation (rig, VFX, authored prefab) instead of the
+   * generic prefab mesh. Ignored by physics and the runtime. */
+  content?: string;
   prefabInstance?: { assetId: string; nodeId: string; rootId: string; overrides: string[] };
 }
 
@@ -39,6 +43,10 @@ export interface SceneComponents {
   npc?: { enabled: boolean; archetype: string; level: number; hostile: boolean; respawnSeconds: number };
   poi?: { enabled: boolean; type: string; label: string; interactionRadius: number; destinationMap: string };
   item?: { enabled: boolean; itemId: string; quantity: number; respawnSeconds: number };
+  /** Interactable container. storageId names the backing store — objects
+   *  sharing an id open the same contents (empty = the default personal
+   *  storage); capacity 0 falls back to the server default. */
+  storage?: { enabled: boolean; storageId: string; label: string; interactionRadius: number; capacity: number };
   /** Dimensions are full extents in Three units; offset is the local center. */
   collider?: { enabled: boolean; shape: 'box' | 'capsule' | 'sphere'; size: Vec3; offset: Vec3; isTrigger: boolean };
 }
@@ -77,6 +85,11 @@ export const SCENE_COMPONENT_DEFINITIONS: readonly SceneComponentDefinition[] = 
   { key:'item', label:'Item Pickup', description:'Spawns a collectible item in the world.', fields:[
     {key:'enabled',label:'Enabled',type:'boolean'}, {key:'itemId',label:'Item ID',type:'string'},
     {key:'quantity',label:'Quantity',type:'number',min:1,step:1}, {key:'respawnSeconds',label:'Respawn seconds',type:'number',min:0,step:1},
+  ] },
+  { key:'storage', label:'Storage', description:'Interactable container — objects sharing a storage ID open the same contents.', fields:[
+    {key:'enabled',label:'Enabled',type:'boolean'}, {key:'storageId',label:'Storage ID',type:'string'},
+    {key:'label',label:'Label',type:'string'}, {key:'interactionRadius',label:'Interaction radius',type:'number',min:.1,step:.1},
+    {key:'capacity',label:'Capacity (slots · 0 = default)',type:'number',min:0,step:1},
   ] },
   { key:'collider', label:'Collider', description:'Controls placement, collision, and trigger volume.', fields:[
     {key:'enabled',label:'Enabled',type:'boolean'}, {key:'shape',label:'Shape',type:'select',options:['box','capsule','sphere']},
@@ -136,6 +149,7 @@ export function normalizeComponents(raw: unknown): SceneComponents {
   if (r.npc) { const n = record(r.npc); out.npc = { enabled:n.enabled!==false, archetype:str(n.archetype,'goblin'), level:Math.max(1,Math.floor(num(n.level,1))), hostile:n.hostile!==false, respawnSeconds:Math.max(0,num(n.respawnSeconds,30)) }; }
   if (r.poi) { const p = record(r.poi); out.poi = { enabled:p.enabled!==false, type:str(p.type,'save_point'), label:str(p.label,'Point of interest'), interactionRadius:Math.max(.1,num(p.interactionRadius,3)), destinationMap:str(p.destinationMap,'') }; }
   if (r.item) { const i = record(r.item); out.item = { enabled:i.enabled!==false, itemId:str(i.itemId,'potion'), quantity:Math.max(1,Math.floor(num(i.quantity,1))), respawnSeconds:Math.max(0,num(i.respawnSeconds,60)) }; }
+  if (r.storage) { const s = record(r.storage); out.storage = { enabled:s.enabled!==false, storageId:str(s.storageId,''), label:str(s.label,'Storage'), interactionRadius:Math.max(.1,num(s.interactionRadius,2)), capacity:Math.max(0,Math.floor(num(s.capacity,0))) }; }
   if (r.collider) { const c = record(r.collider); out.collider = { enabled:c.enabled!==false, shape:c.shape==='sphere'||c.shape==='capsule'?c.shape:'box', size:vec3(c.size,[1,1,1]).map(v=>Math.max(.01,Math.abs(v))) as Vec3, offset:vec3(c.offset,[0,.5,0]), isTrigger:c.isTrigger===true }; }
   return out;
 }
@@ -156,6 +170,7 @@ export function normalizeObject(raw: unknown, index: number): SceneObject {
     visible: r.visible !== false,
     props: r.props && typeof r.props === "object" ? { ...(r.props as Record<string, unknown>) } : {},
     components: normalizeComponents(r.components),
+    ...(typeof r.content === 'string' && r.content ? { content: r.content } : {}),
     ...(r.prefabInstance && typeof record(r.prefabInstance).assetId === 'string' ? { prefabInstance: {assetId:str(record(r.prefabInstance).assetId,''), nodeId:str(record(r.prefabInstance).nodeId,''), rootId:str(record(r.prefabInstance).rootId,''), overrides:Array.isArray(record(r.prefabInstance).overrides)?(record(r.prefabInstance).overrides as unknown[]).filter((v):v is string=>typeof v==='string'):[]} } : {}),
   };
 }

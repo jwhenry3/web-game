@@ -47,11 +47,23 @@ type SceneItem struct {
 	Quantity       int     `json:"quantity"`
 	RespawnSeconds float64 `json:"respawnSeconds"`
 }
+
+// SceneStorage is an interactable container. StorageID names the backing
+// store — objects sharing an id open the same contents (empty = the default
+// personal storage); Capacity 0 falls back to the server default.
+type SceneStorage struct {
+	Enabled           bool    `json:"enabled"`
+	StorageID         string  `json:"storageId"`
+	Label             string  `json:"label"`
+	InteractionRadius float64 `json:"interactionRadius"`
+	Capacity          int     `json:"capacity"`
+}
 type SceneComponents struct {
 	Collider *SceneCollider `json:"collider,omitempty"`
 	NPC      *SceneNPC      `json:"npc,omitempty"`
 	POI      *ScenePOI      `json:"poi,omitempty"`
 	Item     *SceneItem     `json:"item,omitempty"`
+	Storage  *SceneStorage  `json:"storage,omitempty"`
 }
 type ScenePrefabInstance struct {
 	AssetID   string   `json:"assetId"`
@@ -60,14 +72,18 @@ type ScenePrefabInstance struct {
 	Overrides []string `json:"overrides"`
 }
 type SceneObject struct {
-	ID             string               `json:"id"`
-	Name           string               `json:"name"`
-	Parent         string               `json:"parent,omitempty"`
-	Prefab         string               `json:"prefab"`
-	Transform      SceneTransform       `json:"transform"`
-	Visible        bool                 `json:"visible"`
-	Props          map[string]any       `json:"props"`
-	Components     SceneComponents      `json:"components,omitempty"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Parent     string          `json:"parent,omitempty"`
+	Prefab     string          `json:"prefab"`
+	Transform  SceneTransform  `json:"transform"`
+	Visible    bool            `json:"visible"`
+	Props      map[string]any  `json:"props"`
+	Components SceneComponents `json:"components,omitempty"`
+	// Content is the content-definition id the object was placed from — the
+	// editor renders the record's presentation instead of the generic prefab
+	// mesh. Round-trips through the doc; the runtime ignores it.
+	Content        string               `json:"content,omitempty"`
 	PrefabInstance *ScenePrefabInstance `json:"prefabInstance,omitempty"`
 }
 type ScenePrefabAsset struct {

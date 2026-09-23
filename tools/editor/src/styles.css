@@ -227,3 +227,10 @@ table.ed-table td, table.ed-table th { border-bottom-color: #484848; }
 .ed-partdock-preview-chip { display: inline-flex; align-items: center; gap: 4px; color: #8fd0ff; }
 .ed-partdock-preview-chip button { padding: 0 4px; min-height: 16px; font-size: 10px; line-height: 14px; }
 button.ed-previewing { background: #39678c; border-color: #4d86b8; }
+
+/* Resizable pane handles — zero-footprint overlay between flex panes. */
+.ed-pane-handle { flex: none; z-index: 5; position: relative; background: transparent; transition: background .12s; }
+.ed-pane-handle:hover, .ed-pane-handle:active { background: #4d7ea5; }
+.ed-pane-handle.vertical { width: 5px; margin: 0 -2px; cursor: col-resize; }
+.ed-pane-handle.horizontal { height: 5px; margin: -2px 0; cursor: row-resize; }
+.ed-side { flex: none; }

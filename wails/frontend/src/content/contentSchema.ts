@@ -1,6 +1,16 @@
+import { skillAnimationForSkillId } from '../editor/skillAnimations';
+import {
+  CATEGORY_VFX_PROFILES,
+  VFX_CATEGORIES,
+  VFX_PART_LABELS,
+  vfxProfileParts,
+  type VfxCategory,
+  type VfxPart,
+} from '../vfx/battleVfxProfiles';
+
 export const CONTENT_DOCUMENT_VERSION = 1 as const;
 
-export type ContentType = 'npc' | 'poi' | 'item' | 'dialogue' | 'quest' | 'vendor' | 'lootTable' | 'ability' | 'statusEffect' | 'recipe' | 'spawnSet';
+export type ContentType = 'npc' | 'poi' | 'item' | 'dialogue' | 'quest' | 'vendor' | 'lootTable' | 'ability' | 'statusEffect' | 'recipe' | 'spawnSet' | 'character' | 'effect' | 'prefab';
 
 export interface AssetReferenceValue {
   $kind: 'assetRef';
@@ -31,7 +41,7 @@ export interface ContentDocument {
 
 export interface ContentValidationIssue { path: string; message: string; severity: 'error' | 'warning' }
 
-const TYPES = new Set<ContentType>(['npc', 'poi', 'item', 'dialogue', 'quest', 'vendor', 'lootTable', 'ability', 'statusEffect', 'recipe', 'spawnSet']);
+const TYPES = new Set<ContentType>(['npc', 'poi', 'item', 'dialogue', 'quest', 'vendor', 'lootTable', 'ability', 'statusEffect', 'recipe', 'spawnSet', 'character', 'effect', 'prefab']);
 const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
 export function defaultContentDocument(): ContentDocument {
@@ -43,8 +53,15 @@ function normalizeDefinition(raw: unknown, index: number): ContentDefinition {
   const type = TYPES.has(row.type as ContentType) ? row.type as ContentType : 'item';
   const data: Record<string, ContentValue> = {};
   if (isObject(row.data)) for (const [key, child] of Object.entries(row.data)) data[key] = normalizeValue(child, 0);
+  const id = typeof row.id === 'string' ? row.id : `definition_${index + 1}`;
+  // Seeded skills predate the animation field — backfill the derived caster
+  // clip so every loaded document carries it. Authored values are kept.
+  if (type === 'ability' && !data.animation) {
+    const clip = skillAnimationForSkillId(id);
+    if (clip) data.animation = clip;
+  }
   return {
-    id: typeof row.id === 'string' ? row.id : `definition_${index + 1}`,
+    id,
     type,
     name: typeof row.name === 'string' ? row.name : '',
     description: typeof row.description === 'string' ? row.description : '',
@@ -77,9 +94,43 @@ function normalizeValue(value: unknown, depth: number): ContentValue {
   return null;
 }
 
+/**
+ * Effects are authored one part per asset (cast / projectile / impact / area).
+ * Legacy `effect` records predate `data.part` — a bare category record is
+ * expanded into one asset per part its profile defines
+ * (`effect_fire` → `effect_fire_cast`, `effect_fire_impact`, …). Nothing
+ * stored effect-asset ids before the split (slots held category strings), so
+ * dropping the combined record orphans no references. Idempotent: expanded
+ * defs carry `part` and pass through unchanged on the next load.
+ */
+function expandEffectDefinitions(definitions: ContentDefinition[]): ContentDefinition[] {
+  const used = new Set(definitions.map(d => d.id));
+  const out: ContentDefinition[] = [];
+  for (const def of definitions) {
+    if (def.type !== 'effect') { out.push(def); continue; }
+    const category = String(def.data.effect ?? '');
+    const part = String(def.data.part ?? '');
+    if ((VFX_PART_LABELS as Record<string, string>)[part]) { out.push(def); continue; }
+    if ((VFX_CATEGORIES as readonly string[]).includes(category)) {
+      const parts = vfxProfileParts(CATEGORY_VFX_PROFILES[category as VfxCategory]);
+      if (parts.length) {
+        for (const slice of parts) {
+          let id = `${def.id}_${slice}`, n = 2;
+          while (used.has(id)) id = `${def.id}_${slice}_${n++}`;
+          used.add(id);
+          out.push({ ...def, id, name: `${def.name} · ${VFX_PART_LABELS[slice as VfxPart]}`, data: { ...def.data, part: slice } });
+        }
+        continue;
+      }
+    }
+    out.push({ ...def, data: { ...def.data, part: 'impact' } });
+  }
+  return out;
+}
+
 export function normalizeContentDocument(value: unknown): ContentDocument {
   if (!isObject(value) || !Array.isArray(value.definitions)) return defaultContentDocument();
-  const definitions = value.definitions.map((raw, index) => normalizeDefinition(raw, index));
+  const definitions = expandEffectDefinitions(value.definitions.map((raw, index) => normalizeDefinition(raw, index)));
   return { version: CONTENT_DOCUMENT_VERSION, definitions };
 }
 
